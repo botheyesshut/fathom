@@ -1,0 +1,3663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#040810">
+<title>Fathom — The Chart</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --void: #040810;
+    --abyss: #081420;
+    --stone: #2a2118;
+    --stone-lit: #3d2f20;
+    --water: #0e2840;
+    --sonar: #5eb89a;
+    --sonar-dim: #2a5a4a;
+    --sonar-faint: #16302a;
+    --lantern: #f4b860;
+    --lantern-warm: #d89248;
+    --blood: #a04030;
+    --bone: #e8dcc4;
+    --bone-dim: #8a7d68;
+    --strange: #b870e8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--void);
+    color: var(--bone);
+    font-family: 'Cormorant Garamond', serif;
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset: 0;
+  }
+
+  /* ====== TITLE SCREEN ====== */
+  #title {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(94, 184, 154, 0.08), transparent 60%),
+      radial-gradient(ellipse at 50% 70%, rgba(244, 184, 96, 0.04), transparent 50%),
+      var(--void);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 2rem;
+    transition: opacity 1.2s ease;
+  }
+
+  #title.gone { opacity: 0; pointer-events: none; }
+
+  #title h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: clamp(3.5rem, 18vw, 6rem);
+    letter-spacing: 0.18em;
+    color: var(--bone);
+    text-shadow: 0 0 40px rgba(94, 184, 154, 0.3);
+    margin-bottom: 0.4rem;
+    animation: breathe 6s ease-in-out infinite;
+  }
+
+  #title .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--sonar);
+    opacity: 0.7;
+    margin-bottom: 4rem;
+  }
+
+  #title .epigraph {
+    font-style: italic;
+    font-size: 1.05rem;
+    color: var(--bone-dim);
+    text-align: center;
+    max-width: 22rem;
+    line-height: 1.6;
+    margin-bottom: 3rem;
+    opacity: 0;
+    animation: fadeIn 2s ease 0.8s forwards;
+  }
+
+  #title .epigraph .attr {
+    display: block;
+    margin-top: 0.6rem;
+    font-style: normal;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--sonar-dim);
+  }
+
+  #title button {
+    background: transparent;
+    border: 1px solid var(--sonar-dim);
+    color: var(--sonar);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 1rem 2.5rem;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    opacity: 0;
+    animation: fadeIn 1.2s ease 0.4s forwards;
+    touch-action: manipulation;
+  }
+
+  #title button:active {
+    background: rgba(94, 184, 154, 0.1);
+    border-color: var(--sonar);
+    box-shadow: 0 0 30px rgba(94, 184, 154, 0.3);
+  }
+
+  @keyframes breathe {
+    0%, 100% { text-shadow: 0 0 40px rgba(94, 184, 154, 0.3); }
+    50% { text-shadow: 0 0 60px rgba(94, 184, 154, 0.5), 0 0 100px rgba(94, 184, 154, 0.2); }
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  /* ====== HUD ====== */
+  #hud {
+    position: relative;
+    z-index: 10;
+    padding: 0.8rem 1rem 0.6rem;
+    background: linear-gradient(180deg, var(--void) 0%, rgba(4,8,16,0.85) 80%, transparent 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1;
+  }
+
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--bone-dim);
+  }
+
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--bone);
+    letter-spacing: 0.08em;
+  }
+
+  .stat-value.warn { color: var(--lantern); }
+  .stat-value.danger { color: var(--blood); animation: pulse-danger 1s ease-in-out infinite; }
+
+  @keyframes pulse-danger {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .bar {
+    height: 2px;
+    background: var(--abyss);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: var(--sonar);
+    transition: width 0.6s ease, background 0.3s ease;
+  }
+
+  .bar-fill.warn { background: var(--lantern); }
+  .bar-fill.danger { background: var(--blood); }
+
+  /* ====== CHART ====== */
+  #chart-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #000000;
+    touch-action: none;
+  }
+
+  #chart-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+
+  #chart-svg:active { cursor: grabbing; }
+
+  /* ====== DEPTH STRIP ====== */
+  #depth-strip {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    width: 28px;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    pointer-events: none;
+    z-index: 5;
+  }
+  #depth-strip-track {
+    flex: 1;
+    position: relative;
+    background: linear-gradient(180deg, rgba(94,184,154,0.05) 0%, rgba(94,184,154,0.02) 30%, rgba(160,64,48,0.04) 100%);
+    border-left: 1px solid rgba(94,184,154,0.25);
+    border-right: 1px solid rgba(94,184,154,0.25);
+  }
+  #depth-strip-hex-range {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: rgba(94,184,154,0.18);
+    border-top: 1px solid rgba(94,184,154,0.5);
+    border-bottom: 1px solid rgba(94,184,154,0.5);
+  }
+  #depth-strip-safe-line {
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    height: 0;
+    border-top: 1px dashed rgba(244,184,96,0.6);
+  }
+  #depth-strip-crush-line {
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    height: 0;
+    border-top: 1px dashed rgba(160,64,48,0.8);
+  }
+  #depth-strip-marker {
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    height: 4px;
+    background: var(--lantern);
+    box-shadow: 0 0 8px var(--lantern);
+    border-radius: 1px;
+    transition: top 0.3s ease;
+  }
+  #depth-strip-labels {
+    display: none; /* hide for now to keep strip clean */
+  }
+
+  /* ====== RECENTER BUTTON ====== */
+  #recenter-btn {
+    position: absolute;
+    bottom: 0.6rem;
+    right: 3rem; /* clear of the depth strip on the right */
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--sonar-dim);
+    background: rgba(8, 20, 32, 0.7);
+    color: var(--sonar);
+    font-size: 1.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s ease;
+  }
+  #recenter-btn:active {
+    background: rgba(94,184,154,0.2);
+    border-color: var(--sonar);
+    transform: scale(0.92);
+  }
+
+  /* ====== DIVE CONTROLS ====== */
+  #dive-controls {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    justify-content: center;
+  }
+  .dive-btn {
+    flex: 0 1 auto !important;
+    min-width: 38px;
+    padding: 0.6rem 0.4rem !important;
+    font-size: 0.7rem !important;
+  }
+  #dive-depth-readout {
+    flex: 1;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    color: var(--lantern);
+  }
+
+  /* sonar pulse animation */
+  .sonar-pulse {
+    transform-origin: center;
+    animation: sonar-ping 3s ease-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes sonar-ping {
+    0% { transform: scale(0.1); opacity: 0.6; }
+    100% { transform: scale(4); opacity: 0; }
+  }
+
+  /* tile fade-in when revealed */
+  @keyframes reveal {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .hex.revealed {
+    animation: reveal 0.5s ease-out backwards;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+
+  /* Player arrival pulse */
+  @keyframes arrive {
+    0% { transform: scale(0.4); opacity: 0; }
+    50% { transform: scale(1.4); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .arrival {
+    animation: arrive 0.4s ease-out;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+
+  /* Failed-move flash on destination hex */
+  @keyframes flash-fail {
+    0%   { opacity: 0; }
+    20%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .move-flash {
+    animation: flash-fail 0.55s ease-out;
+    pointer-events: none;
+  }
+
+  /* Sub shake — used to confirm input was received on a failed move */
+  @keyframes sub-shake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-1.2px, 0.6px); }
+    40% { transform: translate(1.4px, -0.4px); }
+    60% { transform: translate(-0.8px, 0.5px); }
+    80% { transform: translate(0.6px, -0.5px); }
+  }
+  .sub-shake {
+    animation: sub-shake 0.35s ease-out;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+
+  /* ====== LOG / MESSAGES ====== */
+  #log {
+    position: relative;
+    z-index: 10;
+    padding: 0.75rem 1rem 1rem;
+    background: linear-gradient(0deg, var(--void) 0%, rgba(4,8,16,0.85) 80%, transparent 100%);
+    min-height: 6rem;
+    max-height: 6rem;
+    flex-shrink: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  .log-entry {
+    font-size: 1.15rem;
+    line-height: 1.4;
+    color: var(--bone);
+    font-style: italic;
+    animation: log-in 0.4s ease-out;
+    margin-bottom: 0.3rem;
+  }
+
+  .log-entry.old { color: var(--bone-dim); opacity: 0.55; font-size: 1rem; }
+
+  .log-entry .echo {
+    font-family: 'JetBrains Mono', monospace;
+    font-style: normal;
+    font-size: 0.78rem;
+    color: var(--sonar);
+    letter-spacing: 0.22em;
+    margin-right: 0.55rem;
+    text-transform: uppercase;
+  }
+
+  .log-entry .echo.strange { color: var(--strange); }
+  .log-entry .echo.warn { color: var(--lantern); }
+  .log-entry .echo.danger { color: var(--blood); }
+
+  @keyframes log-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ====== CONTROLS ====== */
+  #controls {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0 1rem 1.2rem;
+    flex-shrink: 0;
+  }
+
+  #ping-power-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--sonar-dim);
+    border-radius: 2px;
+    background: rgba(94, 184, 154, 0.03);
+  }
+
+  .ping-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .ping-label {
+    color: var(--bone-dim);
+  }
+
+  .ping-stats {
+    color: var(--sonar);
+    letter-spacing: 0.15em;
+  }
+
+  #ping-power {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 24px;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+  }
+
+  #ping-power::-webkit-slider-runnable-track {
+    height: 2px;
+    background: linear-gradient(to right, var(--sonar-faint), var(--sonar));
+    border-radius: 1px;
+  }
+
+  #ping-power::-moz-range-track {
+    height: 2px;
+    background: linear-gradient(to right, var(--sonar-faint), var(--sonar));
+    border-radius: 1px;
+  }
+
+  #ping-power::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--sonar);
+    border: 2px solid var(--void);
+    box-shadow: 0 0 8px var(--sonar);
+    margin-top: -7px;
+    cursor: pointer;
+  }
+
+  #ping-power::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--sonar);
+    border: 2px solid var(--void);
+    box-shadow: 0 0 8px var(--sonar);
+    cursor: pointer;
+  }
+
+  #controls-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--sonar-dim);
+    color: var(--sonar);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.9rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 2px;
+  }
+
+  .btn:active {
+    background: rgba(94, 184, 154, 0.15);
+    border-color: var(--sonar);
+    transform: scale(0.97);
+  }
+
+  .btn.primary {
+    border-color: var(--lantern-warm);
+    color: var(--lantern);
+  }
+
+  .btn.primary:active {
+    background: rgba(244, 184, 96, 0.15);
+    border-color: var(--lantern);
+  }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* ====== GAME OVER ====== */
+  #gameover {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 8, 16, 0.95);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 2rem;
+    backdrop-filter: blur(8px);
+  }
+
+  #gameover.show { display: flex; }
+
+  #gameover h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 2.5rem;
+    color: var(--blood);
+    margin-bottom: 1rem;
+    letter-spacing: 0.08em;
+  }
+
+  #gameover .summary {
+    font-style: italic;
+    color: var(--bone-dim);
+    text-align: center;
+    max-width: 20rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+  }
+
+  #gameover .stats {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--sonar);
+    letter-spacing: 0.2em;
+    margin: 1.5rem 0 2rem;
+    text-align: center;
+    line-height: 2;
+  }
+</style>
+</head>
+<body>
+
+<!-- TITLE SCREEN -->
+<div id="title">
+  <h1>Fathom</h1>
+  <div class="sub">The Chart · Prototype</div>
+  <div class="epigraph">
+    There is no map of these waters. The Chart you carry was drawn by drowned men, and they were not careful.
+    <span class="attr">— Logbook of the Vessel Erebus, recovered</span>
+  </div>
+  <button id="dive">Dive</button>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover">
+  <h2 id="go-title">The deep has you.</h2>
+  <p class="summary" id="go-summary"></p>
+  <div class="stats" id="go-stats"></div>
+  <button class="btn primary" id="go-restart">Surface and try again</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="stat-row">
+    <div class="stat">
+      <div class="stat-label">Air</div>
+      <div class="stat-value" id="air-val">350</div>
+      <div class="bar"><div class="bar-fill" id="air-bar" style="width:100%"></div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Hull</div>
+      <div class="stat-value" id="hull-val">100</div>
+      <div class="bar"><div class="bar-fill" id="hull-bar" style="width:100%"></div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Depth</div>
+      <div class="stat-value" id="depth-val">0</div>
+      <div class="bar"><div class="bar-fill" id="depth-bar" style="width:0%; background: var(--strange);"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- CHART -->
+<div id="chart-container">
+  <svg id="chart-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <!-- Vertical depth strip overlay -->
+  <div id="depth-strip">
+    <div id="depth-strip-track">
+      <div id="depth-strip-hex-range"></div>
+      <div id="depth-strip-safe-line"></div>
+      <div id="depth-strip-crush-line"></div>
+      <div id="depth-strip-marker"></div>
+    </div>
+    <div id="depth-strip-labels">
+      <span class="depth-strip-label" id="depth-strip-top">0</span>
+      <span class="depth-strip-label" id="depth-strip-bot">800</span>
+    </div>
+  </div>
+  <!-- Recenter button overlay -->
+  <button id="recenter-btn" title="Center on sub">⊕</button>
+</div>
+
+<!-- LOG -->
+<div id="log"></div>
+
+<!-- CONTROLS -->
+<div id="controls">
+  <div id="ping-power-row">
+    <div class="ping-info">
+      <span class="ping-label">Sonar Power</span>
+      <span class="ping-stats"><span id="ping-cost">5</span> air · <span id="ping-range">300</span> m</span>
+    </div>
+    <input type="range" id="ping-power" min="0" max="5" value="2" step="1">
+  </div>
+  <div id="dive-controls">
+    <button class="btn dive-btn" id="btn-ascend-fast" title="Ascend 120 m">▲▲</button>
+    <button class="btn dive-btn" id="btn-ascend">▲</button>
+    <span id="dive-depth-readout">0 m</span>
+    <button class="btn dive-btn" id="btn-descend">▼</button>
+    <button class="btn dive-btn" id="btn-descend-fast" title="Descend 120 m">▼▼</button>
+  </div>
+  <div id="controls-row">
+    <button class="btn" id="btn-ping">Ping</button>
+    <button class="btn primary" id="btn-surface">Surface</button>
+  </div>
+</div>
+
+<script>
+//=============================================================================
+// FATHOM — The Chart
+// Phase 1 prototype: feel of frontier exploration on a phone screen.
+//=============================================================================
+
+const HEX_SIZE = 16; // smaller so we see a wider expanse of the labyrinth
+const SQRT3 = Math.sqrt(3);
+
+// Hex math (pointy-top, axial coordinates q,r)
+function hexToPixel(q, r) {
+  return {
+    x: HEX_SIZE * SQRT3 * (q + r/2),
+    y: HEX_SIZE * 1.5 * r
+  };
+}
+// Inverse of hexToPixel — converts a pixel position back to fractional axial
+// coords, then rounds to the nearest hex. Used by render() to find which hex
+// the camera is centered on.
+function pixelToHex(x, y) {
+  const r = y / (HEX_SIZE * 1.5);
+  const q = x / (HEX_SIZE * SQRT3) - r / 2;
+  // Cube-coordinate rounding for accurate nearest-hex
+  const s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+  const qd = Math.abs(rq - q), rd = Math.abs(rr - r), sd = Math.abs(rs - s);
+  if (qd > rd && qd > sd) rq = -rr - rs;
+  else if (rd > sd)       rr = -rq - rs;
+  return { q: rq, r: rr };
+}
+function hexDistance(a, b) {
+  return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
+}
+function hexNeighbors(q, r) {
+  return [
+    {q: q+1, r: r},   {q: q+1, r: r-1},
+    {q: q,   r: r-1}, {q: q-1, r: r},
+    {q: q-1, r: r+1}, {q: q,   r: r+1}
+  ];
+}
+function hexKey(q, r) { return q + ',' + r; }
+
+// Hex corners for an SVG polygon (pointy-top)
+function hexCorners(cx, cy, size) {
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    pts.push((cx + size * Math.cos(a)).toFixed(2) + ',' + (cy + size * Math.sin(a)).toFixed(2));
+  }
+  return pts.join(' ');
+}
+function hexCornerPoint(cx, cy, size, i) {
+  const a = Math.PI / 180 * (60 * i - 30);
+  return { x: cx + size * Math.cos(a), y: cy + size * Math.sin(a) };
+}
+
+//=============================================================================
+// WORLD GENERATION — FEATURE-BASED CARVE
+//=============================================================================
+//
+// Each hex is 60 meters. The Erebus is about one hex long.
+//
+// The world is solid stone by default. We carve features into it:
+//   - TUNNELS: a spine of waypoints with a width profile that varies along
+//     its length (1 to 4 hexes wide, pulsing). Tunnels branch and can end
+//     in dead ends.
+//   - CHAMBERS: small, medium, or large rounded openings.
+//   - SEAS: rare, vast open spaces (5+ chunks worth of carved area).
+//
+// Chunks just decide which features SEED inside them. A feature can sprawl
+// across many chunks. Adjacent chunks add their own features on top of
+// already-carved space without erasing it.
+//=============================================================================
+
+//=============================================================================
+// SUBS — each vessel is a "class" with stats. The active sub is loaded into
+// state.sub when a run begins. The Outfit layer (future) will let players
+// switch between subs.
+//=============================================================================
+
+const SUBS = {
+  erebus: {
+    name: 'Erebus',
+    description: 'A lightweight starter submersible with a single porthole. Built for the shelf and the upper bands — the deep abyss will crush it.',
+    hull: 100,
+    air: 350,
+    // Safe depth: full operating depth, no pressure damage.
+    // Crush depth: pressure damage per move begins here; the deeper past, the worse.
+    safeDepth:  1500,  // meters
+    crushDepth: 2200,
+    // How much air a single move costs at zero depth. Scales with depth.
+    airBase: 1,
+    // How fast pressure damages hull per move past safe depth.
+    pressurePerMeter: 0.04,
+    // Vertical movement (ascend/descend per action, in meters), and its air cost.
+    // Snapped to the 60-meter depth grid so the sub can land precisely on
+    // volume bounds.
+    diveStep: 60,
+    diveAirCost: 1,
+    diveStepFast: 120,
+    diveAirCostFast: 3,
+    // Sensor power max (caps the ping slider)
+    sonarMaxPower: 5,
+    // Lightweight subs have a porthole — players occasionally see what's outside.
+    // Heavier deep-water subs lose this in favor of armor; instruments only.
+    porthole: true,
+  },
+};
+
+let activeSubKey = 'erebus';
+function activeSub() { return SUBS[activeSubKey]; }
+
+// Tile types
+const TILES = {
+  stone:    { name: 'solid stone',         char: '',   cost: 99, color: '#000000', wall: true },
+  shore:    { name: 'the shore',           char: '',   cost: 99, color: '#2a2418', wall: true, land: true },
+  dock:     { name: 'the dock',            char: '╪',  cost: 99, color: '#3a2f1c', wall: true, land: true },
+  water:    { name: 'open water',          char: '',   cost: 1,  color: '#08141e' },
+  passage:  { name: 'a passage',           char: '',   cost: 1,  color: '#0a1622' },
+  chamber:  { name: 'an open chamber',     char: '',   cost: 1,  color: '#0e1c2c' },
+  sea:      { name: 'an open sea',         char: '',   cost: 1,  color: '#0a1828' },
+  current:  { name: 'a swift current',     char: '≈',  cost: 2,  color: '#0e2840', strange: true },
+  kelp:     { name: 'a forest of kelp',    char: 'Ψ',  cost: 2,  color: '#0e2018' },
+  chasm:    { name: 'a chasm',             char: '▼',  cost: 1,  color: '#000408' },
+  opening:  { name: 'a sinkhole',          char: 'O',  cost: 1,  color: '#0a1622', poi: 'opening' },
+  ruin:     { name: 'a sunken ruin',       char: '◙',  cost: 2,  color: '#1a1410', poi: 'ruin' },
+  signal:   { name: 'something signaling', char: '◉',  cost: 1,  color: '#0a1622', poi: 'signal' },
+  growth:   { name: 'unnatural growth',    char: '✺',  cost: 2,  color: '#180818', poi: 'growth' },
+  air:      { name: 'an air pocket',       char: '○',  cost: 1,  color: '#1c2820', poi: 'air' },
+  salvage:  { name: 'wreckage',            char: '✕',  cost: 1,  color: '#1a1410', poi: 'salvage' },
+  deadend:  { name: 'a dead end',          char: '•',  cost: 1,  color: '#0a1622', poi: 'deadend' },
+  surface:  { name: 'the surface',         char: '☼',  cost: 0,  color: '#1a2818', poi: 'surface' },
+};
+
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+let worldSeed = Date.now() & 0xffffffff;
+let rng = mulberry32(worldSeed);
+function rand() { return rng(); }
+function randInt(n) { return Math.floor(rand() * n); }
+function pick(arr) { return arr[randInt(arr.length)]; }
+function chance(p) { return rand() < p; }
+
+const world = new Map();
+const revealed = new Set();
+const visited = new Set();
+const generatedChunks = new Set();
+
+// The cave network is generated as a deterministic graph at world creation
+// time. Nodes are chambers placed in depth bands; edges are tunnels (mostly
+// horizontal within a band, some vertical Z-tunnels across bands). Chunks
+// then carve whichever nodes and edges happen to intersect them. This means
+// a given hex (q,r) yields the same passages regardless of which chunk got
+// generated first — geography is consistent everywhere.
+let worldGraph = null;
+
+// Depth bands for the cave network. Marianas Trench (~11,000 meters) is the
+// effective hard floor. Each band is a sprawling region — comparable in size
+// and complexity to a full hand-drawn dungeon map per band, with seven such
+// bands stacked vertically and interconnected. The player will not exhaust
+// any one of them in any reasonable session; that's the point.
+const CAVE_BANDS = [
+  { id: 'b0', minDepth:  480, maxDepth:  720,   hexRadius: 55,  nodeCount: 55  },
+  { id: 'b1', minDepth:  900, maxDepth: 1320,   hexRadius: 70,  nodeCount: 80  },
+  { id: 'b2', minDepth: 1620, maxDepth: 2160,   hexRadius: 85,  nodeCount: 105 },
+  { id: 'b3', minDepth: 2580, maxDepth: 3600,   hexRadius: 100, nodeCount: 125 },
+  { id: 'b4', minDepth: 4200, maxDepth: 5640,   hexRadius: 110, nodeCount: 125 },
+  { id: 'b5', minDepth: 6480, maxDepth: 8520,   hexRadius: 115, nodeCount: 105 },
+  { id: 'b6', minDepth: 9480, maxDepth: 10800,  hexRadius: 100, nodeCount: 75  },
+];
+
+function snapToGrid(m) { return Math.round(m / DEPTH_GRID) * DEPTH_GRID; }
+
+// FNV-1a hash of a string to a 32-bit unsigned integer. Used to derive
+// deterministic per-chamber and per-edge random seeds from their id strings.
+function hashStr(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function hasGraphEdge(edges, a, b) {
+  for (const e of edges) {
+    if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) return true;
+  }
+  return false;
+}
+
+// Generate a meandering hex path from a to b. Real caves don't go in
+// straight lines; this perturbs the path with intermediate control points
+// offset perpendicular to the bee-line. Short paths stay straight (less
+// than 4 hexes), longer ones get one or more bends scaled to distance.
+function meanderingPath(a, b, edgeId) {
+  const dist = hexDistance(a, b);
+  if (dist <= 3) return hexLine(a, b);
+
+  const erng = mulberry32(hashStr(edgeId));
+  const numBends = Math.max(1, Math.floor(dist / 6));
+
+  const controls = [a];
+  for (let i = 1; i <= numBends; i++) {
+    const t = i / (numBends + 1);
+    const baseQ = a.q + (b.q - a.q) * t;
+    const baseR = a.r + (b.r - a.r) * t;
+    // Perpendicular direction in pixel space (so bends look right visually)
+    const dpx = SQRT3 * ((b.q - a.q) + (b.r - a.r) / 2);
+    const dpy = 1.5 * (b.r - a.r);
+    const len = Math.hypot(dpx, dpy) || 1;
+    const npxNorm = -dpy / len;
+    const npyNorm =  dpx / len;
+    // Bend magnitude: gentle for short paths, more pronounced for long
+    const maxBend = Math.min(5, dist / 4);
+    const bendMag = (erng() * 2 - 1) * maxBend * 1.4;
+    const pxShift = npxNorm * bendMag;
+    const pyShift = npyNorm * bendMag;
+    // Convert pixel shift back to hex axial coords
+    const rShift = pyShift / 1.5;
+    const qShift = pxShift / SQRT3 - rShift / 2;
+    controls.push({
+      q: Math.round(baseQ + qShift),
+      r: Math.round(baseR + rShift),
+    });
+  }
+  controls.push(b);
+
+  // Stitch segments together via hexLine between consecutive controls
+  let path = [];
+  for (let i = 0; i < controls.length - 1; i++) {
+    const segment = hexLine(controls[i], controls[i+1]);
+    if (i > 0) segment.shift(); // avoid duplicating shared endpoint
+    path = path.concat(segment);
+  }
+  return path;
+}
+
+// Check whether a tunnel path between two chambers would crash through the
+// CORE of an unrelated chamber in the same band. Looser than the previous
+// rule — tunnels are allowed to graze the edges of other chambers, which
+// produces organic informal crossroads (caves frequently merge into each
+// other). Only outright piercing — entering deeply into another chamber's
+// interior — is rejected.
+function tunnelLineIsClear(a, b, allNodes, sameBandOnly, edgeId) {
+  const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId || (a.id + ':' + b.id));
+  for (const other of allNodes) {
+    if (other.id === a.id || other.id === b.id) continue;
+    if (sameBandOnly && other.bandId !== a.bandId) continue;
+    if (other.bandId === 'surface') continue;
+    for (const p of path) {
+      const d = hexDistance({q: p.q, r: p.r}, {q: other.q, r: other.r});
+      // Reject only if the path enters the chamber's INNER CORE — grazing
+      // the outer rim, even fairly aggressively, is fine and just creates
+      // an informal three-way junction. Dwarf Fortress principle: let the
+      // generation produce messy intersections rather than over-policing.
+      if (d < other.chamberRadius * 0.35) return false;
+    }
+  }
+  return true;
+}
+
+function generateWorldGraph(seed) {
+  const grng = mulberry32((seed ^ 0xCAFE5E2D) >>> 0);
+  const nodes = [];
+  const edges = [];
+
+  // Scatter chambers per band. Four size tiers — antechambers, chambers,
+  // caverns, grand caverns — with weighted distribution. Grand caverns are
+  // rare and remembered; antechambers are common junction-style spaces.
+  // Spacing is loose: chamber centers stay outside each other's nominal
+  // radii (so the centers feel distinct), but rims can overlap freely,
+  // creating naturally merged organic spaces. Grand caverns require more
+  // breathing room from each other so they don't merge into super-caverns.
+  for (const band of CAVE_BANDS) {
+    let placed = 0;
+    let attempts = 0;
+    const maxAttempts = band.nodeCount * 20;
+    while (placed < band.nodeCount && attempts < maxAttempts) {
+      attempts++;
+      const angle = grng() * Math.PI * 2;
+      const dist = Math.sqrt(grng()) * band.hexRadius;
+      const q = Math.round(Math.cos(angle) * dist);
+      const r = Math.round(Math.sin(angle) * dist) - 12;
+      const depth = snapToGrid(band.minDepth + grng() * (band.maxDepth - band.minDepth));
+      const sizeRoll = grng();
+      let chamberRadius, chamberKind;
+      if (sizeRoll < 0.03) {
+        chamberRadius = 9 + grng() * 6;   // 9-15 — Grand cavern
+        chamberKind = 'grand';
+      } else if (sizeRoll < 0.15) {
+        chamberRadius = 5 + grng() * 3;   // 5-8 — Cavern
+        chamberKind = 'cavern';
+      } else if (sizeRoll < 0.55) {
+        chamberRadius = 2.5 + grng() * 2; // 2.5-4.5 — Chamber
+        chamberKind = 'chamber';
+      } else {
+        chamberRadius = 1 + grng() * 1.5; // 1-2.5 — Antechamber
+        chamberKind = 'antechamber';
+      }
+      // Spacing check
+      let tooClose = false;
+      for (const other of nodes) {
+        if (other.bandId !== band.id) continue;
+        const d = hexDistance({q, r}, {q: other.q, r: other.r});
+        const isBigBig = chamberKind === 'grand' && other.chamberKind === 'grand';
+        const minD = isBigBig
+          ? chamberRadius + other.chamberRadius + 3 // grand chambers want room
+          : Math.max(chamberRadius, other.chamberRadius); // others just need distinct centers
+        if (d < minD) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+      nodes.push({
+        id: `${band.id}_n${placed}`,
+        q, r, depth,
+        chamberRadius,
+        chamberKind,
+        bandId: band.id,
+      });
+      placed++;
+    }
+  }
+
+  // Tunnel width based on endpoint chamber sizes. Bigger chambers connect
+  // via broader passages. Antechambers always pinch down to a single hex.
+  function tunnelWidth(a, b) {
+    const maxR = Math.max(a.chamberRadius, b.chamberRadius);
+    const avgR = (a.chamberRadius + b.chamberRadius) / 2;
+    if (maxR >= 9) return 3;                          // grand cavern endpoint → broad
+    if (avgR >= 5) return grng() < 0.6 ? 3 : 2;       // cavern → mostly broad
+    if (avgR >= 3) return grng() < 0.35 ? 2 : 1;      // chamber → sometimes broad
+    return 1;                                          // antechamber-only → narrow
+  }
+
+  // Build horizontal edges within each band. Each chamber connects to 1-2
+  // nearest neighbors via meandering tunnels. The clearance check rejects
+  // edges whose path would pierce the core of an unrelated chamber, but
+  // grazing chamber edges is allowed (and creates informal crossroads).
+  for (const band of CAVE_BANDS) {
+    const bandNodes = nodes.filter(n => n.bandId === band.id);
+    for (const node of bandNodes) {
+      const others = bandNodes
+        .filter(n => n !== node)
+        .map(n => ({n, d: hexDistance({q: node.q, r: node.r}, {q: n.q, r: n.r})}))
+        .sort((a, b) => a.d - b.d);
+      if (others.length === 0) continue;
+      // Most chambers get 2 short connections, some get 3 — produces the
+      // densely-interconnected look of the reference maps where each cavern
+      // has several exits rather than a single chain through the band.
+      const shortCount = grng() < 0.4 ? 3 : 2;
+      let added = 0;
+      for (let i = 0; i < others.length && added < shortCount; i++) {
+        const cand = others[i].n;
+        if (hasGraphEdge(edges, node.id, cand.id)) { added++; continue; }
+        const eid = node.id + ':' + cand.id;
+        if (!tunnelLineIsClear(node, cand, nodes, true, eid)) continue;
+        edges.push({a: node.id, b: cand.id, kind: 'tunnel', width: tunnelWidth(node, cand)});
+        added++;
+      }
+      // Connectivity fallback: if no clean edge was found, connect to nearest
+      // anyway. Better an imperfect tunnel than an orphaned chamber.
+      if (added === 0 && others.length > 0) {
+        if (!hasGraphEdge(edges, node.id, others[0].n.id)) {
+          edges.push({a: node.id, b: others[0].n.id, kind: 'tunnel', width: tunnelWidth(node, others[0].n)});
+        }
+      }
+      // ~30% chance of a long edge — for the truly-vast-tunnel feeling.
+      if (grng() < 0.30 && others.length > 6) {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const longIdx = 5 + Math.floor(grng() * Math.min(10, others.length - 5));
+          const cand = others[longIdx].n;
+          if (hasGraphEdge(edges, node.id, cand.id)) break;
+          const eid = node.id + ':' + cand.id;
+          if (tunnelLineIsClear(node, cand, nodes, true, eid)) {
+            edges.push({a: node.id, b: cand.id, kind: 'long-tunnel', width: tunnelWidth(node, cand)});
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Z-tunnels across band boundaries — sparse, only a handful per pair.
+  for (let bi = 0; bi < CAVE_BANDS.length - 1; bi++) {
+    const upperBand = CAVE_BANDS[bi];
+    const lowerBand = CAVE_BANDS[bi + 1];
+    const upperNodes = nodes.filter(n => n.bandId === upperBand.id);
+    const lowerNodes = nodes.filter(n => n.bandId === lowerBand.id);
+    if (upperNodes.length === 0 || lowerNodes.length === 0) continue;
+
+    const zCount = 8 + Math.floor(grng() * 6); // 8-13 Z-tunnels per band pair
+    const used = new Set();
+    for (let i = 0; i < zCount; i++) {
+      let tries = 0;
+      let upper;
+      do {
+        upper = upperNodes[Math.floor(grng() * upperNodes.length)];
+        tries++;
+      } while (used.has(upper.id) && tries < 8);
+      used.add(upper.id);
+
+      const lower = lowerNodes
+        .map(n => ({n, d: hexDistance({q: upper.q, r: upper.r}, {q: n.q, r: n.r})}))
+        .sort((a, b) => a.d - b.d)[0]?.n;
+      if (lower && !hasGraphEdge(edges, upper.id, lower.id)) {
+        edges.push({a: upper.id, b: lower.id, kind: 'z-tunnel'});
+      }
+    }
+  }
+
+  // Pier entrance — guaranteed sinkhole two hexes NE of the dock.
+  const pierEntry = {
+    id: 'pier-entry',
+    q: 3, r: -1,
+    depth: 0,
+    chamberRadius: 0.5,
+    bandId: 'surface',
+  };
+  nodes.push(pierEntry);
+  // Connect to nearest b0 chamber
+  const topNodes = nodes.filter(n => n.bandId === 'b0');
+  if (topNodes.length > 0) {
+    const nearestTop = topNodes
+      .map(n => ({n, d: hexDistance({q: pierEntry.q, r: pierEntry.r}, {q: n.q, r: n.r})}))
+      .sort((a, b) => a.d - b.d)[0].n;
+    edges.push({a: pierEntry.id, b: nearestTop.id, kind: 'sinkhole'});
+  }
+
+  // A few more sinkholes scattered across the shelf so the player has
+  // alternative entrances if they wander away from the pier.
+  // Scatter additional sinkholes across the shelf so the player has many
+  // entry choices. For each b0 chamber, search around it for a shelf-water
+  // surface hex; place a sinkhole there if one is found. Iterate through
+  // many candidates until the target count is reached. Loose-bay strategy:
+  // we accept any b0 chamber whose center sits in the bay or close enough
+  // that a nearby surface hex lands in shelf water.
+  const sinkholeCandidates = nodes.filter(n => n.bandId === 'b0' && n.r <= -1);
+  const shuffled = [...sinkholeCandidates].sort(() => grng() - 0.5);
+  const extraSinkholeTarget = 8 + Math.floor(grng() * 6); // 8-13
+  let extraSinkholesPlaced = 0;
+  let candidateIdx = 0;
+  while (extraSinkholesPlaced < extraSinkholeTarget && candidateIdx < shuffled.length) {
+    const chamber = shuffled[candidateIdx++];
+    // Search a ring of hexes around the chamber center for shelf water
+    let surfaceHex = null;
+    const searchRadius = Math.max(3, Math.ceil(chamber.chamberRadius) + 2);
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const offsetQ = Math.round((grng() * 2 - 1) * searchRadius);
+      const offsetR = Math.round((grng() * 2 - 1) * searchRadius);
+      const sq = chamber.q + offsetQ;
+      const sr = chamber.r + offsetR;
+      if (shelfSeafloorDepth(sq, sr) != null) {
+        surfaceHex = { q: sq, r: sr };
+        break;
+      }
+    }
+    if (!surfaceHex) continue;
+    const sinkholeNode = {
+      id: `sinkhole_${extraSinkholesPlaced}`,
+      q: surfaceHex.q, r: surfaceHex.r,
+      depth: 0,
+      chamberRadius: 0.5,
+      chamberKind: 'antechamber',
+      bandId: 'surface',
+    };
+    nodes.push(sinkholeNode);
+    edges.push({a: sinkholeNode.id, b: chamber.id, kind: 'sinkhole'});
+    extraSinkholesPlaced++;
+  }
+
+  // Build an index for O(1) lookup
+  const nodesById = {};
+  for (const n of nodes) nodesById[n.id] = n;
+
+  return { nodes, edges, nodesById };
+}
+
+// Carve a chamber from a graph node. Chambers are domed: tallest at the
+// center and narrower at the edges, like a real water-eroded cavern. The
+// taper gives the chamber a sense of bounded space and creates natural
+// "shallow shelves" at the edges where the floor rises. Future on-foot
+// gameplay will use these shallow edges as potential beaches; for now,
+// they simply make chambers feel less like uniform cylinders.
+function carveChamber(node) {
+  const baseRadius = node.chamberRadius;
+  // Per-chamber noise: three sinusoidal components define the boundary
+  // modulation. The result is a blob with character — peninsulas, inlets,
+  // a few prominent lobes — rather than a perfect circle. Bigger chambers
+  // get more dramatic distortion; small antechambers stay roughly round.
+  const noiseRng = mulberry32(hashStr(node.id || 'unknown'));
+  const phases = [noiseRng() * Math.PI * 2, noiseRng() * Math.PI * 2, noiseRng() * Math.PI * 2];
+  const amps = baseRadius < 3 ? [0.10, 0.06, 0.04]
+             : baseRadius < 6 ? [0.18, 0.10, 0.06]
+             :                  [0.22, 0.14, 0.08];
+  function shapedRadius(dq, dr) {
+    // Use pixel-space angle so the blob looks right visually (hex coords
+    // are squished). The threshold compares to hex distance, so this gives
+    // a soft modulation rather than a precise pixel-space ellipse.
+    const px = SQRT3 * (dq + dr / 2);
+    const py = 1.5 * dr;
+    const angle = Math.atan2(py, px);
+    let factor = 1;
+    factor += amps[0] * Math.cos(2 * angle + phases[0]);
+    factor += amps[1] * Math.cos(3 * angle + phases[1]);
+    factor += amps[2] * Math.cos(5 * angle + phases[2]);
+    return baseRadius * factor;
+  }
+
+  const baseSpan = 240 + Math.floor(baseRadius) * 60; // 300m to ~1140m at grand cavern scale
+  const ri = Math.ceil(baseRadius * 1.4);
+  // Always carve center hex with full span (so even tiny chambers exist)
+  addVolume(node.q, node.r, 'chamber', 'chamber',
+            node.depth - baseSpan / 2, node.depth + baseSpan / 2);
+  for (let dq = -ri; dq <= ri; dq++) {
+    for (let dr = -ri; dr <= ri; dr++) {
+      const ds = -dq - dr;
+      if (Math.abs(ds) > ri || Math.abs(dq) > ri || Math.abs(dr) > ri) continue;
+      const d = (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
+      if (d === 0) continue; // center already carved
+      const localR = shapedRadius(dq, dr);
+      if (d > localR) continue;
+      // Dome taper. Use the noisy localR as the boundary for the t ratio so
+      // hexes near the irregular boundary still smoothly compress in span.
+      const t = localR > 0 ? Math.min(1, d / localR) : 0;
+      const localSpan = Math.max(120, snapToGrid(baseSpan * (1 - t * 0.5)));
+      const half = localSpan / 2;
+      addVolume(node.q + dq, node.r + dr, 'chamber', 'chamber',
+                node.depth - half, node.depth + half);
+    }
+  }
+}
+
+// Carve a tunnel along a graph edge. Three kinds:
+//  - tunnel / long-tunnel: horizontal corridor at interpolated depth between A & B
+//  - z-tunnel: horizontal segment at A's depth, then vertical shaft at B's hex down to B
+//  - sinkhole: vertical-only opening from a surface hex down into the cave below
+function carveEdge(edge, nodesById) {
+  const a = nodesById[edge.a];
+  const b = nodesById[edge.b];
+  if (!a || !b) return;
+  const edgeId = edge.a + ':' + edge.b;
+  const width = edge.width || 1;
+
+  // Carve a tunnel hex and (if widening) its perpendicular neighbors. The
+  // sides are determined by the direction the path is heading at this hex.
+  function carveTunnelHex(p, nextHex, depth, span) {
+    addVolume(p.q, p.r, 'passage', 'passage', depth - span / 2, depth + span / 2);
+    if (width >= 2 && nextHex && (nextHex.q !== p.q || nextHex.r !== p.r)) {
+      const neighbors = hexNeighbors(p.q, p.r);
+      let dir = -1;
+      for (let k = 0; k < 6; k++) {
+        if (neighbors[k].q === nextHex.q && neighbors[k].r === nextHex.r) { dir = k; break; }
+      }
+      if (dir >= 0) {
+        const perpL = (dir + 2) % 6;
+        const perpR = (dir + 4) % 6;
+        // Width 2 carves one consistent side; width 3 carves both
+        if (width >= 3) {
+          addVolume(neighbors[perpL].q, neighbors[perpL].r, 'passage', 'passage', depth - span / 2, depth + span / 2);
+          addVolume(neighbors[perpR].q, neighbors[perpR].r, 'passage', 'passage', depth - span / 2, depth + span / 2);
+        } else {
+          const side = (hashStr(edgeId) % 2 === 0) ? perpL : perpR;
+          addVolume(neighbors[side].q, neighbors[side].r, 'passage', 'passage', depth - span / 2, depth + span / 2);
+        }
+      }
+    }
+  }
+
+  if (edge.kind === 'tunnel' || edge.kind === 'long-tunnel') {
+    const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId);
+    const tunnelSpan = 180 + Math.max(0, width - 1) * 30;
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      const t = path.length > 1 ? i / (path.length - 1) : 0;
+      const depth = snapToGrid(a.depth + (b.depth - a.depth) * t);
+      carveTunnelHex(p, path[i + 1], depth, tunnelSpan);
+    }
+  } else if (edge.kind === 'z-tunnel') {
+    // Horizontal segment at A's depth, then vertical shaft at B's hex.
+    // Z-tunnels stay narrow (width 1) — they're transitions, not highways.
+    const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId);
+    const tunnelSpan = 180;
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      addVolume(p.q, p.r, 'passage', 'passage', a.depth - tunnelSpan / 2, a.depth + tunnelSpan / 2);
+    }
+    const shaftTop = Math.min(a.depth, b.depth) - 60;
+    const shaftBot = Math.max(a.depth, b.depth) + 60;
+    addVolume(b.q, b.r, 'passage', 'passage', shaftTop, shaftBot);
+  } else if (edge.kind === 'sinkhole') {
+    // Surface to cave: A is the surface entry (depth 0), B is the cave chamber.
+    // The shaft reaches the chamber's deepest point so a diver at the floor
+    // can still swim sideways into the sinkhole hex. Mirrors carveChamber.
+    const chamberHalfSpan = (240 + Math.floor(b.chamberRadius) * 60) / 2;
+    addVolume(a.q, a.r, 'passage', 'passage', 0, b.depth + chamberHalfSpan);
+    const tile = world.get(hexKey(a.q, a.r));
+    if (tile && !tile.poi) {
+      world.set(hexKey(a.q, a.r), makeTile('opening', a.q, a.r, tile.volumes));
+    }
+    // Horizontal corridor at chamber depth, meandering toward the chamber.
+    const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId);
+    const corridorSpan = 180;
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      addVolume(p.q, p.r, 'passage', 'passage', b.depth - corridorSpan / 2, b.depth + corridorSpan / 2);
+    }
+  }
+}
+
+// Directional shelf seafloor depth. Coast is at r=2; north of coast is open
+// water, gently sloping down then plunging at the shelf break. East/west of
+// the bay channel are mountains (impassable stone).
+function shelfSeafloorDepth(q, r) {
+  // North distance from the coast line. Positive = water; <= 0 means land.
+  const northDist = 1.5 - r;
+  if (northDist <= 0) return null;
+
+  // East-west offset from the bay centerline. Bay widens slowly going north.
+  const eastWestOffset = Math.abs(q + r * 0.5);
+  const bayWidth = 4 + northDist * 0.12;
+  // Beyond shelf break, no walls — open ocean in all directions
+  if (eastWestOffset > bayWidth && northDist < 32) return null;
+
+  let depth;
+  if (northDist < 5) {
+    // Gentle near-shore decline
+    depth = 50 + northDist * 35;        // 50 → 225
+  } else if (northDist < 25) {
+    // Continental shelf — relatively flat with gentle slope
+    depth = 225 + (northDist - 5) * 5;  // 225 → 325
+  } else if (northDist < 32) {
+    // Shelf break — drops rapidly into the deep
+    const t = (northDist - 25) / 7;
+    depth = 325 + t * t * 2000;         // 325 → 2325
+  } else {
+    // Open deep ocean (the player can swim out here but there's nothing yet)
+    depth = 2325 + (northDist - 32) * 80;
+  }
+  return depth;
+}
+
+// Mountain check: any hex that's not shelf water, not south of coast, but
+// beyond the bay walls. Used to leave walls in place during chunk generation.
+function isMountainHex(q, r) {
+  const northDist = 1.5 - r;
+  if (northDist <= 0) return false;
+  const eastWestOffset = Math.abs(q + r * 0.5);
+  const bayWidth = 4 + northDist * 0.12;
+  return eastWestOffset > bayWidth && northDist < 32;
+}
+
+const CHUNK = 14; // hex coords per chunk side
+
+function chunkKey(cq, cr) { return cq + '|' + cr; }
+function hexToChunk(q, r) {
+  return { cq: Math.floor(q / CHUNK), cr: Math.floor(r / CHUNK) };
+}
+
+// Which zone is this hex in? Used both by generation and by runtime
+// transition messaging ("you have left the shelf", etc).
+function hexZone(q, r) {
+  const { cq, cr } = hexToChunk(q, r);
+  const d = Math.sqrt(cq*cq + cr*cr + cq*cr);
+  if (d < 3) return 'shelf';
+  if (d < 5) return 'shelf-edge';
+  return 'deep';
+}
+function zoneRank(zone) {
+  return zone === 'shelf' ? 0 : zone === 'shelf-edge' ? 1 : 2;
+}
+
+function setTile(q, r, type, force) {
+  const t = TILES[type];
+  const k = hexKey(q, r);
+  const existing = world.get(k);
+  if (!force && existing && !existing.wall && t.wall) return; // never re-stone
+  // Preserve volumes when overlaying a POI on open space; clear them when
+  // forcing to a wall (shore, dock, stone — these are solid).
+  const volumes = (t.wall) ? [] : (existing && !existing.wall ? existing.volumes : []);
+  world.set(k, makeTile(type, q, r, volumes));
+}
+
+function makeTile(type, q, r, volumes) {
+  const t = TILES[type];
+  const tile = { type, q, r, volumes: volumes || [], ...t };
+  // Convenience: ceiling/floor are min/max across volumes for legacy code.
+  if (tile.volumes.length > 0) {
+    tile.ceiling = Math.min(...tile.volumes.map(v => v.ceiling));
+    tile.floor   = Math.max(...tile.volumes.map(v => v.floor));
+  } else {
+    tile.ceiling = 0;
+    tile.floor = 0;
+  }
+  return tile;
+}
+
+// Add an open volume to a hex. Volumes that overlap or touch are merged.
+// Snap a depth to the 60-meter grid. The sub moves vertically in 60-meter
+// increments, so any volume bound that isn't a multiple of 60 is unreachable
+// in practice. Snapping at insertion keeps the math honest everywhere.
+const DEPTH_GRID = 60;
+function snapDepth(m, mode) {
+  if (mode === 'ceiling') return Math.ceil(m / DEPTH_GRID) * DEPTH_GRID;
+  if (mode === 'floor')   return Math.floor(m / DEPTH_GRID) * DEPTH_GRID;
+  return Math.round(m / DEPTH_GRID) * DEPTH_GRID;
+}
+
+function addVolume(q, r, type, kind, ceiling, floor) {
+  const t = TILES[type];
+  if (t.wall) return;
+  // Snap to grid: ceiling rounds UP (so we don't claim space that doesn't
+  // exist), floor rounds DOWN (same reason). Result: every volume's bounds
+  // are reachable by 60-m sub movements.
+  ceiling = snapDepth(Math.max(0, ceiling), 'ceiling');
+  floor   = snapDepth(floor, 'floor');
+  if (floor <= ceiling) return; // degenerate after snapping
+  const k = hexKey(q, r);
+  let existing = world.get(k);
+  let existingVolumes = (existing && !existing.wall) ? [...existing.volumes] : [];
+  let existingType = (existing && !existing.wall) ? existing.type : type;
+
+  // Insert the new volume, then merge overlapping volumes
+  const newVol = { ceiling, floor, kind };
+  existingVolumes.push(newVol);
+  existingVolumes.sort((a, b) => a.ceiling - b.ceiling);
+  const merged = [];
+  for (const v of existingVolumes) {
+    if (merged.length && v.ceiling <= merged[merged.length - 1].floor + 1) {
+      // Overlap or touch — merge
+      const last = merged[merged.length - 1];
+      last.floor = Math.max(last.floor, v.floor);
+      // Kind: prefer the existing kind; new kinds promote only in specific cases
+      if (kindPriority(v.kind) > kindPriority(last.kind)) last.kind = v.kind;
+    } else {
+      merged.push({ ...v });
+    }
+  }
+
+  // Pick the dominant type for the whole tile (used for color/symbol).
+  // Highest-priority kind across all volumes wins, unless existing type is a POI.
+  const isExistingPoi = existing && !existing.wall && TILES[existing.type] && TILES[existing.type].poi;
+  let chosenType = isExistingPoi ? existing.type : type;
+  if (!isExistingPoi) {
+    // Choose by kind priority among volumes
+    let bestKind = merged[0].kind;
+    let bestPrio = kindPriority(bestKind);
+    for (const v of merged) {
+      const p = kindPriority(v.kind);
+      if (p > bestPrio) { bestPrio = p; bestKind = v.kind; }
+    }
+    chosenType = kindToType(bestKind);
+  }
+
+  world.set(k, makeTile(chosenType, q, r, merged));
+}
+
+function kindPriority(kind) {
+  const m = { water: 0, passage: 1, chamber: 2, sea: 3 };
+  return m[kind] ?? 0;
+}
+
+function kindToType(kind) {
+  return TILES[kind] ? kind : 'passage';
+}
+
+// Backwards-compatible single-range setter. Most generators still call this.
+function setOpenTile(q, r, type, ceiling, floor) {
+  const kind = ['water', 'passage', 'chamber', 'sea'].includes(type) ? type : 'passage';
+  addVolume(q, r, type, kind, ceiling, floor);
+}
+
+function getTile(q, r) {
+  return world.get(hexKey(q, r));
+}
+
+function tileAt(q, r) {
+  // Ensure the chunk containing this hex AND its neighbors are generated.
+  // Generating neighbors guarantees features that cross chunk borders are
+  // continuous before the player sees the seam.
+  const {cq, cr} = hexToChunk(q, r);
+  for (let dcq = -1; dcq <= 1; dcq++) {
+    for (let dcr = -1; dcr <= 1; dcr++) {
+      ensureChunk(cq + dcq, cr + dcr);
+    }
+  }
+  const k = hexKey(q, r);
+  if (!world.has(k)) setTile(q, r, 'stone', true);
+  return world.get(k);
+}
+
+function ensureChunk(cq, cr) {
+  const k = chunkKey(cq, cr);
+  if (generatedChunks.has(k)) return;
+  generatedChunks.add(k);
+  generateChunk(cq, cr);
+}
+
+// Per-chunk seeded RNG so chunks are deterministic
+function chunkRng(cq, cr) {
+  const s = (worldSeed ^ (cq * 73856093) ^ (cr * 19349663)) >>> 0;
+  return mulberry32(s);
+}
+
+// Generate a chunk by carving the part of the world graph that intersects it,
+// plus directional shelf water and origin features. Idempotent — re-running
+// produces the same result because the graph is deterministic.
+function generateChunk(cq, cr) {
+  if (!worldGraph) worldGraph = generateWorldGraph(worldSeed);
+
+  const crng = chunkRng(cq, cr);
+  const crand = () => crng();
+  const cpick = (a) => a[Math.floor(crand() * a.length)];
+
+  const q0 = cq * CHUNK, q1 = q0 + CHUNK;
+  const r0 = cr * CHUNK, r1 = r0 + CHUNK;
+
+  // Step 1: Shelf water + mountains. Each hex computes its seafloor from the
+  // directional shelf formula. If the formula returns null, the hex is land
+  // (mountain or south of coast) and stays as stone.
+  for (let q = q0; q < q1; q++) {
+    for (let r = r0; r < r1; r++) {
+      const seafloor = shelfSeafloorDepth(q, r);
+      if (seafloor != null) {
+        addVolume(q, r, 'water', 'water', 0, seafloor);
+      }
+    }
+  }
+
+  // Step 2: Cave network. Carve every chamber whose center sits within or
+  // near this chunk's hex bounds, and every tunnel whose path passes through.
+  // This is idempotent — chunks generated in any order produce the same world.
+  const pad = 6; // overlap padding so edge-crossing tunnels get carved fully
+  for (const node of worldGraph.nodes) {
+    if (node.bandId === 'surface') continue; // surface nodes are handled by sinkhole edges
+    if (node.q >= q0 - pad && node.q < q1 + pad &&
+        node.r >= r0 - pad && node.r < r1 + pad) {
+      carveChamber(node);
+    }
+  }
+  for (const edge of worldGraph.edges) {
+    const a = worldGraph.nodesById[edge.a];
+    const b = worldGraph.nodesById[edge.b];
+    if (!a || !b) continue;
+    const minQ = Math.min(a.q, b.q), maxQ = Math.max(a.q, b.q);
+    const minR = Math.min(a.r, b.r), maxR = Math.max(a.r, b.r);
+    if (maxQ < q0 - pad || minQ >= q1 + pad ||
+        maxR < r0 - pad || minR >= r1 + pad) continue;
+    carveEdge(edge, worldGraph.nodesById);
+  }
+
+  // Step 3: Origin specifics — surface marker, dock, shoreline.
+  if (cq === 0 && cr === 0) {
+    addVolume(0, 0, 'water', 'water', 0, 100);
+    let oTile = world.get(hexKey(0, 0));
+    world.set(hexKey(0, 0), makeTile('surface', 0, 0, oTile.volumes));
+    setTile(1, 0, 'dock', true);
+    setTile(1, 1, 'dock', true);
+    const shoreHexes = [
+      {q:-3, r:3}, {q:-2, r:3}, {q:-1, r:3}, {q:0, r:3}, {q:1, r:2}, {q:2, r:2},
+      {q:-3, r:4}, {q:-2, r:4}, {q:-1, r:4}, {q:0, r:4}, {q:1, r:3}, {q:2, r:3},
+      {q:3, r:1}, {q:3, r:2}, {q:-4, r:4}, {q:-4, r:3}, {q:-4, r:2},
+      {q:-2, r:5}, {q:-1, r:5}, {q:0, r:5}, {q:1, r:4}, {q:2, r:4}
+    ];
+    for (const h of shoreHexes) setTile(h.q, h.r, 'shore', true);
+  }
+
+  // Step 4: POIs scattered into open cave hexes (rare in shelf water, more
+  // common in tunnel passages and chambers).
+  const openCaveHexes = [];
+  const openShelfHexes = [];
+  for (let q = q0; q < q1; q++) {
+    for (let r = r0; r < r1; r++) {
+      const t = world.get(hexKey(q, r));
+      if (!t || t.wall || t.poi) continue;
+      if (t.type === 'water' || t.type === 'surface') {
+        openShelfHexes.push({q, r});
+      } else if (t.type === 'passage' || t.type === 'chamber') {
+        openCaveHexes.push({q, r});
+      }
+    }
+  }
+  // Cave POIs
+  let cavePoi = 1 + Math.floor(crand() * 3);
+  while (cavePoi > 0 && openCaveHexes.length > 0) {
+    const idx = Math.floor(crand() * openCaveHexes.length);
+    const h = openCaveHexes.splice(idx, 1)[0];
+    const poiType = cpick(['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage']);
+    setTile(h.q, h.r, poiType, true);
+    cavePoi--;
+  }
+  // Shelf POIs (sparser)
+  let shelfPoi = crand() < 0.5 ? 1 : 0;
+  while (shelfPoi > 0 && openShelfHexes.length > 0) {
+    const idx = Math.floor(crand() * openShelfHexes.length);
+    const h = openShelfHexes.splice(idx, 1)[0];
+    const poiType = cpick(['salvage', 'kelp']);
+    setTile(h.q, h.r, poiType, true);
+    shelfPoi--;
+  }
+}
+
+
+//=============================================================================
+// GAME STATE
+//=============================================================================
+
+const state = {
+  q: 0, r: 0,           // player horizontal position (hex)
+  currentDepth: 30,     // current depth in meters (sub vertical position)
+  air: 350,
+  hull: 100,
+  maxDepth: 0,          // session record (in meters)
+  moves: 0,
+  poisFound: [],
+  alive: true,
+  cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
+  panX: 0, panY: 0,         // user-applied pan offset (drag)
+  pingTimer: 0,
+  pingArrows: null,
+  // Movement feedback
+  lastMoveTime: 0,
+  lastFailTime: 0,
+  failHex: null,            // { q, r, color, expires } — flashed on failed move
+  trail: [],                // recent positions, newest first, capped at 3
+  // Zone tracking for "you have left the shelf" style transitions
+  lastZone: 'shelf',
+  maxZoneReached: 0,        // 0=shelf, 1=shelf-edge, 2=deep
+  // Active ping animation
+  ping: null,               // { startTime, durationMs, maxRadiusPx, originQ, originR, power } | null
+  // Ping memory: hexKey -> turns remaining (0 means forgotten). Decremented
+  // each turn. While > 0 the hex's wall edges remain visible at reduced intensity.
+  pingMemory: new Map(),
+};
+
+//=============================================================================
+// RENDER
+//=============================================================================
+
+const svg = document.getElementById('chart-svg');
+let viewW = 0, viewH = 0;
+let zoom = 2.4; // Higher = more zoomed in. 1.0 = native pixel size.
+// Refs updated by render() so gesture handlers can do cheap viewport-only
+// updates (transform on the world group) without rebuilding the whole tree.
+let worldGroupEl = null;
+let lastCamX = 0, lastCamY = 0;
+
+function setViewport() {
+  const rect = document.getElementById('chart-container').getBoundingClientRect();
+  viewW = rect.width;
+  viewH = rect.height;
+  // The viewBox dimensions are divided by zoom so a higher zoom shows less world
+  const vw = viewW / zoom;
+  const vh = viewH / zoom;
+  svg.setAttribute('viewBox', `${-vw/2} ${-vh/2} ${vw} ${vh}`);
+  svg.setAttribute('width', viewW);
+  svg.setAttribute('height', viewH);
+}
+
+function render() {
+  // Clear
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  // Defs for filters & gradients
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = `
+    <radialGradient id="vignette" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="55%" stop-color="#000000" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  `;
+  svg.appendChild(defs);
+
+  // Camera target follows player smoothly. User-applied pan is layered on top.
+  const playerPx = hexToPixel(state.q, state.r);
+  state.cameraX += (playerPx.x - state.cameraX) * 0.3;
+  state.cameraY += (playerPx.y - state.cameraY) * 0.3;
+  const camX = state.cameraX + state.panX;
+  const camY = state.cameraY + state.panY;
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('transform', `translate(${-camX}, ${-camY})`);
+  svg.appendChild(g);
+  // Save references for cheap pan updates during drag — we can update the
+  // transform attribute without rebuilding the entire SVG tree.
+  worldGroupEl = g;
+  lastCamX = camX;
+  lastCamY = camY;
+
+  // Visible viewport in WORLD coordinates (already divided by zoom)
+  const halfW = viewW / (2 * zoom) + HEX_SIZE * 2;
+  const halfH = viewH / (2 * zoom) + HEX_SIZE * 2;
+
+  const qRange = Math.ceil(halfW / (HEX_SIZE * SQRT3)) + 2;
+  const rRange = Math.ceil(halfH / (HEX_SIZE * 1.5)) + 2;
+
+  // Iterate from the camera center, not the player — so panning shows new areas
+  const camCenter = pixelToHex(camX, camY);
+
+  const playerHex = { q: state.q, r: state.r };
+  const SIGHT = 3;
+
+  for (let dr = -rRange; dr <= rRange; dr++) {
+    for (let dq = -qRange; dq <= qRange; dq++) {
+      const q = camCenter.q + dq;
+      const r = camCenter.r + dr;
+
+      const px = hexToPixel(q, r);
+      const dx = px.x - camX;
+      const dy = px.y - camY;
+      if (Math.abs(dx) > halfW || Math.abs(dy) > halfH) continue;
+
+      const tile = tileAt(q, r);
+      const key = hexKey(q, r);
+      const isVisited = visited.has(key);
+      const isRevealed = revealed.has(key);
+      const isPlayer = (q === state.q && r === state.r);
+      const dFromPlayer = hexDistance({q, r}, playerHex);
+
+      // Walls: stone draws NOTHING (pure void = labyrinth). Land (shore/dock)
+      // does render — it's a visible solid surface that bounds the world.
+      // But the surface is only visible if the sub is near the surface; at
+      // depth, the chart hides land that's hundreds of meters above.
+      if (tile.wall) {
+        if (tile.land && isRevealed && hexNearDepth(tile, state.currentDepth)) {
+          const lp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          lp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
+          lp.setAttribute('fill', tile.color);
+          lp.setAttribute('opacity', '1');
+          lp.setAttribute('stroke', 'none');
+          g.appendChild(lp);
+          // Land texture: a small mottled dot to suggest earth/timber
+          if (tile.type === 'dock') {
+            // Dock pylons — two short verticals
+            for (const offset of [-3, 3]) {
+              const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+              ln.setAttribute('x1', px.x + offset);
+              ln.setAttribute('y1', px.y - 4);
+              ln.setAttribute('x2', px.x + offset);
+              ln.setAttribute('y2', px.y + 4);
+              ln.setAttribute('stroke', '#1a1208');
+              ln.setAttribute('stroke-width', '1.2');
+              g.appendChild(ln);
+            }
+            // Crossbeam
+            const cb = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            cb.setAttribute('x1', px.x - 5);
+            cb.setAttribute('y1', px.y - 1);
+            cb.setAttribute('x2', px.x + 5);
+            cb.setAttribute('y2', px.y - 1);
+            cb.setAttribute('stroke', '#1a1208');
+            cb.setAttribute('stroke-width', '1');
+            g.appendChild(cb);
+          } else {
+            // Shore: a few specks of darker earth for texture
+            for (let i = 0; i < 3; i++) {
+              const ang = (q * 13 + r * 7 + i * 41) % 360 * Math.PI / 180;
+              const rr = HEX_SIZE * 0.35;
+              const dx = Math.cos(ang) * rr;
+              const dy = Math.sin(ang) * rr;
+              const spk = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              spk.setAttribute('cx', px.x + dx);
+              spk.setAttribute('cy', px.y + dy);
+              spk.setAttribute('r', '1');
+              spk.setAttribute('fill', '#1a1208');
+              spk.setAttribute('opacity', '0.7');
+              g.appendChild(spk);
+            }
+          }
+        }
+        continue;
+      }
+
+      // Open hex but not revealed = also void
+      if (!isRevealed) continue;
+      // Even if revealed, hide hexes whose volumes are far from the sub's
+      // current depth. The sub's sonar at 360m can't perceive shelf water at
+      // depth 0 — there's hundreds of meters of rock and dead water between
+      // them. The chart should reflect what the sub can sense NOW.
+      if (!isPlayer && !hexNearDepth(tile, state.currentDepth)) continue;
+
+      // Brightness based on distance from player + visited state
+      let alpha;
+      if (isVisited) {
+        alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
+      } else {
+        alpha = dFromPlayer <= SIGHT ? 0.7 : Math.max(0.28, 0.7 - (dFromPlayer - SIGHT) * 0.1);
+      }
+
+      // Hex floor — caves render with a visible stroke (so wall boundaries read),
+      // Open hexes fill solidly with no stroke. Where they touch, fills merge
+      // into one passage shape. Where they meet wall (void), the fill simply
+      // ends — and that crisp edge IS the wall, like Cloudy Mountain.
+      const isWater = tile.type === 'water';
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      // Slight overdraw (1.02x) prevents hairline seams between adjacent open hexes
+      poly.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
+      poly.setAttribute('fill', tile.color);
+      poly.setAttribute('opacity', isWater ? alpha * 0.55 : alpha);
+      poly.setAttribute('stroke', 'none');
+      g.appendChild(poly);
+
+      // Bright edges: any boundary between a sub-reachable hex and a
+      // not-currently-passable one (wall, OR open water at incompatible depth)
+      // lights up. Drawn from the sub-reachable side, once per edge.
+      const passiveR = passiveRange();
+      const inPassive = passiveR > 0 && dFromPlayer < passiveR;
+      const pingMemTurns = state.pingMemory.get(key) || 0;
+      const memFade = pingMemTurns / 5;
+      const edgesVisible = inPassive || pingMemTurns > 0;
+      const edgeIntensity = inPassive ? 1 : memFade;
+      const tileIsReachable = !tile.wall && hexAcceptsDepth(tile, state.currentDepth);
+
+      if (edgesVisible && tileIsReachable) {
+        const nbrs = hexNeighbors(q, r);
+        for (let k = 0; k < 6; k++) {
+          const n = nbrs[k];
+          const nt = tileAt(n.q, n.r);
+          // Decide what to draw on the edge between (q,r) and (n.q,n.r).
+          // Three cases:
+          //   1. Adjacent hex is solid wall (stone or shore/dock) → grey or earth.
+          //   2. Adjacent hex has open water but not at sub's depth → blue tones
+          //      encoding direction (light = above, dark = below, dual = both).
+          //   3. Adjacent hex is reachable → no edge drawn.
+          let wallColor = null;     // single-line color, if applicable
+          let aboveColor = null;    // dual-line: water above sub's depth
+          let belowColor = null;    // dual-line: water below sub's depth
+          if (nt.wall) {
+            const nIsRevealed = revealed.has(hexKey(n.q, n.r));
+            if (!nIsRevealed && !inPassive) continue;
+            // Shore/dock are visible as "land" only when the sub is near the
+            // surface. At depth, what was shore from above is just rock —
+            // it should render as stone, not land.
+            const isLand = (nt.type === 'shore' || nt.type === 'dock')
+                         && state.currentDepth <= DEPTH_GRID * 2;
+            // Stone: light warm-grey, deliberately not blue. The previous
+            // cool grey-blue read too similar to the indigo "water below"
+            // tone in dim viewing conditions, leading to mistaken hull
+            // collisions when the player thought a wall was open water.
+            wallColor = isLand ? '#8a6840' : '#a89a88';
+          } else if (!hexAcceptsDepth(nt, state.currentDepth)) {
+            // Per the column model: the perimeter cares about three cells
+            // in the neighbor column — (q',r',z), (q',r',z-60), and
+            // (q',r',z+60). The cell at z is already known to be stone
+            // here (hexAcceptsDepth returned false). Now check the two
+            // cells one step up and one step down:
+            //   cell water at z-60 → cyan (ascend one, then move horizontally)
+            //   cell water at z+60 → indigo (descend one, then move)
+            //   both → gradient
+            //   neither → grey: from the sub's depth, all three cells are
+            //             stone, indistinguishable in every actionable way
+            //             from a mountain column. Water elsewhere in the
+            //             column (a shelf far above, a chamber far below)
+            //             is the ping's job to reveal, not the perimeter's.
+            const oneUp = state.currentDepth - DEPTH_GRID;
+            const oneDown = state.currentDepth + DEPTH_GRID;
+            let hasAbove = false, hasBelow = false;
+            for (const v of (nt.volumes || [])) {
+              if (oneUp >= 0 && oneUp >= v.ceiling && oneUp <= v.floor) hasAbove = true;
+              if (oneDown >= v.ceiling && oneDown <= v.floor) hasBelow = true;
+            }
+            if (hasAbove && hasBelow) {
+              aboveColor = '#7ed4f0';
+              belowColor = '#2a1f6e';
+            } else if (hasAbove) {
+              wallColor = '#7ed4f0'; // bright cyan — ascend one step to enter
+            } else if (hasBelow) {
+              wallColor = '#2a1f6e'; // deep indigo — descend one step to enter
+            } else {
+              wallColor = '#a89a88'; // grey — three stone cells, functionally a wall
+            }
+          }
+          if (!wallColor && !aboveColor && !belowColor) continue;
+          const cornerA = (1 - k + 6) % 6;
+          const cornerB = (6 - k) % 6;
+          const pa = hexCornerPoint(px.x, px.y, HEX_SIZE, cornerA);
+          const pb = hexCornerPoint(px.x, px.y, HEX_SIZE, cornerB);
+          const strokeW = (1.2 + edgeIntensity * 0.8);
+          const op = Math.min(1, alpha + 0.15) * edgeIntensity;
+          if (wallColor) {
+            // Single-line edge
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', pa.x.toFixed(2));
+            line.setAttribute('y1', pa.y.toFixed(2));
+            line.setAttribute('x2', pb.x.toFixed(2));
+            line.setAttribute('y2', pb.y.toFixed(2));
+            line.setAttribute('stroke', wallColor);
+            line.setAttribute('stroke-width', strokeW.toFixed(2));
+            line.setAttribute('stroke-linecap', 'round');
+            line.setAttribute('opacity', op.toFixed(2));
+            line.setAttribute('pointer-events', 'none');
+            g.appendChild(line);
+          } else {
+            // Both above and below: gradient runs along the edge's own
+            // axis with dark blue at the corners and light blue at the
+            // midpoint. Every edge gets the same pattern regardless of
+            // its angle, so the hex's perimeter reads as six quiet glows
+            // around dark corners — not the spiraling light-to-dark
+            // cycle that a screen-anchored vertical gradient produced.
+            const gradId = `gradAB_${q}_${r}_${k}`;
+            const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            grad.setAttribute('id', gradId);
+            grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+            grad.setAttribute('x1', pa.x.toFixed(2));
+            grad.setAttribute('y1', pa.y.toFixed(2));
+            grad.setAttribute('x2', pb.x.toFixed(2));
+            grad.setAttribute('y2', pb.y.toFixed(2));
+            grad.innerHTML =
+              `<stop offset="0" stop-color="${belowColor}"/>` +
+              `<stop offset="0.5" stop-color="${aboveColor}"/>` +
+              `<stop offset="1" stop-color="${belowColor}"/>`;
+            defs.appendChild(grad);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', pa.x.toFixed(2));
+            line.setAttribute('y1', pa.y.toFixed(2));
+            line.setAttribute('x2', pb.x.toFixed(2));
+            line.setAttribute('y2', pb.y.toFixed(2));
+            line.setAttribute('stroke', `url(#${gradId})`);
+            line.setAttribute('stroke-width', strokeW.toFixed(2));
+            line.setAttribute('stroke-linecap', 'round');
+            line.setAttribute('opacity', op.toFixed(2));
+            line.setAttribute('pointer-events', 'none');
+            g.appendChild(line);
+          }
+        }
+      }
+
+      // Visited dot marker
+      if (isVisited && !tile.poi && !isPlayer) {
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', px.x);
+        dot.setAttribute('cy', px.y);
+        dot.setAttribute('r', '0.7');
+        dot.setAttribute('fill', '#2a5a4a');
+        dot.setAttribute('opacity', alpha * 0.6);
+        g.appendChild(dot);
+      }
+
+      // Tile symbol (POI/feature)
+      if (tile.char) {
+        const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        txt.setAttribute('x', px.x);
+        txt.setAttribute('y', px.y);
+        txt.setAttribute('text-anchor', 'middle');
+        txt.setAttribute('dominant-baseline', 'central');
+        txt.setAttribute('font-family', 'JetBrains Mono, monospace');
+        txt.setAttribute('font-size', tile.poi ? '12' : '10');
+        txt.setAttribute('opacity', alpha);
+        let color = '#5eb89a';
+        if (tile.poi === 'ruin') color = '#d89248';
+        else if (tile.poi === 'signal') color = '#b870e8';
+        else if (tile.poi === 'growth') color = '#b870e8';
+        else if (tile.poi === 'air') color = '#9ee0c2';
+        else if (tile.poi === 'salvage') color = '#f4b860';
+        else if (tile.poi === 'surface') color = '#f4b860';
+        else if (tile.poi === 'opening') color = '#f4b860'; // warm — the way back up
+        else if (tile.poi === 'deadend') color = '#3a4858';
+        else if (tile.type === 'kelp') color = '#3a6850';
+        else if (tile.type === 'current') color = '#4090c8';
+        else if (tile.type === 'chasm') color = '#7050a0';
+        txt.setAttribute('fill', color);
+        if (tile.poi && tile.poi !== 'deadend') txt.setAttribute('filter', 'url(#softglow)');
+        txt.textContent = tile.char;
+        g.appendChild(txt);
+
+        // Tap-to-identify: invisible hit target over every POI hex. For
+        // non-adjacent POIs this is the only interactive element on the hex,
+        // so a tap reads the description into the log. For adjacent POIs, the
+        // movement hit target (added later in render) sits on top and wins
+        // the click — tapping the POI then moves toward it as before.
+        if (tile.poi) {
+          const hit = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          hit.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 0.7));
+          hit.setAttribute('fill', 'rgba(0,0,0,0.001)');
+          hit.setAttribute('stroke', 'none');
+          hit.style.cursor = 'help';
+          hit.addEventListener('click', (e) => {
+            e.stopPropagation();
+            identifyPoi(tile);
+          });
+          g.appendChild(hit);
+        }
+      }
+
+      // Player marker — the Erebus. Adds an arrival pulse when the player just moved.
+      if (isPlayer) {
+        const now = performance.now();
+        const justArrived = (now - (state.lastMoveTime || 0)) < 450;
+        const justFailed = (now - (state.lastFailTime || 0)) < 350;
+
+        // Wrap the whole sub in a group so we can shake it as a unit
+        const subG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        if (justFailed) subG.classList.add('sub-shake');
+
+        // Outer arrival pulse (only briefly after a successful move)
+        if (justArrived && !justFailed) {
+          const arr = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          arr.setAttribute('cx', px.x);
+          arr.setAttribute('cy', px.y);
+          arr.setAttribute('r', HEX_SIZE * 0.7);
+          arr.setAttribute('fill', 'none');
+          arr.setAttribute('stroke', '#f4b860');
+          arr.setAttribute('stroke-width', '0.8');
+          arr.setAttribute('opacity', '0.7');
+          arr.classList.add('arrival');
+          subG.appendChild(arr);
+        }
+
+        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ring.setAttribute('cx', px.x);
+        ring.setAttribute('cy', px.y);
+        ring.setAttribute('r', HEX_SIZE * 0.45);
+        ring.setAttribute('fill', 'none');
+        ring.setAttribute('stroke', '#f4b860');
+        ring.setAttribute('stroke-width', '1.2');
+        ring.setAttribute('filter', 'url(#softglow)');
+        subG.appendChild(ring);
+
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', px.x);
+        dot.setAttribute('cy', px.y);
+        dot.setAttribute('r', '2.6');
+        dot.setAttribute('fill', '#f4b860');
+        dot.setAttribute('filter', 'url(#glow)');
+        subG.appendChild(dot);
+
+        g.appendChild(subG);
+
+        // Invisible tap target on the sub's own hex — tapping it issues a "wait"
+        const waitHit = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        waitHit.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 0.85));
+        waitHit.setAttribute('fill', 'rgba(0,0,0,0.001)');
+        waitHit.setAttribute('stroke', 'none');
+        waitHit.style.cursor = 'pointer';
+        waitHit.addEventListener('click', () => wait());
+        g.appendChild(waitHit);
+      }
+    }
+  }
+
+  // Animated sonar wavefront — expands outward from the sub at ping origin.
+  // Two rings: a bright leading edge, and a dimmer trailing one for thickness.
+  if (state.ping) {
+    const p = state.ping;
+    const elapsed = performance.now() - p.startTime;
+    const t = Math.min(1, elapsed / p.durationMs);
+    const origin = hexToPixel(p.originQ, p.originR);
+    const leadRadius = t * p.maxRadiusPx;
+    const leadOpacity = (1 - t) * 0.7;
+    const lead = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    lead.setAttribute('cx', origin.x);
+    lead.setAttribute('cy', origin.y);
+    lead.setAttribute('r', leadRadius);
+    lead.setAttribute('fill', 'none');
+    lead.setAttribute('stroke', '#5eb89a');
+    lead.setAttribute('stroke-width', 1.2 + p.power * 0.35);
+    lead.setAttribute('opacity', leadOpacity);
+    lead.setAttribute('pointer-events', 'none');
+    g.appendChild(lead);
+    // Trailing fainter ring, lagging slightly behind
+    const trailT = Math.max(0, t - 0.12);
+    if (trailT > 0) {
+      const trailRadius = trailT * p.maxRadiusPx;
+      const trailOpacity = (1 - t) * 0.35;
+      const trail = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      trail.setAttribute('cx', origin.x);
+      trail.setAttribute('cy', origin.y);
+      trail.setAttribute('r', trailRadius);
+      trail.setAttribute('fill', 'none');
+      trail.setAttribute('stroke', '#5eb89a');
+      trail.setAttribute('stroke-width', 0.8 + p.power * 0.25);
+      trail.setAttribute('opacity', trailOpacity);
+      trail.setAttribute('pointer-events', 'none');
+      g.appendChild(trail);
+    }
+    // Inner glow at the sub itself, brightest at ping origin
+    const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    glow.setAttribute('cx', origin.x);
+    glow.setAttribute('cy', origin.y);
+    glow.setAttribute('r', HEX_SIZE * 0.6);
+    glow.setAttribute('fill', '#5eb89a');
+    glow.setAttribute('opacity', (1 - t) * 0.25);
+    glow.setAttribute('filter', 'url(#softglow)');
+    glow.setAttribute('pointer-events', 'none');
+    g.appendChild(glow);
+  }
+
+  // Ping arrow overlay — for each revealed hex with an opening above or
+  // below the sub's depth (within the ping's depth range), draw a small
+  // ↑/↓ marker with the distance in meters. Persists ~4-5 seconds after
+  // the wavefront so the player can read at leisure, then fades out.
+  if (state.pingArrows) {
+    const pa = state.pingArrows;
+    const elapsed = performance.now() - pa.startTime;
+    if (elapsed >= pa.durationMs) {
+      state.pingArrows = null;
+    } else {
+      // Quick fade in (300ms), long stable middle, fade out over last 800ms
+      const fadeIn  = Math.min(1, elapsed / 300);
+      const fadeOut = elapsed > (pa.durationMs - 800)
+        ? Math.max(0, (pa.durationMs - elapsed) / 800)
+        : 1;
+      const baseOpacity = fadeIn * fadeOut;
+      for (const arrow of pa.arrows) {
+        const ap = hexToPixel(arrow.q, arrow.r);
+        const isUp = arrow.dir === 'up';
+        const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        txt.setAttribute('x', ap.x);
+        // Stack up/down readouts vertically so both fit when a hex has them.
+        txt.setAttribute('y', ap.y + (isUp ? -3.5 : 6.5));
+        txt.setAttribute('text-anchor', 'middle');
+        txt.setAttribute('dominant-baseline', 'central');
+        txt.setAttribute('font-family', 'JetBrains Mono, monospace');
+        txt.setAttribute('font-size', '5.5');
+        txt.setAttribute('font-weight', '600');
+        // Cyan for "ascend to reach", light indigo for "descend to reach"
+        // (the dark indigo of the boundary edge is too dim as text).
+        txt.setAttribute('fill', isUp ? '#9eddf5' : '#a098e0');
+        txt.setAttribute('opacity', baseOpacity);
+        txt.setAttribute('pointer-events', 'none');
+        txt.textContent = (isUp ? '↑' : '↓') + arrow.meters;
+        g.appendChild(txt);
+      }
+    }
+  }
+
+  // Render motion trail — dots fading behind the sub, max 3 steps back.
+  // Tells the player at a glance that movement happened and which way.
+  // Trail entries from a different depth band are skipped: the player at
+  // 360m shouldn't see breadcrumbs from when they were on the surface.
+  if (state.trail.length > 0) {
+    const subPx = hexToPixel(state.q, state.r);
+    let prev = subPx;
+    const depthMargin = DEPTH_GRID * 2;
+    for (let i = 0; i < state.trail.length; i++) {
+      const h = state.trail[i];
+      // Skip trail entries whose depth is far from the sub's current depth
+      if (h.depth != null && Math.abs(h.depth - state.currentDepth) > depthMargin) {
+        prev = hexToPixel(h.q, h.r);
+        continue;
+      }
+      const hp = hexToPixel(h.q, h.r);
+      // Brightness decreases with distance from sub
+      const alphaSteps = [0.55, 0.30, 0.12];
+      const a = alphaSteps[i] || 0.05;
+      // Draw a short dotted segment between prev and hp
+      const dx = hp.x - prev.x;
+      const dy = hp.y - prev.y;
+      const len = Math.sqrt(dx*dx + dy*dy);
+      const steps = 4;
+      for (let s = 1; s < steps; s++) {
+        const t = s / steps;
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', prev.x + dx * t);
+        dot.setAttribute('cy', prev.y + dy * t);
+        dot.setAttribute('r', '1.0');
+        dot.setAttribute('fill', '#f4b860');
+        dot.setAttribute('opacity', a * (1 - t * 0.25));
+        dot.setAttribute('pointer-events', 'none');
+        g.appendChild(dot);
+      }
+      prev = hp;
+    }
+  }
+
+  // Render failed-move flash on top of normal tiles
+  if (state.failHex && performance.now() < state.failHex.expires) {
+    const fpx = hexToPixel(state.failHex.q, state.failHex.r);
+    const flash = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    flash.setAttribute('points', hexCorners(fpx.x, fpx.y, HEX_SIZE * 0.96));
+    flash.setAttribute('fill', state.failHex.color);
+    flash.setAttribute('opacity', '0');
+    flash.setAttribute('stroke', state.failHex.color);
+    flash.setAttribute('stroke-width', '1.6');
+    flash.classList.add('move-flash');
+    g.appendChild(flash);
+  }
+
+  // Tap-to-move hit areas on adjacent passable tiles
+  const adj = hexNeighbors(state.q, state.r);
+  for (const n of adj) {
+    const tile = tileAt(n.q, n.r);
+    const px = hexToPixel(n.q, n.r);
+
+    if (tile.wall) {
+      // Invisible tap target on adjacent walls — collision damage if tapped.
+      // Slightly inset so it doesn't fight with the player's own hex.
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      hit.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 0.85));
+      hit.setAttribute('fill', 'rgba(0,0,0,0.001)'); // invisible but tappable
+      hit.setAttribute('stroke', 'none');
+      hit.style.cursor = 'not-allowed';
+      hit.addEventListener('click', () => move(n.q, n.r));
+      g.appendChild(hit);
+      continue;
+    }
+
+    revealed.add(hexKey(n.q, n.r));
+    // Reachable hexes get a visible dashed tap target. Depth-locked open
+    // hexes get an invisible tap target — tapping them is a collision
+    // attempt (the sub strikes rock at the current depth) and feeds back
+    // sonar info about the opening above or below. Walls already handled
+    // above.
+    const reachable = hexAcceptsDepth(tile, state.currentDepth);
+    if (reachable) {
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      hit.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 0.95));
+      hit.setAttribute('fill', 'rgba(94,184,154,0.04)');
+      hit.setAttribute('stroke', 'rgba(94,184,154,0.55)');
+      hit.setAttribute('stroke-width', '0.8');
+      hit.setAttribute('stroke-dasharray', '2 2');
+      hit.style.cursor = 'pointer';
+      hit.addEventListener('click', () => move(n.q, n.r));
+      g.appendChild(hit);
+    } else {
+      // Depth-locked: invisible but tappable. Collision behavior in move().
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      hit.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 0.85));
+      hit.setAttribute('fill', 'rgba(0,0,0,0.001)');
+      hit.setAttribute('stroke', 'none');
+      hit.style.cursor = 'not-allowed';
+      hit.addEventListener('click', () => move(n.q, n.r));
+      g.appendChild(hit);
+    }
+  }
+
+  // Vignette overlay (in svg viewport space, not world space)
+  const vignette = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  const vw = viewW / zoom, vh = viewH / zoom;
+  vignette.setAttribute('x', -vw/2);
+  vignette.setAttribute('y', -vh/2);
+  vignette.setAttribute('width', vw);
+  vignette.setAttribute('height', vh);
+  vignette.setAttribute('fill', 'url(#vignette)');
+  vignette.setAttribute('pointer-events', 'none');
+  svg.appendChild(vignette);
+}
+
+//=============================================================================
+// REVEAL & EXPLORATION
+//=============================================================================
+
+function revealAround(q, r, radius) {
+  // Standing on a tile reveals itself + immediate neighbors
+  const key = hexKey(q, r);
+  revealed.add(key);
+  for (let dq = -radius; dq <= radius; dq++) {
+    for (let dr = Math.max(-radius, -dq-radius); dr <= Math.min(radius, -dq+radius); dr++) {
+      revealed.add(hexKey(q + dq, r + dr));
+    }
+  }
+}
+
+// Sonar model. Passive sonar is constant — always on, free, fixed range —
+// and is independent of the slider. The slider only selects the power of
+// the ACTIVE ping (button-triggered, air-cost, broadcasts a wavefront).
+//
+//   activeRange: hexes the ping reaches outward
+//   depthRange:  meters of depth ± current depth the ping reads through
+//                (controls how far up/down the arrow overlay sees openings)
+//   activeCost:  air cost per ping at this level
+//   loudness:    forward-looking — pings carry; loud pings attract creatures
+//                and enemy contact. Stored for future combat/AI hookups.
+//
+// Curve rationale: range and cost grow faster than linearly with power.
+// Power 1 is the "right here" ping; nav lives at 2-3; high power (4-5) is
+// the survey-the-room ping for scouting, with real air commitment.
+// One hex = 60 meters.
+const PASSIVE_RANGE = 1; // always-on; sub sees the hex it's in plus adjacent
+const PING_LEVELS = [
+  { activeRange: 0,  depthRange: 0,   activeCost: 0,  loudness: 0 }, // 0: silent
+  { activeRange: 1,  depthRange: 60,  activeCost: 1,  loudness: 1 }, // 1: right here
+  { activeRange: 3,  depthRange: 180, activeCost: 3,  loudness: 2 }, // 2: nav
+  { activeRange: 5,  depthRange: 360, activeCost: 6,  loudness: 3 }, // 3: mid
+  { activeRange: 8,  depthRange: 540, activeCost: 10, loudness: 4 }, // 4: long
+  { activeRange: 12, depthRange: 720, activeCost: 15, loudness: 5 }, // 5: survey
+];
+
+function pingPower() {
+  const el = document.getElementById('ping-power');
+  return el ? parseInt(el.value, 10) : 2;
+}
+
+function passiveRange() {
+  // Passive sonar is fixed — the slider does not affect it.
+  return PASSIVE_RANGE;
+}
+
+function updatePingDisplay() {
+  const p = pingPower();
+  const lvl = PING_LEVELS[p];
+  const costEl = document.getElementById('ping-cost');
+  const rangeEl = document.getElementById('ping-range');
+  if (p === 0) {
+    if (costEl) costEl.textContent = 'OFF';
+    if (rangeEl) rangeEl.textContent = 'silent';
+  } else {
+    if (costEl) costEl.textContent = lvl.activeCost;
+    if (rangeEl) rangeEl.textContent = lvl.activeRange * 60;
+  }
+  // Disable the Ping button when sonar is set to silent
+  const pingBtn = document.getElementById('btn-ping');
+  if (pingBtn) pingBtn.disabled = (p === 0);
+  // Re-render is unnecessary now that passive is decoupled — slider position
+  // doesn't change the chart until the user actually fires a ping.
+}
+
+// Hex line algorithm — returns a list of hexes on the line from a to b.
+// Uses cube-coord lerp + round.
+function hexLine(a, b) {
+  const N = hexDistance(a, b);
+  if (N === 0) return [a];
+  const out = [];
+  // Cube coords: x=q, z=r, y=-q-r
+  const ax = a.q, az = a.r, ay = -a.q - a.r;
+  const bx = b.q, bz = b.r, by = -b.q - b.r;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const x = ax + (bx - ax) * t;
+    const z = az + (bz - az) * t;
+    const y = ay + (by - ay) * t;
+    // round to nearest cube hex
+    let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+    const dx = Math.abs(rx - x), dy = Math.abs(ry - y), dz = Math.abs(rz - z);
+    if (dx > dy && dx > dz) rx = -ry - rz;
+    else if (dy > dz) ry = -rx - rz;
+    else rz = -rx - ry;
+    out.push({ q: rx, r: rz });
+  }
+  return out;
+}
+
+// RAF-driven sonar wavefront. Each tick re-renders so the wavefront appears
+// to expand smoothly outward from the sub. Clears state.ping when finished.
+function animatePing() {
+  const now = performance.now();
+  // Keep animating while either the wavefront OR the arrow overlay needs to
+  // be redrawn. They have different durations, so we drive both from here.
+  const pingActive = state.ping && (now - state.ping.startTime) < state.ping.durationMs;
+  const arrowsActive = state.pingArrows && (now - state.pingArrows.startTime) < state.pingArrows.durationMs;
+  if (!pingActive && !arrowsActive) {
+    if (state.ping) state.ping = null;
+    if (state.pingArrows) state.pingArrows = null;
+    render();
+    return;
+  }
+  if (!pingActive && state.ping) state.ping = null;
+  render();
+  requestAnimationFrame(animatePing);
+}
+
+function ping() {
+  const power = pingPower();
+  if (power === 0) {
+    log('Sonar is silent.', 'warn');
+    return;
+  }
+  const lvl = PING_LEVELS[power];
+  if (state.air < lvl.activeCost) {
+    log(`Not enough air for a power-${power} ping. Needs ${lvl.activeCost}.`, 'warn');
+    return;
+  }
+  state.air = Math.max(0, state.air - lvl.activeCost);
+
+  const radius = lvl.activeRange;
+  let interesting = null;
+  let interestingDist = 999;
+  let openHexes = 0;
+  let totalHexes = 0;
+
+  // Build the set of revealed hexes via line-of-sight rays.
+  // For every hex on the ring at exact distance == radius, cast a ray from
+  // the sub through that hex; reveal every hex along the ray up to and
+  // including the first wall, then stop. This naturally produces shadows
+  // behind walls.
+  const ringHexes = [];
+  for (let dq = -radius; dq <= radius; dq++) {
+    for (let dr = Math.max(-radius, -dq-radius); dr <= Math.min(radius, -dq+radius); dr++) {
+      const q = state.q + dq, r = state.r + dr;
+      const d = hexDistance({q, r}, {q: state.q, r: state.r});
+      if (d === radius) ringHexes.push({q, r});
+    }
+  }
+
+  const pingRevealed = new Set();
+  for (const target of ringHexes) {
+    const line = hexLine({q: state.q, r: state.r}, target);
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i];
+      const k = hexKey(p.q, p.r);
+      const tile = tileAt(p.q, p.r);
+      pingRevealed.add(k);
+      if (tile.wall) {
+        // Wall is the last hex revealed along this ray.
+        break;
+      }
+    }
+  }
+
+  // Record the ping memory — every revealed hex gets a freshness counter
+  // that ticks down each turn. While > 0, its wall edges remain visible
+  // even if passive sonar wouldn't normally reach it.
+  const PING_MEMORY_TURNS = 5;
+  for (const k of pingRevealed) {
+    state.pingMemory.set(k, PING_MEMORY_TURNS);
+  }
+
+  // Stats and POI search across only the line-of-sight revealed set.
+  // Also build the arrow overlay: for every revealed hex that's not
+  // reachable in one step, find the nearest opening above and below
+  // (within the ping's depth range) and queue a small ↑/↓ readout for
+  // the render loop to draw on that hex.
+  const depthRange = lvl.depthRange;
+  const pingArrowList = [];
+  for (const k of pingRevealed) {
+    const [q, r] = k.split(',').map(Number);
+    const tile = tileAt(q, r);
+    revealed.add(k);
+    totalHexes++;
+    if (!tile.wall) openHexes++;
+    const d = hexDistance({q, r}, {q: state.q, r: state.r});
+    if (tile.poi && d > 1) {
+      if (d < interestingDist) {
+        interesting = tile;
+        interestingDist = d;
+      }
+    }
+    // Arrow overlay: skip the sub's own hex, walls, and hexes already
+    // reachable horizontally at current depth.
+    if (tile.wall) continue;
+    if (q === state.q && r === state.r) continue;
+    if (hexAcceptsDepth(tile, state.currentDepth)) continue;
+    let nearestAbove = null, nearestBelow = null;
+    for (const v of (tile.volumes || [])) {
+      if (v.floor < state.currentDepth) {
+        const dist = state.currentDepth - v.floor;
+        if (dist <= depthRange && (nearestAbove === null || dist < nearestAbove)) {
+          nearestAbove = dist;
+        }
+      }
+      if (v.ceiling > state.currentDepth) {
+        const dist = v.ceiling - state.currentDepth;
+        if (dist <= depthRange && (nearestBelow === null || dist < nearestBelow)) {
+          nearestBelow = dist;
+        }
+      }
+    }
+    if (nearestAbove !== null) pingArrowList.push({ q, r, dir: 'up', meters: nearestAbove });
+    if (nearestBelow !== null) pingArrowList.push({ q, r, dir: 'down', meters: nearestBelow });
+  }
+
+  // Start an animated wavefront — radius grows from 0 to the ping's actual reach
+  // over a duration scaled by power. The render loop draws it from state.ping.
+  const maxRadiusPx = radius * HEX_SIZE * SQRT3;
+  const durationMs = 700 + power * 220;
+  state.ping = {
+    startTime: performance.now(),
+    durationMs,
+    maxRadiusPx,
+    originQ: state.q,
+    originR: state.r,
+    power,
+  };
+  // Arrow overlay persists longer than the wavefront so the player has time
+  // to read distances. Stronger pings reveal more detail for longer.
+  if (pingArrowList.length > 0) {
+    state.pingArrows = {
+      arrows: pingArrowList,
+      startTime: performance.now(),
+      durationMs: 3500 + power * 400, // 3.9s at p1, 5.5s at p5
+    };
+  }
+  animatePing();
+
+  // Compose the log message
+  const openRatio = openHexes / Math.max(1, totalHexes);
+
+  const atSurface = state.currentDepth <= 1;
+
+  if (interesting) {
+    const dir = bearing(state.q, state.r, interesting.q, interesting.r);
+    const meters = interestingDist * 60;
+    // Depth offset to the POI: find the nearest volume in the POI tile and compare
+    let depthHint = '';
+    const near = nearestVolume(interesting, state.currentDepth);
+    if (near && near.deltaMeters > 8) {
+      const dir2 = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
+      depthHint = `, ${Math.round(near.deltaMeters)} m ${dir2}`;
+    }
+    const echo = (interesting.poi === 'growth' || interesting.poi === 'signal') ? 'STRANGE'
+               : (interesting.poi === 'air') ? 'AIR'
+               : (interesting.poi === 'opening') ? 'OPENING'
+               : 'ECHO';
+    const echoClass = (echo === 'STRANGE') ? 'strange' : (echo === 'AIR' ? 'warn' : '');
+    log(`${interesting.name.charAt(0).toUpperCase() + interesting.name.slice(1)} ${dir}, ${meters} m out${depthHint}.`, echoClass, echo);
+  } else if (atSurface) {
+    // Surface pings detect bottom contours and openings — no walls up here.
+    if (power >= 4) {
+      log('The ping ranges out across the shelf. Nothing breaks the seafloor in earshot.', '', 'ECHO');
+    } else if (power >= 3) {
+      log('The ping fans through the water column. Empty.', '', 'ECHO');
+    } else {
+      log('The ping fades into open water.', '', 'ECHO');
+    }
+  } else if (power >= 3 && openRatio < 0.15) {
+    log('The ping returns from stone in every direction. You are alone in a corridor.', '', 'ECHO');
+  } else if (power >= 4 && openRatio > 0.6) {
+    log('The ping travels far. Open water in every direction. The hull feels small.', 'strange', 'ECHO');
+  } else if (power >= 3 && openRatio > 0.35) {
+    log('The ping opens. Wide spaces nearby.', '', 'ECHO');
+  } else {
+    log('The ping returns only stone.', '', 'ECHO');
+  }
+
+  updateHUD();
+  render();
+}
+
+function bearing(fromQ, fromR, toQ, toR) {
+  const a = hexToPixel(fromQ, fromR);
+  const b = hexToPixel(toQ, toR);
+  const angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  // 0 = east, 90 = south, -90 = north
+  if (angle > -22.5 && angle <= 22.5) return 'east';
+  if (angle > 22.5 && angle <= 67.5) return 'southeast';
+  if (angle > 67.5 && angle <= 112.5) return 'south';
+  if (angle > 112.5 && angle <= 157.5) return 'southwest';
+  if (angle > 157.5 || angle <= -157.5) return 'west';
+  if (angle > -157.5 && angle <= -112.5) return 'northwest';
+  if (angle > -112.5 && angle <= -67.5) return 'north';
+  return 'northeast';
+}
+
+//=============================================================================
+// MOVEMENT
+//=============================================================================
+
+// Flag a failed move attempt so the renderer can flash the target hex and
+// shake the sub. Color picks the flash hue based on what blocked the move.
+function flagMoveFail(q, r, color) {
+  state.failHex = { q, r, color, expires: performance.now() + 550 };
+  state.lastFailTime = performance.now();
+  render();
+  // Auto-clear after the flash so it doesn't linger on subsequent renders
+  setTimeout(() => {
+    if (state.failHex && performance.now() >= state.failHex.expires) {
+      state.failHex = null;
+      render();
+    }
+  }, 600);
+}
+
+// Wait — a passive turn. The boat holds station. Air is consumed (or recovered)
+// per the current depth, and an ambient flavor line fires occasionally.
+function wait() {
+  if (!state.alive) return;
+  state.moves++;
+  state.lastMoveTime = performance.now();
+  tickPingMemory();
+  applyMoveCosts(1);
+  // Re-fire ambient flavor at the current tile so the player gets a sense of
+  // time passing rather than silence.
+  const tile = getTile(state.q, state.r);
+  if (tile && rand() < 0.6) handleTile(tile);
+  checkDeath();
+  updateHUD();
+  render();
+}
+
+function move(q, r) {
+  if (!state.alive) return;
+  const tile = tileAt(q, r);
+  // Only allow attempted moves to actual adjacent hexes
+  if (hexDistance({q, r}, {q: state.q, r: state.r}) !== 1) return;
+
+  if (tile.wall) {
+    // Collision — the sub strikes the rock
+    const dmg = 4 + Math.floor(rand() * 5); // 4-8 hull damage
+    state.hull = Math.max(0, state.hull - dmg);
+    state.lastMoveTime = performance.now();
+    log(`The hull strikes rock. No passage there. -${dmg} hull.`, 'danger', 'IMPACT');
+    flagMoveFail(q, r, '#a04030');
+    checkDeath();
+    updateHUD();
+    return;
+  }
+
+  // Depth gate: the neighbor hex must have a volume containing our current depth
+  if (!hexAcceptsDepth(tile, state.currentDepth)) {
+    // Striking rock at this depth — the water in that hex is above or below
+    // the sub, so swimming horizontally drives into stone. Damage applies,
+    // and the sonar reports which direction has the opening.
+    const dmg = 4 + Math.floor(rand() * 5);
+    state.hull = Math.max(0, state.hull - dmg);
+    state.lastMoveTime = performance.now();
+    const near = nearestVolume(tile, state.currentDepth);
+    if (near && near.deltaMeters > 0) {
+      const delta = Math.max(1, Math.round(near.deltaMeters));
+      const dir = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
+      log(`The hull strikes rock. Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
+    } else {
+      log(`The hull strikes rock. No passage at this depth. -${dmg} hull.`, 'danger', 'IMPACT');
+    }
+    flagMoveFail(q, r, '#a04030');
+    checkDeath();
+    updateHUD();
+    return;
+  }
+
+  // Trail: remember the hex we just left, newest first, cap at 3. Depth is
+  // recorded so that when the sub descends, trail dots from a different
+  // depth band fade out of view (they belong to a different "layer" of the
+  // world).
+  state.trail.unshift({ q: state.q, r: state.r, depth: state.currentDepth });
+  if (state.trail.length > 3) state.trail.length = 3;
+
+  state.q = q;
+  state.r = r;
+  state.moves++;
+  state.lastMoveTime = performance.now();
+  state.failHex = null;
+  state.pingArrows = null; // arrows are a snapshot — stale after a move
+  tickPingMemory();
+  // Decay any user pan when the player moves, so the camera re-follows the sub
+  state.panX *= 0.5;
+  state.panY *= 0.5;
+  if (Math.abs(state.panX) < 2) state.panX = 0;
+  if (Math.abs(state.panY) < 2) state.panY = 0;
+
+  applyMoveCosts(tile.cost);
+
+  // Zone transition detection — log when player crosses a geographic boundary
+  detectZoneTransition(q, r);
+
+  // Reveal
+  visited.add(hexKey(q, r));
+  revealed.add(hexKey(q, r));
+  for (const n of hexNeighbors(q, r)) {
+    revealed.add(hexKey(n.q, n.r));
+  }
+
+  // React to tile
+  handleTile(tile);
+
+  // Z-axis context — if the new hex has significant vertical space, sound it out.
+  const curVol = volumeContaining(tile, state.currentDepth);
+  if (curVol && (curVol.floor - curVol.ceiling) >= 100) {
+    logZContext(tile, curVol);
+  }
+
+  // Death checks
+  checkDeath();
+
+  updateHUD();
+  render();
+}
+
+// Which volume of this tile contains the given depth, if any?
+function volumeContaining(tile, depth) {
+  if (!tile || tile.wall) return null;
+  for (const v of tile.volumes) {
+    if (depth >= v.ceiling && depth <= v.floor) return v;
+  }
+  return null;
+}
+
+// Does this open tile have ANY volume containing the given depth?
+function hexAcceptsDepth(tile, depth) {
+  return !!volumeContaining(tile, depth);
+}
+
+// Is this hex "near" the given depth — close enough that the sub at that
+// depth would perceive it via sonar? Open hexes are near if any of their
+// volumes overlaps depth ± 2 dive-steps. Surface land (shore/dock) is only
+// visible from near the surface. Pure stone never has its own visible body,
+// so it returns false here (its presence is communicated by wall edges
+// drawn from adjacent open hexes).
+function hexNearDepth(tile, depth) {
+  if (!tile) return false;
+  if (tile.wall) {
+    if (tile.type === 'shore' || tile.type === 'dock') return depth <= DEPTH_GRID * 2;
+    return false;
+  }
+  if (!tile.volumes || tile.volumes.length === 0) return false;
+  const margin = DEPTH_GRID * 2; // 120m — within two dive steps
+  for (const v of tile.volumes) {
+    if (depth >= v.ceiling - margin && depth <= v.floor + margin) return true;
+  }
+  return false;
+}
+
+// Find the closest volume in tile that the player could move *vertically* into
+// from their current depth (taking the smallest ascend/descend). Returns
+// { volume, deltaMeters } or null if the tile is wall/empty.
+function nearestVolume(tile, fromDepth) {
+  if (!tile || tile.wall || tile.volumes.length === 0) return null;
+  let best = null;
+  let bestDelta = Infinity;
+  for (const v of tile.volumes) {
+    let delta;
+    if (fromDepth < v.ceiling) delta = v.ceiling - fromDepth;
+    else if (fromDepth > v.floor) delta = fromDepth - v.floor;
+    else delta = 0;
+    if (delta < bestDelta) { bestDelta = delta; best = v; }
+  }
+  return best ? { volume: best, deltaMeters: bestDelta } : null;
+}
+
+// Apply air cost, pressure damage, update maxDepth.
+// Log when the player crosses a geographic zone boundary. Fires once per
+// transition direction, with prose appropriate to leaving or returning.
+function detectZoneTransition(q, r) {
+  const newZone = hexZone(q, r);
+  const prevZone = state.lastZone;
+  if (newZone === prevZone) return;
+  const newRank = zoneRank(newZone);
+  const prevRank = zoneRank(prevZone);
+  state.lastZone = newZone;
+  const firstTime = newRank > state.maxZoneReached;
+  if (newRank > state.maxZoneReached) state.maxZoneReached = newRank;
+
+  if (newRank > prevRank) {
+    // Moving outward — leaving the more familiar zone
+    if (newZone === 'shelf-edge') {
+      log(firstTime
+        ? 'The seafloor falls away beneath you. You are off the continental shelf.'
+        : 'The seafloor falls away. Off the shelf again.',
+        '', 'OFF SHELF');
+    } else if (newZone === 'deep') {
+      log(firstTime
+        ? 'No floor returns the ping. You are over the abyss.'
+        : 'The abyss again. No floor.',
+        'strange', 'ABYSS');
+    }
+  } else {
+    // Moving inward — returning to a more familiar zone
+    if (newZone === 'shelf') {
+      log('Solid ground beneath you again. The shelf returns.', '', 'SHELF');
+    } else if (newZone === 'shelf-edge') {
+      log('A floor returns to the sonar. The cliff is behind you.', '', 'SHELF EDGE');
+    }
+  }
+}
+
+// Replenish air when the boat is at depth 0 (hatch open, venting to atmosphere).
+// Called from both horizontal and vertical moves so any action at the surface
+// gives back air.
+function surfaceAirRecovery(amount) {
+  const sub = activeSub();
+  if (state.currentDepth > 0) return;
+  if (state.air >= sub.air) return;
+  state.air = Math.min(sub.air, state.air + (amount || 8));
+}
+
+// Tick ping memory — each turn, every remembered hex loses one freshness.
+// Hexes that drop to 0 are forgotten (their wall edges become invisible again
+// unless they're inside passive sonar range).
+function tickPingMemory() {
+  for (const [k, turns] of state.pingMemory) {
+    if (turns <= 1) state.pingMemory.delete(k);
+    else state.pingMemory.set(k, turns - 1);
+  }
+}
+
+function applyMoveCosts(tileCostMultiplier) {
+  const sub = activeSub();
+  // At depth 0 — hatch open, boat passively replenishes air with each move.
+  if (state.currentDepth <= 0) {
+    surfaceAirRecovery(8);
+    return;
+  }
+  const depthFactor = 1 + state.currentDepth / 400;
+  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor));
+  state.air = Math.max(0, state.air - airCost);
+
+  if (state.currentDepth > sub.safeDepth) {
+    const over = state.currentDepth - sub.safeDepth;
+    const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter));
+    state.hull = Math.max(0, state.hull - dmg);
+    if (state.currentDepth > sub.crushDepth) {
+      log(`Past crush depth. The hull screams.`, 'danger', 'PRESSURE');
+    } else if (over > 50) {
+      log(`The hull groans under the pressure.`, 'warn', 'PRESSURE');
+    }
+  }
+
+  state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
+}
+
+function checkDeath() {
+  if (state.air <= 0 && state.alive) {
+    state.alive = false;
+    setTimeout(() => endGame('The air is gone.', 'The scrubbers fail. The boat goes quiet.'), 700);
+  } else if (state.hull <= 0 && state.alive) {
+    state.alive = false;
+    setTimeout(() => endGame('The hull fails.', 'The pressure finds every seam at once.'), 700);
+  }
+}
+
+// Vertical movement — ascend or descend by step meters.
+// Clamps to the volume the player is currently in. To reach another volume in
+// the same hex requires there to be no stone between them (i.e., volumes have
+// been merged or there's an opening shaft connecting them).
+function changeDepth(deltaMeters) {
+  if (!state.alive) return;
+  const sub = activeSub();
+  const tile = getTile(state.q, state.r);
+  if (!tile || tile.wall) return;
+
+  // Find the volume the player is currently in. If somehow not in any, snap to nearest.
+  let cur = volumeContaining(tile, state.currentDepth);
+  if (!cur) {
+    const n = nearestVolume(tile, state.currentDepth);
+    if (!n) return;
+    cur = n.volume;
+    state.currentDepth = Math.max(cur.ceiling, Math.min(cur.floor, state.currentDepth));
+  }
+
+  const targetDepth = Math.max(0, state.currentDepth + deltaMeters);
+  const actual = Math.max(cur.ceiling, Math.min(cur.floor, targetDepth));
+  if (actual === state.currentDepth) {
+    // Hit a boundary. Striking rock damages the hull whether the collision
+    // is horizontal or vertical — driving the sub into a chamber ceiling
+    // is just as much "striking rock" as driving it into a side wall.
+    // Exception: reaching the surface from below is a soft stop (no rock).
+    if (deltaMeters > 0) {
+      // Floor: striking rock below (seabed or chamber floor)
+      const dmg = 4 + Math.floor(rand() * 5);
+      state.hull = Math.max(0, state.hull - dmg);
+      const what = cur.kind === 'water' ? 'The seabed' : 'The chamber floor';
+      log(`${what} stops the dive. -${dmg} hull.`, 'danger', 'IMPACT');
+      flagMoveFail(state.q, state.r, '#a04030');
+      state.lastMoveTime = performance.now();
+      checkDeath();
+    } else {
+      // Ceiling: surface is soft, chamber ceiling and shallow-water cap are rock
+      if (state.currentDepth <= 0) {
+        log('You are at the surface.', 'warn');
+      } else {
+        const dmg = 4 + Math.floor(rand() * 5);
+        state.hull = Math.max(0, state.hull - dmg);
+        const what = cur.kind === 'water' ? 'The shallows' : 'The chamber ceiling';
+        log(`${what} stops the rise. -${dmg} hull.`, 'danger', 'IMPACT');
+        flagMoveFail(state.q, state.r, '#a04030');
+        state.lastMoveTime = performance.now();
+        checkDeath();
+      }
+    }
+    updateHUD();
+    return;
+  }
+  const prevDepth = state.currentDepth;
+  state.currentDepth = actual;
+  state.moves++;
+  state.lastMoveTime = performance.now();
+  state.pingArrows = null; // depth-relative distances now stale
+  tickPingMemory();
+
+  // Vertical air cost (free at depth 0)
+  if (state.currentDepth > 0) {
+    const absDelta = Math.abs(deltaMeters);
+    const fastFactor = absDelta > sub.diveStep ? sub.diveAirCostFast / sub.diveAirCost : 1;
+    const airCost = Math.max(1, Math.round(sub.diveAirCost * fastFactor));
+    state.air = Math.max(0, state.air - airCost);
+  } else {
+    // Reached the surface — recover air and log a breach if we just came up
+    surfaceAirRecovery(8);
+    if (prevDepth > 1) {
+      log(pickFlavor(FLAVOR.breach), '', 'SURFACE');
+    }
+  }
+
+  if (state.currentDepth > sub.safeDepth) {
+    const over = state.currentDepth - sub.safeDepth;
+    const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter * 0.5));
+    state.hull = Math.max(0, state.hull - dmg);
+  }
+  state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
+
+  // Z-axis context — describe what's above and below the sub in the current hex.
+  // Only log when there's a meaningful Z context (vertical space > 30 meters), and
+  // throttle to avoid spam on small back-and-forth movements.
+  logZContext(tile, cur);
+
+  checkDeath();
+  updateHUD();
+  render();
+}
+
+function logZContext(tile, currentVolume) {
+  if (!tile || tile.wall) return;
+  const now = performance.now();
+  if (state._lastZContextLog && now - state._lastZContextLog < 800) return;
+  // Always recompute the current volume in case state.currentDepth shifted.
+  const vol = volumeContaining(tile, state.currentDepth) || currentVolume;
+  if (!vol) return;
+  const above = state.currentDepth - vol.ceiling;
+  const below = vol.floor - state.currentDepth;
+
+  // Only report what's reachable in the sub's current volume — sonar bounces
+  // off the volume's ceiling and floor. Any opening beyond stone (a separate
+  // volume in the same hex with rock between) is unknown to the sub. At the
+  // surface (depth 0), the "ceiling" is the sky — don't pretend it's a roof.
+  const atSurface = state.currentDepth <= 0;
+  let line = null;
+  if (atSurface) {
+    // Surface sounding describes only what's below, never above
+    if (below >= 30) line = `Open water ${Math.round(below)} m below.`;
+  } else if (above >= 30 && below >= 30) {
+    line = `Open water ${Math.round(above)} m above, ${Math.round(below)} m below.`;
+  } else if (above >= 30) {
+    line = `Open water ${Math.round(above)} m above. The floor is just below.`;
+  } else if (below >= 30) {
+    line = `The ceiling is just above. Open water ${Math.round(below)} m below.`;
+  }
+  if (line) {
+    log(line, '', 'SOUNDING');
+    state._lastZContextLog = now;
+  }
+}
+
+// Tap-to-identify a POI hex. Logs a description of what sonar reports about
+// that hex, including distance and depth offset. Costs nothing.
+function identifyPoi(tile) {
+  if (!tile || !tile.poi) return;
+  const dist = hexDistance({q: tile.q, r: tile.r}, {q: state.q, r: state.r});
+  const meters = dist * 60;
+  const dir = bearing(state.q, state.r, tile.q, tile.r);
+  // Depth offset hint, if the POI's volumes don't include the sub's depth.
+  let depthHint = '';
+  const near = nearestVolume(tile, state.currentDepth);
+  if (near && near.deltaMeters > 0) {
+    const dir2 = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
+    depthHint = `, ${Math.round(near.deltaMeters)} m ${dir2}`;
+  }
+  const desc = POI_DESCRIPTIONS[tile.poi] || tile.name || 'an unknown reading';
+  const tag = (tile.poi === 'signal' || tile.poi === 'growth') ? 'STRANGE'
+            : (tile.poi === 'air')    ? 'AIR'
+            : (tile.poi === 'opening') ? 'OPENING'
+            : 'ECHO';
+  const cls = (tag === 'STRANGE') ? 'strange' : (tag === 'AIR' ? 'warn' : '');
+  if (dist === 0) {
+    log(`${desc} — you are over it.`, cls, tag);
+  } else {
+    log(`${desc} ${dir}, ${meters} m out${depthHint}.`, cls, tag);
+  }
+}
+
+// At-a-distance descriptions — what the sonar paints, not what you'd see
+// once close. Keyed by POI tag.
+const POI_DESCRIPTIONS = {
+  ruin:     'A sunken structure',
+  signal:   'A repeating signal',
+  growth:   'A mass of unnatural growth',
+  air:      'A pocket of trapped gas',
+  salvage:  'Wreckage on the bottom',
+  opening:  'A sinkhole through the seafloor',
+  surface:  'The dock and the shore',
+  deadend:  'A dead end',
+};
+
+function handleTile(tile) {
+  // First-time visits get a flavor log
+  const firstVisit = !state.poisFound.includes(hexKey(tile.q, tile.r));
+  const atSurface = state.currentDepth <= 1;
+  const inShallow = !atSurface && state.currentDepth < 200;
+
+  // Ambient depth-aware flavor takes priority over tile-type flavor.
+  // At the surface, surface vocabulary. In open water below the surface but
+  // above 200 meters, openWater vocabulary. Only at >= 200 meters do we use
+  // the cave/passage/chamber vocabulary, regardless of tile type.
+  if (atSurface && (firstVisit || rand() < 0.18)) {
+    log(pickFlavor(FLAVOR.surface));
+    // Adjacent-dock prose: fires when neighboring a dock from the surface
+    maybeLogDockAdjacent();
+    // Occasional porthole view from the starter sub
+    maybePorthole();
+    return;
+  }
+  if (inShallow && (firstVisit || rand() < 0.14)) {
+    log(pickFlavor(FLAVOR.openWater));
+    maybePorthole();
+    return;
+  }
+
+  switch (tile.type) {
+    case 'passage':
+      if (firstVisit && state.currentDepth >= 200 && rand() < 0.20) log(pickFlavor(FLAVOR.passage));
+      maybePorthole();
+      break;
+    case 'chamber':
+      if (firstVisit && state.currentDepth >= 200 && rand() < 0.40) log(pickFlavor(FLAVOR.chamber));
+      maybePorthole();
+      break;
+    case 'current':
+      log('The current pulls at your hull.', 'warn', 'DRIFT');
+      if (chance(0.4)) {
+        const adj = hexNeighbors(state.q, state.r).filter(n => !tileAt(n.q, n.r).wall);
+        if (adj.length) {
+          const push = pick(adj);
+          state.q = push.q; state.r = push.r;
+          state.air = Math.max(0, state.air - 1);
+          visited.add(hexKey(push.q, push.r));
+        }
+      }
+      break;
+    case 'kelp':
+      if (firstVisit) log(pickFlavor(FLAVOR.kelp));
+      state.poisFound.push(hexKey(tile.q, tile.r));
+      break;
+    case 'chasm':
+      if (firstVisit) log(pickFlavor(FLAVOR.chasm), 'strange');
+      state.poisFound.push(hexKey(tile.q, tile.r));
+      break;
+    case 'air':
+      if (firstVisit) {
+        const subA = activeSub();
+        const fillAmount = Math.round(subA.air * 0.2); // 20% of max air
+        const gained = Math.min(fillAmount, subA.air - state.air);
+        state.air = Math.min(subA.air, state.air + fillAmount);
+        log(`A pocket of trapped gas. The boat vents its scrubbers and tops up the reserves. (+${gained} air)`, '', 'AIR');
+        state.poisFound.push(hexKey(tile.q, tile.r));
+        setTile(tile.q, tile.r, 'passage');
+      }
+      break;
+    case 'salvage':
+      if (firstVisit) {
+        const subS = activeSub();
+        const repair = 20 + randInt(15);
+        state.hull = Math.min(subS.hull, state.hull + repair);
+        log(`Wreckage. You patch your hull with what fits. (+${repair} hull)`, '', 'SALVAGE');
+        state.poisFound.push(hexKey(tile.q, tile.r));
+        setTile(tile.q, tile.r, 'passage');
+      }
+      break;
+    case 'ruin':
+      if (firstVisit) {
+        log(pickFlavor(FLAVOR.ruin), '', 'FOUND');
+        state.poisFound.push(hexKey(tile.q, tile.r));
+      }
+      break;
+    case 'signal':
+      if (firstVisit) {
+        log(pickFlavor(FLAVOR.signal), 'strange', 'SIGNAL');
+        state.poisFound.push(hexKey(tile.q, tile.r));
+      }
+      break;
+    case 'growth':
+      if (firstVisit) {
+        log(pickFlavor(FLAVOR.growth), 'strange', 'STRANGE');
+        const dmg = 5 + randInt(10);
+        state.hull = Math.max(0, state.hull - dmg);
+        state.poisFound.push(hexKey(tile.q, tile.r));
+      }
+      break;
+    case 'opening':
+      if (firstVisit) {
+        log('A sinkhole opens beneath you. The seafloor falls away into dark.', 'strange', 'OPENING');
+        state.poisFound.push(hexKey(tile.q, tile.r));
+      }
+      break;
+    case 'surface':
+      if (atSurface) state.air = activeSub().air;
+      break;
+  }
+}
+
+const FLAVOR = {
+  surface: [
+    'Grey swells roll under the hull. The horizon is empty in all directions.',
+    'Surface chop. Whitecaps to the northwest. The sky is the color of old iron.',
+    'Spray on the conning tower. The wind has been at it for hours.',
+    'A bird passes low over the water, then nothing for miles.',
+    'The boat rocks in the swell. The sea is restless and indifferent.',
+    'Cold light off the water. Long swells, slow rhythm.',
+    'Wind in the rigging. The hull creaks against the chop.',
+    'The horizon is a thin grey line. Nothing breaks it.',
+    'Salt on your face. The boat smells of diesel and brine.',
+    'Open ocean in every direction. The sky goes on forever and means nothing.',
+  ],
+  breach: [
+    'The hatch breaks the surface. Cold air pours in.',
+    'You break the surface. The sky is grey and wide and welcome.',
+    'The boat shoulders up into chop. The wind is the first sound in hours.',
+    'Daylight, finally. The instruments seem dim by comparison.',
+    'You surface. The world above is still here, and still indifferent.',
+  ],
+  dockAdjacent: [
+    'The dock creaks within reach. A single line still loops over the cleat.',
+    'You drift past the dock\u2019s end. Black-streaked timber, old paint, smell of tar.',
+    'A gull works at something on the dock\u2019s rail. It does not look up as you pass.',
+    'The dock is close enough to touch. Beyond it, the shore is rock and tideline.',
+    'Pilings stand like teeth. Mussels cluster at the waterline.',
+  ],
+  porthole: {
+    surface: [
+      'Through the porthole: grey water, grey sky, a horizon that won\u2019t stay still.',
+      'Through the porthole: a wave breaks across the glass, then clears.',
+      'Through the porthole: a gull, then nothing.',
+    ],
+    shallow: [
+      'Through the porthole: fish in a slow shoal, silver-sided, unbothered.',
+      'Through the porthole: a jellyfish drifts past, pale as a lantern.',
+      'Through the porthole: sunlit motes wheeling in the bent green light.',
+      'Through the porthole: a single large fish hangs there, watching you.',
+      'Through the porthole: ribbons of kelp passing in slow currents.',
+    ],
+    deep: [
+      'Through the porthole: pure dark. Something fast crosses your light, then gone.',
+      'Through the porthole: a fish with too many teeth and too few eyes.',
+      'Through the porthole: shapes at the edge of vision. They do not approach.',
+      'Through the porthole: bioluminescent flecks, like a sky that doesn\u2019t belong here.',
+    ],
+  },
+  openWater: [
+    'The water column stretches above and below. You hang suspended.',
+    'A school of something silver passes through your sonar and is gone.',
+    'Cold blue all around. Visibility limited to instruments.',
+    'The hull is silent. You could be the only living thing for miles.',
+    'Sunlight from far above, bent and broken by the swell.',
+    'Pressure builds slowly. The boat settles into the depth.',
+    'Particles drift past the viewport. Marine snow, falling.',
+  ],
+  passage: [
+    'Stone presses close. The hull complains.',
+    'The walls are wet. Always wet.',
+    'A drip somewhere. Counting itself.',
+    'Cold seeps through the seams.',
+    'Your light catches something — gone before you can name it.',
+  ],
+  chamber: [
+    'The walls open. Your light does not reach the far side.',
+    'A flooded chamber. The water here is older than the sea above.',
+    'The roof curves away into dark. You drift in a held breath of stone.',
+    'A vast hollow in the rock. The hull seems small.',
+    'Open water inside the earth. The roof presses down at the edge of your light.',
+  ],
+  kelp: [
+    'Kelp moves like it remembers being something else.',
+    'Long fronds part for you. Reluctantly.',
+    'The kelp forest closes behind you.',
+  ],
+  chasm: [
+    'A chasm opens beneath you. The depth gauge stops being useful.',
+    'Down. Just down. You cannot see a bottom.',
+  ],
+  ruin: [
+    'A doorway, half-buried. Someone built down here once.',
+    'Worked stone. Carved with patience and something else.',
+    'A staircase descending into deeper water. You do not take it.',
+  ],
+  signal: [
+    'A pulse. Rhythmic. Almost regular.',
+    'Something is sending. You do not know what receives.',
+    'A frequency that should not be alive.',
+  ],
+  growth: [
+    'The walls here have grown teeth.',
+    'A bloom of something. It moves when you do not look at it.',
+    'Tissue. Where tissue should not be.',
+  ],
+};
+
+function pickFlavor(arr) { return pick(arr); }
+
+// Log a dock-adjacent flavor line if any neighbor is a dock hex.
+// Fires at most once per visit by tracking a recent-trigger guard.
+function maybeLogDockAdjacent() {
+  // Only at the surface; only if we haven't done this very recently
+  const now = performance.now();
+  if (state._lastDockLog && now - state._lastDockLog < 5000) return;
+  const adj = hexNeighbors(state.q, state.r);
+  for (const n of adj) {
+    const t = world.get(hexKey(n.q, n.r));
+    if (t && t.type === 'dock') {
+      log(pickFlavor(FLAVOR.dockAdjacent));
+      state._lastDockLog = now;
+      return;
+    }
+  }
+}
+
+// Occasionally log a porthole view if the active sub has one.
+function maybePorthole() {
+  const sub = activeSub();
+  if (!sub.porthole) return;
+  // ~1 in 4 moves shows the porthole, so it's a small character moment, not spam
+  if (rand() > 0.22) return;
+  const d = state.currentDepth;
+  let pool;
+  if (d <= 1) pool = FLAVOR.porthole.surface;
+  else if (d < 250) pool = FLAVOR.porthole.shallow;
+  else pool = FLAVOR.porthole.deep;
+  log(pickFlavor(pool));
+}
+
+//=============================================================================
+// LOG
+//=============================================================================
+
+const logEl = document.getElementById('log');
+const logHistory = [];
+
+function log(text, cls, echo) {
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  if (echo) {
+    const e = document.createElement('span');
+    e.className = 'echo ' + (cls || '');
+    e.textContent = echo;
+    entry.appendChild(e);
+  }
+  entry.appendChild(document.createTextNode(text));
+
+  // Demote older entries
+  for (const old of logEl.children) {
+    old.classList.add('old');
+  }
+
+  logEl.appendChild(entry);
+  logHistory.push({text, cls, echo});
+
+  // Keep only last 3 visible
+  while (logEl.children.length > 3) logEl.removeChild(logEl.firstChild);
+}
+
+//=============================================================================
+// HUD
+//=============================================================================
+
+function updateHUD() {
+  const sub = activeSub();
+  document.getElementById('air-val').textContent = state.air;
+  document.getElementById('air-bar').style.width = (state.air / sub.air * 100) + '%';
+  document.getElementById('hull-val').textContent = state.hull;
+  document.getElementById('hull-bar').style.width = (state.hull / sub.hull * 100) + '%';
+  // Depth in meters. Display as "1250 m" or "1.2k m"
+  const d = state.currentDepth;
+  let depthLabel = Math.round(d) + ' m';
+  if (d >= 1000) depthLabel = (d / 1000).toFixed(1) + 'k m';
+  document.getElementById('depth-val').textContent = depthLabel;
+  // Bar scales logarithmically
+  const depthPct = Math.min(100, Math.log10(Math.max(1, d)) * 25);
+  document.getElementById('depth-bar').style.width = depthPct + '%';
+
+  // Color states — thresholds are percentages of max so they scale with sub.
+  const airPct = state.air / sub.air;
+  const airEl = document.getElementById('air-val');
+  const airBar = document.getElementById('air-bar');
+  airEl.className = 'stat-value';
+  airBar.className = 'bar-fill';
+  if (airPct < 0.25) { airEl.classList.add('danger'); airBar.classList.add('danger'); }
+  else if (airPct < 0.50) { airEl.classList.add('warn'); airBar.classList.add('warn'); }
+
+  const hullPct = state.hull / sub.hull;
+  const hullEl = document.getElementById('hull-val');
+  const hullBar = document.getElementById('hull-bar');
+  hullEl.className = 'stat-value';
+  hullBar.className = 'bar-fill';
+  if (hullPct < 0.25) { hullEl.classList.add('danger'); hullBar.classList.add('danger'); }
+  else if (hullPct < 0.50) { hullEl.classList.add('warn'); hullBar.classList.add('warn'); }
+
+  // Pressure indicator on depth bar
+  const depthBar = document.getElementById('depth-bar');
+  depthBar.className = 'bar-fill';
+  if (state.currentDepth > sub.crushDepth) depthBar.classList.add('danger');
+  else if (state.currentDepth > sub.safeDepth) depthBar.classList.add('warn');
+
+  // Update vertical depth strip if present
+  updateDepthStrip();
+}
+
+//=============================================================================
+// END GAME
+//=============================================================================
+
+function endGame(title, summary) {
+  document.getElementById('go-title').textContent = title;
+  document.getElementById('go-summary').textContent = summary;
+  document.getElementById('go-stats').innerHTML =
+    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}`;
+  document.getElementById('gameover').classList.add('show');
+}
+
+function restart() {
+  const sub = activeSub();
+  state.q = 0; state.r = 0;
+  state.air = sub.air; state.hull = sub.hull;
+  state.currentDepth = 0; state.maxDepth = 0;
+  state.moves = 0; state.poisFound = [];
+  state.alive = true;
+  state.cameraX = 0; state.cameraY = 0;
+  state.panX = 0; state.panY = 0;
+  state.trail = [];
+  state.failHex = null;
+  state.ping = null;
+  state.pingArrows = null;
+  state.pingMemory = new Map();
+  world.clear();
+  revealed.clear();
+  visited.clear();
+  generatedChunks.clear();
+  worldSeed = Date.now() & 0xffffffff;
+  rng = mulberry32(worldSeed);
+  worldGraph = generateWorldGraph(worldSeed);
+  // Force-generate origin chunk and neighbors so the player can leave
+  tileAt(0, 0);
+  // Set initial depth to match origin tile's range (origin is shallow)
+  const originTile = getTile(0, 0);
+  if (originTile && !originTile.wall) {
+    state.currentDepth = Math.max(0, originTile.ceiling);
+  }
+  // Reveal a generous initial sight area — the player needs to see the
+  // dock, the shoreline, and enough water to chart a course.
+  visited.add(hexKey(0, 0));
+  for (let dq = -5; dq <= 5; dq++) {
+    for (let dr = Math.max(-5, -dq-5); dr <= Math.min(5, -dq+5); dr++) {
+      revealed.add(hexKey(dq, dr));
+    }
+  }
+  logEl.innerHTML = '';
+  state.lastZone = 'shelf';
+  state.maxZoneReached = 0;
+  log(`A grey dock juts east into the chop. Behind you, the shore is rock and packed earth — the last solid ground for hundreds of miles. To the north and west, open water.`);
+  log(`The ${sub.name} casts off. The hatch is open; the air is yours.`, '', 'CAST OFF');
+  document.getElementById('gameover').classList.remove('show');
+  // Cap ping power slider at sub's max
+  const pp = document.getElementById('ping-power');
+  if (pp) pp.max = sub.sonarMaxPower;
+  updatePingDisplay();
+  updateHUD();
+  render();
+}
+
+//=============================================================================
+// SURFACE BUTTON — return to origin if you have a path
+//=============================================================================
+
+function surface() {
+  if (!state.alive) return;
+  const sub = activeSub();
+  const tile = getTile(state.q, state.r);
+  if (!tile || tile.wall) return;
+
+  // At depth 0 in open water (anywhere on the shelf) — the hatch is open, refill air.
+  const onSurface = state.currentDepth <= 0.5 && volumeContaining(tile, 0);
+  if (onSurface) {
+    if (state.air >= sub.air) {
+      log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
+      return;
+    }
+    state.air = sub.air;
+    log(`Hatch open. Air reserves restored.`, '', 'SURFACE');
+    updateHUD();
+    render();
+    return;
+  }
+
+  // Otherwise, rise within the current volume — ascend toward its ceiling.
+  const vol = volumeContaining(tile, state.currentDepth);
+  if (!vol) {
+    log('No volume here to rise within.', 'warn');
+    return;
+  }
+  if (state.currentDepth > vol.ceiling) {
+    const delta = state.currentDepth - vol.ceiling;
+    changeDepth(-Math.min(delta, sub.diveStepFast));
+  } else {
+    log('Already at the top of this space.', 'warn');
+  }
+}
+
+//=============================================================================
+// INIT
+//=============================================================================
+
+function startGame() {
+  const title = document.getElementById('title');
+  if (!title) return;
+  title.classList.add('gone');
+  setViewport();
+  restart();
+  setTimeout(() => { title.style.display = 'none'; }, 1200);
+}
+
+const diveBtn = document.getElementById('dive');
+
+function startOnce(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  startGame();
+}
+
+if (diveBtn) {
+  diveBtn.addEventListener('click', startOnce);
+  diveBtn.addEventListener('touchend', startOnce, {passive: false});
+}
+
+document.getElementById('btn-ping').addEventListener('click', ping);
+document.getElementById('btn-surface').addEventListener('click', surface);
+document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
+updatePingDisplay();
+document.getElementById('go-restart').addEventListener('click', restart);
+
+// Dive controls
+const sub = activeSub();
+document.getElementById('btn-ascend').addEventListener('click', () => changeDepth(-activeSub().diveStep));
+document.getElementById('btn-descend').addEventListener('click', () => changeDepth(activeSub().diveStep));
+document.getElementById('btn-ascend-fast').addEventListener('click', () => changeDepth(-activeSub().diveStepFast));
+document.getElementById('btn-descend-fast').addEventListener('click', () => changeDepth(activeSub().diveStepFast));
+
+// Recenter
+document.getElementById('recenter-btn').addEventListener('click', () => {
+  state.panX = 0; state.panY = 0;
+  render();
+});
+
+//=============================================================================
+// DRAG-TO-PAN + PINCH-ZOOM + WHEEL-ZOOM
+//=============================================================================
+const ZOOM_MIN = 0.6;
+const ZOOM_MAX = 5.0;
+// Set zoom and update the viewBox immediately. Full re-render is optional —
+// during a pinch we want to *only* update the viewBox (cheap, browser scales
+// existing SVG) and skip the expensive DOM rebuild until the gesture ends.
+function setZoom(newZoom, opts) {
+  zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+  // Always update the viewBox so the visual zoom is immediate.
+  const rect = document.getElementById('chart-container').getBoundingClientRect();
+  viewW = rect.width;
+  viewH = rect.height;
+  const vw = viewW / zoom;
+  const vh = viewH / zoom;
+  svg.setAttribute('viewBox', `${-vw/2} ${-vh/2} ${vw} ${vh}`);
+  svg.setAttribute('width', viewW);
+  svg.setAttribute('height', viewH);
+  if (!(opts && opts.skipRender)) render();
+}
+
+(function() {
+  // Modes: idle | dragging | pinching
+  let mode = 'idle';
+  let dragStartX = 0, dragStartY = 0;
+  let originPanX = 0, originPanY = 0;
+  let totalMove = 0;
+  const TAP_THRESH = 8; // pixels
+
+  // Pinch tracking
+  let pinchStartDist = 0;
+  let pinchStartZoom = 0;
+  // rAF coalescing for zoom updates during pinch
+  let pendingZoom = null;
+  let rafId = 0;
+  // rAF coalescing for pan updates during drag
+  let panRafId = 0;
+  let panDirty = false;
+
+  function touchDist(t1, t2) {
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+
+  function flushZoom() {
+    rafId = 0;
+    if (pendingZoom == null) return;
+    // viewBox-only update during the gesture — no DOM rebuild
+    setZoom(pendingZoom, { skipRender: true });
+    pendingZoom = null;
+  }
+
+  function queueZoom(z) {
+    pendingZoom = z;
+    if (!rafId) rafId = requestAnimationFrame(flushZoom);
+  }
+
+  // Cheap pan: just retranslate the existing world group. The whole hex tree
+  // and labels move together without rebuilding anything.
+  function flushPan() {
+    panRafId = 0;
+    if (!worldGroupEl) return;
+    // Recompute the camera the same way render does — but apply only to the
+    // existing group's transform, no DOM rebuild.
+    const playerPx = hexToPixel(state.q, state.r);
+    state.cameraX += (playerPx.x - state.cameraX) * 0.3;
+    state.cameraY += (playerPx.y - state.cameraY) * 0.3;
+    const camX = state.cameraX + state.panX;
+    const camY = state.cameraY + state.panY;
+    lastCamX = camX; lastCamY = camY;
+    worldGroupEl.setAttribute('transform', `translate(${-camX}, ${-camY})`);
+  }
+
+  function queuePan() {
+    if (!panRafId) panRafId = requestAnimationFrame(flushPan);
+  }
+
+  function startDrag(clientX, clientY) {
+    mode = 'dragging';
+    dragStartX = clientX; dragStartY = clientY;
+    originPanX = state.panX; originPanY = state.panY;
+    totalMove = 0;
+  }
+
+  function startPinch(t1, t2) {
+    mode = 'pinching';
+    pinchStartDist = touchDist(t1, t2);
+    pinchStartZoom = zoom;
+    totalMove = 999; // ensure subsequent tap is suppressed
+  }
+
+  function pointerDown(e) {
+    if (e.touches && e.touches.length >= 2) {
+      startPinch(e.touches[0], e.touches[1]);
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    const p = (e.touches && e.touches[0]) || e;
+    startDrag(p.clientX, p.clientY);
+  }
+
+  function pointerMove(e) {
+    // Pinch takes priority — if we have two touches, do pinch regardless of mode
+    if (e.touches && e.touches.length >= 2) {
+      if (mode !== 'pinching') startPinch(e.touches[0], e.touches[1]);
+      const d = touchDist(e.touches[0], e.touches[1]);
+      if (pinchStartDist > 0) {
+        queueZoom(pinchStartZoom * (d / pinchStartDist));
+      }
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    if (mode !== 'dragging') return;
+    const p = (e.touches && e.touches[0]) || e;
+    const dx = p.clientX - dragStartX;
+    const dy = p.clientY - dragStartY;
+    totalMove = Math.max(totalMove, Math.abs(dx) + Math.abs(dy));
+    if (totalMove > TAP_THRESH) {
+      state.panX = originPanX - dx / zoom;
+      state.panY = originPanY - dy / zoom;
+      // Cheap pan: update the world group's transform attribute only.
+      // Coalesced to one update per animation frame.
+      queuePan();
+      panDirty = true;
+      if (e.cancelable) e.preventDefault();
+    }
+  }
+
+  function pointerUp(e) {
+    // Flush any pending zoom and do one full render so hit targets etc.
+    // resize correctly for the final zoom.
+    if (mode === 'pinching') {
+      if (pendingZoom != null) {
+        setZoom(pendingZoom, { skipRender: true });
+        pendingZoom = null;
+      }
+      render();
+    }
+    // After a drag, do one full render so any hex that panned in from
+    // beyond the previously-visible area gets drawn for the new viewport.
+    if (mode === 'dragging' && panDirty) {
+      panDirty = false;
+      render();
+    }
+    // If a finger lifted but one remains, continue as drag with the remaining finger
+    if (e.touches && e.touches.length === 1 && mode === 'pinching') {
+      const p = e.touches[0];
+      startDrag(p.clientX, p.clientY);
+      return;
+    }
+    if (e.touches && e.touches.length === 0) {
+      mode = 'idle';
+    } else if (!e.touches) {
+      mode = 'idle';
+    }
+  }
+
+  const surfaceEl = document.getElementById('chart-svg');
+  surfaceEl.addEventListener('mousedown', pointerDown);
+  surfaceEl.addEventListener('mousemove', pointerMove);
+  surfaceEl.addEventListener('mouseup', pointerUp);
+  surfaceEl.addEventListener('mouseleave', pointerUp);
+  surfaceEl.addEventListener('touchstart', pointerDown, {passive: false});
+  surfaceEl.addEventListener('touchmove', pointerMove, {passive: false});
+  surfaceEl.addEventListener('touchend', pointerUp);
+  surfaceEl.addEventListener('touchcancel', pointerUp);
+
+  // Wheel zoom on desktop. Same trick — viewBox-only during the wheel burst,
+  // then a final render after a short idle.
+  let wheelIdle = 0;
+  surfaceEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    setZoom(zoom * factor, { skipRender: true });
+    clearTimeout(wheelIdle);
+    wheelIdle = setTimeout(() => render(), 120);
+  }, {passive: false});
+
+  // Suppress hex tap if a drag/pinch actually happened.
+  surfaceEl.addEventListener('click', (e) => {
+    if (totalMove > TAP_THRESH) { e.stopPropagation(); e.preventDefault(); totalMove = 0; }
+  }, true);
+})();
+
+//=============================================================================
+// DEPTH STRIP UPDATER
+//=============================================================================
+function updateDepthStrip() {
+  const sub = activeSub();
+  const marker = document.getElementById('depth-strip-marker');
+  const hexRange = document.getElementById('depth-strip-hex-range');
+  const safeLine = document.getElementById('depth-strip-safe-line');
+  const crushLine = document.getElementById('depth-strip-crush-line');
+  if (!marker) return;
+
+  // Strip represents 0 to maxScale meters, where maxScale extends past crush depth.
+  const maxScale = Math.max(sub.crushDepth * 1.2, state.maxDepth * 1.1, 1000);
+
+  function pct(m) { return (Math.max(0, Math.min(maxScale, m)) / maxScale) * 100; }
+
+  const tile = getTile(state.q, state.r);
+  if (tile && !tile.wall) {
+    const top = pct(tile.ceiling);
+    const bot = pct(tile.floor);
+    hexRange.style.top = top + '%';
+    hexRange.style.height = (bot - top) + '%';
+  }
+  safeLine.style.top = pct(sub.safeDepth) + '%';
+  crushLine.style.top = pct(sub.crushDepth) + '%';
+  marker.style.top = `calc(${pct(state.currentDepth)}% - 2px)`;
+
+  const r = document.getElementById('dive-depth-readout');
+  if (r) r.textContent = Math.round(state.currentDepth) + ' m';
+}
+
+window.addEventListener('resize', () => { setViewport(); render(); });
+
+// Prevent pinch zoom on iOS
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+
+// Initialize viewport early in case title is skipped
+setViewport();
+</script>
+</body>
+</html>
