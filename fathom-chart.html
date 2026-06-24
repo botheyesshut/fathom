@@ -2293,9 +2293,39 @@ function revealAround(q, r, radius) {
   // Standing on a tile reveals itself + immediate neighbors
   const key = hexKey(q, r);
   revealed.add(key);
+  const seeds = [{q, r}];
   for (let dq = -radius; dq <= radius; dq++) {
     for (let dr = Math.max(-radius, -dq-radius); dr <= Math.min(radius, -dq+radius); dr++) {
       revealed.add(hexKey(q + dq, r + dr));
+      seeds.push({q: q + dq, r: r + dr});
+    }
+  }
+  revealLandFlood(seeds);
+}
+
+function revealLandFlood(seeds) {
+  // BFS through contiguous land (shore/dock) tiles starting from the boundary
+  // of any newly-revealed area. Once a beach edge or pier end touches a
+  // revealed hex, the whole connected land mass floods into revealed.
+  // Works for surface beaches and future underground beaches/docks.
+  const queue = [];
+  for (const {q, r} of seeds) {
+    for (const n of hexNeighbors(q, r)) {
+      const k = hexKey(n.q, n.r);
+      if (!revealed.has(k) && tileAt(n.q, n.r).land) {
+        revealed.add(k);
+        queue.push(n);
+      }
+    }
+  }
+  while (queue.length) {
+    const {q, r} = queue.shift();
+    for (const n of hexNeighbors(q, r)) {
+      const k = hexKey(n.q, n.r);
+      if (!revealed.has(k) && tileAt(n.q, n.r).land) {
+        revealed.add(k);
+        queue.push(n);
+      }
     }
   }
 }
@@ -2461,10 +2491,12 @@ function ping() {
   // the render loop to draw on that hex.
   const depthRange = lvl.depthRange;
   const pingArrowList = [];
+  const pingSeedsList = [];
   for (const k of pingRevealed) {
     const [q, r] = k.split(',').map(Number);
     const tile = tileAt(q, r);
     revealed.add(k);
+    pingSeedsList.push({q, r});
     totalHexes++;
     if (!tile.wall) openHexes++;
     const d = hexDistance({q, r}, {q: state.q, r: state.r});
@@ -2497,6 +2529,7 @@ function ping() {
     if (nearestAbove !== null) pingArrowList.push({ q, r, dir: 'up', meters: nearestAbove });
     if (nearestBelow !== null) pingArrowList.push({ q, r, dir: 'down', meters: nearestBelow });
   }
+  revealLandFlood(pingSeedsList);
 
   // Start an animated wavefront — radius grows from 0 to the ping's actual reach
   // over a duration scaled by power. The render loop draws it from state.ping.
@@ -2684,9 +2717,12 @@ function move(q, r) {
   // Reveal
   visited.add(hexKey(q, r));
   revealed.add(hexKey(q, r));
+  const revealSeeds = [{q, r}];
   for (const n of hexNeighbors(q, r)) {
     revealed.add(hexKey(n.q, n.r));
+    revealSeeds.push(n);
   }
+  revealLandFlood(revealSeeds);
 
   // React to tile
   handleTile(tile);
@@ -3362,11 +3398,14 @@ function restart() {
   // Reveal a generous initial sight area — the player needs to see the
   // dock, the shoreline, and enough water to chart a course.
   visited.add(hexKey(0, 0));
+  const initSeeds = [{q: 0, r: 0}];
   for (let dq = -5; dq <= 5; dq++) {
     for (let dr = Math.max(-5, -dq-5); dr <= Math.min(5, -dq+5); dr++) {
       revealed.add(hexKey(dq, dr));
+      initSeeds.push({q: dq, r: dr});
     }
   }
+  revealLandFlood(initSeeds);
   logEl.innerHTML = '';
   state.lastZone = 'shelf';
   state.maxZoneReached = 0;
