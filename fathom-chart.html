@@ -1801,11 +1801,12 @@ function render() {
             }
           }
         }
-        // Stone fills with dark grey when the player has been near it — any
-        // adjacent open hex being revealed means the stone wall was "seen".
+        // Stone fills with dark grey when the player has been near it at the
+        // current depth. Depth-aware: surface exploration does not reveal stone
+        // walls at depth 400 m — only adjacent caves explored near that depth do.
         if (!tile.land) {
           const nbrs6 = hexNeighbors(q, r);
-          const seen = nbrs6.some(n => revealed.has(hexKey(n.q, n.r)));
+          const seen = nbrs6.some(n => revealFade(n.q, n.r, state.currentDepth) > 0);
           if (seen) {
             const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
             const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
