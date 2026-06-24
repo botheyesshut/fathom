@@ -1839,12 +1839,11 @@ function render() {
       // Open hexes fill solidly with no stroke. Where they touch, fills merge
       // into one passage shape. Where they meet wall (void), the fill simply
       // ends — and that crisp edge IS the wall, like Cloudy Mountain.
-      const isWater = tile.type === 'water';
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       // Slight overdraw (1.02x) prevents hairline seams between adjacent open hexes
       poly.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
       poly.setAttribute('fill', tile.color);
-      poly.setAttribute('opacity', isWater ? alpha * 0.55 : alpha);
+      poly.setAttribute('opacity', alpha);
       poly.setAttribute('stroke', 'none');
       g.appendChild(poly);
 
