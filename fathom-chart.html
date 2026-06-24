@@ -853,7 +853,7 @@ function pick(arr) { return arr[randInt(arr.length)]; }
 function chance(p) { return rand() < p; }
 
 const world = new Map();
-const revealed = new Set();
+const revealed = new Map(); // hexKey → Set<depth> — tracks which depths each tile was revealed at
 const visited = new Set();
 const generatedChunks = new Set();
 
@@ -1820,19 +1820,19 @@ function render() {
         continue;
       }
 
-      // Open hex but not revealed = also void
-      if (!isRevealed) continue;
-      // Brightness based on distance from player + visited state.
-      // Revealed tiles always render — black means unexplored only, never depth-distant.
-      // Tiles far from the sub's current depth render at 30% alpha so the player
-      // can read "I've been there at another depth" vs "I'm there now."
+      // Depth-aware visibility: each reveal event is tagged with the depth at
+      // which the sub was near this tile. Viewing from currentDepth, the tile
+      // fades to black over 3 depth steps (180 m). Exploring at depth 0 tells
+      // you nothing about what's at depth 400 m in the same column.
+      const fade = isPlayer ? 1 : revealFade(q, r, state.currentDepth);
+      if (fade === 0) continue;
       let alpha;
       if (isVisited) {
         alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
       } else {
         alpha = dFromPlayer <= SIGHT ? 0.7 : Math.max(0.28, 0.7 - (dFromPlayer - SIGHT) * 0.1);
       }
-      if (!isPlayer && !hexNearDepth(tile, state.currentDepth)) alpha *= 0.3;
+      alpha *= fade;
 
       // Hex floor — caves render with a visible stroke (so wall boundaries read),
       // Open hexes fill solidly with no stroke. Where they touch, fills merge
@@ -2245,7 +2245,7 @@ function render() {
       continue;
     }
 
-    revealed.add(hexKey(n.q, n.r));
+    revealAt(n.q, n.r, state.currentDepth);
     // Reachable hexes get a visible dashed tap target. Depth-locked open
     // hexes get an invisible tap target — tapping them is a collision
     // attempt (the sub strikes rock at the current depth) and feeds back
@@ -2290,13 +2290,32 @@ function render() {
 // REVEAL & EXPLORATION
 //=============================================================================
 
+// Store a depth-tagged reveal event. depth is snapped to DEPTH_GRID.
+function revealAt(q, r, depth) {
+  const k = hexKey(q, r);
+  const snapped = Math.round(depth / DEPTH_GRID) * DEPTH_GRID;
+  if (!revealed.has(k)) revealed.set(k, new Set());
+  revealed.get(k).add(snapped);
+}
+
+// Returns 0..1 alpha factor for a water tile at (q,r) viewed from currentDepth.
+// Fades linearly to 0 over 3 DEPTH_GRID steps (180 m). 0 = render as void.
+function revealFade(q, r, currentDepth) {
+  const depths = revealed.get(hexKey(q, r));
+  if (!depths) return 0;
+  let minDist = Infinity;
+  for (const z of depths) minDist = Math.min(minDist, Math.abs(z - currentDepth));
+  const maxDist = 3 * DEPTH_GRID;
+  if (minDist >= maxDist) return 0;
+  return 1 - minDist / maxDist;
+}
+
 function revealAround(q, r, radius) {
-  // Standing on a tile reveals itself + immediate neighbors
-  const key = hexKey(q, r);
-  revealed.add(key);
+  const depth = state.currentDepth;
+  revealAt(q, r, depth);
   for (let dq = -radius; dq <= radius; dq++) {
     for (let dr = Math.max(-radius, -dq-radius); dr <= Math.min(radius, -dq+radius); dr++) {
-      revealed.add(hexKey(q + dq, r + dr));
+      revealAt(q + dq, r + dr, depth);
     }
   }
 }
@@ -2465,7 +2484,7 @@ function ping() {
   for (const k of pingRevealed) {
     const [q, r] = k.split(',').map(Number);
     const tile = tileAt(q, r);
-    revealed.add(k);
+    revealAt(q, r, state.currentDepth);
     totalHexes++;
     if (!tile.wall) openHexes++;
     const d = hexDistance({q, r}, {q: state.q, r: state.r});
@@ -2684,9 +2703,9 @@ function move(q, r) {
 
   // Reveal
   visited.add(hexKey(q, r));
-  revealed.add(hexKey(q, r));
+  revealAt(q, r, state.currentDepth);
   for (const n of hexNeighbors(q, r)) {
-    revealed.add(hexKey(n.q, n.r));
+    revealAt(n.q, n.r, state.currentDepth);
   }
 
   // React to tile
@@ -3365,7 +3384,7 @@ function restart() {
   visited.add(hexKey(0, 0));
   for (let dq = -5; dq <= 5; dq++) {
     for (let dr = Math.max(-5, -dq-5); dr <= Math.min(5, -dq+5); dr++) {
-      revealed.add(hexKey(dq, dr));
+      revealAt(dq, dr, 0); // initial surface reveal
     }
   }
   logEl.innerHTML = '';
