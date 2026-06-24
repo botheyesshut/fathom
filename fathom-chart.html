@@ -1827,11 +1827,6 @@ function render() {
       // you nothing about what's at depth 400 m in the same column.
       const fade = isPlayer ? 1 : revealFade(q, r, state.currentDepth);
       if (fade === 0) continue;
-      // Skip tiles that have no water at the current depth — they have volumes
-      // at other depths but are effectively stone here. Adjacent tiles' edge
-      // logic (hexAcceptsDepth) already handles the cyan/indigo navigation
-      // hints pointing up or down toward those volumes.
-      if (!hexAcceptsDepth(tile, state.currentDepth)) continue;
       let alpha;
       if (isVisited) {
         alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
@@ -1988,8 +1983,10 @@ function render() {
         g.appendChild(dot);
       }
 
-      // Tile symbol (POI/feature)
-      if (tile.char) {
+      // Tile symbol (POI/feature) — only shown when the tile has water at the
+      // current depth. Suppresses deep POIs (gas pocket at 350m) from appearing
+      // at the surface just because the initial reveal seeded the tile.
+      if (tile.char && hexAcceptsDepth(tile, state.currentDepth)) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', px.x);
         txt.setAttribute('y', px.y);
