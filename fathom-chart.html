@@ -816,7 +816,7 @@ function activeSub() { return SUBS[activeSubKey]; }
 // Tile types
 const TILES = {
   stone:    { name: 'solid stone',         char: '',   cost: 99, color: '#000000', wall: true },
-  shore:    { name: 'the shore',           char: '',   cost: 99, color: '#2a2418', wall: true, land: true },
+  shore:    { name: 'the shore',           char: '',   cost: 99, color: '#c8a060', wall: true, land: true },
   dock:     { name: 'the dock',            char: '╪',  cost: 99, color: '#3a2f1c', wall: true, land: true },
   water:    { name: 'open water',          char: '',   cost: 1,  color: '#08141e' },
   passage:  { name: 'a passage',           char: '',   cost: 1,  color: '#0a1622' },
@@ -1573,6 +1573,13 @@ function generateChunk(cq, cr) {
       {q:-2, r:5}, {q:-1, r:5}, {q:0, r:5}, {q:1, r:4}, {q:2, r:4}
     ];
     for (const h of shoreHexes) setTile(h.q, h.r, 'shore', true);
+    // Extended pier — runs south from the dock to meet the beach.
+    // Set after shore loop so these override any shore tiles at the same coords.
+    setTile(0, 1, 'dock', true);
+    setTile(2, 0, 'dock', true);
+    setTile(2, 1, 'dock', true);
+    setTile(1, 2, 'dock', true);
+    setTile(2, 2, 'dock', true);
   }
 
   // Step 4: POIs scattered into open cave hexes (rare in shelf water, more
@@ -1719,6 +1726,10 @@ function render() {
   const playerHex = { q: state.q, r: state.r };
   const SIGHT = 3;
 
+  // Edge lines collected here and flushed after all fills so they always
+  // render on top, regardless of which stone/water hex was iterated first.
+  const pendingEdges = [];
+
   for (let dr = -rRange; dr <= rRange; dr++) {
     for (let dq = -qRange; dq <= qRange; dq++) {
       const q = camCenter.q + dq;
@@ -1785,6 +1796,22 @@ function render() {
               spk.setAttribute('opacity', '0.7');
               g.appendChild(spk);
             }
+          }
+        }
+        // Stone fills with dark grey when the player has been near it — any
+        // adjacent open hex being revealed means the stone wall was "seen".
+        if (!tile.land) {
+          const nbrs6 = hexNeighbors(q, r);
+          const seen = nbrs6.some(n => revealed.has(hexKey(n.q, n.r)));
+          if (seen) {
+            const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
+            const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            sp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
+            sp.setAttribute('fill', '#4a4540');
+            sp.setAttribute('opacity', stoneAlpha.toFixed(2));
+            sp.setAttribute('stroke', 'none');
+            sp.setAttribute('pointer-events', 'none');
+            g.appendChild(sp);
           }
         }
         continue;
@@ -1880,11 +1907,11 @@ function render() {
             }
             if (hasAbove && hasBelow) {
               aboveColor = '#7ed4f0';
-              belowColor = '#2a1f6e';
+              belowColor = '#6048c8';
             } else if (hasAbove) {
               wallColor = '#7ed4f0'; // bright cyan — ascend one step to enter
             } else if (hasBelow) {
-              wallColor = '#2a1f6e'; // deep indigo — descend one step to enter
+              wallColor = '#6048c8'; // indigo — descend one step to enter
             } else {
               wallColor = '#a89a88'; // grey — three stone cells, functionally a wall
             }
@@ -1908,7 +1935,7 @@ function render() {
             line.setAttribute('stroke-linecap', 'round');
             line.setAttribute('opacity', op.toFixed(2));
             line.setAttribute('pointer-events', 'none');
-            g.appendChild(line);
+            pendingEdges.push(line);
           } else {
             // Both above and below: gradient runs along the edge's own
             // axis with dark blue at the corners and light blue at the
@@ -1939,7 +1966,7 @@ function render() {
             line.setAttribute('stroke-linecap', 'round');
             line.setAttribute('opacity', op.toFixed(2));
             line.setAttribute('pointer-events', 'none');
-            g.appendChild(line);
+            pendingEdges.push(line);
           }
         }
       }
@@ -2056,6 +2083,9 @@ function render() {
       }
     }
   }
+
+  // Flush edge lines last so they always sit on top of all stone/water fills.
+  for (const el of pendingEdges) g.appendChild(el);
 
   // Animated sonar wavefront — expands outward from the sub at ping origin.
   // Two rings: a bright leading edge, and a dimmer trailing one for thickness.
