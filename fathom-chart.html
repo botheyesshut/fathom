@@ -1827,6 +1827,11 @@ function render() {
       // you nothing about what's at depth 400 m in the same column.
       const fade = isPlayer ? 1 : revealFade(q, r, state.currentDepth);
       if (fade === 0) continue;
+      // Skip tiles that have no water at the current depth — they have volumes
+      // at other depths but are effectively stone here. Adjacent tiles' edge
+      // logic (hexAcceptsDepth) already handles the cyan/indigo navigation
+      // hints pointing up or down toward those volumes.
+      if (!hexAcceptsDepth(tile, state.currentDepth)) continue;
       let alpha;
       if (isVisited) {
         alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
