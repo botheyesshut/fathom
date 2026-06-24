@@ -1427,6 +1427,7 @@ function addVolume(q, r, type, kind, ceiling, floor) {
   if (floor <= ceiling) return; // degenerate after snapping
   const k = hexKey(q, r);
   let existing = world.get(k);
+  if (existing && existing.land) return; // shore/dock tiles are inviolable — cave carving must not overwrite them
   let existingVolumes = (existing && !existing.wall) ? [...existing.volumes] : [];
   let existingType = (existing && !existing.wall) ? existing.type : type;
 
