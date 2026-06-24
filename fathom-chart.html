@@ -1564,22 +1564,18 @@ function generateChunk(cq, cr) {
     addVolume(0, 0, 'water', 'water', 0, 100);
     let oTile = world.get(hexKey(0, 0));
     world.set(hexKey(0, 0), makeTile('surface', 0, 0, oTile.volumes));
+    // Pier: single straight column at q=1, r=0→2, pointing into the beach.
     setTile(1, 0, 'dock', true);
     setTile(1, 1, 'dock', true);
+    setTile(1, 2, 'dock', true);
     const shoreHexes = [
-      {q:-3, r:3}, {q:-2, r:3}, {q:-1, r:3}, {q:0, r:3}, {q:1, r:2}, {q:2, r:2},
-      {q:-3, r:4}, {q:-2, r:4}, {q:-1, r:4}, {q:0, r:4}, {q:1, r:3}, {q:2, r:3},
-      {q:3, r:1}, {q:3, r:2}, {q:-4, r:4}, {q:-4, r:3}, {q:-4, r:2},
-      {q:-2, r:5}, {q:-1, r:5}, {q:0, r:5}, {q:1, r:4}, {q:2, r:4}
+      {q:-3, r:3}, {q:-2, r:3}, {q:-1, r:3}, {q:0, r:3}, {q:1, r:3}, {q:2, r:3},
+      {q:-3, r:4}, {q:-2, r:4}, {q:-1, r:4}, {q:0, r:4}, {q:1, r:4}, {q:2, r:4},
+      {q:3, r:1}, {q:3, r:2}, {q:3, r:3},
+      {q:-4, r:4}, {q:-4, r:3}, {q:-4, r:2},
+      {q:-2, r:5}, {q:-1, r:5}, {q:0, r:5}
     ];
     for (const h of shoreHexes) setTile(h.q, h.r, 'shore', true);
-    // Extended pier — runs south from the dock to meet the beach.
-    // Set after shore loop so these override any shore tiles at the same coords.
-    setTile(0, 1, 'dock', true);
-    setTile(2, 0, 'dock', true);
-    setTile(2, 1, 'dock', true);
-    setTile(1, 2, 'dock', true);
-    setTile(2, 2, 'dock', true);
   }
 
   // Step 4: POIs scattered into open cave hexes (rare in shelf water, more
@@ -1752,7 +1748,8 @@ function render() {
       // But the surface is only visible if the sub is near the surface; at
       // depth, the chart hides land that's hundreds of meters above.
       if (tile.wall) {
-        if (tile.land && isRevealed && hexNearDepth(tile, state.currentDepth)) {
+        const landVisible = isRevealed || hexNeighbors(q, r).some(n => revealed.has(hexKey(n.q, n.r)));
+        if (tile.land && landVisible && hexNearDepth(tile, state.currentDepth)) {
           const lp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
           lp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
           lp.setAttribute('fill', tile.color);
@@ -2293,40 +2290,9 @@ function revealAround(q, r, radius) {
   // Standing on a tile reveals itself + immediate neighbors
   const key = hexKey(q, r);
   revealed.add(key);
-  const seeds = [{q, r}];
   for (let dq = -radius; dq <= radius; dq++) {
     for (let dr = Math.max(-radius, -dq-radius); dr <= Math.min(radius, -dq+radius); dr++) {
       revealed.add(hexKey(q + dq, r + dr));
-      seeds.push({q: q + dq, r: r + dr});
-    }
-  }
-  revealLandFlood(seeds);
-}
-
-function revealLandFlood(seeds, maxHops = 4) {
-  // BFS through contiguous land (shore/dock) tiles, limited to maxHops steps
-  // from the nearest seed. Closes black-hole gaps in beaches and piers without
-  // revealing entire connected shorelines that the sub hasn't sailed near yet.
-  // Works for surface beaches and future underground beaches/docks.
-  const queue = [];
-  for (const {q, r} of seeds) {
-    for (const n of hexNeighbors(q, r)) {
-      const k = hexKey(n.q, n.r);
-      if (!revealed.has(k) && tileAt(n.q, n.r).land) {
-        revealed.add(k);
-        queue.push({q: n.q, r: n.r, hops: 1});
-      }
-    }
-  }
-  while (queue.length) {
-    const {q, r, hops} = queue.shift();
-    if (hops >= maxHops) continue;
-    for (const n of hexNeighbors(q, r)) {
-      const k = hexKey(n.q, n.r);
-      if (!revealed.has(k) && tileAt(n.q, n.r).land) {
-        revealed.add(k);
-        queue.push({q: n.q, r: n.r, hops: hops + 1});
-      }
     }
   }
 }
@@ -2492,12 +2458,10 @@ function ping() {
   // the render loop to draw on that hex.
   const depthRange = lvl.depthRange;
   const pingArrowList = [];
-  const pingSeedsList = [];
   for (const k of pingRevealed) {
     const [q, r] = k.split(',').map(Number);
     const tile = tileAt(q, r);
     revealed.add(k);
-    pingSeedsList.push({q, r});
     totalHexes++;
     if (!tile.wall) openHexes++;
     const d = hexDistance({q, r}, {q: state.q, r: state.r});
@@ -2530,7 +2494,6 @@ function ping() {
     if (nearestAbove !== null) pingArrowList.push({ q, r, dir: 'up', meters: nearestAbove });
     if (nearestBelow !== null) pingArrowList.push({ q, r, dir: 'down', meters: nearestBelow });
   }
-  revealLandFlood(pingSeedsList);
 
   // Start an animated wavefront — radius grows from 0 to the ping's actual reach
   // over a duration scaled by power. The render loop draws it from state.ping.
@@ -2718,12 +2681,9 @@ function move(q, r) {
   // Reveal
   visited.add(hexKey(q, r));
   revealed.add(hexKey(q, r));
-  const revealSeeds = [{q, r}];
   for (const n of hexNeighbors(q, r)) {
     revealed.add(hexKey(n.q, n.r));
-    revealSeeds.push(n);
   }
-  revealLandFlood(revealSeeds);
 
   // React to tile
   handleTile(tile);
@@ -3399,14 +3359,11 @@ function restart() {
   // Reveal a generous initial sight area — the player needs to see the
   // dock, the shoreline, and enough water to chart a course.
   visited.add(hexKey(0, 0));
-  const initSeeds = [{q: 0, r: 0}];
   for (let dq = -5; dq <= 5; dq++) {
     for (let dr = Math.max(-5, -dq-5); dr <= Math.min(5, -dq+5); dr++) {
       revealed.add(hexKey(dq, dr));
-      initSeeds.push({q: dq, r: dr});
     }
   }
-  revealLandFlood(initSeeds);
   logEl.innerHTML = '';
   state.lastZone = 'shelf';
   state.maxZoneReached = 0;
