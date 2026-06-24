@@ -1817,19 +1817,17 @@ function render() {
 
       // Open hex but not revealed = also void
       if (!isRevealed) continue;
-      // Even if revealed, hide hexes whose volumes are far from the sub's
-      // current depth. The sub's sonar at 360m can't perceive shelf water at
-      // depth 0 — there's hundreds of meters of rock and dead water between
-      // them. The chart should reflect what the sub can sense NOW.
-      if (!isPlayer && !hexNearDepth(tile, state.currentDepth)) continue;
-
-      // Brightness based on distance from player + visited state
+      // Brightness based on distance from player + visited state.
+      // Revealed tiles always render — black means unexplored only, never depth-distant.
+      // Tiles far from the sub's current depth render at 30% alpha so the player
+      // can read "I've been there at another depth" vs "I'm there now."
       let alpha;
       if (isVisited) {
         alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
       } else {
         alpha = dFromPlayer <= SIGHT ? 0.7 : Math.max(0.28, 0.7 - (dFromPlayer - SIGHT) * 0.1);
       }
+      if (!isPlayer && !hexNearDepth(tile, state.currentDepth)) alpha *= 0.3;
 
       // Hex floor — caves render with a visible stroke (so wall boundaries read),
       // Open hexes fill solidly with no stroke. Where they touch, fills merge
