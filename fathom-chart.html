@@ -1754,7 +1754,9 @@ function render() {
       // But the surface is only visible if the sub is near the surface; at
       // depth, the chart hides land that's hundreds of meters above.
       if (tile.wall) {
-        const landVisible = isRevealed || hexNeighbors(q, r).some(n => revealed.has(hexKey(n.q, n.r)));
+        const landVisible = state.currentDepth === 0
+                          || isRevealed
+                          || hexNeighbors(q, r).some(n => revealed.has(hexKey(n.q, n.r)));
         if (tile.land && landVisible && hexNearDepth(tile, state.currentDepth)) {
           const lp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
           lp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
@@ -1801,21 +1803,25 @@ function render() {
             }
           }
         }
-        // Stone fills with dark grey when the player has been near it at the
-        // current depth. Depth-aware: surface exploration does not reveal stone
-        // walls at depth 400 m — only adjacent caves explored near that depth do.
+        // Stone fills when the player is near an adjacent open cave at the current
+        // depth. At depth 0 (surface view) all bay-bordering cliffs are always
+        // visible; deeper, revealFade gates them so surface pings don't expose
+        // underground walls. Color shifts from dark brown (surface cliffs) to
+        // warm grey (cave walls) below the surface.
         if (!tile.land) {
+          const isSurf0 = state.currentDepth === 0;
           const nbrs6 = hexNeighbors(q, r);
           const seen = nbrs6.some(n => {
             const nt = tileAt(n.q, n.r);
-            return !nt.wall && hexAcceptsDepth(nt, state.currentDepth)
-                && revealFade(n.q, n.r, state.currentDepth) > 0;
+            if (nt.wall || !hexAcceptsDepth(nt, state.currentDepth)) return false;
+            return isSurf0 || revealFade(n.q, n.r, state.currentDepth) > 0;
           });
           if (seen) {
+            const stoneColor = isSurf0 ? '#4a2e18' : '#4a4540';
             const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
             const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             sp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
-            sp.setAttribute('fill', '#4a4540');
+            sp.setAttribute('fill', stoneColor);
             sp.setAttribute('opacity', stoneAlpha.toFixed(2));
             sp.setAttribute('stroke', 'none');
             sp.setAttribute('pointer-events', 'none');
@@ -1825,28 +1831,57 @@ function render() {
         continue;
       }
 
-      // Depth-aware visibility: each reveal event is tagged with the depth at
-      // which the sub was near this tile. Viewing from currentDepth, the tile
-      // fades to black over 3 depth steps (180 m). Exploring at depth 0 tells
-      // you nothing about what's at depth 400 m in the same column.
-      const fade = isPlayer ? 1 : revealFade(q, r, state.currentDepth);
-      if (fade === 0) continue;
-      let alpha;
-      if (isVisited) {
-        alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
+      // Surface (depth 0): bypass fog-of-war — show all surface-water tiles as
+      // open ocean. At depth, revealFade gates what the sub has explored.
+      const isSurf = state.currentDepth === 0;
+      const cd     = state.currentDepth;
+      let fade;
+      if (isSurf) {
+        fade = hexAcceptsDepth(tile, 0) ? 1 : 0;
       } else {
-        alpha = dFromPlayer <= SIGHT ? 0.7 : Math.max(0.28, 0.7 - (dFromPlayer - SIGHT) * 0.1);
+        fade = isPlayer ? 1 : revealFade(q, r, cd);
       }
-      alpha *= fade;
+      if (fade === 0) continue;
 
-      // Hex floor — caves render with a visible stroke (so wall boundaries read),
-      // Open hexes fill solidly with no stroke. Where they touch, fills merge
-      // into one passage shape. Where they meet wall (void), the fill simply
-      // ends — and that crisp edge IS the wall, like Cloudy Mountain.
+      // Depth-tiered visibility radius:
+      //   0 m       — full ocean view, gradient falloff, minimum 40% (no black)
+      //   60–120 m  — bright bubble 3 hexes; 4th hex noticeably dimmer
+      //   180–300 m — bright bubble 2 hexes; 3rd hex noticeably dimmer
+      //   > 300 m   — tight SIGHT-radius bubble (cave exploration mode)
+      let alpha;
+      if (isSurf) {
+        const base = isVisited ? 1.0 : 0.85;
+        alpha = Math.max(0.40, base - dFromPlayer * 0.045);
+      } else if (cd <= 2 * DEPTH_GRID) {          // 60–120 m
+        if      (dFromPlayer <= 3)  alpha = isVisited ? 0.92 : 0.72;
+        else if (dFromPlayer === 4) alpha = isVisited ? 0.48 : 0.34;
+        else alpha = Math.max(isVisited ? 0.12 : 0.08,
+                              (isVisited ? 0.48 : 0.34) - (dFromPlayer - 4) * 0.10);
+        alpha *= fade;
+      } else if (cd <= 5 * DEPTH_GRID) {          // 180–300 m
+        if      (dFromPlayer <= 2)  alpha = isVisited ? 0.92 : 0.72;
+        else if (dFromPlayer === 3) alpha = isVisited ? 0.38 : 0.26;
+        else alpha = Math.max(isVisited ? 0.08 : 0.05,
+                              (isVisited ? 0.38 : 0.26) - (dFromPlayer - 3) * 0.08);
+        alpha *= fade;
+      } else {                                     // > 300 m — cave darkness
+        if (isVisited) {
+          alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
+        } else {
+          alpha = dFromPlayer <= SIGHT ? 0.7 : Math.max(0.28, 0.7 - (dFromPlayer - SIGHT) * 0.1);
+        }
+        alpha *= fade;
+      }
+
+      // At depth 0 the map shows open ocean — all water hexes render as blue.
+      // At depth, tiles use their own colour (cave-type palette).
+      const fillColor = isSurf ? '#3090c8' : tile.color;
+
+      // Hex floor — fills merge where tiles touch; crisp edge against void is the wall.
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       // Slight overdraw (1.02x) prevents hairline seams between adjacent open hexes
       poly.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
-      poly.setAttribute('fill', tile.color);
+      poly.setAttribute('fill', fillColor);
       poly.setAttribute('opacity', alpha);
       poly.setAttribute('stroke', 'none');
       g.appendChild(poly);
