@@ -1873,6 +1873,10 @@ function render() {
           continue;
         }
         fade = isPlayer ? 1 : revealFade(q, r, cd);
+        // Floodlights: the bright bubble always illuminates nearby tiles
+        // unconditionally — exploration history doesn't matter here.
+        const bubbleR = cd <= 2 * DEPTH_GRID ? 3 : cd <= 5 * DEPTH_GRID ? 2 : -1;
+        if (dFromPlayer <= bubbleR) fade = 1;
       }
       if (fade === 0) continue;
 
