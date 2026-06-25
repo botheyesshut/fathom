@@ -817,7 +817,7 @@ function activeSub() { return SUBS[activeSubKey]; }
 const TILES = {
   stone:    { name: 'solid stone',         char: '',   cost: 99, color: '#000000', wall: true },
   shore:    { name: 'the shore',           char: '',   cost: 99, color: '#c8a060', wall: true, land: true },
-  dock:     { name: 'the dock',            char: '╪',  cost: 99, color: '#3a2f1c', wall: true, land: true },
+  dock:     { name: 'the dock',            char: '╪',  cost: 99, color: '#7a5028', wall: true, land: true },
   water:    { name: 'open water',          char: '',   cost: 1,  color: '#08141e' },
   passage:  { name: 'a passage',           char: '',   cost: 1,  color: '#0a1622' },
   chamber:  { name: 'an open chamber',     char: '',   cost: 1,  color: '#0e1c2c' },
@@ -1813,8 +1813,9 @@ function render() {
           const nbrs6 = hexNeighbors(q, r);
           const seen = nbrs6.some(n => {
             const nt = tileAt(n.q, n.r);
-            if (nt.wall || !hexAcceptsDepth(nt, state.currentDepth)) return false;
-            return isSurf0 || revealFade(n.q, n.r, state.currentDepth) > 0;
+            if (isSurf0) return !nt.wall || nt.land; // surface: any open tile or shore reveals stone
+            return !nt.wall && hexAcceptsDepth(nt, state.currentDepth)
+                && revealFade(n.q, n.r, state.currentDepth) > 0;
           });
           if (seen) {
             const stoneColor = isSurf0 ? '#4a2e18' : '#4a4540';
