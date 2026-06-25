@@ -1892,7 +1892,7 @@ function render() {
         // No revealFade — dive lights illuminate nearby tiles unconditionally.
         if (dFromPlayer <= 3) {
           fillColor = '#1a6090';
-          alpha = Math.max(0.80, 1.0 - dFromPlayer * 0.07); // gentle fade 1.0→0.80
+          alpha = Math.max(0.93, 1.0 - dFromPlayer * 0.025); // near-flat 1.0→0.93
         } else if (dFromPlayer === 4) {
           fillColor = '#1a6090';
           alpha = 0.25 * Math.max(0.4, fade);               // sharp drop outside bubble
@@ -1904,7 +1904,7 @@ function render() {
         // clearly lighter than cave darkness without matching the shallower tier.
         if (dFromPlayer <= 2) {
           fillColor = '#1a6090';
-          alpha = Math.max(0.55, 0.68 - dFromPlayer * 0.065); // gentle fade 0.68→0.55
+          alpha = Math.max(0.80, 0.86 - dFromPlayer * 0.03); // near-flat 0.86→0.80
         } else if (dFromPlayer === 3) {
           fillColor = '#1a6090';
           alpha = 0.20 * Math.max(0.4, fade);               // sharp drop outside bubble
