@@ -1815,8 +1815,12 @@ function render() {
           // adjacent to an explored cave at the current depth renders.
           const seen = isSurf0 || hexNeighbors(q, r).some(n => {
             const nt = tileAt(n.q, n.r);
-            return !nt.wall && hexAcceptsDepth(nt, state.currentDepth)
-                && revealFade(n.q, n.r, state.currentDepth) > 0;
+            if (nt.wall) return false;
+            // At shallow depths ocean tiles always illuminate adjacent stone
+            if (state.currentDepth <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
+            // Stone is a column — the adjacent passage needn't contain exactly
+            // the current depth, just be explored within the 180m fade window.
+            return revealFade(n.q, n.r, state.currentDepth) > 0;
           });
           if (seen) {
             const stoneColor = state.currentDepth >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820';
