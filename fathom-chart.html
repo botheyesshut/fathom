@@ -1806,7 +1806,11 @@ function render() {
         // walls at depth 400 m — only adjacent caves explored near that depth do.
         if (!tile.land) {
           const nbrs6 = hexNeighbors(q, r);
-          const seen = nbrs6.some(n => revealFade(n.q, n.r, state.currentDepth) > 0);
+          const seen = nbrs6.some(n => {
+            const nt = tileAt(n.q, n.r);
+            return !nt.wall && hexAcceptsDepth(nt, state.currentDepth)
+                && revealFade(n.q, n.r, state.currentDepth) > 0;
+          });
           if (seen) {
             const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
             const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
