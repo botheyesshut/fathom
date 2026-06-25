@@ -1839,10 +1839,19 @@ function render() {
       const cd     = state.currentDepth;
       let fade;
       if (isSurf) {
-        // Surface map view: all water tiles are visible regardless of depth.
-        // Deep caves (180m+) are still underwater — they show as blue ocean.
-        // POI chars are separately gated by hexAcceptsDepth so gas pockets
-        // at 350m won't display their symbol from the surface.
+        // Tiles within 2 depth-steps (≤120m ceiling) read as navigable ocean → blue.
+        // Deeper cave tiles (ceiling ≥180m) are seafloor rock from the surface
+        // perspective: sub can't enter them at depth 0, so they look like stone.
+        if (!hexNearDepth(tile, 0)) {
+          const dsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          dsp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
+          dsp.setAttribute('fill', '#7a4820');
+          dsp.setAttribute('opacity', Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05).toFixed(2));
+          dsp.setAttribute('stroke', 'none');
+          dsp.setAttribute('pointer-events', 'none');
+          g.appendChild(dsp);
+          continue;
+        }
         fade = 1;
       } else {
         fade = isPlayer ? 1 : revealFade(q, r, cd);
