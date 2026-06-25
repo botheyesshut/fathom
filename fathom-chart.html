@@ -1818,7 +1818,7 @@ function render() {
                 && revealFade(n.q, n.r, state.currentDepth) > 0;
           });
           if (seen) {
-            const stoneColor = isSurf0 ? '#4a2e18' : '#4a4540';
+            const stoneColor = isSurf0 ? '#7a4820' : '#4a4540';
             const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
             const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             sp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
@@ -1838,7 +1838,10 @@ function render() {
       const cd     = state.currentDepth;
       let fade;
       if (isSurf) {
-        fade = hexAcceptsDepth(tile, 0) ? 1 : 0;
+        // hexNearDepth covers tiles within 2 depth steps (120m) of surface:
+        // ceiling 0m tiles (bay surface), 60m tiles (bay floor), 120m tiles.
+        // hexAcceptsDepth(tile,0) only matched ceiling=0 and missed most of the bay.
+        fade = hexNearDepth(tile, 0) ? 1 : 0;
       } else {
         fade = isPlayer ? 1 : revealFade(q, r, cd);
       }
