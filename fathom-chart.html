@@ -1819,7 +1819,7 @@ function render() {
                 && revealFade(n.q, n.r, state.currentDepth) > 0;
           });
           if (seen) {
-            const stoneColor = isSurf0 ? '#7a4820' : '#4a4540';
+            const stoneColor = '#7a4820'; // dark brown at all depths — cliffs/rock face
             const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
             const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             sp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
