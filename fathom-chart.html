@@ -1859,7 +1859,9 @@ function render() {
         if (!hexAcceptsDepth(tile, cd)) {
           const seen = dFromPlayer <= SIGHT || hexNeighbors(q, r).some(n => {
             const nt = tileAt(n.q, n.r);
-            return !nt.wall && hexAcceptsDepth(nt, cd) && revealFade(n.q, n.r, cd) > 0;
+            if (nt.wall || !hexAcceptsDepth(nt, cd)) return false;
+            if (cd <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
+            return revealFade(n.q, n.r, cd) > 0;
           });
           if (seen) {
             const rsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -1873,48 +1875,48 @@ function render() {
           continue;
         }
         fade = isPlayer ? 1 : revealFade(q, r, cd);
-        // Floodlights: the bright bubble always illuminates nearby tiles
-        // unconditionally — exploration history doesn't matter here.
+        // At ≤300 m, surface-accessible ocean tiles are always lit — sunlight
+        // and reflections illuminate the water column throughout this zone.
+        if (cd <= 5 * DEPTH_GRID && hexNearDepth(tile, 0)) fade = 1;
+        // Sub floodlights also illuminate cave tiles within the bright bubble
         const bubbleR = cd <= 2 * DEPTH_GRID ? 3 : cd <= 5 * DEPTH_GRID ? 2 : -1;
         if (dFromPlayer <= bubbleR) fade = 1;
       }
       if (fade === 0) continue;
 
-      // Depth-tiered visibility radius:
-      //   0 m       — full ocean view, gradient falloff, minimum 40% (no black)
-      //   60–120 m  — bright bubble 3 hexes; 4th hex noticeably dimmer
-      //   180–300 m — bright bubble 2 hexes; 3rd hex noticeably dimmer
-      //   > 300 m   — tight SIGHT-radius bubble (cave exploration mode)
+      // Depth visibility model:
+      //   0 m        — full ocean view, gradient falloff, minimum 50%
+      //   60–300 m   — ocean stays visible; bright inner zone (r=3 at 60-120m,
+      //                r=2 at 180-300m) with a noticeable drop at the edge, then
+      //                dim non-black falloff — the whole water column is lit by
+      //                surface reflections (epipelagic/mesopelagic zones)
+      //   > 300 m    — cave darkness: tight SIGHT bubble, explore-gated
       let alpha;
       let fillColor = tile.color;
       if (isSurf) {
         fillColor = '#3090c8';
         const base = isVisited ? 1.0 : 0.85;
         alpha = Math.max(0.50, base - dFromPlayer * 0.045);
-      } else if (cd <= 2 * DEPTH_GRID) {          // 60–120 m
-        // Bright 3-hex bubble: lit-cave blue overrides near-black tile colours.
-        // No revealFade — dive lights illuminate nearby tiles unconditionally.
-        if (dFromPlayer <= 3) {
-          fillColor = '#1a6090';
-          alpha = Math.max(0.93, 1.0 - dFromPlayer * 0.025); // near-flat 1.0→0.93
-        } else if (dFromPlayer === 4) {
-          fillColor = '#1a6090';
-          alpha = 0.25 * Math.max(0.4, fade);               // sharp drop outside bubble
+      } else if (cd <= 5 * DEPTH_GRID) {
+        // step 1..5 = depths 60m..300m
+        const step   = cd / DEPTH_GRID;
+        const innerR = cd <= 2 * DEPTH_GRID ? 3 : 2;
+        // Brightness values decay with depth
+        const innerA = Math.max(0.58, 0.95 - (step - 1) * 0.075); // 0.95→0.65
+        const dropA  = Math.max(0.28, 0.65 - (step - 1) * 0.075); // 0.65→0.35
+        const minA   = Math.max(0.18, 0.50 - (step - 1) * 0.080); // 0.50→0.18
+        const outerR = 0.038 + (step - 1) * 0.010;                 // 0.038→0.078
+        if (dFromPlayer <= innerR) {
+          alpha = Math.max(innerA * 0.94, innerA - dFromPlayer * 0.018); // near-flat
+        } else if (dFromPlayer === innerR + 1) {
+          alpha = dropA;                                 // noticeable drop at bubble edge
         } else {
-          alpha = Math.max(0.04, 0.20 - (dFromPlayer - 4) * 0.05) * fade;
+          alpha = Math.max(minA, dropA - (dFromPlayer - innerR - 1) * outerR);
         }
-      } else if (cd <= 5 * DEPTH_GRID) {          // 180–300 m
-        // Bright 2-hex bubble: same hue as 60–120m but lower alpha so it reads
-        // clearly lighter than cave darkness without matching the shallower tier.
-        if (dFromPlayer <= 2) {
-          fillColor = '#1a6090';
-          alpha = Math.max(0.80, 0.86 - dFromPlayer * 0.03); // near-flat 0.86→0.80
-        } else if (dFromPlayer === 3) {
-          fillColor = '#1a6090';
-          alpha = 0.20 * Math.max(0.4, fade);               // sharp drop outside bubble
-        } else {
-          alpha = Math.max(0.03, 0.15 - (dFromPlayer - 3) * 0.04) * fade;
-        }
+        // Cave tiles (not surface-accessible) still dim by exploration state
+        if (!hexNearDepth(tile, 0)) alpha *= fade;
+        // 60-120m: ocean blue matches surface feel; 180-300m: mesopelagic dark blue
+        fillColor = cd <= 2 * DEPTH_GRID ? '#3090c8' : '#1a6090';
       } else {                                     // > 300 m — cave darkness
         if (isVisited) {
           alpha = dFromPlayer <= SIGHT ? 1 : Math.max(0.4, 1 - (dFromPlayer - SIGHT) * 0.12);
