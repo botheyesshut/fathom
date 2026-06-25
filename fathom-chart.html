@@ -1854,6 +1854,24 @@ function render() {
         }
         fade = 1;
       } else {
+        // Water tile with no volume at this depth looks like a rock wall —
+        // e.g. a passage ceiling=180m appears as a cliff face when you're at 60m.
+        if (!hexAcceptsDepth(tile, cd)) {
+          const seen = dFromPlayer <= SIGHT || hexNeighbors(q, r).some(n => {
+            const nt = tileAt(n.q, n.r);
+            return !nt.wall && hexAcceptsDepth(nt, cd) && revealFade(n.q, n.r, cd) > 0;
+          });
+          if (seen) {
+            const rsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            rsp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
+            rsp.setAttribute('fill', '#7a4820');
+            rsp.setAttribute('opacity', Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05).toFixed(2));
+            rsp.setAttribute('stroke', 'none');
+            rsp.setAttribute('pointer-events', 'none');
+            g.appendChild(rsp);
+          }
+          continue;
+        }
         fade = isPlayer ? 1 : revealFade(q, r, cd);
       }
       if (fade === 0) continue;
