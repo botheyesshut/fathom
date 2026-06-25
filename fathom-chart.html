@@ -1839,10 +1839,11 @@ function render() {
       const cd     = state.currentDepth;
       let fade;
       if (isSurf) {
-        // hexNearDepth covers tiles within 2 depth steps (120m) of surface:
-        // ceiling 0m tiles (bay surface), 60m tiles (bay floor), 120m tiles.
-        // hexAcceptsDepth(tile,0) only matched ceiling=0 and missed most of the bay.
-        fade = hexNearDepth(tile, 0) ? 1 : 0;
+        // Surface map view: all water tiles are visible regardless of depth.
+        // Deep caves (180m+) are still underwater — they show as blue ocean.
+        // POI chars are separately gated by hexAcceptsDepth so gas pockets
+        // at 350m won't display their symbol from the surface.
+        fade = 1;
       } else {
         fade = isPlayer ? 1 : revealFade(q, r, cd);
       }
