@@ -1886,7 +1886,7 @@ function render() {
       if (isSurf) {
         fillColor = '#3090c8';
         const base = isVisited ? 1.0 : 0.85;
-        alpha = Math.max(0.40, base - dFromPlayer * 0.045);
+        alpha = Math.max(0.50, base - dFromPlayer * 0.045);
       } else if (cd <= 2 * DEPTH_GRID) {          // 60–120 m
         // Bright 3-hex bubble: lit-cave blue overrides near-black tile colours.
         // No revealFade — dive lights illuminate nearby tiles unconditionally.
@@ -1900,12 +1900,13 @@ function render() {
           alpha = Math.max(0.04, 0.20 - (dFromPlayer - 4) * 0.05) * fade;
         }
       } else if (cd <= 5 * DEPTH_GRID) {          // 180–300 m
-        // Bright 2-hex bubble: dimmer lit-cave, same principle.
+        // Bright 2-hex bubble: same hue as 60–120m but lower alpha so it reads
+        // clearly lighter than cave darkness without matching the shallower tier.
         if (dFromPlayer <= 2) {
-          fillColor = '#0e3a56';
-          alpha = Math.max(0.70, 0.90 - dFromPlayer * 0.10); // gentle fade 0.90→0.70
+          fillColor = '#1a6090';
+          alpha = Math.max(0.55, 0.68 - dFromPlayer * 0.065); // gentle fade 0.68→0.55
         } else if (dFromPlayer === 3) {
-          fillColor = '#0e3a56';
+          fillColor = '#1a6090';
           alpha = 0.20 * Math.max(0.4, fade);               // sharp drop outside bubble
         } else {
           alpha = Math.max(0.03, 0.15 - (dFromPlayer - 3) * 0.04) * fade;
