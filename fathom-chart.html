@@ -1810,10 +1810,11 @@ function render() {
         // warm grey (cave walls) below the surface.
         if (!tile.land) {
           const isSurf0 = state.currentDepth === 0;
-          const nbrs6 = hexNeighbors(q, r);
-          const seen = nbrs6.some(n => {
+          // At depth 0 every stone tile is visible — surface map view shows
+          // all rock (cliffs, seafloor, mountains). Below surface, only stone
+          // adjacent to an explored cave at the current depth renders.
+          const seen = isSurf0 || hexNeighbors(q, r).some(n => {
             const nt = tileAt(n.q, n.r);
-            if (isSurf0) return !nt.wall || nt.land; // surface: any open tile or shore reveals stone
             return !nt.wall && hexAcceptsDepth(nt, state.currentDepth)
                 && revealFade(n.q, n.r, state.currentDepth) > 0;
           });
