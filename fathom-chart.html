@@ -1819,7 +1819,7 @@ function render() {
                 && revealFade(n.q, n.r, state.currentDepth) > 0;
           });
           if (seen) {
-            const stoneColor = '#7a4820'; // dark brown at all depths — cliffs/rock face
+            const stoneColor = state.currentDepth >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820';
             const stoneAlpha = Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05);
             const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             sp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
@@ -1864,7 +1864,7 @@ function render() {
           if (seen) {
             const rsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             rsp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
-            rsp.setAttribute('fill', '#7a4820');
+            rsp.setAttribute('fill', cd >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820');
             rsp.setAttribute('opacity', Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05).toFixed(2));
             rsp.setAttribute('stroke', 'none');
             rsp.setAttribute('pointer-events', 'none');
