@@ -1311,7 +1311,7 @@ function carveEdge(edge, nodesById) {
     addVolume(a.q, a.r, 'passage', 'passage', 0, b.depth + chamberHalfSpan);
     const tile = world.get(hexKey(a.q, a.r));
     if (tile && !tile.poi) {
-      world.set(hexKey(a.q, a.r), makeTile('opening', a.q, a.r, tile.volumes));
+      world.set(hexKey(a.q, a.r), makeTile('opening', a.q, a.r, tile.ceiling, tile.floor));
     }
     // Horizontal corridor at chamber depth, meandering toward the chamber.
     const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId);
@@ -1390,26 +1390,23 @@ function setTile(q, r, type, force) {
   const k = hexKey(q, r);
   const existing = world.get(k);
   if (!force && existing && !existing.wall && t.wall) return; // never re-stone
-  // Preserve volumes when overlaying a POI on open space; clear them when
-  // forcing to a wall (shore, dock, stone — these are solid).
-  const volumes = (t.wall) ? [] : (existing && !existing.wall ? existing.volumes : []);
-  // Cell mirror: a wall/land tile has no open cells — drop any this hex had.
-  if (t.wall && existing && !existing.wall && existing.volumes) clearCells(q, r, existing.volumes);
-  world.set(k, makeTile(type, q, r, volumes));
+  const open = existing && !existing.wall;
+  if (t.wall) {
+    // Wall/land tile is solid — it owns no open cells. Drop any this hex had.
+    if (open) clearHexCells(q, r, existing.ceiling, existing.floor);
+    world.set(k, makeTile(type, q, r, 0, 0));
+  } else {
+    // Overlaying a feature (POI) on open space — keep the hex's open extent.
+    world.set(k, makeTile(type, q, r, open ? existing.ceiling : 0, open ? existing.floor : 0));
+  }
 }
 
-function makeTile(type, q, r, volumes) {
+function makeTile(type, q, r, ceiling, floor) {
   const t = TILES[type];
-  const tile = { type, q, r, volumes: volumes || [], ...t };
-  // Convenience: ceiling/floor are min/max across volumes for legacy code.
-  if (tile.volumes.length > 0) {
-    tile.ceiling = Math.min(...tile.volumes.map(v => v.ceiling));
-    tile.floor   = Math.max(...tile.volumes.map(v => v.floor));
-  } else {
-    tile.ceiling = 0;
-    tile.floor = 0;
-  }
-  return tile;
+  // A tile is hex-level display metadata only. The voxel `cells` map holds the
+  // actual open/closed structure; ceiling/floor cache this hex's open extent
+  // (shallowest/deepest open cell) for the depth gauge and spawn logic.
+  return { type, q, r, ...t, ceiling: ceiling || 0, floor: floor || 0 };
 }
 
 // Add an open volume to a hex. Volumes that overlap or touch are merged.
@@ -1423,97 +1420,67 @@ function snapDepth(m, mode) {
   return Math.round(m / DEPTH_GRID) * DEPTH_GRID;
 }
 
-// ---- Cell model mirror (Stage A) ----------------------------------------
-// stampCells/clearCells keep the voxel `cells` map in lockstep with a hex's
-// volumes. addVolume stamps after every merge; setTile clears when it walls a
-// hex. Each covered 60-m slice is one cell carrying its OWN volume's kind (not
-// the column's dominant type). Recomputed from the full merged set each call,
-// so kind promotions from a merge propagate. Once render and movement read
-// cells directly (Stages B–C), the volume model retires (Stage D).
-function stampCells(q, r, volumes) {
-  for (const v of volumes) {
-    for (let d = v.ceiling; d <= v.floor; d += DEPTH_GRID) {
-      cells.set(cellKey(q, r, d), { type: kindToType(v.kind), kind: v.kind });
-    }
-  }
+// ---- Cell model maintenance ---------------------------------------------
+// The voxel `cells` map is the sole structural source of truth. addVolume
+// stamps open cells; clearHexCells drops them when a hex is walled. A hex's
+// tile carries only display metadata plus its open extent (ceiling/floor).
+function clearHexCells(q, r, ceiling, floor) {
+  for (let d = ceiling; d <= floor; d += DEPTH_GRID) cells.delete(cellKey(q, r, d));
 }
-function clearCells(q, r, volumes) {
-  for (const v of volumes) {
-    for (let d = v.ceiling; d <= v.floor; d += DEPTH_GRID) {
-      cells.delete(cellKey(q, r, d));
-    }
-  }
-}
-// Dev assertion — call verifyCells() in the console after a world loads. It
-// rebuilds the expected cell set from every hex's volumes and diffs it against
-// the live `cells` map. "0 missing, 0 extra" proves the mirror is exact (i.e.
-// no terrain writer bypassed stampCells/clearCells).
+// Dev assertion — call verifyCells() in the console. A hex's cached ceiling and
+// floor must themselves be open cells (the shallowest/deepest open slices), and
+// no wall tile may own a cell. "0 bad" means the model is internally sound.
 function verifyCells() {
-  const expected = new Set();
+  let bad = 0;
   for (const [k, tile] of world) {
-    if (tile.wall || !tile.volumes) continue;
+    if (tile.wall) continue;
     const [q, r] = k.split(',').map(Number);
-    for (const v of tile.volumes) {
-      for (let d = v.ceiling; d <= v.floor; d += DEPTH_GRID) expected.add(cellKey(q, r, d));
-    }
+    if (!cells.has(cellKey(q, r, tile.ceiling)) || !cells.has(cellKey(q, r, tile.floor))) bad++;
   }
-  let missing = 0, extra = 0;
-  for (const ck of expected) if (!cells.has(ck)) missing++;
-  for (const ck of cells.keys()) if (!expected.has(ck)) extra++;
-  console.log(`verifyCells: ${missing} missing, ${extra} extra · ${cells.size} cells vs ${expected.size} expected`);
-  return { missing, extra, cells: cells.size, expected: expected.size };
+  console.log(`verifyCells: ${bad} bad tiles · ${cells.size} cells`);
+  return { bad, cells: cells.size };
 }
 
 function addVolume(q, r, type, kind, ceiling, floor) {
-  const t = TILES[type];
-  if (t.wall) return;
+  if (TILES[type].wall) return;
   // Snap to grid: ceiling rounds UP (so we don't claim space that doesn't
-  // exist), floor rounds DOWN (same reason). Result: every volume's bounds
-  // are reachable by 60-m sub movements.
+  // exist), floor rounds DOWN. Every bound is then reachable by 60-m moves.
   ceiling = snapDepth(Math.max(0, ceiling), 'ceiling');
   floor   = snapDepth(floor, 'floor');
   if (floor <= ceiling) return; // degenerate after snapping
   const k = hexKey(q, r);
-  let existing = world.get(k);
-  if (existing && existing.land) return; // shore/dock tiles are inviolable — cave carving must not overwrite them
-  let existingVolumes = (existing && !existing.wall) ? [...existing.volumes] : [];
-  let existingType = (existing && !existing.wall) ? existing.type : type;
+  const existing = world.get(k);
+  if (existing && existing.land) return; // shore/dock inviolable — never carve them
 
-  // Insert the new volume, then merge overlapping volumes
-  const newVol = { ceiling, floor, kind };
-  existingVolumes.push(newVol);
-  existingVolumes.sort((a, b) => a.ceiling - b.ceiling);
-  const merged = [];
-  for (const v of existingVolumes) {
-    if (merged.length && v.ceiling <= merged[merged.length - 1].floor + 1) {
-      // Overlap or touch — merge
-      const last = merged[merged.length - 1];
-      last.floor = Math.max(last.floor, v.floor);
-      // Kind: prefer the existing kind; new kinds promote only in specific cases
-      if (kindPriority(v.kind) > kindPriority(last.kind)) last.kind = v.kind;
-    } else {
-      merged.push({ ...v });
-    }
+  // Stamp this run's open cells. Where runs overlap, the higher-priority kind
+  // wins (sea > chamber > passage > water) so the cell reads as the grander space.
+  for (let d = ceiling; d <= floor; d += DEPTH_GRID) {
+    const ck = cellKey(q, r, d);
+    const ex = cells.get(ck);
+    if (!ex || kindPriority(kind) > kindPriority(ex.kind)) cells.set(ck, { type: kindToType(kind), kind });
   }
 
-  // Pick the dominant type for the whole tile (used for color/symbol).
-  // Highest-priority kind across all volumes wins, unless existing type is a POI.
-  const isExistingPoi = existing && !existing.wall && TILES[existing.type] && TILES[existing.type].poi;
-  let chosenType = isExistingPoi ? existing.type : type;
-  if (!isExistingPoi) {
-    // Choose by kind priority among volumes
-    let bestKind = merged[0].kind;
-    let bestPrio = kindPriority(bestKind);
-    for (const v of merged) {
-      const p = kindPriority(v.kind);
-      if (p > bestPrio) { bestPrio = p; bestKind = v.kind; }
+  // Accumulate the hex's open extent and pick its display type (dominant kind),
+  // unless it already carries a POI — those keep their own symbol.
+  const open = existing && !existing.wall;
+  const newCeiling = open ? Math.min(existing.ceiling, ceiling) : ceiling;
+  const newFloor   = open ? Math.max(existing.floor, floor)     : floor;
+  const isExistingPoi = open && TILES[existing.type] && TILES[existing.type].poi;
+  let chosenType;
+  if (isExistingPoi) {
+    chosenType = existing.type; // POIs keep their own symbol/colour
+  } else {
+    // Dominant kind = highest-priority kind among this hex's open cells, which
+    // matches the old volume model's bestKind exactly, independent of the order
+    // features were carved (a POI re-type can't corrupt it).
+    let bestKind = kind, bestPrio = kindPriority(kind);
+    for (let d = newCeiling; d <= newFloor; d += DEPTH_GRID) {
+      const c = cells.get(cellKey(q, r, d));
+      if (c) { const p = kindPriority(c.kind); if (p > bestPrio) { bestPrio = p; bestKind = c.kind; } }
     }
     chosenType = kindToType(bestKind);
   }
-
-  world.set(k, makeTile(chosenType, q, r, merged));
-  // Dual-write the cell mirror from the authoritative merged set.
-  stampCells(q, r, merged);
+  world.set(k, makeTile(chosenType, q, r, newCeiling, newFloor));
 }
 
 function kindPriority(kind) {
@@ -1614,7 +1581,7 @@ function generateChunk(cq, cr) {
   if (cq === 0 && cr === 0) {
     addVolume(0, 0, 'water', 'water', 0, 100);
     let oTile = world.get(hexKey(0, 0));
-    world.set(hexKey(0, 0), makeTile('surface', 0, 0, oTile.volumes));
+    world.set(hexKey(0, 0), makeTile('surface', 0, 0, oTile.ceiling, oTile.floor));
     // Pier: single straight column at q=1, r=0→2, pointing into the beach.
     setTile(1, 0, 'dock', true);
     setTile(1, 1, 'dock', true);
