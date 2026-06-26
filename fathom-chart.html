@@ -742,6 +742,10 @@ function hexNeighbors(q, r) {
   ];
 }
 function hexKey(q, r) { return q + ',' + r; }
+// Cell model (voxel): the world's emerging source of truth is a sparse grid
+// keyed by hex + depth. An absent key means solid stone. Each 60-m depth slice
+// of a hex is its own cell — no column-wide inheritance, no "impassable water".
+function cellKey(q, r, d) { return q + ',' + r + ',' + d; }
 
 // Hex corners for an SVG polygon (pointy-top)
 function hexCorners(cx, cy, size) {
@@ -853,6 +857,7 @@ function pick(arr) { return arr[randInt(arr.length)]; }
 function chance(p) { return rand() < p; }
 
 const world = new Map();
+const cells = new Map(); // cellKey(q,r,depth) → { type, kind }. Absent = stone. Voxel source of truth (Stage A: written alongside volumes).
 const revealed = new Map(); // hexKey → Set<depth> — tracks which depths each tile was revealed at
 const visited = new Set();
 const generatedChunks = new Set();
@@ -1388,6 +1393,8 @@ function setTile(q, r, type, force) {
   // Preserve volumes when overlaying a POI on open space; clear them when
   // forcing to a wall (shore, dock, stone — these are solid).
   const volumes = (t.wall) ? [] : (existing && !existing.wall ? existing.volumes : []);
+  // Cell mirror: a wall/land tile has no open cells — drop any this hex had.
+  if (t.wall && existing && !existing.wall && existing.volumes) clearCells(q, r, existing.volumes);
   world.set(k, makeTile(type, q, r, volumes));
 }
 
@@ -1414,6 +1421,47 @@ function snapDepth(m, mode) {
   if (mode === 'ceiling') return Math.ceil(m / DEPTH_GRID) * DEPTH_GRID;
   if (mode === 'floor')   return Math.floor(m / DEPTH_GRID) * DEPTH_GRID;
   return Math.round(m / DEPTH_GRID) * DEPTH_GRID;
+}
+
+// ---- Cell model mirror (Stage A) ----------------------------------------
+// stampCells/clearCells keep the voxel `cells` map in lockstep with a hex's
+// volumes. addVolume stamps after every merge; setTile clears when it walls a
+// hex. Each covered 60-m slice is one cell carrying its OWN volume's kind (not
+// the column's dominant type). Recomputed from the full merged set each call,
+// so kind promotions from a merge propagate. Once render and movement read
+// cells directly (Stages B–C), the volume model retires (Stage D).
+function stampCells(q, r, volumes) {
+  for (const v of volumes) {
+    for (let d = v.ceiling; d <= v.floor; d += DEPTH_GRID) {
+      cells.set(cellKey(q, r, d), { type: kindToType(v.kind), kind: v.kind });
+    }
+  }
+}
+function clearCells(q, r, volumes) {
+  for (const v of volumes) {
+    for (let d = v.ceiling; d <= v.floor; d += DEPTH_GRID) {
+      cells.delete(cellKey(q, r, d));
+    }
+  }
+}
+// Dev assertion — call verifyCells() in the console after a world loads. It
+// rebuilds the expected cell set from every hex's volumes and diffs it against
+// the live `cells` map. "0 missing, 0 extra" proves the mirror is exact (i.e.
+// no terrain writer bypassed stampCells/clearCells).
+function verifyCells() {
+  const expected = new Set();
+  for (const [k, tile] of world) {
+    if (tile.wall || !tile.volumes) continue;
+    const [q, r] = k.split(',').map(Number);
+    for (const v of tile.volumes) {
+      for (let d = v.ceiling; d <= v.floor; d += DEPTH_GRID) expected.add(cellKey(q, r, d));
+    }
+  }
+  let missing = 0, extra = 0;
+  for (const ck of expected) if (!cells.has(ck)) missing++;
+  for (const ck of cells.keys()) if (!expected.has(ck)) extra++;
+  console.log(`verifyCells: ${missing} missing, ${extra} extra · ${cells.size} cells vs ${expected.size} expected`);
+  return { missing, extra, cells: cells.size, expected: expected.size };
 }
 
 function addVolume(q, r, type, kind, ceiling, floor) {
@@ -1464,6 +1512,8 @@ function addVolume(q, r, type, kind, ceiling, floor) {
   }
 
   world.set(k, makeTile(chosenType, q, r, merged));
+  // Dual-write the cell mirror from the authoritative merged set.
+  stampCells(q, r, merged);
 }
 
 function kindPriority(kind) {
@@ -3460,6 +3510,7 @@ function restart() {
   state.pingArrows = null;
   state.pingMemory = new Map();
   world.clear();
+  cells.clear();
   revealed.clear();
   visited.clear();
   generatedChunks.clear();
