@@ -2043,11 +2043,8 @@ function render() {
             //             is the ping's job to reveal, not the perimeter's.
             const oneUp = state.currentDepth - DEPTH_GRID;
             const oneDown = state.currentDepth + DEPTH_GRID;
-            let hasAbove = false, hasBelow = false;
-            for (const v of (nt.volumes || [])) {
-              if (oneUp >= 0 && oneUp >= v.ceiling && oneUp <= v.floor) hasAbove = true;
-              if (oneDown >= v.ceiling && oneDown <= v.floor) hasBelow = true;
-            }
+            const hasAbove = oneUp >= 0 && cells.has(cellKey(n.q, n.r, oneUp));
+            const hasBelow = cells.has(cellKey(n.q, n.r, oneDown));
             if (hasAbove && hasBelow) {
               aboveColor = '#7ed4f0';
               belowColor = '#6048c8';
@@ -2643,20 +2640,15 @@ function ping() {
     if (tile.wall) continue;
     if (q === state.q && r === state.r) continue;
     if (hexAcceptsDepth(tile, state.currentDepth)) continue;
+    // Nearest open cell above / below the sub's depth, within the ping's
+    // vertical reach. (cd itself is stone here — we continue'd past reachable.)
     let nearestAbove = null, nearestBelow = null;
-    for (const v of (tile.volumes || [])) {
-      if (v.floor < state.currentDepth) {
-        const dist = state.currentDepth - v.floor;
-        if (dist <= depthRange && (nearestAbove === null || dist < nearestAbove)) {
-          nearestAbove = dist;
-        }
-      }
-      if (v.ceiling > state.currentDepth) {
-        const dist = v.ceiling - state.currentDepth;
-        if (dist <= depthRange && (nearestBelow === null || dist < nearestBelow)) {
-          nearestBelow = dist;
-        }
-      }
+    for (let dist = DEPTH_GRID; dist <= depthRange; dist += DEPTH_GRID) {
+      const up = state.currentDepth - dist;
+      if (nearestAbove === null && up >= 0 && cells.has(cellKey(q, r, up))) nearestAbove = dist;
+      const dn = state.currentDepth + dist;
+      if (nearestBelow === null && cells.has(cellKey(q, r, dn))) nearestBelow = dist;
+      if (nearestAbove !== null && nearestBelow !== null) break;
     }
     if (nearestAbove !== null) pingArrowList.push({ q, r, dir: 'up', meters: nearestAbove });
     if (nearestBelow !== null) pingArrowList.push({ q, r, dir: 'down', meters: nearestBelow });
@@ -2868,55 +2860,72 @@ function move(q, r) {
   render();
 }
 
-// Which volume of this tile contains the given depth, if any?
+// ---- Cell-model queries -------------------------------------------------
+// The voxel `cells` map is the source of truth for "is there navigable space
+// at (q,r,depth)?". These helpers answer the old volume questions by reading
+// cells. A "volume" is reconstructed on demand as the contiguous vertical run
+// of open cells around a depth — so callers that still expect {ceiling,floor}
+// keep working, and vertically-adjacent open cells correctly read as one
+// connected space (no phantom 60-m walls between stacked carves).
+const MAX_DEPTH_SCAN = 12000; // the world generates no deeper than ~10,800 m
+
+function cellAt(q, r, d) { return cells.get(cellKey(q, r, d)); }
+
+// Expand the open run containing (q,r,d): walk up/down while cells stay open.
+function cellRun(q, r, d) {
+  if (!cells.has(cellKey(q, r, d))) return null;
+  let ceiling = d, floor = d;
+  while (ceiling - DEPTH_GRID >= 0 && cells.has(cellKey(q, r, ceiling - DEPTH_GRID))) ceiling -= DEPTH_GRID;
+  while (cells.has(cellKey(q, r, floor + DEPTH_GRID))) floor += DEPTH_GRID;
+  return { ceiling, floor, kind: cells.get(cellKey(q, r, d)).kind };
+}
+
+// The open run containing this depth, or null. Shape matches the old volume.
 function volumeContaining(tile, depth) {
   if (!tile || tile.wall) return null;
-  for (const v of tile.volumes) {
-    if (depth >= v.ceiling && depth <= v.floor) return v;
-  }
-  return null;
+  return cellRun(tile.q, tile.r, depth);
 }
 
-// Does this open tile have ANY volume containing the given depth?
+// Does this hex have an open cell exactly at this (grid-aligned) depth?
 function hexAcceptsDepth(tile, depth) {
-  return !!volumeContaining(tile, depth);
+  return !!tile && !tile.wall && cells.has(cellKey(tile.q, tile.r, depth));
 }
 
-// Is this hex "near" the given depth — close enough that the sub at that
-// depth would perceive it via sonar? Open hexes are near if any of their
-// volumes overlaps depth ± 2 dive-steps. Surface land (shore/dock) is only
-// visible from near the surface. Pure stone never has its own visible body,
-// so it returns false here (its presence is communicated by wall edges
-// drawn from adjacent open hexes).
+// Is this hex "near" the given depth — within two dive-steps (±120 m)? Surface
+// land (shore/dock) is only visible near the surface. Pure stone has no body of
+// its own; its presence is drawn as wall edges from adjacent open hexes.
 function hexNearDepth(tile, depth) {
   if (!tile) return false;
   if (tile.wall) {
     if (tile.type === 'shore' || tile.type === 'dock') return depth <= DEPTH_GRID * 2;
     return false;
   }
-  if (!tile.volumes || tile.volumes.length === 0) return false;
-  const margin = DEPTH_GRID * 2; // 120m — within two dive steps
-  for (const v of tile.volumes) {
-    if (depth >= v.ceiling - margin && depth <= v.floor + margin) return true;
+  for (let o = -2; o <= 2; o++) {
+    const d = depth + o * DEPTH_GRID;
+    if (d >= 0 && cells.has(cellKey(tile.q, tile.r, d))) return true;
   }
   return false;
 }
 
-// Find the closest volume in tile that the player could move *vertically* into
-// from their current depth (taking the smallest ascend/descend). Returns
-// { volume, deltaMeters } or null if the tile is wall/empty.
+// Nearest open run to fromDepth (smallest vertical move). Returns
+// { volume:{ceiling,floor,kind}, deltaMeters } or null. On a tie the run above
+// wins, matching the old volume-order tie-break.
 function nearestVolume(tile, fromDepth) {
-  if (!tile || tile.wall || tile.volumes.length === 0) return null;
-  let best = null;
-  let bestDelta = Infinity;
-  for (const v of tile.volumes) {
-    let delta;
-    if (fromDepth < v.ceiling) delta = v.ceiling - fromDepth;
-    else if (fromDepth > v.floor) delta = fromDepth - v.floor;
-    else delta = 0;
-    if (delta < bestDelta) { bestDelta = delta; best = v; }
+  if (!tile || tile.wall) return null;
+  if (cells.has(cellKey(tile.q, tile.r, fromDepth))) {
+    return { volume: cellRun(tile.q, tile.r, fromDepth), deltaMeters: 0 };
   }
-  return best ? { volume: best, deltaMeters: bestDelta } : null;
+  for (let step = 1; step * DEPTH_GRID <= MAX_DEPTH_SCAN; step++) {
+    const up = fromDepth - step * DEPTH_GRID;
+    const dn = fromDepth + step * DEPTH_GRID;
+    if (up >= 0 && cells.has(cellKey(tile.q, tile.r, up))) {
+      return { volume: cellRun(tile.q, tile.r, up), deltaMeters: step * DEPTH_GRID };
+    }
+    if (cells.has(cellKey(tile.q, tile.r, dn))) {
+      return { volume: cellRun(tile.q, tile.r, dn), deltaMeters: step * DEPTH_GRID };
+    }
+  }
+  return null;
 }
 
 // Apply air cost, pressure damage, update maxDepth.
