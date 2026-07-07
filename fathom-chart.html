@@ -875,15 +875,63 @@ let worldGraph = null;
 // and complexity to a full hand-drawn dungeon map per band, with seven such
 // bands stacked vertically and interconnected. The player will not exhaust
 // any one of them in any reasonable session; that's the point.
+// hexRadius/nodeCount drive the LEGACY finite graph (generateWorldGraph).
+// density = per-node-cell chamber spawn probability for the INFINITE generator
+// (Stage E), derived to match each band's legacy areal density: denser near the
+// surface, sparser in the deep. All tunable knobs.
 const CAVE_BANDS = [
-  { id: 'b0', minDepth:  480, maxDepth:  720,   hexRadius: 55,  nodeCount: 55  },
-  { id: 'b1', minDepth:  900, maxDepth: 1320,   hexRadius: 70,  nodeCount: 80  },
-  { id: 'b2', minDepth: 1620, maxDepth: 2160,   hexRadius: 85,  nodeCount: 105 },
-  { id: 'b3', minDepth: 2580, maxDepth: 3600,   hexRadius: 100, nodeCount: 125 },
-  { id: 'b4', minDepth: 4200, maxDepth: 5640,   hexRadius: 110, nodeCount: 125 },
-  { id: 'b5', minDepth: 6480, maxDepth: 8520,   hexRadius: 115, nodeCount: 105 },
-  { id: 'b6', minDepth: 9480, maxDepth: 10800,  hexRadius: 100, nodeCount: 75  },
+  { id: 'b0', minDepth:  480, maxDepth:  720,   hexRadius: 55,  nodeCount: 55,  density: 0.83 },
+  { id: 'b1', minDepth:  900, maxDepth: 1320,   hexRadius: 70,  nodeCount: 80,  density: 0.75 },
+  { id: 'b2', minDepth: 1620, maxDepth: 2160,   hexRadius: 85,  nodeCount: 105, density: 0.67 },
+  { id: 'b3', minDepth: 2580, maxDepth: 3600,   hexRadius: 100, nodeCount: 125, density: 0.57 },
+  { id: 'b4', minDepth: 4200, maxDepth: 5640,   hexRadius: 110, nodeCount: 125, density: 0.47 },
+  { id: 'b5', minDepth: 6480, maxDepth: 8520,   hexRadius: 115, nodeCount: 105, density: 0.36 },
+  { id: 'b6', minDepth: 9480, maxDepth: 10800,  hexRadius: 100, nodeCount: 75,  density: 0.34 },
 ];
+
+// ---- Infinite cave generation (Stage E) ---------------------------------
+// Chambers are placed on a coarse lattice: space is divided into NODE_CELL-hex
+// square cells, and each (cell, band) deterministically spawns 0 or 1 chamber
+// via a hash of (seed, band, cellQ, cellR). This makes the chamber graph
+// infinite and LOCALLY computable — any region's chambers are found by
+// iterating the cells overlapping it, with no global list. Mirrors how the
+// ocean (shelfSeafloorDepth) is already a pure function of position.
+const NODE_CELL = 12; // hexes per node-cell side
+
+// The chamber for a given lattice cell + band, or null if the cell is empty.
+// Fully deterministic in (worldSeed, band, ncq, ncr).
+function caveNodeAt(ncq, ncr, bandIdx) {
+  const band = CAVE_BANDS[bandIdx];
+  const rng = mulberry32(hashStr(worldSeed + ':' + band.id + ':' + ncq + ':' + ncr));
+  if (rng() >= band.density) return null; // this cell holds no chamber
+  const q = ncq * NODE_CELL + Math.floor(rng() * NODE_CELL);
+  const r = ncr * NODE_CELL + Math.floor(rng() * NODE_CELL);
+  const depth = snapToGrid(band.minDepth + rng() * (band.maxDepth - band.minDepth));
+  const sizeRoll = rng();
+  let chamberRadius, chamberKind;
+  if (sizeRoll < 0.03)      { chamberRadius = 9 + rng() * 6;   chamberKind = 'grand'; }
+  else if (sizeRoll < 0.15) { chamberRadius = 5 + rng() * 3;   chamberKind = 'cavern'; }
+  else if (sizeRoll < 0.55) { chamberRadius = 2.5 + rng() * 2; chamberKind = 'chamber'; }
+  else                      { chamberRadius = 1 + rng() * 1.5; chamberKind = 'antechamber'; }
+  return { id: band.id + ':' + ncq + ':' + ncr, q, r, depth, chamberRadius, chamberKind, bandId: band.id, bandIdx };
+}
+
+// Every chamber whose center lattice-cell overlaps the hex box [qMin,qMax] x
+// [rMin,rMax], across all bands. Bounded, order-independent, deterministic.
+function caveNodesInRegion(qMin, qMax, rMin, rMax) {
+  const out = [];
+  const ncq0 = Math.floor(qMin / NODE_CELL), ncq1 = Math.floor(qMax / NODE_CELL);
+  const ncr0 = Math.floor(rMin / NODE_CELL), ncr1 = Math.floor(rMax / NODE_CELL);
+  for (let bi = 0; bi < CAVE_BANDS.length; bi++) {
+    for (let ncq = ncq0; ncq <= ncq1; ncq++) {
+      for (let ncr = ncr0; ncr <= ncr1; ncr++) {
+        const node = caveNodeAt(ncq, ncr, bi);
+        if (node) out.push(node);
+      }
+    }
+  }
+  return out;
+}
 
 function snapToGrid(m) { return Math.round(m / DEPTH_GRID) * DEPTH_GRID; }
 
