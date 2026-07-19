@@ -1662,23 +1662,39 @@ function generateChunk(cq, cr) {
     spawnedChunks.add(chunkK);
     const homeWaters = cq === 0 && cr === 0;
     if (!homeWaters && openCaveHexes.length >= 6) {
-      const trySpawn = (type, chance) => {
-        if (crand() >= chance || openCaveHexes.length === 0) return;
-        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+      // Only actual open cave cells will do — creatures obey the voxels.
+      const caveDepthsAt = (h) => {
         const t = world.get(hexKey(h.q, h.r));
-        if (!t || t.wall) return;
-        // Only an actual open cave cell will do — creatures obey the voxels.
+        if (!t || t.wall) return [];
         const opts = [];
         for (let d = t.ceiling; d <= t.floor; d += DEPTH_GRID) {
           const c = cells.get(cellKey(h.q, h.r, d));
           if (c && (c.kind === 'passage' || c.kind === 'chamber')) opts.push(d);
         }
-        if (opts.length === 0) return;
-        spawnCreature(type, h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+        return opts;
       };
-      trySpawn('drifter', 0.30);
-      trySpawn('lurker', 0.35);
-      trySpawn('eel', 0.22);
+      // Band biomes: the mix of life changes with depth. Shallow caves breed
+      // drifters and thieving eels; the deep water belongs to the hunters.
+      const rolls = 1 + Math.floor(crand() * 2);
+      for (let i = 0; i < rolls; i++) {
+        if (crand() >= 0.55) continue;
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (!opts.length) continue;
+        const depth = opts[Math.floor(crand() * opts.length)];
+        const roll = crand();
+        const type = depth >= 2400 ? (roll < 0.55 ? 'lurker' : roll < 0.80 ? 'drifter' : 'eel')
+                   : depth >= 1200 ? (roll < 0.40 ? 'lurker' : roll < 0.70 ? 'drifter' : 'eel')
+                   :                 (roll < 0.22 ? 'lurker' : roll < 0.60 ? 'drifter' : 'eel');
+        spawnCreature(type, h.q, h.r, depth);
+      }
+      // And rarely — engine noise. Another boat works these waters. Rivals
+      // seek unworked sites, put divers down, and strip them first.
+      if (crand() < 0.06) {
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (opts.length) spawnCreature('rival', h.q, h.r, opts[0]);
+      }
     }
   }
 }
@@ -2297,9 +2313,9 @@ function render() {
     ct.setAttribute('dominant-baseline', 'central');
     ct.setAttribute('font-family', 'JetBrains Mono, monospace');
     ct.setAttribute('font-size', c.type === 'drifter' ? '14' : c.type === 'eel' ? '11' : '12');
-    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : '#d05048');
+    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : '#d05048');
     ct.setAttribute('filter', 'url(#softglow)');
-    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : '⊗';
+    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : '⊗';
     g.appendChild(ct);
   }
 
@@ -2909,6 +2925,8 @@ function move(q, r) {
     state.lastMoveTime = performance.now();
     log(blocker.type === 'drifter'
       ? 'Something vast fills the passage, drifting. The boat backs off.'
+      : blocker.type === 'rival'
+      ? "Another boat holds that water and won't yield. You back off."
       : 'Something is in that water. The boat backs off.', 'warn', 'CONTACT');
     flagMoveFail(q, r, '#7050a0');
     creatureTick();
@@ -3188,6 +3206,66 @@ function tickEel(c, dPlayer) {
   }
 }
 
+// A rival salvager: another boat, working the same waters. It seeks the
+// nearest unworked site, holds station three turns with divers down, and
+// strips it — the prize is gone before you arrive. It wants no trouble:
+// close on it and it stands off. Every encounter should feel like an event.
+function tickRival(c, dPlayer) {
+  if (dPlayer <= 2) {
+    // Wary of company — open the range.
+    let best = null, bestD = dPlayer;
+    for (const n of hexNeighbors(c.q, c.r)) {
+      if (!creatureCanEnter(c, n.q, n.r, c.depth)) continue;
+      const d2 = hexDistance({q: n.q, r: n.r}, {q: state.q, r: state.r});
+      if (d2 > bestD) { bestD = d2; best = n; }
+    }
+    if (best) { c.q = best.q; c.r = best.r; }
+    return;
+  }
+  if (c.working) {
+    c.work--;
+    if (c.work <= 0) {
+      c.working = 0;
+      if (c.tk && !state.poisFound.includes(c.tk)) state.poisFound.push(c.tk);
+      c.tk = null;
+      if (dPlayer <= passiveContactR() + 4) {
+        log("Across the water: another boat's divers surface. They got there first.", 'warn', 'RIVAL');
+      }
+    }
+    return;
+  }
+  // Acquire a target every few turns: the nearest unworked site.
+  c.phase = (c.phase + 1) % 6;
+  if (!c.tk && c.phase === 0) {
+    let best = null, bestD = 15;
+    for (const [k, t] of world) {
+      if (!t.poi || t.poi === 'opening' || t.poi === 'surface' || t.poi === 'deadend') continue;
+      if (state.poisFound.includes(k)) continue;
+      const d = hexDistance({q: t.q, r: t.r}, {q: c.q, r: c.r});
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    if (best) { c.tk = hexKey(best.q, best.r); c.tq = best.q; c.tr = best.r; }
+  }
+  if (c.tk) {
+    const target = { q: c.tq, r: c.tr };
+    const dT = hexDistance({q: c.q, r: c.r}, target);
+    if (dT === 0) { c.working = 1; c.work = 3; return; }
+    let best = null, bestD2 = dT;
+    for (const n of hexNeighbors(c.q, c.r)) {
+      if (!creatureCanEnter(c, n.q, n.r, c.depth)) continue;
+      const d2 = hexDistance({q: n.q, r: n.r}, target);
+      if (d2 < bestD2) { bestD2 = d2; best = n; }
+    }
+    if (best) { c.q = best.q; c.r = best.r; }
+    else c.tk = null; // blocked at this depth — give it up, look again later
+    return;
+  }
+  if (rand() < 0.4) {
+    const nbrs = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth));
+    if (nbrs.length) { const n = nbrs[Math.floor(rand() * nbrs.length)]; c.q = n.q; c.r = n.r; }
+  }
+}
+
 function tickDrifter(c) {
   c.phase ^= 1;
   if (c.phase) return; // vast things move every other turn
@@ -3239,6 +3317,7 @@ function creatureTick() {
     if (d > CREATURE_SIM_RANGE) continue;
     if (c.type === 'drifter') tickDrifter(c);
     else if (c.type === 'eel') tickEel(c, d);
+    else if (c.type === 'rival') tickRival(c, d);
     else tickLurker(c, d);
     const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     const depthOff = Math.abs(c.depth - state.currentDepth);
@@ -3248,6 +3327,7 @@ function creatureTick() {
       const dir = bearing(state.q, state.r, c.q, c.r);
       const what = c.type === 'drifter' ? 'something vast, moving slow'
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
+                 : c.type === 'rival' ? 'engine noise — another boat under power'
                  : c.awake ? 'something fast, closing'
                  : 'a faint heartbeat, holding still';
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
@@ -4011,6 +4091,11 @@ function surface() {
   if (onSurface) {
     // Make port: within hailing distance of the dock, cargo goes ashore.
     const atPort = hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) <= 4;
+    // Far from home, surfacing is how you find it: a bearing off the sun.
+    if (!atPort) {
+      const km = (hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) * 60 / 1000).toFixed(1);
+      log(`You take a bearing off the sun. The dock lies ${bearing(state.q, state.r, 1, 1)}, ${km} km as the gull flies.`, '', 'BEARING');
+    }
     if (atPort && state.cargo > 0) {
       const n = state.cargo;
       state.cargoBanked += n;

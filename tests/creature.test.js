@@ -151,6 +151,21 @@ st.creatures[0].tq = 0; st.creatures[0].tr = -6;
   check(stoneViolations === 0, '60 ticks: no creature ever occupies stone', st.creatures.length + ' creatures × 60 ticks, ' + stoneViolations + ' violations');
 }
 
+// ---- 5b. Rival salvager: seeks the nearest unworked site and strips it ----
+st.creatures.length = 0;
+st.q = 0; st.r = -16; st.currentDepth = 0; // inside sim range (24), outside stand-off (2)
+sb.setTile(2, -9, 'ruin', true);
+sb.spawnCreature('rival', 5, -9, 0);
+const poisBefore = st.poisFound.length;
+let rivalStone = 0;
+for (let i = 0; i < 40 && st.poisFound.length === poisBefore; i++) {
+  sb.creatureTick();
+  const rv = st.creatures[0];
+  if (rv && !sb.__ck(rv.q, rv.r, rv.depth)) rivalStone++;
+}
+check(st.poisFound.length > poisBefore, 'rival finds and strips a site', (st.poisFound.length - poisBefore) + ' site(s) worked');
+check(rivalStone === 0 && st.creatures.length === 1, 'rival stays in open water and persists', 'stoneViolations=' + rivalStone);
+
 // ---- 6. Save v2 round trip + v1 compat ----
 {
   st.q = 0; st.r = -6; st.currentDepth = 0;
