@@ -1654,6 +1654,9 @@ const state = {
   pingMemory: new Map(),
   // Living things in the water. Overlay state — saved with the run.
   creatures: [],
+  // The first economy: crates aboard, and crates banked ashore at the dock.
+  cargo: 0,
+  cargoBanked: 0,
 };
 
 //=============================================================================
@@ -2079,7 +2082,11 @@ function render() {
       // Tile symbol (POI/feature) — only shown when the tile has water at the
       // current depth. Suppresses deep POIs (gas pocket at 350m) from appearing
       // at the surface just because the initial reveal seeded the tile.
-      if (tile.char && hexAcceptsDepth(tile, state.currentDepth)) {
+      // Consumed one-shot POIs (air pockets, salvage) stay consumed across
+      // reloads: the substrate regenerates the tile, but the overlay
+      // (poisFound) knows it was taken — draw plain water, not the prize.
+      const consumedPoi = (tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(key);
+      if (tile.char && !consumedPoi && hexAcceptsDepth(tile, state.currentDepth)) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', px.x);
         txt.setAttribute('y', px.y);
@@ -3392,7 +3399,8 @@ function handleTile(tile) {
         const subS = activeSub();
         const repair = 20 + randInt(15);
         state.hull = Math.min(subS.hull, state.hull + repair);
-        log(`Wreckage. You patch your hull with what fits. (+${repair} hull)`, '', 'SALVAGE');
+        state.cargo++;
+        log(`Wreckage. You patch the hull with what fits and winch a crate aboard. (+${repair} hull, +1 cargo)`, '', 'SALVAGE');
         state.poisFound.push(hexKey(tile.q, tile.r));
         setTile(tile.q, tile.r, 'passage');
       }
@@ -3643,7 +3651,7 @@ function endGame(title, summary) {
   document.getElementById('go-title').textContent = title;
   document.getElementById('go-summary').textContent = summary;
   document.getElementById('go-stats').innerHTML =
-    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}`;
+    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}<br>Salvage banked: ${state.cargoBanked}${state.cargo ? ` (+${state.cargo} lost with the boat)` : ''}`;
   document.getElementById('gameover').classList.add('show');
   clearSave(); // the deep keeps what it takes — a lost boat is a lost world
 }
@@ -3655,6 +3663,7 @@ function restart() {
   state.air = sub.air; state.hull = sub.hull;
   state.currentDepth = 0; state.maxDepth = 0;
   state.moves = 0; state.poisFound = [];
+  state.cargo = 0; state.cargoBanked = 0;
   state.alive = true;
   state.cameraX = 0; state.cameraY = 0;
   state.panX = 0; state.panY = 0;
@@ -3719,6 +3728,13 @@ function surface() {
   // At depth 0 in open water (anywhere on the shelf) — the hatch is open, refill air.
   const onSurface = state.currentDepth <= 0.5 && volumeContaining(tile, 0);
   if (onSurface) {
+    // Make port: within hailing distance of the dock, cargo goes ashore.
+    if (state.cargo > 0 && hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) <= 4) {
+      const n = state.cargo;
+      state.cargoBanked += n;
+      state.cargo = 0;
+      log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
+    }
     if (state.air >= sub.air) {
       log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
       return;
@@ -3777,6 +3793,7 @@ function doSave() {
       lastZone: state.lastZone, maxZoneReached: state.maxZoneReached,
       visited: [...visited], revealed: rev,
       creatures: state.creatures, spawnedChunks: [...spawnedChunks],
+      cargo: state.cargo, cargoBanked: state.cargoBanked,
     }));
   } catch (e) { /* quota or private mode — persistence is best-effort */ }
 }
@@ -3817,6 +3834,8 @@ function resumeGame(save) {
   spawnedChunks.clear();
   for (const ck of save.spawnedChunks || []) spawnedChunks.add(ck);
   state.creatures = save.creatures || [];
+  state.cargo = save.cargo || 0;
+  state.cargoBanked = save.cargoBanked || 0;
   worldSeed = save.seed;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
