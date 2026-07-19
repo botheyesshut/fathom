@@ -1868,12 +1868,18 @@ function render() {
         // Water tile with no volume at this depth looks like a rock wall —
         // e.g. a passage ceiling=180m appears as a cliff face when you're at 60m.
         if (!hexAcceptsDepth(tile, cd)) {
-          const seen = dFromPlayer <= SIGHT || hexNeighbors(q, r).some(n => {
-            const nt = tileAt(n.q, n.r);
-            if (nt.wall || !hexAcceptsDepth(nt, cd)) return false;
-            if (cd <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
-            return revealFade(n.q, n.r, cd) > 0;
-          });
+          // One epistemic rule for rock and water alike: a face renders only
+          // if the lights touch it (adjacent), the sonar has returned it
+          // (this hex revealed — ping rays reveal the wall they stop on), or
+          // it borders water the player actually knows. No free knowledge of
+          // unattached rock floating beyond the boat's senses.
+          const seen = dFromPlayer <= 1 || revealFade(q, r, cd) > 0
+            || hexNeighbors(q, r).some(n => {
+              const nt = tileAt(n.q, n.r);
+              if (nt.wall || !hexAcceptsDepth(nt, cd)) return false;
+              if (cd <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
+              return revealFade(n.q, n.r, cd) > 0;
+            });
           if (seen) {
             const rsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             rsp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
