@@ -36,7 +36,7 @@ function freshContext(storage) {
   };
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
-  try { vm.runInContext(script + '\nfunction __state(){ return state; }\nfunction __tile(q,r){ return world.get(hexKey(q,r)); }', sandbox, { timeout: 15000 }); } catch (e) {}
+  try { vm.runInContext(script + '\nfunction __state(){ return state; }\nfunction __tile(q,r){ return world.get(hexKey(q,r)); }\nfunction __subKey(){ return activeSubKey; }', sandbox, { timeout: 15000 }); } catch (e) {}
   return sandbox;
 }
 let failures = 0;
@@ -81,8 +81,16 @@ sb.surface();
 check(st.hull === 65 && st.cargoBanked === 0, 'yard spends a crate for +25 hull', 'hull=' + st.hull + ' banked=' + st.cargoBanked);
 
 // 3. Round trip
+// 2c. The outfitter: enough banked → the port offers; a second press buys.
+st.hull = 100; st.air = 350; st.cargoBanked = 25;
+sb.surface(); // arms the offer
+check(sb.__subKey() === 'erebus' && st.cargoBanked === 25, 'outfitter offer arms without spending', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked);
+sb.surface(); // accepts
+check(sb.__subKey() === 'charon' && st.cargoBanked === 5 && st.hull === 130 && st.air === 450,
+  'second press buys the Charon', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked + ' hull=' + st.hull + ' air=' + st.air);
+
 st.cargo = 3; // three more crates aboard
-st.cargoBanked = 1; // restock the ledger after the yard test
+st.cargoBanked = 1; // restock the ledger after the yard/outfitter tests
 sb.doSave();
 const raw = JSON.parse(store.getItem('fathom-save-v1'));
 check(raw.cargo === 3 && raw.cargoBanked === 1, 'save carries cargo + bank', JSON.stringify({c: raw.cargo, b: raw.cargoBanked}));
@@ -90,6 +98,7 @@ const sb2 = freshContext(store);
 sb2.startGame();
 const st2 = sb2.__state();
 check(st2.cargo === 3 && st2.cargoBanked === 1, 'cargo + bank survive reload', 'cargo=' + st2.cargo + ' banked=' + st2.cargoBanked);
+check(sb2.__subKey() === 'charon', 'the bought boat survives reload', 'sub=' + sb2.__subKey());
 
 console.log(failures === 0 ? '\nALL CARGO CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

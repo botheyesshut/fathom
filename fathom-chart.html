@@ -812,6 +812,45 @@ const SUBS = {
     // Lightweight subs have a porthole — players occasionally see what's outside.
     // Heavier deep-water subs lose this in favor of armor; instruments only.
     porthole: true,
+    // Outfitter tier & price (banked crates). Tier 0 is the starter boat.
+    tier: 0,
+    price: 0,
+  },
+  charon: {
+    name: 'Charon',
+    description: 'A mid-water workboat with a doubled pressure hull. The porthole is gone — below the twilight bands there is nothing to see anyway.',
+    hull: 130,
+    air: 450,
+    safeDepth:  2400,
+    crushDepth: 3200,
+    airBase: 1,
+    pressurePerMeter: 0.04,
+    diveStep: 60,
+    diveAirCost: 1,
+    diveStepFast: 120,
+    diveAirCostFast: 3,
+    sonarMaxPower: 5,
+    porthole: false,
+    tier: 1,
+    price: 20,
+  },
+  nyx: {
+    name: 'Nyx',
+    description: 'An abyssal boat, all armor and instruments. Built for the black bands where the pressure sings against the plates.',
+    hull: 180,
+    air: 600,
+    safeDepth:  6000,
+    crushDepth: 8000,
+    airBase: 1,
+    pressurePerMeter: 0.04,
+    diveStep: 60,
+    diveAirCost: 1,
+    diveStepFast: 120,
+    diveAirCostFast: 3,
+    sonarMaxPower: 5,
+    porthole: false,
+    tier: 2,
+    price: 60,
   },
 };
 
@@ -3720,6 +3759,8 @@ function endGame(title, summary) {
 }
 
 function restart() {
+  activeSubKey = 'erebus'; // every new world starts at the bottom of the ladder
+  state._outfitOffer = null;
   const sub = activeSub();
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
@@ -3809,6 +3850,34 @@ function surface() {
       state.hull += gained;
       log(`The yard works the hull: ${spend} crate${spend > 1 ? 's' : ''} buys +${gained} hull. ${state.cargoBanked} banked.`, '', 'YARD');
     }
+    // The outfitter: the next boat up the ladder, offered when affordable.
+    // One-button commerce — the port makes the offer; a second hatch-press
+    // within the window accepts. Moving away lets the offer lapse.
+    if (atPort) {
+      const next = Object.keys(SUBS).map(k => SUBS[k].tier === sub.tier + 1 ? k : null).filter(Boolean)[0];
+      const offer = state._outfitOffer;
+      if (offer && offer.key && SUBS[offer.key]
+          && offer.q === state.q && offer.r === state.r
+          && performance.now() < offer.until
+          && state.cargoBanked >= SUBS[offer.key].price) {
+        const bought = SUBS[offer.key];
+        state.cargoBanked -= bought.price;
+        activeSubKey = offer.key;
+        state.hull = bought.hull;
+        state.air = bought.air;
+        state._outfitOffer = null;
+        const pp2 = document.getElementById('ping-power');
+        if (pp2) pp2.max = bought.sonarMaxPower;
+        log(`The ${bought.name} takes the water. ${bought.description} (${bought.price} crates; ${state.cargoBanked} banked.)`, '', 'OUTFIT');
+        updateHUD();
+        render();
+        return;
+      }
+      if (next && state.cargoBanked >= SUBS[next].price) {
+        state._outfitOffer = { key: next, q: state.q, r: state.r, until: performance.now() + 45000 };
+        log(`The outfitter's shed is open: the ${SUBS[next].name} lies ready — ${SUBS[next].price} crates. Press Surface again to take her.`, 'warn', 'OUTFIT');
+      }
+    }
     if (state.air >= sub.air) {
       log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
       return;
@@ -3868,6 +3937,7 @@ function doSave() {
       visited: [...visited], revealed: rev,
       creatures: state.creatures, spawnedChunks: [...spawnedChunks],
       cargo: state.cargo, cargoBanked: state.cargoBanked,
+      subKey: activeSubKey,
     }));
   } catch (e) { /* quota or private mode — persistence is best-effort */ }
 }
@@ -3891,6 +3961,8 @@ function clearSave() {
 // beneath the boat; the overlay puts the player, their charts, and their
 // resources back exactly where they were.
 function resumeGame(save) {
+  activeSubKey = SUBS[save.subKey] ? save.subKey : 'erebus';
+  state._outfitOffer = null;
   const sub = activeSub();
   state.q = save.q; state.r = save.r;
   state.air = save.air; state.hull = save.hull;
