@@ -76,6 +76,40 @@ sb.noiseMade(st.q, st.r, 3);             // reach = 2 + 9 = 11
 check(st.creatures[0].awake === true, 'lurker in earshot wakes on loud ping');
 check(st.creatures[1].awake === false, 'lurker beyond earshot stays asleep');
 
+// ---- 2b. Ballast roar: fast dives are loud; slow dives are silent ----
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('lurker', 3, -8, 60);
+sb.changeDepth(120); // > diveStep → ballast noise (loudness 2, reach 8)
+check(st.creatures[0].awake === true, 'fast dive (ballast roar) wakes a sleeping hunter', 'now at ' + st.currentDepth + ' m');
+st.creatures.length = 0;
+sb.spawnCreature('lurker', 3, -8, 180);
+sb.changeDepth(60); // single step — quiet
+check(st.creatures[0].awake === false, 'slow dive stays silent', 'now at ' + st.currentDepth + ' m');
+
+// ---- 2c. The Eel: cargo piracy, the chase, and the escape ----
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0; st.cargo = 2;
+sb.spawnCreature('eel', 4, -8, 0);
+for (let i = 0; i < 6 && st.cargo === 2; i++) sb.creatureTick();
+check(st.cargo === 1 && st.creatures[0] && st.creatures[0].carrying === 1, 'eel closes and raids the hold', 'cargo=' + st.cargo);
+const eel = st.creatures[0];
+st.q = eel.q; st.r = eel.r - 1; st.currentDepth = eel.depth; // corner it
+sb.creatureTick();
+check(st.cargo === 2 && st.creatures.length === 0, 'cornering the thief recovers the crate', 'cargo=' + st.cargo + ', thieves left=' + st.creatures.length);
+st.q = 0; st.r = -6; st.currentDepth = 0; st.cargo = 1;
+sb.spawnCreature('eel', 3, -7, 0);
+for (let i = 0; i < 6 && st.cargo === 1; i++) sb.creatureTick();
+check(st.cargo === 0, 'a second thief strikes', 'cargo=' + st.cargo);
+for (let i = 0; i < 14; i++) sb.creatureTick();
+check(st.creatures.length === 0, 'uncaught thief vanishes into tight water, crate and all');
+st.cargo = 0;
+// Restore test-3's precondition: an awake hunter 4 hexes out, as test 2 left it.
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('lurker', 0, -10, 0);
+st.creatures[0].awake = true; st.creatures[0].calm = 9;
+st.creatures[0].tq = 0; st.creatures[0].tr = -6;
+
 // ---- 3. Hunt: awake lurker closes and strikes ----
 {
   const c = st.creatures[0];
