@@ -1,4 +1,4 @@
-# Epistemics audit findings (2026-07-19) — fixes for next session
+# Epistemics audit findings (2026-07-19) — ALL 7 FIXES APPLIED same day (see commit); kept as audit record. Deliberate-decision items below remain open.
 Principle: chart shows only what the boat could know (lights ≤1 / revealed / ping / passive / sunlight ≤300m). Precedent: d305dd6. Line numbers approximate.
 
 ## Fix in this order

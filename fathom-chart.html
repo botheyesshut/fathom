@@ -1827,7 +1827,7 @@ function render() {
             if (state.currentDepth <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
             // Stone is a column — the adjacent passage needn't contain exactly
             // the current depth, just be explored within the 180m fade window.
-            return revealFade(n.q, n.r, state.currentDepth) > 0;
+            return revealFade(n.q, n.r, state.currentDepth) > 0 && hexNearDepth(nt, state.currentDepth);
           });
           if (seen) {
             const stoneColor = state.currentDepth >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820';
@@ -1897,7 +1897,8 @@ function render() {
         if (cd <= 5 * DEPTH_GRID && hexNearDepth(tile, 0)) fade = 1;
         // Sub floodlights also illuminate cave tiles within the bright bubble
         const bubbleR = cd <= 2 * DEPTH_GRID ? 3 : cd <= 5 * DEPTH_GRID ? 2 : -1;
-        if (dFromPlayer <= bubbleR) fade = 1;
+        // Roofed caves get no sunlight bounce — lights only reach adjacent.
+        if (dFromPlayer <= (hexNearDepth(tile, 0) ? bubbleR : 1)) fade = 1;
       }
       if (fade === 0) continue;
 
@@ -2200,7 +2201,10 @@ function render() {
     if (c.depth !== state.currentDepth) continue;
     if (c.type === 'lurker' && !c.awake) continue;
     const dC = hexDistance({q: c.q, r: c.r}, playerHex);
-    if (dC > SIGHT + 1) continue;
+    // Same epistemic rule as terrain: lights touch it (adjacent), or it's
+    // inside the passive-sonar envelope AND standing in water the player has
+    // actually revealed. No glyphs floating in unexplored void, none through rock.
+    if (dC > 1 && (dC > passiveRange() + 2 || revealFade(c.q, c.r, state.currentDepth) <= 0)) continue;
     const cpx = hexToPixel(c.q, c.r);
     if (Math.abs(cpx.x - camX) > halfW || Math.abs(cpx.y - camY) > halfH) continue;
     const ct = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -2592,7 +2596,10 @@ function ping() {
       const k = hexKey(p.q, p.r);
       const tile = tileAt(p.q, p.r);
       pingRevealed.add(k);
-      if (tile.wall) {
+      // A face that is rock AT THIS DEPTH stops sound like full-column stone —
+      // rays must not chart labyrinth behind a wall they struck. The face
+      // itself stays revealed (added above): that's the sanctioned knowledge.
+      if (tile.wall || !hexAcceptsDepth(tile, state.currentDepth)) {
         // Wall is the last hex revealed along this ray.
         break;
       }
@@ -2621,7 +2628,8 @@ function ping() {
     totalHexes++;
     if (!tile.wall) openHexes++;
     const d = hexDistance({q, r}, {q: state.q, r: state.r});
-    if (tile.poi && d > 1) {
+    const poiConsumed = (tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(k);
+    if (tile.poi && !poiConsumed && d > 1) {
       if (d < interestingDist) {
         interesting = tile;
         interestingDist = d;
@@ -2680,7 +2688,7 @@ function ping() {
     // Depth offset to the POI: find the nearest volume in the POI tile and compare
     let depthHint = '';
     const near = nearestVolume(interesting, state.currentDepth);
-    if (near && near.deltaMeters > 8) {
+    if (near && near.deltaMeters > 8 && near.deltaMeters <= lvl.depthRange) {
       const dir2 = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
       depthHint = `, ${Math.round(near.deltaMeters)} m ${dir2}`;
     }
@@ -2795,7 +2803,7 @@ function move(q, r) {
     state.hull = Math.max(0, state.hull - dmg);
     state.lastMoveTime = performance.now();
     const near = nearestVolume(tile, state.currentDepth);
-    if (near && near.deltaMeters > 0) {
+    if (near && near.deltaMeters > 0 && near.deltaMeters <= PING_LEVELS[activeSub().sonarMaxPower].depthRange) {
       const delta = Math.max(1, Math.round(near.deltaMeters));
       const dir = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
       log(`The hull strikes rock. Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
@@ -4132,9 +4140,12 @@ function updateDepthStrip() {
   function pct(m) { return (Math.max(0, Math.min(maxScale, m)) / maxScale) * 100; }
 
   const tile = getTile(state.q, state.r);
-  if (tile && !tile.wall) {
-    const top = pct(tile.ceiling);
-    const bot = pct(tile.floor);
+  // The sounder reads the contiguous run the sub is in (first echo) — not the
+  // hex's full column, which may hide runs sealed behind unexplored stone.
+  const curRun = tile && !tile.wall ? volumeContaining(tile, state.currentDepth) : null;
+  if (curRun) {
+    const top = pct(curRun.ceiling);
+    const bot = pct(curRun.floor);
     hexRange.style.top = top + '%';
     hexRange.style.height = (bot - top) + '%';
   }
