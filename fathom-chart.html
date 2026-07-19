@@ -396,6 +396,23 @@
     transform-box: fill-box;
   }
 
+  /* ====== SOUND TOGGLE ====== */
+  #sound-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 20;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--sonar-dim);
+    background: rgba(4, 8, 16, 0.7);
+    color: var(--sonar);
+    font-size: 1rem;
+    line-height: 1;
+  }
+  #sound-btn.muted { opacity: 0.35; }
+
   /* ====== LOG / MESSAGES ====== */
   #log {
     position: relative;
@@ -674,6 +691,8 @@
   </div>
   <!-- Recenter button overlay -->
   <button id="recenter-btn" title="Center on sub">⊕</button>
+  <!-- Sound toggle overlay -->
+  <button id="sound-btn" title="Sound on/off">♪</button>
 </div>
 
 <!-- LOG -->
@@ -2666,6 +2685,7 @@ function ping() {
   state.air = Math.max(0, state.air - lvl.activeCost);
   // A ping is a shout in a dark house. Everything with ears now knows where you are.
   noiseMade(state.q, state.r, lvl.loudness);
+  sfx('ping');
 
   const radius = lvl.activeRange;
   let interesting = null;
@@ -2887,6 +2907,7 @@ function move(q, r) {
     log(`The hull strikes rock. No passage there. -${dmg} hull.`, 'danger', 'IMPACT');
     flagMoveFail(q, r, '#a04030');
     noiseMade(q, r, 2); // metal on rock carries — hunters hear it
+    sfx('impact');
     creatureTick();
     checkDeath();
     updateHUD();
@@ -2911,6 +2932,7 @@ function move(q, r) {
     }
     flagMoveFail(q, r, '#a04030');
     noiseMade(q, r, 2); // metal on rock carries — hunters hear it
+    sfx('impact');
     creatureTick();
     checkDeath();
     updateHUD();
@@ -3019,6 +3041,85 @@ function pregenTick() {
 }
 
 //=============================================================================
+// SOUND — a voice for the deep. Everything synthesized in WebAudio: no
+// assets, no dependencies. Wrapped so a missing/blocked AudioContext can
+// never break the game — sfx() is always a safe no-op. The context unlocks
+// on the first user-gesture-driven sound (Android autoplay policy).
+//=============================================================================
+
+let audioCtx = null;
+let audioMaster = null;
+let audioMuted = false;
+try { audioMuted = localStorage.getItem('fathom-audio') === '0'; } catch (e) {}
+
+function audioEnsure() {
+  if (audioMuted) return null;
+  if (!audioCtx) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+      audioMaster = audioCtx.createGain();
+      audioMaster.gain.value = 0.22;
+      audioMaster.connect(audioCtx.destination);
+    } catch (e) { return null; }
+  }
+  if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch (e) {} }
+  return audioCtx;
+}
+
+function tone(freqFrom, freqTo, dur, type, vol, delay) {
+  const ctx = audioEnsure();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + (delay || 0);
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freqFrom, t0);
+  if (freqTo && freqTo !== freqFrom) osc.frequency.exponentialRampToValueAtTime(freqTo, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol || 0.5, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g);
+  g.connect(audioMaster);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.05);
+}
+
+function noiseBurst(dur, vol, cutoff) {
+  const ctx = audioEnsure();
+  if (!ctx) return;
+  const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filt = ctx.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = cutoff || 300;
+  const g = ctx.createGain();
+  g.gain.value = vol || 0.5;
+  src.connect(filt);
+  filt.connect(g);
+  g.connect(audioMaster);
+  src.start(ctx.currentTime);
+}
+
+const SFX = {
+  ping()    { tone(1250, 320, 0.7, 'sine', 0.5); },                                  // the signature sweep
+  impact()  { noiseBurst(0.18, 0.6, 250); tone(90, 55, 0.22, 'sine', 0.5); },        // hull on rock
+  groan()   { tone(52, 38, 1.4, 'sawtooth', 0.16); tone(66, 47, 1.1, 'sawtooth', 0.10, 0.15); }, // pressure
+  ballast() { noiseBurst(0.5, 0.4, 180); },                                          // tanks blowing
+  strike()  { noiseBurst(0.25, 0.8, 200); tone(70, 45, 0.3, 'sine', 0.6); },         // something hits back
+  theft()   { tone(900, 1400, 0.08, 'square', 0.18); tone(1400, 700, 0.10, 'square', 0.15, 0.09); },
+  bell()    { tone(660, 660, 0.5, 'sine', 0.25); tone(1320, 1320, 0.4, 'sine', 0.10, 0.01); },   // port money
+  relic()   { tone(520, 780, 0.25, 'triangle', 0.2); tone(780, 1040, 0.3, 'triangle', 0.16, 0.22); },
+  contact() { tone(220, 210, 0.15, 'sine', 0.12); },                                 // passive pip
+};
+function sfx(name) { try { if (SFX[name]) SFX[name](); } catch (e) {} }
+
+//=============================================================================
 // EXPEDITIONS — the crew goes over the side.
 //
 // Ruins and signals are worked by dive teams: the boat holds station while
@@ -3054,6 +3155,7 @@ function expeditionTick() {
   if (roll < relicChance) {
     exp.relics++;
     log('The divers surface a RELIC — old work, and not drowned-men make.', 'strange', 'RELIC');
+    sfx('relic');
   } else if (roll < relicChance + 0.35) {
     exp.crates++;
     log('The divers send up a crate on the line.', '', 'DIVE TEAM');
@@ -3159,6 +3261,7 @@ function tickEel(c, dPlayer) {
     state.cargo++;
     c.gone = true;
     log('Cornered! The thief convulses, drops the crate, and is gone into a crack.', '', 'RECOVERED');
+    sfx('bell');
     return;
   }
   if (c.carrying) {
@@ -3184,6 +3287,7 @@ function tickEel(c, dPlayer) {
         c.carrying = 1;
         c.flee = 12;
         log('Something quick raids the hold — a crate is gone into the dark!', 'danger', 'THEFT');
+        sfx('theft');
         return;
       }
       if (c.depth !== state.currentDepth) {
@@ -3286,6 +3390,7 @@ function tickLurker(c, dPlayer) {
     state.hull = Math.max(0, state.hull - dmg);
     state.lastFailTime = performance.now();
     log(`Something slams the hull out of the dark. -${dmg} hull.`, 'danger', 'STRIKE');
+    sfx('strike');
     c.calm = 9; // blood in the water — it stays interested
     return;
   }
@@ -3332,6 +3437,7 @@ function creatureTick() {
                  : 'a faint heartbeat, holding still';
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
       log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, c.awake ? 'danger' : 'strange', 'CONTACT');
+      sfx('contact');
     }
   }
   // Reap anything that despawned this turn (caught or escaped thieves).
@@ -3534,6 +3640,7 @@ function changeDepth(deltaMeters) {
       flagMoveFail(state.q, state.r, '#a04030');
       state.lastMoveTime = performance.now();
       noiseMade(state.q, state.r, 2); // impacts ring through the water
+      sfx('impact');
       creatureTick();
       checkDeath();
     } else {
@@ -3578,6 +3685,7 @@ function changeDepth(deltaMeters) {
   // every hunter in earshot now knows where you are. Silence is a speed.
   if (Math.abs(deltaMeters) > sub.diveStep) {
     noiseMade(state.q, state.r, 2);
+    sfx('ballast');
     if (rand() < 0.25) log('The ballast tanks roar. The sound carries.', 'warn');
   }
 
@@ -3585,6 +3693,7 @@ function changeDepth(deltaMeters) {
     const over = state.currentDepth - sub.safeDepth;
     const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter * 0.5));
     state.hull = Math.max(0, state.hull - dmg);
+    sfx('groan'); // the pressure sings against the plates
   }
   state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
 
@@ -4101,11 +4210,13 @@ function surface() {
       state.cargoBanked += n;
       state.cargo = 0;
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
+      sfx('bell');
     }
     if (atPort && state.relics > 0) {
       state.relicsBanked += state.relics;
       log(`${state.relics} relic${state.relics > 1 ? 's' : ''} go ashore under guard. The collectors will pay well, someday. ${state.relicsBanked} in the vault.`, 'strange', 'PORT');
       state.relics = 0;
+      sfx('relic');
     }
     // The yard: banked crates buy hull patching (prices in DOCK_PRICES).
     // Spends only what the damage needs, never more.
@@ -4136,6 +4247,7 @@ function surface() {
         const pp2 = document.getElementById('ping-power');
         if (pp2) pp2.max = bought.sonarMaxPower;
         log(`The ${bought.name} takes the water. ${bought.description} (${bought.price} crates; ${state.cargoBanked} banked.)`, '', 'OUTFIT');
+        sfx('bell');
         updateHUD();
         render();
         return;
@@ -4310,6 +4422,19 @@ document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', restart);
+// Sound toggle — a device preference, stored apart from the save.
+const soundBtn = document.getElementById('sound-btn');
+if (soundBtn) {
+  const syncSoundBtn = () => soundBtn.classList.toggle('muted', audioMuted);
+  soundBtn.addEventListener('click', () => {
+    audioMuted = !audioMuted;
+    try { localStorage.setItem('fathom-audio', audioMuted ? '0' : '1'); } catch (e) {}
+    if (!audioMuted) { audioEnsure(); sfx('contact'); } // confirm with a pip
+    syncSoundBtn();
+  });
+  syncSoundBtn();
+}
+
 // Flush the pending save the moment the app is backgrounded — Android is
 // free to kill a hidden tab without ever firing the debounced timer.
 document.addEventListener('visibilitychange', () => {
