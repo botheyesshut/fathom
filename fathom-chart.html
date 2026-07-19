@@ -857,36 +857,29 @@ function pick(arr) { return arr[randInt(arr.length)]; }
 function chance(p) { return rand() < p; }
 
 const world = new Map();
-const cells = new Map(); // cellKey(q,r,depth) → { type, kind }. Absent = stone. Voxel source of truth (Stage A: written alongside volumes).
+const cells = new Map(); // cellKey(q,r,depth) → { type, kind }. Absent = stone. The voxel source of truth.
+const carvedFeatures = new Set(); // 'c:'/'e:'/'s:' + feature id — each cave feature carves exactly once
 const revealed = new Map(); // hexKey → Set<depth> — tracks which depths each tile was revealed at
 const visited = new Set();
 const generatedChunks = new Set();
-
-// The cave network is generated as a deterministic graph at world creation
-// time. Nodes are chambers placed in depth bands; edges are tunnels (mostly
-// horizontal within a band, some vertical Z-tunnels across bands). Chunks
-// then carve whichever nodes and edges happen to intersect them. This means
-// a given hex (q,r) yields the same passages regardless of which chunk got
-// generated first — geography is consistent everywhere.
-let worldGraph = null;
 
 // Depth bands for the cave network. Marianas Trench (~11,000 meters) is the
 // effective hard floor. Each band is a sprawling region — comparable in size
 // and complexity to a full hand-drawn dungeon map per band, with seven such
 // bands stacked vertically and interconnected. The player will not exhaust
 // any one of them in any reasonable session; that's the point.
-// hexRadius/nodeCount drive the LEGACY finite graph (generateWorldGraph).
-// density = per-node-cell chamber spawn probability for the INFINITE generator
-// (Stage E), derived to match each band's legacy areal density: denser near the
-// surface, sparser in the deep. All tunable knobs.
+// density = probability that a given lattice cell in this band holds a
+// chamber — denser near the surface, sparser and lonelier in the deep. Tuned
+// to match the original hand-built world's areal density near the origin;
+// every value is a feel knob.
 const CAVE_BANDS = [
-  { id: 'b0', minDepth:  480, maxDepth:  720,   hexRadius: 55,  nodeCount: 55,  density: 0.83 },
-  { id: 'b1', minDepth:  900, maxDepth: 1320,   hexRadius: 70,  nodeCount: 80,  density: 0.75 },
-  { id: 'b2', minDepth: 1620, maxDepth: 2160,   hexRadius: 85,  nodeCount: 105, density: 0.67 },
-  { id: 'b3', minDepth: 2580, maxDepth: 3600,   hexRadius: 100, nodeCount: 125, density: 0.57 },
-  { id: 'b4', minDepth: 4200, maxDepth: 5640,   hexRadius: 110, nodeCount: 125, density: 0.47 },
-  { id: 'b5', minDepth: 6480, maxDepth: 8520,   hexRadius: 115, nodeCount: 105, density: 0.36 },
-  { id: 'b6', minDepth: 9480, maxDepth: 10800,  hexRadius: 100, nodeCount: 75,  density: 0.34 },
+  { id: 'b0', minDepth:  480, maxDepth:  720,   density: 0.83 },
+  { id: 'b1', minDepth:  900, maxDepth: 1320,   density: 0.75 },
+  { id: 'b2', minDepth: 1620, maxDepth: 2160,   density: 0.67 },
+  { id: 'b3', minDepth: 2580, maxDepth: 3600,   density: 0.57 },
+  { id: 'b4', minDepth: 4200, maxDepth: 5640,   density: 0.47 },
+  { id: 'b5', minDepth: 6480, maxDepth: 8520,   density: 0.36 },
+  { id: 'b6', minDepth: 9480, maxDepth: 10800,  density: 0.34 },
 ];
 
 // ---- Infinite cave generation (Stage E) ---------------------------------
@@ -898,9 +891,32 @@ const CAVE_BANDS = [
 // ocean (shelfSeafloorDepth) is already a pure function of position.
 const NODE_CELL = 12; // hexes per node-cell side
 
+// Longest a tunnel may run, in hexes. THIS is what makes the world locally
+// computable: a chunk only has to consider chambers within this reach to know
+// every tunnel that could cross it. Meandering adds a little slack on top.
+const MAX_TUNNEL = 40;
+const BEND_MARGIN = 10;
+// How far around a chamber we look for neighbours (and for chambers a tunnel
+// might pierce). Fixed, so caveEdgesForNode is a pure function of the node —
+// two different chunks computing the same chamber get the same tunnels.
+const CONNECT_SCAN = MAX_TUNNEL + 16;
+const Z_TUNNEL_CHANCE = 0.15;  // chance a chamber drops a shaft to the band below
+const SINKHOLE_CHANCE = 0.35;  // chance a top-band chamber opens to daylight
+
+// Memoised lattice lookups. Chunk generation queries heavily-overlapping
+// regions, so without this the same cells get recomputed thousands of times.
+const nodeCache = new Map();
+function caveNodeAt(ncq, ncr, bandIdx) {
+  const ck = bandIdx + ':' + ncq + ':' + ncr;
+  if (nodeCache.has(ck)) return nodeCache.get(ck);
+  const node = caveNodeCompute(ncq, ncr, bandIdx);
+  nodeCache.set(ck, node);
+  return node;
+}
+
 // The chamber for a given lattice cell + band, or null if the cell is empty.
 // Fully deterministic in (worldSeed, band, ncq, ncr).
-function caveNodeAt(ncq, ncr, bandIdx) {
+function caveNodeCompute(ncq, ncr, bandIdx) {
   const band = CAVE_BANDS[bandIdx];
   const rng = mulberry32(hashStr(worldSeed + ':' + band.id + ':' + ncq + ':' + ncr));
   if (rng() >= band.density) return null; // this cell holds no chamber
@@ -933,6 +949,122 @@ function caveNodesInRegion(qMin, qMax, rMin, rMax) {
   return out;
 }
 
+// Canonical edge id — same string whichever endpoint asks.
+function caveEdgeId(a, b) { return a.id < b.id ? a.id + '|' + b.id : b.id + '|' + a.id; }
+
+// Tunnel width from endpoint chamber sizes. Hash-derived so it's a pure
+// function of the pair, never dependent on call order.
+function caveTunnelWidth(a, b) {
+  const maxR = Math.max(a.chamberRadius, b.chamberRadius);
+  const avgR = (a.chamberRadius + b.chamberRadius) / 2;
+  const roll = mulberry32(hashStr('w:' + caveEdgeId(a, b)))();
+  if (maxR >= 9) return 3;                    // grand cavern endpoint → broad
+  if (avgR >= 5) return roll < 0.6 ? 3 : 2;   // cavern → mostly broad
+  if (avgR >= 3) return roll < 0.35 ? 2 : 1;  // chamber → sometimes broad
+  return 1;                                    // antechamber-only → narrow
+}
+
+// Reject a tunnel that would drive through the CORE of an unrelated chamber in
+// the same band. Grazing rims is fine — it makes organic crossroads. The
+// ellipse prune skips chambers the meandering path provably cannot reach
+// (path deviation is bounded by BEND_MARGIN), so the expensive per-hex check
+// runs only for genuine near-misses.
+function caveTunnelClear(a, b, localNodes, eid) {
+  const ab = hexDistance({q: a.q, r: a.r}, {q: b.q, r: b.r});
+  let path = null;
+  for (const other of localNodes) {
+    if (other.id === a.id || other.id === b.id) continue;
+    if (other.bandId !== a.bandId) continue;
+    const da = hexDistance({q: other.q, r: other.r}, {q: a.q, r: a.r});
+    const db = hexDistance({q: other.q, r: other.r}, {q: b.q, r: b.r});
+    if (da + db > ab + 2 * (other.chamberRadius * 0.35 + BEND_MARGIN)) continue;
+    if (!path) path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, eid);
+    for (const p of path) {
+      if (hexDistance({q: p.q, r: p.r}, {q: other.q, r: other.r}) < other.chamberRadius * 0.35) return false;
+    }
+  }
+  return true;
+}
+
+// Every tunnel originating at this chamber. A pure function of the node + seed:
+// any chunk that computes it gets the identical answer, which is exactly what
+// makes chunk seams agree with no communication between them. Memoised —
+// neighbouring chunks ask about the same chambers over and over.
+const edgeCache = new Map();
+function caveEdgesForNode(node) {
+  const hit = edgeCache.get(node.id);
+  if (hit) return hit;
+  const edges = caveEdgesCompute(node);
+  edgeCache.set(node.id, edges);
+  return edges;
+}
+
+function caveEdgesCompute(node) {
+  const R = CONNECT_SCAN;
+  const near = caveNodesInRegion(node.q - R, node.q + R, node.r - R, node.r + R);
+  const rng = mulberry32(hashStr('e:' + worldSeed + ':' + node.id));
+  // Draw every random value up-front so the sequence never varies with branches.
+  const shortCount = rng() < 0.4 ? 3 : 2;
+  const longRoll = rng(), longPick = rng(), zRoll = rng();
+  const edges = [];
+
+  const sameBand = near
+    .filter(n => n.bandId === node.bandId && n.id !== node.id)
+    .map(n => ({ n, d: hexDistance({q: node.q, r: node.r}, {q: n.q, r: n.r}) }))
+    .filter(x => x.d > 0 && x.d <= MAX_TUNNEL)
+    .sort((x, y) => x.d - y.d || (x.n.id < y.n.id ? -1 : 1));
+
+  let added = 0;
+  for (let i = 0; i < sameBand.length && added < shortCount; i++) {
+    const cand = sameBand[i].n;
+    if (!caveTunnelClear(node, cand, near, caveEdgeId(node, cand))) continue;
+    edges.push({ a: node, b: cand, kind: 'tunnel', width: caveTunnelWidth(node, cand) });
+    added++;
+  }
+  // Connectivity fallback — better an imperfect tunnel than an orphaned chamber.
+  if (added === 0 && sameBand.length > 0) {
+    const cand = sameBand[0].n;
+    edges.push({ a: node, b: cand, kind: 'tunnel', width: caveTunnelWidth(node, cand) });
+  }
+  // ~30% get a long haul — the truly-vast-tunnel feeling.
+  if (longRoll < 0.30 && sameBand.length > 6) {
+    const cand = sameBand[5 + Math.floor(longPick * Math.min(10, sameBand.length - 5))].n;
+    if (caveTunnelClear(node, cand, near, caveEdgeId(node, cand))) {
+      edges.push({ a: node, b: cand, kind: 'long-tunnel', width: caveTunnelWidth(node, cand) });
+    }
+  }
+  // Sparse vertical shaft down to the nearest chamber in the band below.
+  if (node.bandIdx < CAVE_BANDS.length - 1 && zRoll < Z_TUNNEL_CHANCE) {
+    let best = null, bestD = Infinity;
+    for (const n of near) {
+      if (n.bandIdx !== node.bandIdx + 1) continue;
+      const d = hexDistance({q: node.q, r: node.r}, {q: n.q, r: n.r});
+      if (d <= MAX_TUNNEL && (d < bestD || (d === bestD && best && n.id < best.id))) { bestD = d; best = n; }
+    }
+    if (best) edges.push({ a: node, b: best, kind: 'z-tunnel', width: 1 });
+  }
+  return edges;
+}
+
+// A top-band chamber may open to daylight. Only where there's real rock between
+// the seabed and the chamber — out past the shelf break the seafloor is deeper
+// than the band, so a "sinkhole" there would just be open ocean.
+function caveSinkholeForNode(node) {
+  if (node.bandIdx !== 0) return null;
+  const rng = mulberry32(hashStr('s:' + worldSeed + ':' + node.id));
+  if (rng() >= SINKHOLE_CHANCE) return null;
+  const searchR = Math.max(3, Math.ceil(node.chamberRadius) + 2);
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const sq = node.q + Math.round((rng() * 2 - 1) * searchR);
+    const sr = node.r + Math.round((rng() * 2 - 1) * searchR);
+    const seafloor = shelfSeafloorDepth(sq, sr);
+    if (seafloor != null && seafloor < node.depth - DEPTH_GRID) {
+      return { id: 'sink:' + node.id, q: sq, r: sr, depth: 0, chamberRadius: 0.5, chamberKind: 'antechamber', bandId: 'surface' };
+    }
+  }
+  return null;
+}
+
 function snapToGrid(m) { return Math.round(m / DEPTH_GRID) * DEPTH_GRID; }
 
 // FNV-1a hash of a string to a 32-bit unsigned integer. Used to derive
@@ -944,13 +1076,6 @@ function hashStr(s) {
     h = Math.imul(h, 16777619) >>> 0;
   }
   return h >>> 0;
-}
-
-function hasGraphEdge(edges, a, b) {
-  for (const e of edges) {
-    if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) return true;
-  }
-  return false;
 }
 
 // Generate a meandering hex path from a to b. Real caves don't go in
@@ -998,245 +1123,6 @@ function meanderingPath(a, b, edgeId) {
     path = path.concat(segment);
   }
   return path;
-}
-
-// Check whether a tunnel path between two chambers would crash through the
-// CORE of an unrelated chamber in the same band. Looser than the previous
-// rule — tunnels are allowed to graze the edges of other chambers, which
-// produces organic informal crossroads (caves frequently merge into each
-// other). Only outright piercing — entering deeply into another chamber's
-// interior — is rejected.
-function tunnelLineIsClear(a, b, allNodes, sameBandOnly, edgeId) {
-  const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId || (a.id + ':' + b.id));
-  for (const other of allNodes) {
-    if (other.id === a.id || other.id === b.id) continue;
-    if (sameBandOnly && other.bandId !== a.bandId) continue;
-    if (other.bandId === 'surface') continue;
-    for (const p of path) {
-      const d = hexDistance({q: p.q, r: p.r}, {q: other.q, r: other.r});
-      // Reject only if the path enters the chamber's INNER CORE — grazing
-      // the outer rim, even fairly aggressively, is fine and just creates
-      // an informal three-way junction. Dwarf Fortress principle: let the
-      // generation produce messy intersections rather than over-policing.
-      if (d < other.chamberRadius * 0.35) return false;
-    }
-  }
-  return true;
-}
-
-function generateWorldGraph(seed) {
-  const grng = mulberry32((seed ^ 0xCAFE5E2D) >>> 0);
-  const nodes = [];
-  const edges = [];
-
-  // Scatter chambers per band. Four size tiers — antechambers, chambers,
-  // caverns, grand caverns — with weighted distribution. Grand caverns are
-  // rare and remembered; antechambers are common junction-style spaces.
-  // Spacing is loose: chamber centers stay outside each other's nominal
-  // radii (so the centers feel distinct), but rims can overlap freely,
-  // creating naturally merged organic spaces. Grand caverns require more
-  // breathing room from each other so they don't merge into super-caverns.
-  for (const band of CAVE_BANDS) {
-    let placed = 0;
-    let attempts = 0;
-    const maxAttempts = band.nodeCount * 20;
-    while (placed < band.nodeCount && attempts < maxAttempts) {
-      attempts++;
-      const angle = grng() * Math.PI * 2;
-      const dist = Math.sqrt(grng()) * band.hexRadius;
-      const q = Math.round(Math.cos(angle) * dist);
-      const r = Math.round(Math.sin(angle) * dist) - 12;
-      const depth = snapToGrid(band.minDepth + grng() * (band.maxDepth - band.minDepth));
-      const sizeRoll = grng();
-      let chamberRadius, chamberKind;
-      if (sizeRoll < 0.03) {
-        chamberRadius = 9 + grng() * 6;   // 9-15 — Grand cavern
-        chamberKind = 'grand';
-      } else if (sizeRoll < 0.15) {
-        chamberRadius = 5 + grng() * 3;   // 5-8 — Cavern
-        chamberKind = 'cavern';
-      } else if (sizeRoll < 0.55) {
-        chamberRadius = 2.5 + grng() * 2; // 2.5-4.5 — Chamber
-        chamberKind = 'chamber';
-      } else {
-        chamberRadius = 1 + grng() * 1.5; // 1-2.5 — Antechamber
-        chamberKind = 'antechamber';
-      }
-      // Spacing check
-      let tooClose = false;
-      for (const other of nodes) {
-        if (other.bandId !== band.id) continue;
-        const d = hexDistance({q, r}, {q: other.q, r: other.r});
-        const isBigBig = chamberKind === 'grand' && other.chamberKind === 'grand';
-        const minD = isBigBig
-          ? chamberRadius + other.chamberRadius + 3 // grand chambers want room
-          : Math.max(chamberRadius, other.chamberRadius); // others just need distinct centers
-        if (d < minD) { tooClose = true; break; }
-      }
-      if (tooClose) continue;
-      nodes.push({
-        id: `${band.id}_n${placed}`,
-        q, r, depth,
-        chamberRadius,
-        chamberKind,
-        bandId: band.id,
-      });
-      placed++;
-    }
-  }
-
-  // Tunnel width based on endpoint chamber sizes. Bigger chambers connect
-  // via broader passages. Antechambers always pinch down to a single hex.
-  function tunnelWidth(a, b) {
-    const maxR = Math.max(a.chamberRadius, b.chamberRadius);
-    const avgR = (a.chamberRadius + b.chamberRadius) / 2;
-    if (maxR >= 9) return 3;                          // grand cavern endpoint → broad
-    if (avgR >= 5) return grng() < 0.6 ? 3 : 2;       // cavern → mostly broad
-    if (avgR >= 3) return grng() < 0.35 ? 2 : 1;      // chamber → sometimes broad
-    return 1;                                          // antechamber-only → narrow
-  }
-
-  // Build horizontal edges within each band. Each chamber connects to 1-2
-  // nearest neighbors via meandering tunnels. The clearance check rejects
-  // edges whose path would pierce the core of an unrelated chamber, but
-  // grazing chamber edges is allowed (and creates informal crossroads).
-  for (const band of CAVE_BANDS) {
-    const bandNodes = nodes.filter(n => n.bandId === band.id);
-    for (const node of bandNodes) {
-      const others = bandNodes
-        .filter(n => n !== node)
-        .map(n => ({n, d: hexDistance({q: node.q, r: node.r}, {q: n.q, r: n.r})}))
-        .sort((a, b) => a.d - b.d);
-      if (others.length === 0) continue;
-      // Most chambers get 2 short connections, some get 3 — produces the
-      // densely-interconnected look of the reference maps where each cavern
-      // has several exits rather than a single chain through the band.
-      const shortCount = grng() < 0.4 ? 3 : 2;
-      let added = 0;
-      for (let i = 0; i < others.length && added < shortCount; i++) {
-        const cand = others[i].n;
-        if (hasGraphEdge(edges, node.id, cand.id)) { added++; continue; }
-        const eid = node.id + ':' + cand.id;
-        if (!tunnelLineIsClear(node, cand, nodes, true, eid)) continue;
-        edges.push({a: node.id, b: cand.id, kind: 'tunnel', width: tunnelWidth(node, cand)});
-        added++;
-      }
-      // Connectivity fallback: if no clean edge was found, connect to nearest
-      // anyway. Better an imperfect tunnel than an orphaned chamber.
-      if (added === 0 && others.length > 0) {
-        if (!hasGraphEdge(edges, node.id, others[0].n.id)) {
-          edges.push({a: node.id, b: others[0].n.id, kind: 'tunnel', width: tunnelWidth(node, others[0].n)});
-        }
-      }
-      // ~30% chance of a long edge — for the truly-vast-tunnel feeling.
-      if (grng() < 0.30 && others.length > 6) {
-        for (let attempt = 0; attempt < 4; attempt++) {
-          const longIdx = 5 + Math.floor(grng() * Math.min(10, others.length - 5));
-          const cand = others[longIdx].n;
-          if (hasGraphEdge(edges, node.id, cand.id)) break;
-          const eid = node.id + ':' + cand.id;
-          if (tunnelLineIsClear(node, cand, nodes, true, eid)) {
-            edges.push({a: node.id, b: cand.id, kind: 'long-tunnel', width: tunnelWidth(node, cand)});
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // Z-tunnels across band boundaries — sparse, only a handful per pair.
-  for (let bi = 0; bi < CAVE_BANDS.length - 1; bi++) {
-    const upperBand = CAVE_BANDS[bi];
-    const lowerBand = CAVE_BANDS[bi + 1];
-    const upperNodes = nodes.filter(n => n.bandId === upperBand.id);
-    const lowerNodes = nodes.filter(n => n.bandId === lowerBand.id);
-    if (upperNodes.length === 0 || lowerNodes.length === 0) continue;
-
-    const zCount = 8 + Math.floor(grng() * 6); // 8-13 Z-tunnels per band pair
-    const used = new Set();
-    for (let i = 0; i < zCount; i++) {
-      let tries = 0;
-      let upper;
-      do {
-        upper = upperNodes[Math.floor(grng() * upperNodes.length)];
-        tries++;
-      } while (used.has(upper.id) && tries < 8);
-      used.add(upper.id);
-
-      const lower = lowerNodes
-        .map(n => ({n, d: hexDistance({q: upper.q, r: upper.r}, {q: n.q, r: n.r})}))
-        .sort((a, b) => a.d - b.d)[0]?.n;
-      if (lower && !hasGraphEdge(edges, upper.id, lower.id)) {
-        edges.push({a: upper.id, b: lower.id, kind: 'z-tunnel'});
-      }
-    }
-  }
-
-  // Pier entrance — guaranteed sinkhole two hexes NE of the dock.
-  const pierEntry = {
-    id: 'pier-entry',
-    q: 3, r: -1,
-    depth: 0,
-    chamberRadius: 0.5,
-    bandId: 'surface',
-  };
-  nodes.push(pierEntry);
-  // Connect to nearest b0 chamber
-  const topNodes = nodes.filter(n => n.bandId === 'b0');
-  if (topNodes.length > 0) {
-    const nearestTop = topNodes
-      .map(n => ({n, d: hexDistance({q: pierEntry.q, r: pierEntry.r}, {q: n.q, r: n.r})}))
-      .sort((a, b) => a.d - b.d)[0].n;
-    edges.push({a: pierEntry.id, b: nearestTop.id, kind: 'sinkhole'});
-  }
-
-  // A few more sinkholes scattered across the shelf so the player has
-  // alternative entrances if they wander away from the pier.
-  // Scatter additional sinkholes across the shelf so the player has many
-  // entry choices. For each b0 chamber, search around it for a shelf-water
-  // surface hex; place a sinkhole there if one is found. Iterate through
-  // many candidates until the target count is reached. Loose-bay strategy:
-  // we accept any b0 chamber whose center sits in the bay or close enough
-  // that a nearby surface hex lands in shelf water.
-  const sinkholeCandidates = nodes.filter(n => n.bandId === 'b0' && n.r <= -1);
-  const shuffled = [...sinkholeCandidates].sort(() => grng() - 0.5);
-  const extraSinkholeTarget = 8 + Math.floor(grng() * 6); // 8-13
-  let extraSinkholesPlaced = 0;
-  let candidateIdx = 0;
-  while (extraSinkholesPlaced < extraSinkholeTarget && candidateIdx < shuffled.length) {
-    const chamber = shuffled[candidateIdx++];
-    // Search a ring of hexes around the chamber center for shelf water
-    let surfaceHex = null;
-    const searchRadius = Math.max(3, Math.ceil(chamber.chamberRadius) + 2);
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const offsetQ = Math.round((grng() * 2 - 1) * searchRadius);
-      const offsetR = Math.round((grng() * 2 - 1) * searchRadius);
-      const sq = chamber.q + offsetQ;
-      const sr = chamber.r + offsetR;
-      if (shelfSeafloorDepth(sq, sr) != null) {
-        surfaceHex = { q: sq, r: sr };
-        break;
-      }
-    }
-    if (!surfaceHex) continue;
-    const sinkholeNode = {
-      id: `sinkhole_${extraSinkholesPlaced}`,
-      q: surfaceHex.q, r: surfaceHex.r,
-      depth: 0,
-      chamberRadius: 0.5,
-      chamberKind: 'antechamber',
-      bandId: 'surface',
-    };
-    nodes.push(sinkholeNode);
-    edges.push({a: sinkholeNode.id, b: chamber.id, kind: 'sinkhole'});
-    extraSinkholesPlaced++;
-  }
-
-  // Build an index for O(1) lookup
-  const nodesById = {};
-  for (const n of nodes) nodesById[n.id] = n;
-
-  return { nodes, edges, nodesById };
 }
 
 // Carve a chamber from a graph node. Chambers are domed: tallest at the
@@ -1298,11 +1184,10 @@ function carveChamber(node) {
 //  - tunnel / long-tunnel: horizontal corridor at interpolated depth between A & B
 //  - z-tunnel: horizontal segment at A's depth, then vertical shaft at B's hex down to B
 //  - sinkhole: vertical-only opening from a surface hex down into the cave below
-function carveEdge(edge, nodesById) {
-  const a = nodesById[edge.a];
-  const b = nodesById[edge.b];
+function carveEdge(edge) {
+  const a = edge.a, b = edge.b;
   if (!a || !b) return;
-  const edgeId = edge.a + ':' + edge.b;
+  const edgeId = caveEdgeId(a, b);
   const width = edge.width || 1;
 
   // Carve a tunnel hex and (if widening) its perpendicular neighbors. The
@@ -1359,7 +1244,7 @@ function carveEdge(edge, nodesById) {
     addVolume(a.q, a.r, 'passage', 'passage', 0, b.depth + chamberHalfSpan);
     const tile = world.get(hexKey(a.q, a.r));
     if (tile && !tile.poi) {
-      world.set(hexKey(a.q, a.r), makeTile('opening', a.q, a.r, tile.ceiling, tile.floor));
+      world.set(hexKey(a.q, a.r), makeTile('opening', a.q, a.r, tile.ceiling, tile.floor, tile.bestPrio));
     }
     // Horizontal corridor at chamber depth, meandering toward the chamber.
     const path = meanderingPath({q: a.q, r: a.r}, {q: b.q, r: b.r}, edgeId);
@@ -1442,19 +1327,24 @@ function setTile(q, r, type, force) {
   if (t.wall) {
     // Wall/land tile is solid — it owns no open cells. Drop any this hex had.
     if (open) clearHexCells(q, r, existing.ceiling, existing.floor);
-    world.set(k, makeTile(type, q, r, 0, 0));
+    world.set(k, makeTile(type, q, r, 0, 0, 0));
   } else {
-    // Overlaying a feature (POI) on open space — keep the hex's open extent.
-    world.set(k, makeTile(type, q, r, open ? existing.ceiling : 0, open ? existing.floor : 0));
+    // Overlaying a feature (POI) on open space — keep the hex's open extent
+    // and its accumulated kind priority.
+    world.set(k, makeTile(type, q, r, open ? existing.ceiling : 0, open ? existing.floor : 0,
+                          open ? (existing.bestPrio || 0) : 0));
   }
 }
 
-function makeTile(type, q, r, ceiling, floor) {
+function makeTile(type, q, r, ceiling, floor, bestPrio) {
   const t = TILES[type];
   // A tile is hex-level display metadata only. The voxel `cells` map holds the
   // actual open/closed structure; ceiling/floor cache this hex's open extent
   // (shallowest/deepest open cell) for the depth gauge and spawn logic.
-  return { type, q, r, ...t, ceiling: ceiling || 0, floor: floor || 0 };
+  // bestPrio caches the highest kind priority ever carved into this hex — an
+  // order-independent max that survives POI overlays, so the display type
+  // never needs a full extent rescan.
+  return { type, q, r, ...t, ceiling: ceiling || 0, floor: floor || 0, bestPrio: bestPrio || 0 };
 }
 
 // Add an open volume to a hex. Volumes that overlap or touch are merged.
@@ -1508,28 +1398,19 @@ function addVolume(q, r, type, kind, ceiling, floor) {
     if (!ex || kindPriority(kind) > kindPriority(ex.kind)) cells.set(ck, { type: kindToType(kind), kind });
   }
 
-  // Accumulate the hex's open extent and pick its display type (dominant kind),
-  // unless it already carries a POI — those keep their own symbol.
+  // Accumulate the hex's open extent and pick its display type (dominant
+  // kind), unless it already carries a POI — those keep their own symbol.
+  // bestPrio is a running max over every kind ever carved here, so this is
+  // O(1) per carve and independent of carve order (max is commutative).
   const open = existing && !existing.wall;
   const newCeiling = open ? Math.min(existing.ceiling, ceiling) : ceiling;
   const newFloor   = open ? Math.max(existing.floor, floor)     : floor;
+  const newPrio    = Math.max(open ? (existing.bestPrio || 0) : 0, kindPriority(kind));
   const isExistingPoi = open && TILES[existing.type] && TILES[existing.type].poi;
-  let chosenType;
-  if (isExistingPoi) {
-    chosenType = existing.type; // POIs keep their own symbol/colour
-  } else {
-    // Dominant kind = highest-priority kind among this hex's open cells, which
-    // matches the old volume model's bestKind exactly, independent of the order
-    // features were carved (a POI re-type can't corrupt it).
-    let bestKind = kind, bestPrio = kindPriority(kind);
-    for (let d = newCeiling; d <= newFloor; d += DEPTH_GRID) {
-      const c = cells.get(cellKey(q, r, d));
-      if (c) { const p = kindPriority(c.kind); if (p > bestPrio) { bestPrio = p; bestKind = c.kind; } }
-    }
-    chosenType = kindToType(bestKind);
-  }
-  world.set(k, makeTile(chosenType, q, r, newCeiling, newFloor));
+  const chosenType = isExistingPoi ? existing.type : kindToType(PRIO_TO_KIND[newPrio]);
+  world.set(k, makeTile(chosenType, q, r, newCeiling, newFloor, newPrio));
 }
+const PRIO_TO_KIND = ['water', 'passage', 'chamber', 'sea'];
 
 function kindPriority(kind) {
   const m = { water: 0, passage: 1, chamber: 2, sea: 3 };
@@ -1582,8 +1463,6 @@ function chunkRng(cq, cr) {
 // plus directional shelf water and origin features. Idempotent — re-running
 // produces the same result because the graph is deterministic.
 function generateChunk(cq, cr) {
-  if (!worldGraph) worldGraph = generateWorldGraph(worldSeed);
-
   const crng = chunkRng(cq, cr);
   const crand = () => crng();
   const cpick = (a) => a[Math.floor(crand() * a.length)];
@@ -1603,33 +1482,51 @@ function generateChunk(cq, cr) {
     }
   }
 
-  // Step 2: Cave network. Carve every chamber whose center sits within or
-  // near this chunk's hex bounds, and every tunnel whose path passes through.
-  // This is idempotent — chunks generated in any order produce the same world.
-  const pad = 6; // overlap padding so edge-crossing tunnels get carved fully
-  for (const node of worldGraph.nodes) {
-    if (node.bandId === 'surface') continue; // surface nodes are handled by sinkhole edges
-    if (node.q >= q0 - pad && node.q < q1 + pad &&
-        node.r >= r0 - pad && node.r < r1 + pad) {
+  // Step 2: Cave network — computed LOCALLY, and therefore infinitely. Every
+  // chamber within tunnel-reach of this chunk comes from the deterministic
+  // lattice, and every tunnel those chambers originate is carved if it touches
+  // us. No global graph, no edge of the world. Each feature carves exactly
+  // ONCE (carving writes cells globally, wherever they land), tracked in
+  // carvedFeatures — the first generated chunk a feature touches carves all
+  // of it. The carve itself is a pure function of the feature, so which chunk
+  // performs it cannot matter.
+  const CHAMBER_PAD = 24; // covers a grand cavern's full rim (radius ≤ 15 × 1.4)
+  const EDGE_PAD = 10;    // covers a meandering path's max deviation from its bbox
+  const scanR = MAX_TUNNEL + BEND_MARGIN;
+  const nodes = caveNodesInRegion(q0 - scanR, q1 + scanR, r0 - scanR, r1 + scanR);
+  const touches = (aq, ar, bq, br, pad) => !(
+    Math.max(aq, bq) < q0 - pad || Math.min(aq, bq) >= q1 + pad ||
+    Math.max(ar, br) < r0 - pad || Math.min(ar, br) >= r1 + pad);
+
+  for (const node of nodes) {
+    if (touches(node.q, node.r, node.q, node.r, CHAMBER_PAD) && !carvedFeatures.has('c:' + node.id)) {
+      carvedFeatures.add('c:' + node.id);
       carveChamber(node);
     }
   }
-  for (const edge of worldGraph.edges) {
-    const a = worldGraph.nodesById[edge.a];
-    const b = worldGraph.nodesById[edge.b];
-    if (!a || !b) continue;
-    const minQ = Math.min(a.q, b.q), maxQ = Math.max(a.q, b.q);
-    const minR = Math.min(a.r, b.r), maxR = Math.max(a.r, b.r);
-    if (maxQ < q0 - pad || minQ >= q1 + pad ||
-        maxR < r0 - pad || minR >= r1 + pad) continue;
-    carveEdge(edge, worldGraph.nodesById);
+  for (const node of nodes) {
+    for (const e of caveEdgesForNode(node)) {
+      const eid = 'e:' + caveEdgeId(e.a, e.b);
+      if (carvedFeatures.has(eid)) continue;
+      if (touches(e.a.q, e.a.r, e.b.q, e.b.r, EDGE_PAD)) {
+        carvedFeatures.add(eid);
+        carveEdge(e);
+      }
+    }
+    // Daylight: a top-band chamber may punch a sinkhole up through the seabed.
+    const sink = caveSinkholeForNode(node);
+    if (sink && !carvedFeatures.has('s:' + node.id)
+        && touches(sink.q, sink.r, node.q, node.r, EDGE_PAD)) {
+      carvedFeatures.add('s:' + node.id);
+      carveEdge({ a: sink, b: node, kind: 'sinkhole', width: 1 });
+    }
   }
 
   // Step 3: Origin specifics — surface marker, dock, shoreline.
   if (cq === 0 && cr === 0) {
     addVolume(0, 0, 'water', 'water', 0, 100);
     let oTile = world.get(hexKey(0, 0));
-    world.set(hexKey(0, 0), makeTile('surface', 0, 0, oTile.ceiling, oTile.floor));
+    world.set(hexKey(0, 0), makeTile('surface', 0, 0, oTile.ceiling, oTile.floor, oTile.bestPrio));
     // Pier: single straight column at q=1, r=0→2, pointing into the beach.
     setTile(1, 0, 'dock', true);
     setTile(1, 1, 'dock', true);
@@ -1647,6 +1544,17 @@ function generateChunk(cq, cr) {
       {q:-5, r:5}, {q:-4, r:5}, {q:-3, r:5}, {q:-2, r:5}, {q:-1, r:5}, {q:0, r:5}, {q:1, r:5}, {q:2, r:5}, {q:3, r:5},
     ];
     for (const h of shoreHexes) setTile(h.q, h.r, 'shore', true);
+
+    // Guaranteed pier entrance: a sinkhole just NE of the dock dropping into
+    // the nearest top-band chamber, so the player always has a way under —
+    // never at the mercy of whether the lattice happened to open one nearby.
+    const pierEntry = { id: 'pier-entry', q: 3, r: -1, depth: 0, chamberRadius: 0.5, chamberKind: 'antechamber', bandId: 'surface' };
+    const pierTarget = caveNodesInRegion(pierEntry.q - MAX_TUNNEL, pierEntry.q + MAX_TUNNEL,
+                                         pierEntry.r - MAX_TUNNEL, pierEntry.r + MAX_TUNNEL)
+      .filter(n => n.bandIdx === 0)
+      .map(n => ({ n, d: hexDistance({q: pierEntry.q, r: pierEntry.r}, {q: n.q, r: n.r}) }))
+      .sort((x, y) => x.d - y.d || (x.n.id < y.n.id ? -1 : 1))[0];
+    if (pierTarget) carveEdge({ a: pierEntry, b: pierTarget.n, kind: 'sinkhole', width: 1 });
   }
 
   // Step 4: POIs scattered into open cave hexes (rare in shelf water, more
@@ -2873,6 +2781,32 @@ function move(q, r) {
 
   updateHUD();
   render();
+  schedulePregen();
+}
+
+// Idle-time chunk pregeneration. tileAt already forces the 3x3 chunk block
+// around anything rendered; this quietly extends generation one ring further
+// (the 5x5 rim) during idle moments, one chunk per tick, so the player never
+// feels a generation hitch when crossing a chunk boundary. ensureChunk no-ops
+// on anything already generated, so re-scheduling is nearly free.
+let pregenQueue = [];
+let pregenTimer = 0;
+function schedulePregen() {
+  const { cq, cr } = hexToChunk(state.q, state.r);
+  pregenQueue = [];
+  for (let dq = -2; dq <= 2; dq++) {
+    for (let dr = -2; dr <= 2; dr++) {
+      if (Math.max(Math.abs(dq), Math.abs(dr)) === 2) pregenQueue.push([cq + dq, cr + dr]);
+    }
+  }
+  if (!pregenTimer) pregenTimer = setTimeout(pregenTick, 80);
+}
+function pregenTick() {
+  pregenTimer = 0;
+  const next = pregenQueue.shift();
+  if (!next) return;
+  ensureChunk(next[0], next[1]);
+  if (pregenQueue.length) pregenTimer = setTimeout(pregenTick, 80);
 }
 
 // ---- Cell-model queries -------------------------------------------------
@@ -3540,7 +3474,9 @@ function restart() {
   generatedChunks.clear();
   worldSeed = Date.now() & 0xffffffff;
   rng = mulberry32(worldSeed);
-  worldGraph = generateWorldGraph(worldSeed);
+  nodeCache.clear(); // lattice + edge memos and the carve registry are seed-dependent
+  edgeCache.clear();
+  carvedFeatures.clear();
   // Force-generate origin chunk and neighbors so the player can leave
   tileAt(0, 0);
   // Set initial depth to match origin tile's range (origin is shallow)
