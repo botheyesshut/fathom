@@ -698,6 +698,7 @@
   <div id="controls-row">
     <button class="btn" id="btn-ping">Ping</button>
     <button class="btn primary" id="btn-surface">Surface</button>
+    <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
   </div>
 </div>
 
@@ -3439,6 +3440,7 @@ function updateHUD() {
 
   // Update vertical depth strip if present
   updateDepthStrip();
+  scheduleSave();
 }
 
 //=============================================================================
@@ -3451,10 +3453,12 @@ function endGame(title, summary) {
   document.getElementById('go-stats').innerHTML =
     `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}`;
   document.getElementById('gameover').classList.add('show');
+  clearSave(); // the deep keeps what it takes — a lost boat is a lost world
 }
 
 function restart() {
   const sub = activeSub();
+  clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
   state.air = sub.air; state.hull = sub.hull;
   state.currentDepth = 0; state.maxDepth = 0;
@@ -3501,9 +3505,11 @@ function restart() {
   // Cap ping power slider at sub's max
   const pp = document.getElementById('ping-power');
   if (pp) pp.max = sub.sonarMaxPower;
+  gameStarted = true;
   updatePingDisplay();
   updateHUD();
   render();
+  schedulePregen();
 }
 
 //=============================================================================
@@ -3545,6 +3551,98 @@ function surface() {
 }
 
 //=============================================================================
+// PERSISTENCE — the substrate/overlay split made real.
+//
+// The WORLD is never saved: it is a pure function of worldSeed, recomputed
+// cell-for-cell identical on every load. What's saved is the OVERLAY — the
+// seed itself plus everything the player has done: position, resources, and
+// which cells of the dark they have charted. This is the exact split a shared
+// multiplayer sea needs (server ships a seed + deltas), running locally.
+//=============================================================================
+
+const SAVE_KEY = 'fathom-save-v1';
+let gameStarted = false;
+let saveTimer = 0;
+
+function scheduleSave() {
+  if (saveTimer || !gameStarted) return;
+  saveTimer = setTimeout(doSave, 400);
+}
+
+function doSave() {
+  saveTimer = 0;
+  if (!gameStarted || !state.alive) return;
+  try {
+    const rev = {};
+    for (const [k, s] of revealed) rev[k] = [...s];
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1, seed: worldSeed,
+      q: state.q, r: state.r, depth: state.currentDepth,
+      air: state.air, hull: state.hull, maxDepth: state.maxDepth,
+      moves: state.moves, poisFound: state.poisFound,
+      lastZone: state.lastZone, maxZoneReached: state.maxZoneReached,
+      visited: [...visited], revealed: rev,
+    }));
+  } catch (e) { /* quota or private mode — persistence is best-effort */ }
+}
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (!p || p.v !== 1 || typeof p.seed !== 'number') return null;
+    return p;
+  } catch (e) { return null; }
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; }
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+}
+
+// Rebuild the saved run: same seed → the identical infinite world regenerates
+// beneath the boat; the overlay puts the player, their charts, and their
+// resources back exactly where they were.
+function resumeGame(save) {
+  const sub = activeSub();
+  state.q = save.q; state.r = save.r;
+  state.air = save.air; state.hull = save.hull;
+  state.currentDepth = save.depth; state.maxDepth = save.maxDepth || 0;
+  state.moves = save.moves || 0; state.poisFound = save.poisFound || [];
+  state.alive = true;
+  state.panX = 0; state.panY = 0;
+  state.trail = []; state.failHex = null;
+  state.ping = null; state.pingArrows = null;
+  state.pingMemory = new Map();
+  world.clear(); cells.clear(); revealed.clear(); visited.clear();
+  generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear();
+  worldSeed = save.seed;
+  // Gameplay dice only — the substrate derives everything from hashed seeds.
+  rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
+  tileAt(0, 0);                 // origin (dock, pier entrance) always exists
+  tileAt(state.q, state.r);     // and the water under the boat
+  for (const k of save.visited || []) visited.add(k);
+  const rev = save.revealed || {};
+  for (const k in rev) revealed.set(k, new Set(rev[k]));
+  const px = hexToPixel(state.q, state.r);
+  state.cameraX = px.x; state.cameraY = px.y;
+  state.lastZone = save.lastZone || 'shelf';
+  state.maxZoneReached = save.maxZoneReached || 0;
+  logEl.innerHTML = '';
+  const depthNote = state.currentDepth > 0 ? `, ${Math.round(state.currentDepth)} m down` : ', riding the surface';
+  log(`The chart unrolls where you left it. The ${sub.name} holds station${depthNote}.`, '', 'RESUME');
+  document.getElementById('gameover').classList.remove('show');
+  const pp = document.getElementById('ping-power');
+  if (pp) pp.max = sub.sonarMaxPower;
+  gameStarted = true;
+  updatePingDisplay();
+  updateHUD();
+  render();
+  schedulePregen();
+}
+
+//=============================================================================
 // INIT
 //=============================================================================
 
@@ -3553,7 +3651,8 @@ function startGame() {
   if (!title) return;
   title.classList.add('gone');
   setViewport();
-  restart();
+  const save = loadSave();
+  if (save) resumeGame(save); else restart();
   setTimeout(() => { title.style.display = 'none'; }, 1200);
 }
 
@@ -3574,6 +3673,23 @@ document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', restart);
+// Flush the pending save the moment the app is backgrounded — Android is
+// free to kill a hidden tab without ever firing the debounced timer.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && saveTimer) { clearTimeout(saveTimer); saveTimer = 0; doSave(); }
+});
+// New World: armed two-tap so a stray thumb can't abandon a living run.
+let newWorldArmed = 0;
+document.getElementById('btn-newworld').addEventListener('click', () => {
+  if (!gameStarted) return;
+  if (Date.now() - newWorldArmed < 4000) {
+    newWorldArmed = 0;
+    restart();
+  } else {
+    newWorldArmed = Date.now();
+    log('Abandon this ocean? Tap New World again within a breath to chart another.', 'warn');
+  }
+});
 
 // Dive controls
 const sub = activeSub();
