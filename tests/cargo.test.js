@@ -89,6 +89,26 @@ sb.surface(); // accepts
 check(sb.__subKey() === 'charon' && st.cargoBanked === 5 && st.hull === 130 && st.air === 450,
   'second press buys the Charon', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked + ' hull=' + st.hull + ' air=' + st.air);
 
+// 2d. Expeditions: hold station over a ruin, the crew works it out
+st.q = 5; st.r = -9; st.currentDepth = 300; st.hull = 130; st.air = 400;
+const ruinTile = { type: 'ruin', poi: 'ruin', q: 5, r: -9, ceiling: 0, floor: 300 };
+sb.handleTile(ruinTile);
+check(!!st.expedition, 'divers go over the side at the ruin');
+let spins = 0;
+while (st.expedition && spins++ < 12) sb.creatureTick();
+check(!st.expedition && st.poisFound.includes('5,-9'), 'expedition completes; the site is worked out', 'haul aboard: ' + st.cargo + ' crates, ' + st.relics + ' relics');
+st.q = 6; st.r = -9; st.currentDepth = 300;
+const ruin2 = { type: 'ruin', poi: 'ruin', q: 6, r: -9, ceiling: 0, floor: 300 };
+sb.handleTile(ruin2);
+check(!!st.expedition, 'a second team goes down');
+st.q = 0; st.r = -6; // the boat moves off
+sb.creatureTick();
+check(!st.expedition && st.poisFound.includes('6,-9'), 'moving off recalls the team; site spent');
+// relics go ashore under guard
+st.relics = 2; st.cargo = 0; st.q = 0; st.r = 0; st.currentDepth = 0; st.hull = 130; st.air = 450;
+sb.surface();
+check(st.relics === 0 && st.relicsBanked === 2, 'relics bank in the vault at port', 'vault=' + st.relicsBanked);
+
 st.cargo = 3; // three more crates aboard
 st.cargoBanked = 1; // restock the ledger after the yard/outfitter tests
 sb.doSave();

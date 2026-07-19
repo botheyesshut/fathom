@@ -1730,6 +1730,11 @@ const state = {
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
+  // Relics: expedition treasure — worth more than crates, someday.
+  relics: 0,
+  relicsBanked: 0,
+  // Active dive team, or null. { key, type, turns, crates, relics }
+  expedition: null,
 };
 
 //=============================================================================
@@ -2996,6 +3001,75 @@ function pregenTick() {
 }
 
 //=============================================================================
+// EXPEDITIONS — the crew goes over the side.
+//
+// Ruins and signals are worked by dive teams: the boat holds station while
+// divers explore below, one event per player turn. Crates and RELICS come up
+// the line; moving off recalls the team with whatever they carry. The site is
+// spent either way. Creatures keep ticking while you wait — holding station
+// in the dark with divers down is the loneliest air in the game.
+//=============================================================================
+
+function startExpedition(tile, kind) {
+  state.expedition = {
+    key: hexKey(tile.q, tile.r),
+    type: kind,
+    turns: 4 + randInt(3),
+    crates: 0,
+    relics: 0,
+  };
+  log(kind === 'ruin'
+    ? 'The boat holds station over the ruin. Two divers go over the side, lights dropping away into the structure.'
+    : 'The boat holds station on the signal. A diver goes over the side, homing on the pulse.', '', 'DIVE TEAM');
+}
+
+function expeditionTick() {
+  const exp = state.expedition;
+  if (!exp) return;
+  if (hexKey(state.q, state.r) !== exp.key) {
+    finishExpedition('The dive team is recalled, hauled in on the line');
+    return;
+  }
+  exp.turns--;
+  const roll = rand();
+  const relicChance = exp.type === 'signal' ? 0.20 : 0.10;
+  if (roll < relicChance) {
+    exp.relics++;
+    log('The divers surface a RELIC — old work, and not drowned-men make.', 'strange', 'RELIC');
+  } else if (roll < relicChance + 0.35) {
+    exp.crates++;
+    log('The divers send up a crate on the line.', '', 'DIVE TEAM');
+  } else if (roll < relicChance + 0.50) {
+    const dmg = 2 + randInt(3);
+    state.hull = Math.max(0, state.hull - dmg);
+    log(`Something shifts below — the line snags and saws the hull. -${dmg} hull.`, 'warn', 'DIVE TEAM');
+  } else if (roll < relicChance + 0.60) {
+    state.air = Math.min(activeSub().air, state.air + 8);
+    log('The divers tap a trapped pocket and pass gas up the line. +8 air.', '', 'DIVE TEAM');
+  } else {
+    log(pick([
+      'Hand signals on the line: still searching.',
+      'The divers report voices below. There are no voices.',
+      'Silt blooms under the boat. The lights dim, then steady.',
+    ]), '', 'DIVE TEAM');
+  }
+  if (exp.turns <= 0) finishExpedition('The divers come up on the last of their air');
+}
+
+function finishExpedition(prefix) {
+  const exp = state.expedition;
+  if (!exp) return;
+  state.expedition = null;
+  state.cargo += exp.crates;
+  state.relics += exp.relics;
+  if (!state.poisFound.includes(exp.key)) state.poisFound.push(exp.key);
+  const hauls = [];
+  if (exp.crates) hauls.push(`${exp.crates} crate${exp.crates > 1 ? 's' : ''}`);
+  if (exp.relics) hauls.push(`${exp.relics} relic${exp.relics > 1 ? 's' : ''}`);
+  log(`${prefix}${hauls.length ? ' with ' + hauls.join(' and ') : ', empty-handed'}. The site is worked out.`, '', 'DIVE TEAM');
+}
+
+//=============================================================================
 // CREATURES — the deep is inhabited.
 //
 // Creatures are OVERLAY, not substrate: rolled once per chunk (spawnedChunks,
@@ -3158,6 +3232,7 @@ function tickLurker(c, dPlayer) {
 // contact lines — the boat hears what it cannot see.
 function creatureTick() {
   if (!state.alive) return;
+  expeditionTick(); // dive teams work on the same clock the deep hunts on
   const now = performance.now();
   for (const c of state.creatures) {
     const d = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
@@ -3599,14 +3674,24 @@ function handleTile(tile) {
       break;
     case 'ruin':
       if (firstVisit) {
-        log(pickFlavor(FLAVOR.ruin), '', 'FOUND');
-        state.poisFound.push(hexKey(tile.q, tile.r));
+        // Ruins rest on the floor like wrecks — put the boat on the bottom
+        // before the divers go over. (Site is spent by the expedition.)
+        if (Math.abs(state.currentDepth - tile.floor) > DEPTH_GRID) {
+          if (rand() < 0.5) log('The ruin lies broken on the floor below. Descend to put divers on it.', 'warn', 'FOUND');
+          break;
+        }
+        if (!state.expedition) {
+          log(pickFlavor(FLAVOR.ruin), '', 'FOUND');
+          startExpedition(tile, 'ruin');
+        }
       }
       break;
     case 'signal':
       if (firstVisit) {
-        log(pickFlavor(FLAVOR.signal), 'strange', 'SIGNAL');
-        state.poisFound.push(hexKey(tile.q, tile.r));
+        if (!state.expedition) {
+          log(pickFlavor(FLAVOR.signal), 'strange', 'SIGNAL');
+          startExpedition(tile, 'signal');
+        }
       }
       break;
     case 'growth':
@@ -3843,7 +3928,7 @@ function endGame(title, summary) {
   document.getElementById('go-title').textContent = title;
   document.getElementById('go-summary').textContent = summary;
   document.getElementById('go-stats').innerHTML =
-    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}<br>Salvage banked: ${state.cargoBanked}${state.cargo ? ` (+${state.cargo} lost with the boat)` : ''}`;
+    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}<br>Salvage banked: ${state.cargoBanked}${state.cargo ? ` (+${state.cargo} lost with the boat)` : ''}<br>Relics vaulted: ${state.relicsBanked}${state.relics ? ` (+${state.relics} lost with the boat)` : ''}`;
   document.getElementById('gameover').classList.add('show');
   clearSave(); // the deep keeps what it takes — a lost boat is a lost world
 }
@@ -3858,6 +3943,8 @@ function restart() {
   state.currentDepth = 0; state.maxDepth = 0;
   state.moves = 0; state.poisFound = [];
   state.cargo = 0; state.cargoBanked = 0;
+  state.relics = 0; state.relicsBanked = 0;
+  state.expedition = null;
   state.alive = true;
   state.cameraX = 0; state.cameraY = 0;
   state.panX = 0; state.panY = 0;
@@ -3929,6 +4016,11 @@ function surface() {
       state.cargoBanked += n;
       state.cargo = 0;
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
+    }
+    if (atPort && state.relics > 0) {
+      state.relicsBanked += state.relics;
+      log(`${state.relics} relic${state.relics > 1 ? 's' : ''} go ashore under guard. The collectors will pay well, someday. ${state.relicsBanked} in the vault.`, 'strange', 'PORT');
+      state.relics = 0;
     }
     // The yard: banked crates buy hull patching (prices in DOCK_PRICES).
     // Spends only what the damage needs, never more.
@@ -4027,6 +4119,8 @@ function doSave() {
       visited: [...visited], revealed: rev,
       creatures: state.creatures, spawnedChunks: [...spawnedChunks],
       cargo: state.cargo, cargoBanked: state.cargoBanked,
+      relics: state.relics, relicsBanked: state.relicsBanked,
+      expedition: state.expedition,
       subKey: activeSubKey,
     }));
   } catch (e) { /* quota or private mode — persistence is best-effort */ }
@@ -4072,6 +4166,9 @@ function resumeGame(save) {
   state.creatures = save.creatures || [];
   state.cargo = save.cargo || 0;
   state.cargoBanked = save.cargoBanked || 0;
+  state.relics = save.relics || 0;
+  state.relicsBanked = save.relicsBanked || 0;
+  state.expedition = save.expedition || null;
   worldSeed = save.seed;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
