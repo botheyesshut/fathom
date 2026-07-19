@@ -860,6 +860,7 @@ function chance(p) { return rand() < p; }
 const world = new Map();
 const cells = new Map(); // cellKey(q,r,depth) → { type, kind }. Absent = stone. The voxel source of truth.
 const carvedFeatures = new Set(); // 'c:'/'e:'/'s:' + feature id — each cave feature carves exactly once
+const spawnedChunks = new Set(); // chunks that already rolled their creatures — overlay state, saved
 const revealed = new Map(); // hexKey → Set<depth> — tracks which depths each tile was revealed at
 const visited = new Set();
 const generatedChunks = new Set();
@@ -1591,6 +1592,33 @@ function generateChunk(cq, cr) {
     setTile(h.q, h.r, poiType, true);
     shelfPoi--;
   }
+
+  // Step 5: Creatures — rolled once per chunk, ever. The world regenerates
+  // from seed; its inhabitants are overlay state (spawnedChunks is saved).
+  // Home waters around the dock stay empty — dread is earned by distance.
+  const chunkK = chunkKey(cq, cr);
+  if (!spawnedChunks.has(chunkK)) {
+    spawnedChunks.add(chunkK);
+    const homeWaters = cq === 0 && cr === 0;
+    if (!homeWaters && openCaveHexes.length >= 6) {
+      const trySpawn = (type, chance) => {
+        if (crand() >= chance || openCaveHexes.length === 0) return;
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const t = world.get(hexKey(h.q, h.r));
+        if (!t || t.wall) return;
+        // Only an actual open cave cell will do — creatures obey the voxels.
+        const opts = [];
+        for (let d = t.ceiling; d <= t.floor; d += DEPTH_GRID) {
+          const c = cells.get(cellKey(h.q, h.r, d));
+          if (c && (c.kind === 'passage' || c.kind === 'chamber')) opts.push(d);
+        }
+        if (opts.length === 0) return;
+        spawnCreature(type, h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+      };
+      trySpawn('drifter', 0.30);
+      trySpawn('lurker', 0.35);
+    }
+  }
 }
 
 
@@ -1624,6 +1652,8 @@ const state = {
   // Ping memory: hexKey -> turns remaining (0 means forgotten). Decremented
   // each turn. While > 0 the hex's wall edges remain visible at reduced intensity.
   pingMemory: new Map(),
+  // Living things in the water. Overlay state — saved with the run.
+  creatures: [],
 };
 
 //=============================================================================
@@ -2150,6 +2180,29 @@ function render() {
     }
   }
 
+  // Creatures — drawn between fills and edge lines. Only what shares the
+  // sub's depth slice, close enough to see; a sleeping lurker is never drawn.
+  // Everything else is passive sonar's business.
+  for (const c of state.creatures) {
+    if (c.depth !== state.currentDepth) continue;
+    if (c.type === 'lurker' && !c.awake) continue;
+    const dC = hexDistance({q: c.q, r: c.r}, playerHex);
+    if (dC > SIGHT + 1) continue;
+    const cpx = hexToPixel(c.q, c.r);
+    if (Math.abs(cpx.x - camX) > halfW || Math.abs(cpx.y - camY) > halfH) continue;
+    const ct = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    ct.setAttribute('x', cpx.x);
+    ct.setAttribute('y', cpx.y);
+    ct.setAttribute('text-anchor', 'middle');
+    ct.setAttribute('dominant-baseline', 'central');
+    ct.setAttribute('font-family', 'JetBrains Mono, monospace');
+    ct.setAttribute('font-size', c.type === 'drifter' ? '14' : '12');
+    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : '#d05048');
+    ct.setAttribute('filter', 'url(#softglow)');
+    ct.textContent = c.type === 'drifter' ? '⊙' : '⊗';
+    g.appendChild(ct);
+  }
+
   // Flush edge lines last so they always sit on top of all stone/water fills.
   for (const el of pendingEdges) g.appendChild(el);
 
@@ -2495,6 +2548,8 @@ function ping() {
     return;
   }
   state.air = Math.max(0, state.air - lvl.activeCost);
+  // A ping is a shout in a dark house. Everything with ears now knows where you are.
+  noiseMade(state.q, state.r, lvl.loudness);
 
   const radius = lvl.activeRange;
   let interesting = null;
@@ -2641,6 +2696,7 @@ function ping() {
     log('The ping returns only stone.', '', 'ECHO');
   }
 
+  creatureTick();
   updateHUD();
   render();
 }
@@ -2691,6 +2747,7 @@ function wait() {
   // time passing rather than silence.
   const tile = getTile(state.q, state.r);
   if (tile && rand() < 0.6) handleTile(tile);
+  creatureTick();
   checkDeath();
   updateHUD();
   render();
@@ -2709,6 +2766,8 @@ function move(q, r) {
     state.lastMoveTime = performance.now();
     log(`The hull strikes rock. No passage there. -${dmg} hull.`, 'danger', 'IMPACT');
     flagMoveFail(q, r, '#a04030');
+    noiseMade(q, r, 2); // metal on rock carries — hunters hear it
+    creatureTick();
     checkDeath();
     updateHUD();
     return;
@@ -2731,7 +2790,23 @@ function move(q, r) {
       log(`The hull strikes rock. No passage at this depth. -${dmg} hull.`, 'danger', 'IMPACT');
     }
     flagMoveFail(q, r, '#a04030');
+    noiseMade(q, r, 2); // metal on rock carries — hunters hear it
+    creatureTick();
     checkDeath();
+    updateHUD();
+    return;
+  }
+
+  // A living body in the water: you don't share a hex with one.
+  const blocker = state.creatures.find(c =>
+    c.q === q && c.r === r && Math.abs(c.depth - state.currentDepth) < DEPTH_GRID);
+  if (blocker) {
+    state.lastMoveTime = performance.now();
+    log(blocker.type === 'drifter'
+      ? 'Something vast fills the passage, drifting. The boat backs off.'
+      : 'Something is in that water. The boat backs off.', 'warn', 'CONTACT');
+    flagMoveFail(q, r, '#7050a0');
+    creatureTick();
     updateHUD();
     return;
   }
@@ -2777,7 +2852,8 @@ function move(q, r) {
     logZContext(tile, curVol);
   }
 
-  // Death checks
+  // The water answers: creatures take their turn, then death checks.
+  creatureTick();
   checkDeath();
 
   updateHUD();
@@ -2808,6 +2884,119 @@ function pregenTick() {
   if (!next) return;
   ensureChunk(next[0], next[1]);
   if (pregenQueue.length) pregenTimer = setTimeout(pregenTick, 80);
+}
+
+//=============================================================================
+// CREATURES — the deep is inhabited.
+//
+// Creatures are OVERLAY, not substrate: rolled once per chunk (spawnedChunks,
+// saved), living in state.creatures, acting one step after each player turn.
+// They move only through open cells — the same voxel truth the sub obeys.
+//   drifter — vast, slow, harmless; wanders the caves and fills the passage
+//             it occupies. You go around, or you wait.
+//   lurker  — a sound-hunter. Sleeps until a loud noise (active ping, hull
+//             impact) wakes it; then it comes, aligning depth first, and
+//             strikes whatever it corners. Silence is armor.
+//=============================================================================
+
+const CREATURE_SIM_RANGE = 24; // hexes — beyond this, creatures rest in the dark
+const CONTACT_LOG_MS = 7000;   // min ms between passive-contact log lines
+
+function spawnCreature(type, q, r, depth) {
+  state.creatures.push({
+    id: type + ':' + q + ',' + r + ',' + depth,
+    type, q, r, depth,
+    awake: false, tq: 0, tr: 0, calm: 0, phase: 0,
+  });
+}
+
+// A creature may enter any open cell except the sub's own — hunters stop
+// adjacent; the strike happens from there.
+function creatureCanEnter(c, q, r, depth) {
+  if (q === state.q && r === state.r && depth === state.currentDepth) return false;
+  return cells.has(cellKey(q, r, depth));
+}
+
+// Sound in the water. Loudness comes from PING_LEVELS (1-5) or a hull impact
+// (2). Every sleeping lurker in earshot wakes and turns toward the source.
+function noiseMade(q, r, loudness) {
+  if (!loudness) return;
+  const reach = 2 + loudness * 3;
+  for (const c of state.creatures) {
+    if (c.type !== 'lurker') continue;
+    if (Math.abs(c.depth - state.currentDepth) > 2 * DEPTH_GRID) continue;
+    const d = hexDistance({q: c.q, r: c.r}, {q, r});
+    if (d > reach) continue;
+    const first = !c.awake;
+    c.awake = true; c.tq = q; c.tr = r; c.calm = 9;
+    if (first && d <= passiveRange() + 6) {
+      log('Passive sonar: something answers the noise. It is moving.', 'danger', 'CONTACT');
+    }
+  }
+}
+
+function tickDrifter(c) {
+  c.phase ^= 1;
+  if (c.phase) return; // vast things move every other turn
+  const nbrs = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth));
+  if (nbrs.length && rand() < 0.75) {
+    const n = nbrs[Math.floor(rand() * nbrs.length)];
+    c.q = n.q; c.r = n.r;
+  }
+}
+
+function tickLurker(c, dPlayer) {
+  if (!c.awake) return;
+  if (c.calm <= 0) { c.awake = false; return; }
+  c.calm--;
+  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
+  if (sameSlice && dPlayer === 1) {
+    const dmg = 5 + Math.floor(rand() * 6);
+    state.hull = Math.max(0, state.hull - dmg);
+    state.lastFailTime = performance.now();
+    log(`Something slams the hull out of the dark. -${dmg} hull.`, 'danger', 'STRIKE');
+    c.calm = 9; // blood in the water — it stays interested
+    return;
+  }
+  // Close on the prey if near, else on the last noise it heard.
+  const target = dPlayer <= 12 ? { q: state.q, r: state.r } : { q: c.tq, r: c.tr };
+  // Depth first: a hunter aligns its depth to the prey's, one band per turn.
+  if (dPlayer <= 12 && c.depth !== state.currentDepth) {
+    const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
+    if (c.depth + dd >= 0 && cells.has(cellKey(c.q, c.r, c.depth + dd))) { c.depth += dd; return; }
+  }
+  let best = null;
+  let bestD = hexDistance({q: c.q, r: c.r}, target);
+  for (const n of hexNeighbors(c.q, c.r)) {
+    if (!creatureCanEnter(c, n.q, n.r, c.depth)) continue;
+    const d = hexDistance({q: n.q, r: n.r}, target);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  if (best) { c.q = best.q; c.r = best.r; }
+}
+
+// One creature turn after each player action. Also emits passive-sonar
+// contact lines — the boat hears what it cannot see.
+function creatureTick() {
+  if (!state.alive) return;
+  const now = performance.now();
+  for (const c of state.creatures) {
+    const d = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
+    if (d > CREATURE_SIM_RANGE) continue;
+    if (c.type === 'drifter') tickDrifter(c); else tickLurker(c, d);
+    const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
+    const depthOff = Math.abs(c.depth - state.currentDepth);
+    if (d2 <= passiveRange() + 2 && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
+        (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
+      state._lastContactLog = now;
+      const dir = bearing(state.q, state.r, c.q, c.r);
+      const what = c.type === 'drifter' ? 'something vast, moving slow'
+                 : c.awake ? 'something fast, closing'
+                 : 'a faint heartbeat, holding still';
+      const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
+      log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, c.awake ? 'danger' : 'strange', 'CONTACT');
+    }
+  }
 }
 
 // ---- Cell-model queries -------------------------------------------------
@@ -3003,6 +3192,8 @@ function changeDepth(deltaMeters) {
       log(`${what} stops the dive. -${dmg} hull.`, 'danger', 'IMPACT');
       flagMoveFail(state.q, state.r, '#a04030');
       state.lastMoveTime = performance.now();
+      noiseMade(state.q, state.r, 2); // impacts ring through the water
+      creatureTick();
       checkDeath();
     } else {
       // Ceiling: surface is soft, chamber ceiling and shallow-water cap are rock
@@ -3054,6 +3245,7 @@ function changeDepth(deltaMeters) {
   // throttle to avoid spam on small back-and-forth movements.
   logZContext(tile, cur);
 
+  creatureTick();
   checkDeath();
   updateHUD();
   render();
@@ -3481,6 +3673,8 @@ function restart() {
   nodeCache.clear(); // lattice + edge memos and the carve registry are seed-dependent
   edgeCache.clear();
   carvedFeatures.clear();
+  spawnedChunks.clear();
+  state.creatures = [];
   // Force-generate origin chunk and neighbors so the player can leave
   tileAt(0, 0);
   // Set initial depth to match origin tile's range (origin is shallow)
@@ -3576,12 +3770,13 @@ function doSave() {
     const rev = {};
     for (const [k, s] of revealed) rev[k] = [...s];
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 1, seed: worldSeed,
+      v: 2, seed: worldSeed,
       q: state.q, r: state.r, depth: state.currentDepth,
       air: state.air, hull: state.hull, maxDepth: state.maxDepth,
       moves: state.moves, poisFound: state.poisFound,
       lastZone: state.lastZone, maxZoneReached: state.maxZoneReached,
       visited: [...visited], revealed: rev,
+      creatures: state.creatures, spawnedChunks: [...spawnedChunks],
     }));
   } catch (e) { /* quota or private mode — persistence is best-effort */ }
 }
@@ -3591,7 +3786,7 @@ function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (!p || p.v !== 1 || typeof p.seed !== 'number') return null;
+    if (!p || (p.v !== 1 && p.v !== 2) || typeof p.seed !== 'number') return null;
     return p;
   } catch (e) { return null; }
 }
@@ -3617,6 +3812,11 @@ function resumeGame(save) {
   state.pingMemory = new Map();
   world.clear(); cells.clear(); revealed.clear(); visited.clear();
   generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear();
+  // Creatures + spawn history restore BEFORE generation, so already-rolled
+  // chunks don't re-roll their inhabitants into duplicates.
+  spawnedChunks.clear();
+  for (const ck of save.spawnedChunks || []) spawnedChunks.add(ck);
+  state.creatures = save.creatures || [];
   worldSeed = save.seed;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
