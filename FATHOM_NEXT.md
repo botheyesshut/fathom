@@ -21,6 +21,14 @@ Fable's design rulings + build queue. Successor models: execute, don't re-litiga
 - **Expeditions**: ruins (floor-gated) + signals → dive team 4-6 turns, events/turn (35% crate, 10-20% relic — signals richer, 15% hull scrape, 10% +8 air, else flavor); move off = recall w/ partial loot; site spent either way. Relics = new treasure (state.relics → relicsBanked at port vault). All saved.
 NEW TUNING KNOBS for the playtest pass: sub prices/stats, eel rate + flee timer, expedition event table + turn count, relic chances.
 
+## LIVING OCEAN ARC (after the expansion arc — battery-gated)
+- **Bearing off the sun**: surface() away from port logs direction + km to dock.
+- **Band biomes**: creature type rolled from spawn DEPTH (<1200m eel/drifter-heavy; ≥2400m lurker 55%). Spawn refactor: 1-2 rolls × 55% per cave chunk.
+- **Rival salvagers** ('rival' in state.creatures, 6%/chunk, glyph ⊘ #7090b8): seeks nearest unworked POI ≤15 hexes (world-scan every 6th turn), 3-turn work → site pushed to poisFound ("they got there first" within earshot), stands off if player ≤2, blocks like a big body, reads as "engine noise" on passive. NO combat, NO cargo of their own yet, and they don't emit into noiseMade (player-centric depth gate) — all three are deliberate v1 cuts.
+- NEXT CANDIDATE (not built): **audio** — WebAudio synth (ping sweep, pressure groan >safeDepth, strike thud, theft chirp); needs user-gesture unlock (game has taps); consider mute toggle. After that: rival boats that CARRY + bank cargo, torpedo/countermeasure design (Sean input needed), currents in tunnels.
+
+## PUSH STATUS (end of second Fable marathon): check `git log origin/main..HEAD` — network flaked repeatedly; retry loops were running. Everything is committed locally; Sean holds the definitive build via SendUserFile.
+
 ## VERIFICATION DOCTRINE (non-negotiable, it caught every bug this session)
 **The battery lives in the repo: `node tests/run-all.js` — run it before shipping ANY substrate/movement/creature/economy/persistence change; ship only on ALL SUITES PASSED.** Pattern notes for extending it:
 - Extract <script>, run in vm context with Proxy DOM stubs. **Stub firstChild/lastChild/nextSibling/parentNode as null** or render()'s while-loop hangs forever.
