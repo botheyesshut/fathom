@@ -897,6 +897,11 @@ const CAVE_BANDS = [
 // iterating the cells overlapping it, with no global list. Mirrors how the
 // ocean (shelfSeafloorDepth) is already a pure function of position.
 const NODE_CELL = 12; // hexes per node-cell side
+// Substrate feature-content rates — deterministic hash rolls (see the tail of
+// carveChamber and the shelf-feature pass in generateChunk). Feel knobs.
+const CAVE_POI_CHANCE = 0.40;      // chance a chamber holds a point of interest
+const SHELF_KELP_ROLL = 0.0026;    // per shelf hex: roll under this → kelp...
+const SHELF_SALVAGE_ROLL = 0.0013; // ...but under this → a wreck instead
 
 // Longest a tunnel may run, in hexes. THIS is what makes the world locally
 // computable: a chunk only has to consider chambers within this reach to know
@@ -1183,6 +1188,33 @@ function carveChamber(node) {
       const half = localSpan / 2;
       addVolume(node.q + dq, node.r + dr, 'chamber', 'chamber',
                 node.depth - half, node.depth + half);
+    }
+  }
+
+  // The chamber's contents are part of the chamber (substrate purity):
+  // WHETHER and WHERE are hash-rolled from the chamber's id; the TYPE is
+  // hash-rolled from the hex itself — so if two overlapping chambers ever
+  // elect the same hex, they agree on what sits there, and carve order
+  // cannot matter. Sink hexes (incl. the pier entry) are reserved.
+  const prng = mulberry32(hashStr('poi:' + worldSeed + ':' + node.id));
+  if (prng() < CAVE_POI_CHANCE) {
+    const ang = prng() * Math.PI * 2;
+    // Elect within the CORE (≤ 0.5×radius): the noise-shaped rim can pinch to
+    // ~0.56×radius, so the core is always inside the blob this chamber just
+    // carved — the elected cell provably exists regardless of carve order.
+    const rad = prng() * Math.max(0.5, baseRadius * 0.5);
+    const pr = Math.round(Math.sin(ang) * rad / 1.5);
+    const pq = Math.round(Math.cos(ang) * rad / SQRT3 - pr / 2);
+    const hq = node.q + pq, hr = node.r + pr;
+    const sink = caveSinkholeForNode(node);
+    const reserved = (sink && sink.q === hq && sink.r === hr) || (hq === 3 && hr === -1);
+    if (!reserved && cells.has(cellKey(hq, hr, node.depth))) {
+      const t = world.get(hexKey(hq, hr));
+      if (t && !t.poi) {
+        const types = ['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage'];
+        const type = types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr) % types.length];
+        setTile(hq, hr, type, true);
+      }
     }
   }
 }
@@ -1564,38 +1596,23 @@ function generateChunk(cq, cr) {
     if (pierTarget) carveEdge({ a: pierEntry, b: pierTarget.n, kind: 'sinkhole', width: 1 });
   }
 
-  // Step 4: POIs scattered into open cave hexes (rare in shelf water, more
-  // common in tunnel passages and chambers).
-  const openCaveHexes = [];
-  const openShelfHexes = [];
+  // Step 4: Shelf features — pure hash-of-hex, so every client computes the
+  // same kelp bed and the same wreck in the same place. Gated on "open to the
+  // sky" via the cell at depth 0 (order-independent), not on display type.
+  // Chamber POIs are rolled inside carveChamber; tunnels stay empty —
+  // chambers are the destinations.
+  const openCaveHexes = []; // collected for creature spawning (Step 5)
   for (let q = q0; q < q1; q++) {
     for (let r = r0; r < r1; r++) {
       const t = world.get(hexKey(q, r));
-      if (!t || t.wall || t.poi) continue;
-      if (t.type === 'water' || t.type === 'surface') {
-        openShelfHexes.push({q, r});
-      } else if (t.type === 'passage' || t.type === 'chamber') {
-        openCaveHexes.push({q, r});
+      if (!t || t.wall || t.land || t.poi) continue;
+      if (t.type === 'passage' || t.type === 'chamber') openCaveHexes.push({q, r});
+      if (!cells.has(cellKey(q, r, 0))) continue;
+      const roll = hashStr(worldSeed + ':shelf:' + q + ':' + r) / 4294967296;
+      if (roll < SHELF_KELP_ROLL) {
+        setTile(q, r, roll < SHELF_SALVAGE_ROLL ? 'salvage' : 'kelp', true);
       }
     }
-  }
-  // Cave POIs
-  let cavePoi = 1 + Math.floor(crand() * 3);
-  while (cavePoi > 0 && openCaveHexes.length > 0) {
-    const idx = Math.floor(crand() * openCaveHexes.length);
-    const h = openCaveHexes.splice(idx, 1)[0];
-    const poiType = cpick(['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage']);
-    setTile(h.q, h.r, poiType, true);
-    cavePoi--;
-  }
-  // Shelf POIs (sparser)
-  let shelfPoi = crand() < 0.5 ? 1 : 0;
-  while (shelfPoi > 0 && openShelfHexes.length > 0) {
-    const idx = Math.floor(crand() * openShelfHexes.length);
-    const h = openShelfHexes.splice(idx, 1)[0];
-    const poiType = cpick(['salvage', 'kelp']);
-    setTile(h.q, h.r, poiType, true);
-    shelfPoi--;
   }
 
   // Step 5: Creatures — rolled once per chunk, ever. The world regenerates

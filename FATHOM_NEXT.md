@@ -6,11 +6,11 @@ Fable's design rulings + build queue. Successor models: execute, don't re-litiga
 2. **Collection depth**: salvage/air pickup requires currentDepth within 60m of the hex floor (salvage) — replaces the accidental "any depth ≥200m" rule. Air pockets: within 60m of the pocket's cell depth. You dive TO the prize.
 3. **Sound envelopes**: name them — `PASSIVE_CONTACT_R = passiveRange()+2`, `WAKE_NOTICE_R = passiveRange()+6` — one comment block explaining coarseness-scales-with-range. Delete identifyPoi's dead depthHint branch.
 
-## BUILD QUEUE (order matters; each gated by the one before)
-1. **Tuning pass from Sean's playtest verdicts** — knobs: CAVE_BANDS.density, Z_TUNNEL_CHANCE 0.15, SINKHOLE_CHANCE 0.35, creature rates 0.30/0.35, lurker dmg 5-10, glyphs ⊙/⊗ (fallback ASCII 'O'/'X' if Android fails).
-2. **Player → entities[0]** — unify state.q/r/depth into an entities list (multiplayer seam + enemy-sub prerequisite). Do it as one mechanical rename session with the headless harness re-run before/after (movement, dive, save round-trip must be byte-identical).
-3. **Economy deepening** — banked salvage buys air top-ups/hull repair at the dock (first spend), then outfit tiers. Keep prices in one CONFIG object.
-4. **Deterministic POIs** — hash-per-feature placement (substrate purity for multiplayer; kills the chunk-RNG order-dependence documented in memory).
+## BUILD QUEUE (updated end of Fable session — 2,3,4 DONE)
+1. **Tuning pass from Sean's playtest verdicts** — knobs: CAVE_BANDS.density, Z_TUNNEL_CHANCE 0.15, SINKHOLE_CHANCE 0.35, creature rates 0.30/0.35, lurker dmg 5-10, glyphs ⊙/⊗ (fallback ASCII 'O'/'X' if Android fails), CAVE_POI_CHANCE 0.40 + SHELF_KELP/SALVAGE_ROLL (new POI density ~4.5/chunk, was ~2.5 — may want trimming), DOCK_PRICES.hullPerCrate 25.
+2. ~~Player → entities[0]~~ **DONE** (accessor seam; state.q/r/currentDepth alias entities[0]; zero call-site + zero save churn; full battery proof).
+3. ~~Economy: first spend~~ **DONE** (the yard — banked crates buy hull at DOCK_PRICES; exact-change spending).
+4. ~~Deterministic POIs~~ **DONE** (chamber POIs hash-rolled in carveChamber core with hex-hashed TYPE; shelf features hash-of-hex gated on cells at depth 0; flip harness now asserts FULL substrate order-independence incl. POIs — 0 mismatches. Tunnels intentionally empty: chambers are destinations).
 5. **Chunk eviction/compaction** — only when long-session memory becomes real.
 6. **Species #3** — a thin thing that slips through 1-hex squeezes the sub can't enter (first size-class gameplay).
 
