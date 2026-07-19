@@ -2093,7 +2093,12 @@ function render() {
       // reloads: the substrate regenerates the tile, but the overlay
       // (poisFound) knows it was taken — draw plain water, not the prize.
       const consumedPoi = (tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(key);
-      if (tile.char && !consumedPoi && hexAcceptsDepth(tile, state.currentDepth)) {
+      // Ruling: the bottom keeps its secrets. Wreckage resting on the floor is
+      // invisible to surface eyes — the glyph is earned by sonar or by having
+      // charted near its depth. (Kelp climbs the column; it stays visible.)
+      const floorSecret = tile.poi === 'salvage' && !consumedPoi
+        && revealFade(tile.q, tile.r, tile.floor) <= 0;
+      if (tile.char && !consumedPoi && !floorSecret && hexAcceptsDepth(tile, state.currentDepth)) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', px.x);
         txt.setAttribute('y', px.y);
@@ -2204,7 +2209,7 @@ function render() {
     // Same epistemic rule as terrain: lights touch it (adjacent), or it's
     // inside the passive-sonar envelope AND standing in water the player has
     // actually revealed. No glyphs floating in unexplored void, none through rock.
-    if (dC > 1 && (dC > passiveRange() + 2 || revealFade(c.q, c.r, state.currentDepth) <= 0)) continue;
+    if (dC > 1 && (dC > passiveContactR() || revealFade(c.q, c.r, state.currentDepth) <= 0)) continue;
     const cpx = hexToPixel(c.q, c.r);
     if (Math.abs(cpx.x - camX) > halfW || Math.abs(cpx.y - camY) > halfH) continue;
     const ct = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -2922,6 +2927,11 @@ function pregenTick() {
 
 const CREATURE_SIM_RANGE = 24; // hexes — beyond this, creatures rest in the dark
 const CONTACT_LOG_MS = 7000;   // min ms between passive-contact log lines
+// Sound envelopes: coarser information carries farther. The passive ear
+// LOCALIZES (bearing + range) to passiveContactR; a woken hunter's first stir
+// is merely NOTICED (one unlocalized bit) out to wakeNoticeR.
+function passiveContactR() { return passiveRange() + 2; }
+function wakeNoticeR() { return passiveRange() + 6; }
 
 function spawnCreature(type, q, r, depth) {
   state.creatures.push({
@@ -2950,7 +2960,7 @@ function noiseMade(q, r, loudness) {
     if (d > reach) continue;
     const first = !c.awake;
     c.awake = true; c.tq = q; c.tr = r; c.calm = 9;
-    if (first && d <= passiveRange() + 6) {
+    if (first && d <= wakeNoticeR()) {
       log('Passive sonar: something answers the noise. It is moving.', 'danger', 'CONTACT');
     }
   }
@@ -3007,7 +3017,7 @@ function creatureTick() {
     if (c.type === 'drifter') tickDrifter(c); else tickLurker(c, d);
     const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     const depthOff = Math.abs(c.depth - state.currentDepth);
-    if (d2 <= passiveRange() + 2 && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
+    if (d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
         (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
       state._lastContactLog = now;
       const dir = bearing(state.q, state.r, c.q, c.r);
@@ -3311,13 +3321,9 @@ function identifyPoi(tile) {
   const dist = hexDistance({q: tile.q, r: tile.r}, {q: state.q, r: state.r});
   const meters = dist * 60;
   const dir = bearing(state.q, state.r, tile.q, tile.r);
-  // Depth offset hint, if the POI's volumes don't include the sub's depth.
-  let depthHint = '';
-  const near = nearestVolume(tile, state.currentDepth);
-  if (near && near.deltaMeters > 0) {
-    const dir2 = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
-    depthHint = `, ${Math.round(near.deltaMeters)} m ${dir2}`;
-  }
+  // Tappable glyphs always share the sub's depth slice (the render gate
+  // requires hexAcceptsDepth), so there is never a vertical offset to hint.
+  const depthHint = '';
   const desc = POI_DESCRIPTIONS[tile.poi] || tile.name || 'an unknown reading';
   const tag = (tile.poi === 'signal' || tile.poi === 'growth') ? 'STRANGE'
             : (tile.poi === 'air')    ? 'AIR'
@@ -3399,6 +3405,11 @@ function handleTile(tile) {
       break;
     case 'air':
       if (firstVisit) {
+        // Gas collects at the ceiling — you rise to it to vent and refill.
+        if (Math.abs(state.currentDepth - tile.ceiling) > DEPTH_GRID) {
+          if (rand() < 0.5) log('Sonar reads trapped gas pooled at the ceiling above. Rise to vent.', 'warn', 'AIR');
+          break;
+        }
         const subA = activeSub();
         const fillAmount = Math.round(subA.air * 0.2); // 20% of max air
         const gained = Math.min(fillAmount, subA.air - state.air);
@@ -3410,6 +3421,11 @@ function handleTile(tile) {
       break;
     case 'salvage':
       if (firstVisit) {
+        // Wreckage rests on the bottom — you dive to it, not over it.
+        if (Math.abs(state.currentDepth - tile.floor) > DEPTH_GRID) {
+          if (rand() < 0.5) log('The wreck lies on the floor below. Descend to work it.', 'warn', 'SALVAGE');
+          break;
+        }
         const subS = activeSub();
         const repair = 20 + randInt(15);
         state.hull = Math.min(subS.hull, state.hull + repair);
