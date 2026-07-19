@@ -1627,8 +1627,19 @@ function generateChunk(cq, cr) {
 //=============================================================================
 
 const state = {
-  q: 0, r: 0,           // player horizontal position (hex)
-  currentDepth: 30,     // current depth in meters (sub vertical position)
+  // ---- Entities: every actor in the water, the player's boat first. ------
+  // entities[0] IS the player — a sub entity with position and depth. The
+  // legacy state.q / state.r / state.currentDepth names are accessor aliases
+  // onto it, so every existing call site keeps working while new systems
+  // (enemy subs, remote captains someday) address entities uniformly.
+  // Creatures stay in state.creatures until enemy subs force the merge.
+  entities: [{ id: 'erebus', kind: 'sub', q: 0, r: 0, depth: 30 }],
+  get q() { return this.entities[0].q; },
+  set q(v) { this.entities[0].q = v; },
+  get r() { return this.entities[0].r; },
+  set r(v) { this.entities[0].r = v; },
+  get currentDepth() { return this.entities[0].depth; },
+  set currentDepth(v) { this.entities[0].depth = v; },
   air: 350,
   hull: 100,
   maxDepth: 0,          // session record (in meters)
