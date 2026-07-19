@@ -15,7 +15,7 @@ Fable's design rulings + build queue. Successor models: execute, don't re-litiga
 6. **Species #3** — a thin thing that slips through 1-hex squeezes the sub can't enter (first size-class gameplay).
 
 ## VERIFICATION DOCTRINE (non-negotiable, it caught every bug this session)
-Headless VM harness pattern (see git history: fathom_*_verify.js in scratchpad):
+**The battery lives in the repo: `node tests/run-all.js` — run it before shipping ANY substrate/movement/creature/economy/persistence change; ship only on ALL SUITES PASSED.** Pattern notes for extending it:
 - Extract <script>, run in vm context with Proxy DOM stubs. **Stub firstChild/lastChild/nextSibling/parentNode as null** or render()'s while-loop hangs forever.
 - Inject `__reset(seed)` clearing: world, cells, generatedChunks, revealed, visited, nodeCache, edgeCache, carvedFeatures, spawnedChunks.
 - Substrate changes: prove order-independence (same chunks, 2 orders, byte-equal cells) + determinism (fresh loads). Compare only mutually-interior chunks (3x3 complete in both) — frontier cells legitimately differ.
