@@ -818,6 +818,11 @@ const SUBS = {
 let activeSubKey = 'erebus';
 function activeSub() { return SUBS[activeSubKey]; }
 
+// Dock economy prices — every future service the port sells lives here.
+const DOCK_PRICES = {
+  hullPerCrate: 25, // the yard: one banked crate buys this much hull patching
+};
+
 // Tile types
 const TILES = {
   stone:    { name: 'solid stone',         char: '',   cost: 99, color: '#000000', wall: true },
@@ -3770,11 +3775,22 @@ function surface() {
   const onSurface = state.currentDepth <= 0.5 && volumeContaining(tile, 0);
   if (onSurface) {
     // Make port: within hailing distance of the dock, cargo goes ashore.
-    if (state.cargo > 0 && hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) <= 4) {
+    const atPort = hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) <= 4;
+    if (atPort && state.cargo > 0) {
       const n = state.cargo;
       state.cargoBanked += n;
       state.cargo = 0;
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
+    }
+    // The yard: banked crates buy hull patching (prices in DOCK_PRICES).
+    // Spends only what the damage needs, never more.
+    if (atPort && state.hull < sub.hull && state.cargoBanked > 0) {
+      const need = Math.ceil((sub.hull - state.hull) / DOCK_PRICES.hullPerCrate);
+      const spend = Math.min(need, state.cargoBanked);
+      const gained = Math.min(sub.hull - state.hull, spend * DOCK_PRICES.hullPerCrate);
+      state.cargoBanked -= spend;
+      state.hull += gained;
+      log(`The yard works the hull: ${spend} crate${spend > 1 ? 's' : ''} buys +${gained} hull. ${state.cargoBanked} banked.`, '', 'YARD');
     }
     if (state.air >= sub.air) {
       log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
