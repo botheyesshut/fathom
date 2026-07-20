@@ -2785,6 +2785,25 @@ function animatePing() {
   requestAnimationFrame(animatePing);
 }
 
+// Vertical sonar sounding of a neighbor column (nq,nr) from the sub at
+// (sq,sr,cd). Sonar is NOT X-ray: the sound sinks/rises through the sub's OWN
+// water column and only then finds a sideways gap; solid stone in the sub's
+// column stops it dead (upClear/downClear latch false at the first stone and
+// never recover). Returns metres to the nearest REACHABLE opening above/below,
+// or null. Pure — the ping loop and the test battery both call this.
+function soundColumn(sq, sr, cd, nq, nr, depthRange) {
+  let above = null, below = null, upClear = true, downClear = true;
+  for (let dist = DEPTH_GRID; dist <= depthRange; dist += DEPTH_GRID) {
+    const up = cd - dist, dn = cd + dist;
+    if (upClear && (up < 0 || !cells.has(cellKey(sq, sr, up)))) upClear = false;
+    if (downClear && !cells.has(cellKey(sq, sr, dn))) downClear = false;
+    if (above === null && upClear && cells.has(cellKey(nq, nr, up))) above = dist;
+    if (below === null && downClear && cells.has(cellKey(nq, nr, dn))) below = dist;
+    if ((above !== null || !upClear) && (below !== null || !downClear)) break;
+  }
+  return { above, below };
+}
+
 function ping() {
   const power = pingPower();
   if (power === 0) {
@@ -2873,18 +2892,10 @@ function ping() {
     if (tile.wall) continue;
     if (q === state.q && r === state.r) continue;
     if (hexAcceptsDepth(tile, state.currentDepth)) continue;
-    // Nearest open cell above / below the sub's depth, within the ping's
-    // vertical reach. (cd itself is stone here — we continue'd past reachable.)
-    let nearestAbove = null, nearestBelow = null;
-    for (let dist = DEPTH_GRID; dist <= depthRange; dist += DEPTH_GRID) {
-      const up = state.currentDepth - dist;
-      if (nearestAbove === null && up >= 0 && cells.has(cellKey(q, r, up))) nearestAbove = dist;
-      const dn = state.currentDepth + dist;
-      if (nearestBelow === null && cells.has(cellKey(q, r, dn))) nearestBelow = dist;
-      if (nearestAbove !== null && nearestBelow !== null) break;
-    }
-    if (nearestAbove !== null) pingArrowList.push({ q, r, dir: 'up', meters: nearestAbove });
-    if (nearestBelow !== null) pingArrowList.push({ q, r, dir: 'down', meters: nearestBelow });
+    // Vertical sounding — reachable-through-water only (see soundColumn).
+    const snd = soundColumn(state.q, state.r, state.currentDepth, q, r, depthRange);
+    if (snd.above !== null) pingArrowList.push({ q, r, dir: 'up', meters: snd.above });
+    if (snd.below !== null) pingArrowList.push({ q, r, dir: 'down', meters: snd.below });
   }
 
   // Start an animated wavefront — radius grows from 0 to the ping's actual reach

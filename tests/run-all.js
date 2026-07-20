@@ -9,7 +9,7 @@
 //   cargo.test    — dive-to-the-prize collection, port banking, the yard
 const { spawnSync } = require('child_process');
 const path = require('path');
-const suites = ['flip', 'save', 'creature', 'cargo'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');
