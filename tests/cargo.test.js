@@ -89,6 +89,13 @@ sb.surface(); // accepts
 check(sb.__subKey() === 'charon' && st.cargoBanked === 5 && st.hull === 130 && st.air === 450,
   'second press buys the Charon', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked + ' hull=' + st.hull + ' air=' + st.air);
 
+// 2c2. Crew: a hand waits on the dock; a second press signs them on
+st.hull = 130; st.air = 450; // full — yard and air stay quiet
+sb.surface(); // arms the hire offer (banked 5 = exactly one sign-on)
+check(!!st._hireOffer && st.crew.length === 0, 'a hand waits on the dock', st._hireOffer && st._hireOffer.role);
+sb.surface();
+check(st.crew.length === 1 && st.cargoBanked === 0, 'second press signs them aboard', st.crew[0] && (st.crew[0].name + ' the ' + st.crew[0].role));
+
 // 2d. Expeditions: hold station over a ruin, the crew works it out
 st.q = 5; st.r = -9; st.currentDepth = 300; st.hull = 130; st.air = 400;
 const ruinTile = { type: 'ruin', poi: 'ruin', q: 5, r: -9, ceiling: 0, floor: 300 };
@@ -107,10 +114,12 @@ check(!st.expedition && st.poisFound.includes('6,-9'), 'moving off recalls the t
 // 2e. Cavern beach: landfall gives air + a crew expedition; returns refill
 sb.__setCell(0, -8, 60, 'beach');
 st.q = 0; st.r = -8; st.currentDepth = 60; st.air = 100; st.expedition = null;
+if (st.crew[0]) { st.crew[0].role = 'diver'; st.crew[0].xp = 0; }
 sb.maybeBeach();
 check(st.air > 100 && !!st.expedition && st.expedition.type === 'beach', 'first landfall: air off the pocket + beach expedition', 'air=' + st.air);
 let bspin = 0;
 while (st.expedition && bspin++ < 12) sb.creatureTick();
+check(st.crew[0] && st.crew[0].xp === 1, 'the dive seasons the diver', 'xp=' + (st.crew[0] && st.crew[0].xp));
 st.air = 200;
 sb.maybeBeach();
 check(st.air > 200, 'the old beach refills the tanks on return', 'air=' + st.air);
@@ -130,6 +139,7 @@ sb2.startGame();
 const st2 = sb2.__state();
 check(st2.cargo === 3 && st2.cargoBanked === 1, 'cargo + bank survive reload', 'cargo=' + st2.cargo + ' banked=' + st2.cargoBanked);
 check(sb2.__subKey() === 'charon', 'the bought boat survives reload', 'sub=' + sb2.__subKey());
+check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.crew[0].name + ', xp ' + st2.crew[0].xp));
 
 console.log(failures === 0 ? '\nALL CARGO CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

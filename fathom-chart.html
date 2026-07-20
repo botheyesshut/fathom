@@ -834,6 +834,7 @@ const SUBS = {
     // Outfitter tier & price (banked crates). Tier 0 is the starter boat.
     tier: 0,
     price: 0,
+    crewCap: 2,
   },
   charon: {
     name: 'Charon',
@@ -852,6 +853,7 @@ const SUBS = {
     porthole: false,
     tier: 1,
     price: 20,
+    crewCap: 3,
   },
   nyx: {
     name: 'Nyx',
@@ -870,8 +872,23 @@ const SUBS = {
     porthole: false,
     tier: 2,
     price: 60,
+    crewCap: 4,
   },
 };
+
+// ---- Crew: the boat's hands. Names, roles, experience — overlay state. ----
+// Roles wire into dials the game already has: divers make expeditions richer
+// and safer, a sonarman sharpens the passive ear, an engineer stretches the
+// yard's work. A member's level is 1 + floor(xp/3), capped at 3; levels of a
+// role stack across the crew.
+const CREW_NAMES = ['Okafor', 'Reyes', 'Halvorsen', 'Ito', 'Marchetti', 'Osei', 'Lindqvist', 'Baptiste', 'Ferro', 'Ngata', 'Sorokin', 'Adeyemi'];
+const CREW_ROLES = ['diver', 'sonarman', 'engineer'];
+const CREW_HIRE_COST = 5; // banked crates for a sign-on
+function crewLvl(role) {
+  let s = 0;
+  for (const m of state.crew) if (m.role === role) s += Math.min(3, 1 + Math.floor(m.xp / 3));
+  return s;
+}
 
 let activeSubKey = 'erebus';
 function activeSub() { return SUBS[activeSubKey]; }
@@ -1782,6 +1799,8 @@ const state = {
   relicsBanked: 0,
   // Active dive team, or null. { key, type, turns, crates, relics }
   expedition: null,
+  // The boat's hands: { name, role, xp }. Hired at the dock; lost with the boat.
+  crew: [],
 };
 
 //=============================================================================
@@ -3194,11 +3213,11 @@ function expeditionTick() {
     exp.relics++;
     log('The divers surface a RELIC — old work, and not drowned-men make.', 'strange', 'RELIC');
     sfx('relic');
-  } else if (roll < relicChance + 0.35) {
+  } else if (roll < relicChance + 0.35 + 0.05 * crewLvl('diver')) {
     exp.crates++;
     log('The divers send up a crate on the line.', '', 'DIVE TEAM');
-  } else if (roll < relicChance + 0.50) {
-    const dmg = 2 + randInt(3);
+  } else if (roll < relicChance + 0.50 + 0.05 * crewLvl('diver')) {
+    const dmg = Math.max(1, 2 + randInt(3) - crewLvl('diver'));
     state.hull = Math.max(0, state.hull - dmg);
     log(`Something shifts below — the line snags and saws the hull. -${dmg} hull.`, 'warn', 'DIVE TEAM');
   } else if (roll < relicChance + 0.60) {
@@ -3220,6 +3239,7 @@ function finishExpedition(prefix) {
   state.expedition = null;
   state.cargo += exp.crates;
   state.relics += exp.relics;
+  for (const m of state.crew) if (m.role === 'diver') m.xp++; // dives season divers
   if (!state.poisFound.includes(exp.key)) state.poisFound.push(exp.key);
   const hauls = [];
   if (exp.crates) hauls.push(`${exp.crates} crate${exp.crates > 1 ? 's' : ''}`);
@@ -3245,7 +3265,7 @@ const CONTACT_LOG_MS = 7000;   // min ms between passive-contact log lines
 // Sound envelopes: coarser information carries farther. The passive ear
 // LOCALIZES (bearing + range) to passiveContactR; a woken hunter's first stir
 // is merely NOTICED (one unlocalized bit) out to wakeNoticeR.
-function passiveContactR() { return passiveRange() + 2; }
+function passiveContactR() { return passiveRange() + 2 + (crewLvl('sonarman') > 0 ? 1 : 0); }
 function wakeNoticeR() { return passiveRange() + 6; }
 
 function spawnCreature(type, q, r, depth) {
@@ -4156,7 +4176,7 @@ function endGame(title, summary) {
   document.getElementById('go-title').textContent = title;
   document.getElementById('go-summary').textContent = summary;
   document.getElementById('go-stats').innerHTML =
-    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}<br>Salvage banked: ${state.cargoBanked}${state.cargo ? ` (+${state.cargo} lost with the boat)` : ''}<br>Relics vaulted: ${state.relicsBanked}${state.relics ? ` (+${state.relics} lost with the boat)` : ''}`;
+    `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}<br>Salvage banked: ${state.cargoBanked}${state.cargo ? ` (+${state.cargo} lost with the boat)` : ''}<br>Relics vaulted: ${state.relicsBanked}${state.relics ? ` (+${state.relics} lost with the boat)` : ''}${state.crew.length ? `<br>Lost with all hands: ${state.crew.map(m => m.name).join(', ')}` : ''}`;
   document.getElementById('gameover').classList.add('show');
   clearSave(); // the deep keeps what it takes — a lost boat is a lost world
 }
@@ -4173,6 +4193,8 @@ function restart() {
   state.cargo = 0; state.cargoBanked = 0;
   state.relics = 0; state.relicsBanked = 0;
   state.expedition = null;
+  state.crew = [];
+  state._hireOffer = null;
   state.alive = true;
   state.cameraX = 0; state.cameraY = 0;
   state.panX = 0; state.panY = 0;
@@ -4262,7 +4284,7 @@ function surface() {
     if (atPort && state.hull < sub.hull && state.cargoBanked > 0) {
       const need = Math.ceil((sub.hull - state.hull) / DOCK_PRICES.hullPerCrate);
       const spend = Math.min(need, state.cargoBanked);
-      const gained = Math.min(sub.hull - state.hull, spend * DOCK_PRICES.hullPerCrate);
+      const gained = Math.min(sub.hull - state.hull, Math.round(spend * DOCK_PRICES.hullPerCrate * (1 + 0.25 * crewLvl('engineer'))));
       state.cargoBanked -= spend;
       state.hull += gained;
       log(`The yard works the hull: ${spend} crate${spend > 1 ? 's' : ''} buys +${gained} hull. ${state.cargoBanked} banked.`, '', 'YARD');
@@ -4294,6 +4316,26 @@ function surface() {
       if (next && state.cargoBanked >= SUBS[next].price) {
         state._outfitOffer = { key: next, q: state.q, r: state.r, until: performance.now() + 45000 };
         log(`The outfitter's shed is open: the ${SUBS[next].name} lies ready — ${SUBS[next].price} crates. Press Surface again to take her.`, 'warn', 'OUTFIT');
+      }
+      // The hiring hall: a hand waits on the dock when there's a berth and
+      // the ledger covers a sign-on. Outfit offers take precedence.
+      const cap = sub.crewCap || 2;
+      const ho = state._hireOffer;
+      if (!state._outfitOffer && ho && ho.q === state.q && ho.r === state.r
+          && performance.now() < ho.until
+          && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
+        state.cargoBanked -= CREW_HIRE_COST;
+        state.crew.push({ name: ho.name, role: ho.role, xp: 0 });
+        state._hireOffer = null;
+        log(`${ho.name} signs aboard as ${ho.role}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.) Crew ${state.crew.length}/${cap}.`, '', 'CREW');
+        sfx('bell');
+        updateHUD();
+        render();
+        return;
+      }
+      if (!state._outfitOffer && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
+        state._hireOffer = { name: pick(CREW_NAMES), role: pick(CREW_ROLES), q: state.q, r: state.r, until: performance.now() + 45000 };
+        log(`On the dock: ${state._hireOffer.name}, a ${state._hireOffer.role} looking for a berth — ${CREW_HIRE_COST} crates for the sign-on. Press Surface again to take them on.`, 'warn', 'CREW');
       }
     }
     if (state.air >= sub.air) {
@@ -4357,6 +4399,7 @@ function doSave() {
       cargo: state.cargo, cargoBanked: state.cargoBanked,
       relics: state.relics, relicsBanked: state.relicsBanked,
       expedition: state.expedition,
+      crew: state.crew,
       subKey: activeSubKey,
     }));
   } catch (e) { /* quota or private mode — persistence is best-effort */ }
@@ -4405,6 +4448,8 @@ function resumeGame(save) {
   state.relics = save.relics || 0;
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
+  state.crew = save.crew || [];
+  state._hireOffer = null;
   worldSeed = save.seed;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
