@@ -383,6 +383,16 @@
   }
 
   /* Sub shake — used to confirm input was received on a failed move */
+  @keyframes growth-sway {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    30% { transform: translateY(-1.2px) rotate(10deg); }
+    70% { transform: translateY(1.2px) rotate(-10deg); }
+  }
+  .growth-glyph {
+    animation: growth-sway 3.4s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
   @keyframes sub-shake {
     0%, 100% { transform: translate(0, 0); }
     20% { transform: translate(-1.2px, 0.6px); }
@@ -2348,6 +2358,7 @@ function render() {
         else if (tile.type === 'chasm') color = '#7050a0';
         txt.setAttribute('fill', color);
         if (tile.poi && tile.poi !== 'deadend') txt.setAttribute('filter', 'url(#softglow)');
+        if (tile.poi === 'growth') txt.setAttribute('class', 'growth-glyph'); // it stirs in the water
         txt.textContent = tile.char;
         g.appendChild(txt);
 
@@ -3984,7 +3995,7 @@ function handleTile(tile) {
       if (firstVisit) {
         // Gas collects at the ceiling — you rise to it to vent and refill.
         if (Math.abs(state.currentDepth - tile.ceiling) > DEPTH_GRID) {
-          if (rand() < 0.5) log('Sonar reads trapped gas pooled at the ceiling above. Rise to vent.', 'warn', 'AIR');
+          if (rand() < 0.5) log(`Sonar reads trapped gas pooled ${Math.round(state.currentDepth - tile.ceiling)} m above. Rise to vent.`, 'warn', 'AIR');
           break;
         }
         const subA = activeSub();
@@ -4000,7 +4011,7 @@ function handleTile(tile) {
       if (firstVisit) {
         // Wreckage rests on the bottom — you dive to it, not over it.
         if (Math.abs(state.currentDepth - tile.floor) > DEPTH_GRID) {
-          if (rand() < 0.5) log('The wreck lies on the floor below. Descend to work it.', 'warn', 'SALVAGE');
+          if (rand() < 0.5) log(`The wreck lies on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to work it.`, 'warn', 'SALVAGE');
           break;
         }
         const subS = activeSub();
@@ -4017,7 +4028,7 @@ function handleTile(tile) {
         // Ruins rest on the floor like wrecks — put the boat on the bottom
         // before the divers go over. (Site is spent by the expedition.)
         if (Math.abs(state.currentDepth - tile.floor) > DEPTH_GRID) {
-          if (rand() < 0.5) log('The ruin lies broken on the floor below. Descend to put divers on it.', 'warn', 'FOUND');
+          if (rand() < 0.5) log(`The ruin lies broken on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to put divers on it.`, 'warn', 'FOUND');
           break;
         }
         if (!state.expedition) {
@@ -4034,14 +4045,21 @@ function handleTile(tile) {
         }
       }
       break;
-    case 'growth':
-      if (firstVisit) {
-        log(pickFlavor(FLAVOR.growth), 'strange', 'STRANGE');
-        const dmg = 5 + randInt(10);
-        state.hull = Math.max(0, state.hull - dmg);
-        state.poisFound.push(hexKey(tile.q, tile.r));
-      }
+    case 'growth': {
+      // A LIVING hazard — it bites every turn you spend in it, not once. Effect
+      // and flavor vary by bloom (see GROWTH_KINDS).
+      const gk = growthKind(tile.q, tile.r);
+      const hull = gk.hull ? gk.hull[0] + randInt(gk.hull[1] - gk.hull[0] + 1) : 0;
+      const air = gk.air ? gk.air[0] + randInt(gk.air[1] - gk.air[0] + 1) : 0;
+      if (hull) state.hull = Math.max(0, state.hull - hull);
+      if (air) state.air = Math.max(0, state.air - air);
+      const bits = [];
+      if (hull) bits.push(`-${hull} hull`);
+      if (air) bits.push(`-${air} air`);
+      log(`${gk.msg}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`, 'strange', 'STRANGE');
+      if (firstVisit) state.poisFound.push(hexKey(tile.q, tile.r));
       break;
+    }
     case 'opening':
       if (firstVisit) {
         log('A sinkhole opens beneath you. The seafloor falls away into dark.', 'strange', 'OPENING');
@@ -4053,6 +4071,16 @@ function handleTile(tile) {
       break;
   }
 }
+
+// Unnatural growths vary and are living hazards — deterministic by hex, so the
+// same bloom is the same bloom for everyone. Most bite; one only watches.
+const GROWTH_KINDS = [
+  { msg: 'Pale tendrils rake the hull as you pass.', hull: [4, 9] },
+  { msg: 'A bladder bursts — spores foul the scrubbers.', hull: [1, 3], air: [6, 14] },
+  { msg: 'A rubbery holdfast seizes the boat; you tear loose.', hull: [6, 12], air: [2, 5] },
+  { msg: 'Eyeless polyps turn to follow you. Nothing touches the hull — this time.' },
+];
+function growthKind(q, r) { return GROWTH_KINDS[hashStr(worldSeed + ':growth:' + q + ':' + r) % GROWTH_KINDS.length]; }
 
 const FLAVOR = {
   surface: [

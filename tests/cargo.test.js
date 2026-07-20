@@ -168,6 +168,23 @@ check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.cre
   check(armed && st.cargoBanked < 10, 'a second press arms a hand', 'bank=' + st.cargoBanked);
 }
 
+// 6. Unnatural growth: a living, varied hazard that bites every pass (not once)
+{
+  st.hull = 200; st.air = 600; st.currentDepth = 500; st.expedition = null;
+  let bh = -1;
+  for (let i = 0; i < 12; i++) {
+    const h0 = st.hull, a0 = st.air;
+    sb.handleTile({ type: 'growth', poi: 'growth', q: i, r: 700, ceiling: 480, floor: 540 });
+    if (st.hull < h0 || st.air < a0) { bh = i; break; }
+  }
+  check(bh >= 0, 'unnatural growth harms the boat, and varies by hex', 'biting hex q=' + bh);
+  if (bh >= 0) {
+    const h1 = st.hull, a1 = st.air;
+    sb.handleTile({ type: 'growth', poi: 'growth', q: bh, r: 700, ceiling: 480, floor: 540 });
+    check(st.hull < h1 || st.air < a1, 'growth bites AGAIN on the next pass (was one-shot — the bug)', 'persistent');
+  }
+}
+
 // 4. The death ruling: the sea keeps what was aboard; the port keeps the bank
 {
   const st3 = sb2.__state();
