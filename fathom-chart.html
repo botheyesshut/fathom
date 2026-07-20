@@ -2442,7 +2442,7 @@ function render() {
   // Everything else is passive sonar's business.
   for (const c of state.creatures) {
     if (c.depth !== state.currentDepth) continue;
-    if (c.type === 'lurker' && !c.awake) continue;
+    if (c.type === 'lurker' && (c.interest || 0) < LURK_STALK && !c.fleeing) continue;
     const dC = hexDistance({q: c.q, r: c.r}, playerHex);
     // Same epistemic rule as terrain: lights touch it (adjacent), or it's
     // inside the passive-sonar envelope AND standing in water the player has
@@ -2729,9 +2729,11 @@ function pingPower() {
 }
 
 function passiveRange() {
-  // Passive sonar is fixed — the slider does not affect it.
-  return PASSIVE_RANGE;
+  // Silent running: dropping the sonar slider to 0 kills passive sonar too —
+  // you go deaf, but you also go quiet, and the deep loses your thread faster.
+  return pingPower() === 0 ? 0 : PASSIVE_RANGE;
 }
+function sonarSilent() { return pingPower() === 0; }
 
 function updatePingDisplay() {
   const p = pingPower();
@@ -3371,12 +3373,24 @@ const CONTACT_LOG_MS = 7000;   // min ms between passive-contact log lines
 function passiveContactR() { return passiveRange() + 2 + (crewLvl('sonarman') > 0 ? 1 : 0); }
 function wakeNoticeR() { return passiveRange() + 6; }
 
+// Lurker interest bands (0-100). Interest is the whole cat-and-mouse: it grows
+// with noise and proximity, fades with silence and distance, and its level
+// decides how the beast behaves this turn.
+const LURK_WARY = 12, LURK_STALK = 38, LURK_HUNT = 68;
+
 function spawnCreature(type, q, r, depth) {
-  state.creatures.push({
-    id: type + ':' + q + ',' + r + ',' + depth,
-    type, q, r, depth,
-    awake: false, tq: 0, tr: 0, calm: 0, phase: 0,
-  });
+  const c = { id: type + ':' + q + ',' + r + ',' + depth, type, q, r, depth,
+              awake: false, tq: 0, tr: 0, calm: 0, phase: 0 };
+  if (type === 'lurker') {
+    // Each hunter is its own animal, seeded from where it was born:
+    //   cunning   — seeks true egress when it flees; less foolable
+    //   tenacity  — how slowly its interest fades; the stubborn ones never quit
+    //   aggression— how fast noise and nearness stoke it
+    const rng = mulberry32(hashStr(worldSeed + ':crt:' + q + ':' + r + ':' + depth));
+    c.interest = 0; c.fleeing = false;
+    c.cunning = rng(); c.tenacity = rng(); c.aggression = rng();
+  }
+  state.creatures.push(c);
 }
 
 // A creature may enter any open cell except the sub's own — hunters stop
@@ -3392,14 +3406,19 @@ function noiseMade(q, r, loudness) {
   if (!loudness) return;
   const reach = 2 + loudness * 3;
   for (const c of state.creatures) {
-    if (c.type !== 'lurker') continue;
-    if (Math.abs(c.depth - state.currentDepth) > 2 * DEPTH_GRID) continue;
+    if (c.type !== 'lurker' || c.fleeing) continue;
+    if (Math.abs(c.depth - state.currentDepth) > 3 * DEPTH_GRID) continue;
     const d = hexDistance({q: c.q, r: c.r}, {q, r});
     if (d > reach) continue;
-    const first = !c.awake;
-    c.awake = true; c.tq = q; c.tr = r; c.calm = 9;
-    if (first && d <= wakeNoticeR()) {
-      log('Passive sonar: something answers the noise. It is moving.', 'danger', 'CONTACT');
+    // Noise stokes interest — louder and closer bites deeper, and an eager
+    // (aggressive) beast is stoked more. It turns toward where the sound came from.
+    const spike = Math.max(6, Math.round(loudness * 14 * (1 - d / (reach + 1)) * (0.6 + c.aggression * 0.8)));
+    const was = c.interest || 0;
+    c.interest = Math.min(100, was + spike);
+    c.tq = q; c.tr = r;
+    if (was < LURK_STALK && c.interest >= LURK_STALK && d <= wakeNoticeR()) {
+      log('Passive sonar: something out there turns toward the noise.', 'danger', 'CONTACT');
+      sfx('contact');
     }
   }
 }
@@ -3541,35 +3560,107 @@ function tickDrifter(c) {
   }
 }
 
-function tickLurker(c, dPlayer) {
-  if (!c.awake) return;
-  if (c.calm <= 0) { c.awake = false; return; }
-  c.calm--;
-  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
-  if (sameSlice && dPlayer === 1) {
-    const dmg = 5 + Math.floor(rand() * 6);
-    state.hull = Math.max(0, state.hull - dmg);
-    state.lastFailTime = performance.now();
-    log(`Something slams the hull out of the dark. -${dmg} hull.`, 'danger', 'STRIKE');
-    sfx('strike');
-    c.calm = 9; // blood in the water — it stays interested
-    return;
-  }
-  // Close on the prey if near, else on the last noise it heard.
-  const target = dPlayer <= 12 ? { q: state.q, r: state.r } : { q: c.tq, r: c.tr };
-  // Depth first: a hunter aligns its depth to the prey's, one band per turn.
-  if (dPlayer <= 12 && c.depth !== state.currentDepth) {
-    const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
-    if (c.depth + dd >= 0 && cells.has(cellKey(c.q, c.r, c.depth + dd))) { c.depth += dd; return; }
-  }
-  let best = null;
-  let bestD = hexDistance({q: c.q, r: c.r}, target);
+// ---- Lurker movement primitives ----
+function lurkerStep(c, tq, tr) { // one hex straight toward a target
+  let best = null, bestD = hexDistance({q: c.q, r: c.r}, {q: tq, r: tr});
   for (const n of hexNeighbors(c.q, c.r)) {
     if (!creatureCanEnter(c, n.q, n.r, c.depth)) continue;
-    const d = hexDistance({q: n.q, r: n.r}, target);
-    if (d < bestD) { bestD = d; best = n; }
+    const dd = hexDistance({q: n.q, r: n.r}, {q: tq, r: tr});
+    if (dd < bestD) { bestD = dd; best = n; }
   }
   if (best) { c.q = best.q; c.r = best.r; }
+}
+function lurkerDrift(c, tq, tr) { // loose step its general way (no closer required)
+  const d0 = hexDistance({q: c.q, r: c.r}, {q: tq, r: tr});
+  const opts = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth)
+    && hexDistance({q: n.q, r: n.r}, {q: tq, r: tr}) <= d0);
+  if (opts.length) { const n = pick(opts); c.q = n.q; c.r = n.r; }
+}
+function lurkerWander(c) {
+  const opts = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth));
+  if (opts.length && rand() < 0.6) { const n = pick(opts); c.q = n.q; c.r = n.r; }
+}
+function lurkerFlee(c, dPlayer) {
+  const away = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth)
+    && hexDistance({q: n.q, r: n.r}, {q: state.q, r: state.r}) >= dPlayer);
+  if (!away.length) { lurkerWander(c); return; } // cornered — thrash anywhere open
+  let choice;
+  if (c.cunning > 0.5) {
+    // Smart: make for true egress — the exit with the most onward routes.
+    choice = away.reduce((b, n) =>
+      openNeighborCount(n.q, n.r, c.depth) > openNeighborCount(b.q, b.r, c.depth) ? n : b, away[0]);
+  } else {
+    // Dumb: bolt straight, taking whatever opens the most water behind it.
+    choice = away.reduce((b, n) =>
+      hexDistance({q: n.q, r: n.r}, {q: state.q, r: state.r}) >
+      hexDistance({q: b.q, r: b.r}, {q: state.q, r: state.r}) ? n : b, away[0]);
+  }
+  c.q = choice.q; c.r = choice.r;
+}
+function lurkerStrike(c) {
+  const dmg = 5 + Math.floor(rand() * 6);
+  state.hull = Math.max(0, state.hull - dmg);
+  state.lastFailTime = performance.now();
+  log(`Something slams the hull out of the dark. -${dmg} hull.`, 'danger', 'STRIKE');
+  sfx('strike');
+  c.interest = 100; // blood in the water
+}
+
+// The predator's turn. Interest is the whole game: noise and nearness raise it,
+// silence and distance let it bleed away, and its level chooses the behavior.
+function tickLurker(c, dPlayer, silent) {
+  if (c.interest === undefined) c.interest = c.awake ? 80 : 0; // migrate old saves
+  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
+
+  // FLEEING overrides all — a beaten beast wants only out (see lurkerFlee).
+  if (c.fleeing) {
+    c.interest = Math.max(0, c.interest - 6);
+    lurkerFlee(c, dPlayer);
+    if (dPlayer > 14) c.fleeing = false;
+    return;
+  }
+
+  // --- The dice each turn: how interest grows and fades. ---
+  let dec = 6 - Math.round(c.tenacity * 4);                 // 2..6 baseline fade
+  if (silent && dPlayer > 1) dec += 8;                       // gone dark: it loses you
+  let gain = 0;
+  if (!silent && dPlayer <= passiveContactR() + 1 && Math.abs(c.depth - state.currentDepth) <= 2 * DEPTH_GRID)
+    gain += 3 + Math.round(c.aggression * 5);                // your live sonar betrays you
+  if (dPlayer <= 2 && sameSlice) gain += 6 + Math.round(c.aggression * 6); // it's right on you
+  const before = c.interest;
+  c.interest = Math.max(0, Math.min(100, c.interest - dec + gain));
+  if (before >= LURK_STALK && c.interest < LURK_WARY && dPlayer <= 14)
+    log('The shape in the dark loses the thread. It turns away.', '', 'CONTACT');
+
+  if (c.interest < LURK_WARY) return; // dormant / drifted off
+
+  // HUNTING — locked on. Advise the unarmed, align depth, close, and strike.
+  if (c.interest >= LURK_HUNT) {
+    if (teamScore().atk === 0 && !state._huntAdvised) {
+      state._huntAdvised = true;
+      log('It has your scent. Unarmed, distance and silence are your only defenses — run, or kill the sonar and pray it loses you.', 'danger', 'THE DEEP');
+    }
+    if (sameSlice && dPlayer === 1) { lurkerStrike(c); return; }
+    if (dPlayer <= 14 && c.depth !== state.currentDepth) {
+      const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
+      if (c.depth + dd >= 0 && cells.has(cellKey(c.q, c.r, c.depth + dd))) { c.depth += dd; return; }
+    }
+    lurkerStep(c, dPlayer <= 14 ? state.q : c.tq, dPlayer <= 14 ? state.r : c.tr);
+    return;
+  }
+
+  // STALKING ("somewhat interested") — equal thirds: close in, hold, or drift its way.
+  if (c.interest >= LURK_STALK) {
+    const roll = rand();
+    if (roll < 0.34) lurkerStep(c, state.q, state.r);
+    else if (roll < 0.67) { /* hold station, watching */ }
+    else lurkerDrift(c, state.q, state.r);
+    return;
+  }
+
+  // WARY — it knows something's near but hasn't fixed on it. Circles, drifts.
+  if (rand() < 0.45) lurkerDrift(c, c.tq || state.q, c.tr || state.r);
+  else lurkerWander(c);
 }
 
 // One creature turn after each player action. Also emits passive-sonar
@@ -3578,29 +3669,37 @@ function creatureTick() {
   if (!state.alive) return;
   expeditionTick(); // dive teams work on the same clock the deep hunts on
   const now = performance.now();
+  const silent = sonarSilent(); // running dark this turn?
   for (const c of state.creatures) {
     const d = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     if (d > CREATURE_SIM_RANGE) continue;
     if (c.type === 'drifter') tickDrifter(c);
     else if (c.type === 'eel') tickEel(c, d);
     else if (c.type === 'rival') tickRival(c, d);
-    else tickLurker(c, d);
+    else tickLurker(c, d, silent);
     const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     const depthOff = Math.abs(c.depth - state.currentDepth);
-    if (d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
+    // Silent running = deaf: no passive contacts while the sonar's off.
+    const hunting = c.type === 'lurker' && (c.interest || 0) >= LURK_HUNT;
+    if (!silent && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
         (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
       state._lastContactLog = now;
       const dir = bearing(state.q, state.r, c.q, c.r);
+      const lurkWhat = c.fleeing ? 'something breaking away, fast'
+                     : (c.interest || 0) >= LURK_HUNT ? 'something closing, fast and straight'
+                     : (c.interest || 0) >= LURK_STALK ? 'something pacing you in the dark'
+                     : 'a slow shape, half-interested';
       const what = c.type === 'drifter' ? 'something vast, moving slow'
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
                  : c.type === 'rival' ? 'engine noise — another boat under power'
-                 : c.awake ? 'something fast, closing'
-                 : 'a faint heartbeat, holding still';
+                 : lurkWhat;
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
-      log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, c.awake ? 'danger' : 'strange', 'CONTACT');
+      log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, hunting || c.fleeing ? 'danger' : 'strange', 'CONTACT');
       sfx('contact');
     }
   }
+  // The advisory re-arms once no hunter is locked on.
+  if (!state.creatures.some(c => c.type === 'lurker' && (c.interest || 0) >= LURK_HUNT)) state._huntAdvised = false;
   // Reap anything that despawned this turn (caught or escaped thieves).
   if (state.creatures.some(c => c.gone)) {
     state.creatures = state.creatures.filter(c => !c.gone);

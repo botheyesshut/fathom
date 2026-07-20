@@ -24,8 +24,10 @@ function memStorage() {
 }
 function freshContext(storage) {
   const stub = makeStub();
+  const pingEl = { value: '2' }; // the sonar slider — tests drive it (0 = silent running)
   const documentStub = new Proxy({}, { get(t, p) {
-    if (['createElementNS','createElement','getElementById','querySelector','querySelectorAll'].includes(p)) return () => makeStub();
+    if (['createElementNS','createElement','querySelector','querySelectorAll'].includes(p)) return () => makeStub();
+    if (p === 'getElementById') return (id) => id === 'ping-power' ? pingEl : makeStub();
     if (p === 'addEventListener') return () => {};
     return stub;
   }});
@@ -36,6 +38,7 @@ function freshContext(storage) {
     requestAnimationFrame: () => 0, cancelAnimationFrame: () => {}, performance: { now: () => Date.now() },
     document: documentStub, navigator: { userAgent: 'node' }, localStorage: storage || memStorage(),
   };
+  sandbox.__ping = pingEl;
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
   const injected = script + '\nfunction __cells(){ return cells; }\nfunction __state(){ return state; }\nfunction __spawned(){ return spawnedChunks; }\nfunction __ck(q,r,d){ return cells.has(cellKey(q,r,d)); }\nfunction __kind(q,r,d){ const c = cells.get(cellKey(q,r,d)); return c ? c.kind : null; }';
@@ -73,19 +76,19 @@ st.creatures.length = 0;
 sb.spawnCreature('lurker', 0, -10, 0);   // 4 hexes away
 sb.spawnCreature('lurker', 40, -6, 0);   // 40 hexes away
 sb.noiseMade(st.q, st.r, 3);             // reach = 2 + 9 = 11
-check(st.creatures[0].awake === true, 'lurker in earshot wakes on loud ping');
-check(st.creatures[1].awake === false, 'lurker beyond earshot stays asleep');
+check((st.creatures[0].interest||0) > 10, 'a loud ping stokes a near lurker', 'interest ' + st.creatures[0].interest);
+check((st.creatures[1].interest||0) === 0, 'a lurker beyond earshot is unmoved');
 
 // ---- 2b. Ballast roar: fast dives are loud; slow dives are silent ----
 st.creatures.length = 0;
 st.q = 0; st.r = -6; st.currentDepth = 0;
 sb.spawnCreature('lurker', 3, -8, 60);
 sb.changeDepth(120); // > diveStep → ballast noise (loudness 2, reach 8)
-check(st.creatures[0].awake === true, 'fast dive (ballast roar) wakes a sleeping hunter', 'now at ' + st.currentDepth + ' m');
+check((st.creatures[0].interest||0) > 0, 'fast dive (ballast roar) stokes a sleeping hunter', 'interest ' + st.creatures[0].interest);
 st.creatures.length = 0;
-sb.spawnCreature('lurker', 3, -8, 180);
-sb.changeDepth(60); // single step — quiet
-check(st.creatures[0].awake === false, 'slow dive stays silent', 'now at ' + st.currentDepth + ' m');
+sb.spawnCreature('lurker', 30, -8, 180); // far off, so only NOISE (not nearness) could stir it
+sb.changeDepth(60); // single step — no ballast, no noise
+check((st.creatures[0].interest||0) === 0, 'a slow dive makes no noise — a distant hunter stays cold', 'interest ' + (st.creatures[0].interest||0));
 
 // ---- 2c. The Eel: cargo piracy, the chase, and the escape ----
 st.creatures.length = 0;
@@ -107,7 +110,7 @@ st.cargo = 0;
 // Restore test-3's precondition: an awake hunter 4 hexes out, as test 2 left it.
 st.q = 0; st.r = -6; st.currentDepth = 0;
 sb.spawnCreature('lurker', 0, -10, 0);
-st.creatures[0].awake = true; st.creatures[0].calm = 9;
+st.creatures[0].interest = 100; st.creatures[0].tq = st.q; st.creatures[0].tr = st.r;
 st.creatures[0].tq = 0; st.creatures[0].tr = -6;
 
 // ---- 3. Hunt: awake lurker closes and strikes ----
@@ -142,7 +145,7 @@ st.creatures[0].tq = 0; st.creatures[0].tr = -6;
   // reuse real spawns near the player: pull some cave chunks close by
   for (let cq = 1; cq <= 3; cq++) for (let cr = -3; cr <= -1; cr++) sb.ensureChunk(cq, cr);
   // wake everything and stress-move
-  for (const c of st.creatures) { if (c.type === 'lurker') { c.awake = true; c.calm = 999; c.tq = st.q; c.tr = st.r; } }
+  for (const c of st.creatures) { if (c.type === 'lurker') { c.interest = 100; c.tq = st.q; c.tr = st.r; } }
   let stoneViolations = 0;
   for (let i = 0; i < 60; i++) {
     sb.creatureTick();
@@ -150,6 +153,26 @@ st.creatures[0].tq = 0; st.creatures[0].tr = -6;
   }
   check(stoneViolations === 0, '60 ticks: no creature ever occupies stone', st.creatures.length + ' creatures × 60 ticks, ' + stoneViolations + ' violations');
 }
+
+// ---- 4b. Silent running: killing the sonar lets the deep lose your thread ----
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('lurker', 6, -6, 0);
+const SL = st.creatures[0]; SL.tenacity = 0.2;
+sb.__ping.value = '2'; SL.interest = 60; sb.creatureTick(); const iOn = SL.interest;
+sb.__ping.value = '0'; SL.interest = 60; sb.creatureTick(); const iDark = SL.interest;
+check(iDark < iOn, 'interest bleeds FASTER with the sonar off (silent running)', 'on→' + iOn + ' dark→' + iDark);
+sb.__ping.value = '2';
+
+// ---- 4c. Fleeing: a beaten beast opens the distance, making for open water ----
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('lurker', 0, -8, 0);
+const FL = st.creatures[0]; FL.fleeing = true; FL.cunning = 0.2;
+const hd = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+const fd0 = hd(FL, st);
+for (let i = 0; i < 4; i++) sb.creatureTick();
+check(hd(FL, st) > fd0, 'a fleeing beast opens the distance', fd0 + ' → ' + hd(FL, st));
 
 // ---- 5b. Rival salvager: seeks the nearest unworked site and strips it ----
 st.creatures.length = 0;
