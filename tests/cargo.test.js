@@ -141,5 +141,19 @@ check(st2.cargo === 3 && st2.cargoBanked === 1, 'cargo + bank survive reload', '
 check(sb2.__subKey() === 'charon', 'the bought boat survives reload', 'sub=' + sb2.__subKey());
 check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.crew[0].name + ', xp ' + st2.crew[0].xp));
 
+// 4. The death ruling: the sea keeps what was aboard; the port keeps the bank
+{
+  const st3 = sb2.__state();
+  st3.cargo = 2; st3.relics = 1; st3.cargoBanked = 7; st3.relicsBanked = 3;
+  sb2.endGame('The deep has you.', 'test');
+  check(st3.cargo === 0 && st3.relics === 0 && st3.crew.length === 0 && sb2.__subKey() === 'erebus',
+    'the sea keeps what was aboard', 'cargo/relics/crew zeroed, boat back to erebus');
+  check(st3.cargoBanked === 7 && st3.relicsBanked === 3, 'the port keeps what was banked',
+    'bank=' + st3.cargoBanked + ' vault=' + st3.relicsBanked);
+  const raw3 = JSON.parse(store.getItem('fathom-save-v1'));
+  check(!!raw3 && raw3.cargoBanked === 7 && raw3.subKey === 'erebus',
+    'the campaign save survives death (no resurrection by reload)', 'saved bank=' + raw3.cargoBanked);
+}
+
 console.log(failures === 0 ? '\nALL CARGO CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

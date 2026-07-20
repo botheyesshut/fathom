@@ -118,9 +118,11 @@ check(rev2.has('7,-4') && rev2.get('7,-4').has(120), 'revealed depth-charts rest
     compared + ' cells in ' + interior.size + ' mutually-interior chunks, ' + mm + ' mismatches');
 }
 
-// ---- Death clears the save ----
+// ---- Death keeps the campaign: same sea, everything aboard lost ----
 c2.endGame('The deep has you.', 'test');
-check(!store._m.has('fathom-save-v1'), 'death clears the save (a lost boat is a lost world)');
+const postDeath = JSON.parse(store.getItem('fathom-save-v1'));
+check(!!postDeath && postDeath.seed === seed1 && postDeath.subKey === 'erebus' && postDeath.q === 0,
+  'death keeps the campaign (same sea, stock Erebus at the dock)', 'seed kept, boat reset');
 
 // ---- New World (restart) also clears any save ----
 c1.doSave();

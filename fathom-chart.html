@@ -649,7 +649,7 @@
   <h2 id="go-title">The deep has you.</h2>
   <p class="summary" id="go-summary"></p>
   <div class="stats" id="go-stats"></div>
-  <button class="btn primary" id="go-restart">Surface and try again</button>
+  <button class="btn primary" id="go-restart">Take another boat</button>
 </div>
 
 <!-- HUD -->
@@ -4178,7 +4178,37 @@ function endGame(title, summary) {
   document.getElementById('go-stats').innerHTML =
     `Moves: ${state.moves}<br>Max depth: ${state.maxDepth} m<br>Discoveries: ${state.poisFound.length}<br>Salvage banked: ${state.cargoBanked}${state.cargo ? ` (+${state.cargo} lost with the boat)` : ''}<br>Relics vaulted: ${state.relicsBanked}${state.relics ? ` (+${state.relics} lost with the boat)` : ''}${state.crew.length ? `<br>Lost with all hands: ${state.crew.map(m => m.name).join(', ')}` : ''}`;
   document.getElementById('gameover').classList.add('show');
-  clearSave(); // the deep keeps what it takes — a lost boat is a lost world
+  // THE RULING (Sean, ratified): a lost boat is not a lost campaign. The sea
+  // keeps everything aboard — boat, crew, cargo, relics. The port keeps what
+  // was banked, the charts keep what was learned, and the same sea waits.
+  // A stock Erebus swings at the dock. (New World remains the full wipe.)
+  activeSubKey = 'erebus';
+  const sub0 = SUBS.erebus;
+  state.q = 0; state.r = 0; state.currentDepth = 0;
+  state.hull = sub0.hull; state.air = sub0.air;
+  state.cargo = 0; state.relics = 0;
+  state.crew = [];
+  state.expedition = null;
+  state._outfitOffer = null; state._hireOffer = null;
+  state.moves = 0; state.maxDepth = 0;
+  state.trail = []; state.pingMemory = new Map();
+  state.pingArrows = null; state.ping = null;
+  doSave(true); // bank the post-death campaign NOW — no resurrection by reload
+}
+
+// The button on the death screen: not a new world — another boat on the same sea.
+function anotherBoat() {
+  state.alive = true;
+  document.getElementById('gameover').classList.remove('show');
+  const pp = document.getElementById('ping-power');
+  if (pp) pp.max = activeSub().sonarMaxPower;
+  const px0 = hexToPixel(0, 0);
+  state.cameraX = px0.x; state.cameraY = px0.y;
+  log("Another boat. The replacement Erebus smells of tar and someone else's luck. The sea is the same sea.", '', 'CAST OFF');
+  updatePingDisplay();
+  updateHUD();
+  render();
+  schedulePregen();
 }
 
 function restart() {
@@ -4382,9 +4412,9 @@ function scheduleSave() {
   saveTimer = setTimeout(doSave, 400);
 }
 
-function doSave() {
+function doSave(force) {
   saveTimer = 0;
-  if (!gameStarted || !state.alive) return;
+  if (!gameStarted || (!state.alive && !force)) return;
   try {
     const rev = {};
     for (const [k, s] of revealed) rev[k] = [...s];
@@ -4505,7 +4535,7 @@ document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
-document.getElementById('go-restart').addEventListener('click', restart);
+document.getElementById('go-restart').addEventListener('click', anotherBoat);
 // Sound toggle — a device preference, stored apart from the save.
 const soundBtn = document.getElementById('sound-btn');
 if (soundBtn) {
