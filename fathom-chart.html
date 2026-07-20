@@ -1832,6 +1832,12 @@ function generateChunk(cq, cr) {
         const opts = caveDepthsAt(h);
         if (opts.length) spawnCreature('rival', h.q, h.r, opts[0]);
       }
+      // A school of shoalfang — three small biters that hunt as a wall.
+      if (crand() < 0.13) {
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (opts.length) spawnShoal(h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+      }
     }
   }
 }
@@ -2457,9 +2463,9 @@ function render() {
     ct.setAttribute('dominant-baseline', 'central');
     ct.setAttribute('font-family', 'JetBrains Mono, monospace');
     ct.setAttribute('font-size', c.type === 'drifter' ? '14' : c.type === 'eel' ? '11' : '12');
-    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : '#d05048');
+    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : '#d05048');
     ct.setAttribute('filter', 'url(#softglow)');
-    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : '⊗';
+    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : '⊗';
     g.appendChild(ct);
   }
 
@@ -3393,6 +3399,22 @@ function spawnCreature(type, q, r, depth) {
   state.creatures.push(c);
 }
 
+// Shoalfang: a school of three small biters that move as a wall to SURROUND
+// the sub and close a ring. Each bite is tiny; the danger is being pinned. The
+// whole school shares a temperament (boldness) seeded from its spawn.
+function spawnShoal(q, r, depth) {
+  const rng = mulberry32(hashStr(worldSeed + ':shoal:' + q + ':' + r + ':' + depth));
+  const boldness = rng();
+  let placed = 0;
+  for (const [dq, dr] of [[0,0],[1,0],[0,1],[1,-1],[-1,1],[-1,0],[0,-1]]) {
+    if (placed >= 3) break;
+    const sq = q + dq, sr = r + dr;
+    if (!cells.has(cellKey(sq, sr, depth))) continue;
+    state.creatures.push({ id: 'shoal:' + sq + ',' + sr + ',' + depth, type: 'shoal', q: sq, r: sr, depth, boldness, spooked: 0 });
+    placed++;
+  }
+}
+
 // A creature may enter any open cell except the sub's own — hunters stop
 // adjacent; the strike happens from there.
 function creatureCanEnter(c, q, r, depth) {
@@ -3550,6 +3572,36 @@ function tickRival(c, dPlayer) {
   }
 }
 
+// The shoalfang turn: close a ring around the sub and pin it. Each member
+// claims an unoccupied hex of the sub's ring; a bold school presses from any
+// distance, a timid one only when near — and a loud noise scatters the timid.
+function tickShoal(c, dPlayer) {
+  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
+  if (c.spooked > 0) { c.spooked--; lurkerWander(c); return; }
+  if (sameSlice && dPlayer === 1) {
+    const openRing = hexNeighbors(state.q, state.r).filter(n => cells.has(cellKey(n.q, n.r, state.currentDepth)));
+    const ringed = openRing.length > 0 && openRing.every(n =>
+      state.creatures.some(o => o.type === 'shoal' && o.q === n.q && o.r === n.r && Math.abs(o.depth - state.currentDepth) < DEPTH_GRID));
+    const dmg = 1 + Math.floor(rand() * 3) + (ringed ? 2 : 0);
+    state.hull = Math.max(0, state.hull - dmg);
+    state.lastFailTime = performance.now();
+    if (ringed) { if (rand() < 0.5) { log(`The school has closed the ring — pinned, and they bite from every side. -${dmg} hull.`, 'danger', 'SWARM'); sfx('strike'); } }
+    else if (rand() < 0.4) log(`Small teeth worry the hull. -${dmg} hull.`, 'warn', 'SWARM');
+    return;
+  }
+  // Follow the sub's depth, but sluggishly — a dive buys you a moment.
+  if (dPlayer <= 6 && c.depth !== state.currentDepth && rand() < 0.4) {
+    const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
+    if (c.depth + dd >= 0 && cells.has(cellKey(c.q, c.r, c.depth + dd))) { c.depth += dd; return; }
+  }
+  const ring = hexNeighbors(state.q, state.r).filter(n => cells.has(cellKey(n.q, n.r, c.depth))
+    && !state.creatures.some(o => o !== c && o.type === 'shoal' && o.q === n.q && o.r === n.r));
+  let target = null, bd = Infinity;
+  for (const n of ring) { const dd = hexDistance({q: c.q, r: c.r}, {q: n.q, r: n.r}); if (dd < bd) { bd = dd; target = n; } }
+  if (target && (c.boldness > 0.5 || dPlayer <= 5)) lurkerStep(c, target.q, target.r);
+  else lurkerStep(c, state.q, state.r);
+}
+
 function tickDrifter(c) {
   c.phase ^= 1;
   if (c.phase) return; // vast things move every other turn
@@ -3676,6 +3728,7 @@ function creatureTick() {
     if (c.type === 'drifter') tickDrifter(c);
     else if (c.type === 'eel') tickEel(c, d);
     else if (c.type === 'rival') tickRival(c, d);
+    else if (c.type === 'shoal') tickShoal(c, d);
     else tickLurker(c, d, silent);
     const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     const depthOff = Math.abs(c.depth - state.currentDepth);
@@ -3692,6 +3745,7 @@ function creatureTick() {
       const what = c.type === 'drifter' ? 'something vast, moving slow'
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
                  : c.type === 'rival' ? 'engine noise — another boat under power'
+                 : c.type === 'shoal' ? 'a school, circling to surround you'
                  : lurkWhat;
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
       log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, hunting || c.fleeing ? 'danger' : 'strange', 'CONTACT');

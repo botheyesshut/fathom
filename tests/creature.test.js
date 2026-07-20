@@ -174,6 +174,20 @@ const fd0 = hd(FL, st);
 for (let i = 0; i < 4; i++) sb.creatureTick();
 check(hd(FL, st) > fd0, 'a fleeing beast opens the distance', fd0 + ' → ' + hd(FL, st));
 
+// ---- 4d. Shoalfang: a trio spawns, closes on the sub, and bites ----
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
+sb.spawnShoal(0, -10, 0);
+check(st.creatures.length === 3 && st.creatures.every(c => c.type === 'shoal'), 'shoalfang spawns as a trio', st.creatures.length + ' fish');
+const shd = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+for (const c of st.creatures) c.boldness = 1; // a bold school presses
+const near0 = Math.min(...st.creatures.map(c => shd(c, st)));
+const hull0 = st.hull;
+for (let i = 0; i < 10; i++) sb.creatureTick();
+const near1 = Math.min(...st.creatures.map(c => shd(c, st)));
+check(near1 < near0, 'the school closes on the sub', near0 + ' → ' + near1);
+check(st.hull < hull0, 'the school bites once it surrounds you', 'hull ' + hull0 + ' → ' + st.hull);
+
 // ---- 5b. Rival salvager: seeks the nearest unworked site and strips it ----
 st.creatures.length = 0;
 st.q = 0; st.r = -16; st.currentDepth = 0; // inside sim range (24), outside stand-off (2)
