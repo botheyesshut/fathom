@@ -726,6 +726,7 @@
   </div>
   <div id="controls-row">
     <button class="btn" id="btn-ping">Ping</button>
+    <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn primary" id="btn-surface">Surface</button>
     <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
   </div>
@@ -1896,6 +1897,8 @@ const state = {
   expedition: null,
   // The boat's hands: { name, role, xp }. Hired at the dock; lost with the boat.
   crew: [],
+  // Decoy buoys in the water: { q, r, depth, turns }. Transient — not saved.
+  buoys: [],
 };
 
 //=============================================================================
@@ -2823,6 +2826,22 @@ function soundColumn(sq, sr, cd, nq, nr, depthRange) {
   return { above, below };
 }
 
+// Launch a decoy buoy — it shrieks into the water for ten turns, and the
+// sound-hunters mob it instead of you. The captain's answer to a swarm with
+// no guns: make a louder target, and slip away in the confusion.
+function launchDecoy() {
+  if (!state.alive || !gameStarted) return;
+  if (state.air < 6) { log('Not enough air to charge a decoy.', 'warn'); return; }
+  state.air -= 6;
+  state.buoys.push({ q: state.q, r: state.r, depth: state.currentDepth, turns: 10 });
+  log('A decoy buoy kicks free and begins to shriek into the dark. Move — let it have their attention.', '', 'DECOY');
+  sfx('ping');
+  creatureTick();
+  updateHUD();
+  render();
+  schedulePregen();
+}
+
 function ping() {
   const power = pingPower();
   if (power === 0) {
@@ -3594,12 +3613,16 @@ function tickShoal(c, dPlayer) {
     const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
     if (c.depth + dd >= 0 && cells.has(cellKey(c.q, c.r, c.depth + dd))) { c.depth += dd; return; }
   }
-  const ring = hexNeighbors(state.q, state.r).filter(n => cells.has(cellKey(n.q, n.r, c.depth))
+  // A decoy buoy steals the school's attention — they mob the loudest thing.
+  let aq = state.q, ar = state.r, bbd = 12;
+  for (const b of state.buoys) { const bd = hexDistance({q: c.q, r: c.r}, {q: b.q, r: b.r}); if (bd < bbd) { bbd = bd; aq = b.q; ar = b.r; } }
+  const ring = hexNeighbors(aq, ar).filter(n => cells.has(cellKey(n.q, n.r, c.depth))
     && !state.creatures.some(o => o !== c && o.type === 'shoal' && o.q === n.q && o.r === n.r));
   let target = null, bd = Infinity;
   for (const n of ring) { const dd = hexDistance({q: c.q, r: c.r}, {q: n.q, r: n.r}); if (dd < bd) { bd = dd; target = n; } }
-  if (target && (c.boldness > 0.5 || dPlayer <= 5)) lurkerStep(c, target.q, target.r);
-  else lurkerStep(c, state.q, state.r);
+  const nearAnchor = hexDistance({q: c.q, r: c.r}, {q: aq, r: ar}) <= 5;
+  if (target && (c.boldness > 0.5 || nearAnchor)) lurkerStep(c, target.q, target.r);
+  else lurkerStep(c, aq, ar);
 }
 
 function tickDrifter(c) {
@@ -3722,6 +3745,9 @@ function creatureTick() {
   expeditionTick(); // dive teams work on the same clock the deep hunts on
   const now = performance.now();
   const silent = sonarSilent(); // running dark this turn?
+  // Decoy buoys shout into the water, pulling the sound-hunters off the boat.
+  for (const b of state.buoys) { noiseMade(b.q, b.r, 3); b.turns--; }
+  if (state.buoys.length) state.buoys = state.buoys.filter(b => b.turns > 0);
   for (const c of state.creatures) {
     const d = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     if (d > CREATURE_SIM_RANGE) continue;
@@ -4519,6 +4545,7 @@ function restart() {
   carvedFeatures.clear();
   spawnedChunks.clear();
   state.creatures = [];
+  state.buoys = [];
   // Force-generate origin chunk and neighbors so the player can leave
   tileAt(0, 0);
   // Set initial depth to match origin tile's range (origin is shallow)
@@ -4849,6 +4876,7 @@ if (diveBtn) {
 }
 
 document.getElementById('btn-ping').addEventListener('click', ping);
+document.getElementById('btn-launch').addEventListener('click', launchDecoy);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();

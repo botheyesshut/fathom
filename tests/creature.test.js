@@ -188,6 +188,19 @@ const near1 = Math.min(...st.creatures.map(c => shd(c, st)));
 check(near1 < near0, 'the school closes on the sub', near0 + ' → ' + near1);
 check(st.hull < hull0, 'the school bites once it surrounds you', 'hull ' + hull0 + ' → ' + st.hull);
 
+// ---- 4e. Decoy buoy: pulls the school off the boat ----
+st.creatures.length = 0; st.buoys = [];
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnShoal(0, -8, 0);
+for (const c of st.creatures) c.boldness = 1;
+st.buoys.push({ q: 8, r: -6, depth: 0, turns: 10 });
+const toBuoy0 = Math.min(...st.creatures.map(c => shd(c, { q: 8, r: -6 })));
+for (let i = 0; i < 5; i++) sb.creatureTick();
+const toBuoy1 = Math.min(...st.creatures.map(c => shd(c, { q: 8, r: -6 })));
+check(toBuoy1 < toBuoy0, 'a decoy buoy pulls the school toward it', toBuoy0 + ' → ' + toBuoy1);
+check(st.buoys[0] && st.buoys[0].turns === 5, 'the buoy burns down its turns', st.buoys[0] && st.buoys[0].turns);
+st.buoys = [];
+
 // ---- 5b. Rival salvager: seeks the nearest unworked site and strips it ----
 st.creatures.length = 0;
 st.q = 0; st.r = -16; st.currentDepth = 0; // inside sim range (24), outside stand-off (2)
