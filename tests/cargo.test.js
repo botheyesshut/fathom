@@ -36,7 +36,7 @@ function freshContext(storage) {
   };
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
-  try { vm.runInContext(script + '\nfunction __state(){ return state; }\nfunction __tile(q,r){ return world.get(hexKey(q,r)); }\nfunction __subKey(){ return activeSubKey; }', sandbox, { timeout: 15000 }); } catch (e) {}
+  try { vm.runInContext(script + '\nfunction __state(){ return state; }\nfunction __tile(q,r){ return world.get(hexKey(q,r)); }\nfunction __subKey(){ return activeSubKey; }\nfunction __setCell(q,r,d,k2){ cells.set(cellKey(q,r,d), {type:k2, kind:k2}); }', sandbox, { timeout: 15000 }); } catch (e) {}
   return sandbox;
 }
 let failures = 0;
@@ -104,6 +104,17 @@ check(!!st.expedition, 'a second team goes down');
 st.q = 0; st.r = -6; // the boat moves off
 sb.creatureTick();
 check(!st.expedition && st.poisFound.includes('6,-9'), 'moving off recalls the team; site spent');
+// 2e. Cavern beach: landfall gives air + a crew expedition; returns refill
+sb.__setCell(0, -8, 60, 'beach');
+st.q = 0; st.r = -8; st.currentDepth = 60; st.air = 100; st.expedition = null;
+sb.maybeBeach();
+check(st.air > 100 && !!st.expedition && st.expedition.type === 'beach', 'first landfall: air off the pocket + beach expedition', 'air=' + st.air);
+let bspin = 0;
+while (st.expedition && bspin++ < 12) sb.creatureTick();
+st.air = 200;
+sb.maybeBeach();
+check(st.air > 200, 'the old beach refills the tanks on return', 'air=' + st.air);
+
 // relics go ashore under guard
 st.relics = 2; st.cargo = 0; st.q = 0; st.r = 0; st.currentDepth = 0; st.hull = 130; st.air = 450;
 sb.surface();

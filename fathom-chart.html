@@ -890,6 +890,7 @@ const TILES = {
   passage:  { name: 'a passage',           char: '',   cost: 1,  color: '#0a1622' },
   chamber:  { name: 'an open chamber',     char: '',   cost: 1,  color: '#0e1c2c' },
   sea:      { name: 'an open sea',         char: '',   cost: 1,  color: '#0a1828' },
+  beach:    { name: 'a cavern beach',      char: '',   cost: 1,  color: '#0e1c2c' },
   current:  { name: 'a swift current',     char: '≈',  cost: 2,  color: '#0e2840', strange: true },
   kelp:     { name: 'a forest of kelp',    char: 'Ψ',  cost: 2,  color: '#0e2018' },
   chasm:    { name: 'a chasm',             char: '▼',  cost: 1,  color: '#000408' },
@@ -1275,6 +1276,17 @@ function carveChamber(node) {
       }
     }
   }
+
+  // Some chambers trap air at the crown: a CAVERN BEACH. The chamber's top
+  // center cell becomes landfall — air off the pocket, sand for the crew,
+  // a remembered waypoint in the deep. Hash-rolled from the chamber's id;
+  // beach is the highest kind, so the cell survives every later merge.
+  if (baseRadius >= 2.5 && mulberry32(hashStr('beach:' + worldSeed + ':' + node.id))() < 0.12) {
+    const top = Math.ceil(Math.max(0, node.depth - baseSpan / 2) / DEPTH_GRID) * DEPTH_GRID;
+    if (cells.has(cellKey(node.q, node.r, top))) {
+      cells.set(cellKey(node.q, node.r, top), { type: 'beach', kind: 'beach' });
+    }
+  }
 }
 
 // Carve a tunnel along a graph edge. Three kinds:
@@ -1507,10 +1519,10 @@ function addVolume(q, r, type, kind, ceiling, floor) {
   const chosenType = isExistingPoi ? existing.type : kindToType(PRIO_TO_KIND[newPrio]);
   world.set(k, makeTile(chosenType, q, r, newCeiling, newFloor, newPrio));
 }
-const PRIO_TO_KIND = ['water', 'passage', 'chamber', 'sea'];
+const PRIO_TO_KIND = ['water', 'passage', 'chamber', 'sea', 'beach'];
 
 function kindPriority(kind) {
-  const m = { water: 0, passage: 1, chamber: 2, sea: 3 };
+  const m = { water: 0, passage: 1, chamber: 2, sea: 3, beach: 4 };
   return m[kind] ?? 0;
 }
 
@@ -2056,6 +2068,10 @@ function render() {
         }
         alpha *= fade;
       }
+
+      // A cavern beach at this depth slice reads as pale sand under stone.
+      const cellHere = cells.get(cellKey(q, r, cd));
+      if (!isSurf && cellHere && cellHere.kind === 'beach') fillColor = '#8a7448';
 
       // Hex floor — fills merge where tiles touch; crisp edge against void is the wall.
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -3006,7 +3022,8 @@ function move(q, r) {
     logZContext(tile, curVol);
   }
 
-  // The water answers: creatures take their turn, then death checks.
+  // The water answers: landfall, creatures, then death checks.
+  maybeBeach();
   creatureTick();
   checkDeath();
 
@@ -3139,7 +3156,28 @@ function startExpedition(tile, kind) {
   };
   log(kind === 'ruin'
     ? 'The boat holds station over the ruin. Two divers go over the side, lights dropping away into the structure.'
+    : kind === 'beach'
+    ? 'The crew wades ashore by lamplight — the first dry ground in miles. They fan out across the sand.'
     : 'The boat holds station on the signal. A diver goes over the side, homing on the pulse.', '', 'DIVE TEAM');
+}
+
+// Rising into a cavern beach: air off the trapped pocket, landfall for the
+// crew, and afterwards a remembered waypoint that tops the tanks on return.
+function maybeBeach() {
+  const cell = cells.get(cellKey(state.q, state.r, state.currentDepth));
+  if (!cell || cell.kind !== 'beach') return;
+  const k = 'beach:' + hexKey(state.q, state.r);
+  const sub = activeSub();
+  if (!state.poisFound.includes(k)) {
+    state.poisFound.push(k);
+    state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.5));
+    log('The boat breaks into still black air under stone — a cavern beach, pale sand rising out of the water. The crew tops the tanks off the pocket.', 'strange', 'BEACH');
+    sfx('bell');
+    if (!state.expedition) startExpedition({ q: state.q, r: state.r }, 'beach');
+  } else if (state.air < sub.air) {
+    state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.25));
+    log('The old beach. The crew tops the tanks off the pocket.', '', 'BEACH');
+  }
 }
 
 function expeditionTick() {
@@ -3151,7 +3189,7 @@ function expeditionTick() {
   }
   exp.turns--;
   const roll = rand();
-  const relicChance = exp.type === 'signal' ? 0.20 : 0.10;
+  const relicChance = exp.type === 'signal' ? 0.20 : exp.type === 'beach' ? 0.15 : 0.10;
   if (roll < relicChance) {
     exp.relics++;
     log('The divers surface a RELIC — old work, and not drowned-men make.', 'strange', 'RELIC');
@@ -3702,6 +3740,7 @@ function changeDepth(deltaMeters) {
   // throttle to avoid spam on small back-and-forth movements.
   logZContext(tile, cur);
 
+  maybeBeach();
   creatureTick();
   checkDeath();
   updateHUD();
