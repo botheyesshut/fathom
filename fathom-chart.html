@@ -886,8 +886,87 @@ const CREW_ROLES = ['diver', 'sonarman', 'engineer'];
 const CREW_HIRE_COST = 5; // banked crates for a sign-on
 function crewLvl(role) {
   let s = 0;
-  for (const m of state.crew) if (m.role === role) s += Math.min(3, 1 + Math.floor(m.xp / 3));
+  for (const m of state.crew) {
+    if (m.role !== role || m.wounded) continue; // the wounded work no dials
+    s += Math.min(3, 1 + Math.floor(m.xp / 3));
+  }
   return s;
+}
+
+// ---- Gear: salvage-era equipment, and rarer relic-work. Slots per member:
+// weapon / armor / kit. Stats are ABSTRACT (atk/def/utility) so the same
+// items resolve expedition hazards now and per-tile dungeon combat later.
+// Scale law: crew gear acts at MAN scale only — never soaks boat-scale hits.
+const GEAR = {
+  axe:      { slot: 'weapon', name: 'boarding axe',        atk: 1, cost: { crates: 2 } },
+  speargun: { slot: 'weapon', name: 'pneumatic speargun',  atk: 2, cost: { crates: 4 } },
+  lance:    { slot: 'weapon', name: 'relic lance',         atk: 4, cost: { relics: 1 }, strange: true },
+  plates:   { slot: 'armor',  name: 'scrap diving plates', def: 1, cost: { crates: 3 } },
+  wardsuit: { slot: 'armor',  name: 'salt-iron wardsuit',  def: 3, cost: { relics: 1 }, strange: true },
+  firstaid: { slot: 'kit',    name: 'first-aid satchel',   heal: true, charges: 2, cost: { crates: 3 } },
+  grenades: { slot: 'kit',    name: 'depth grenades',      boom: true, charges: 2, cost: { crates: 5 } },
+};
+
+function teamScore() {
+  let atk = 0, def = 0;
+  for (const m of state.crew) {
+    if (m.wounded || !m.gear) continue;
+    if (m.gear.weapon && GEAR[m.gear.weapon]) atk += GEAR[m.gear.weapon].atk;
+    if (m.gear.armor && GEAR[m.gear.armor]) def += GEAR[m.gear.armor].def;
+  }
+  return { atk, def };
+}
+
+function teamKit(prop) { // first able member carrying a charged kit with `prop`
+  for (const m of state.crew) {
+    if (m.wounded || !m.gear || !m.gear.kit || m.gear.kit.charges <= 0) continue;
+    if (GEAR[m.gear.kit.key] && GEAR[m.gear.kit.key][prop]) return m;
+  }
+  return null;
+}
+
+// Something in the dark below — the expedition hazard. Armed, armored teams
+// drive it off; grenades buy a win when the line would break; unarmed teams
+// take wounds, patched on the sand if a satchel is carried. No crew at all
+// and the thing takes it out on the line and the hull. Wounds heal at port.
+function resolveHazard(exp) {
+  const threat = 2 + randInt(4); // 2-5
+  const s = teamScore();
+  if (state.crew.filter(m => !m.wounded).length === 0) {
+    const dmg = 3 + randInt(3);
+    state.hull = Math.max(0, state.hull - dmg);
+    log(`Something in the dark takes the line — with no divers to face it, it turns on the boat. -${dmg} hull.`, 'danger', 'HAZARD');
+    return 'hull';
+  }
+  if (s.atk + s.def >= threat) {
+    const fighters = state.crew.filter(m => !m.wounded && m.gear && m.gear.weapon);
+    const hero = fighters.length ? pick(fighters) : pick(state.crew.filter(m => !m.wounded));
+    hero.xp++;
+    if (rand() < 0.35) { exp.crates++; log(`Something came out of the dark — ${hero.name} met it. It broke and ran; the divers strip what it guarded.`, 'warn', 'HAZARD'); }
+    else log(`Something came out of the dark — ${hero.name} met it, and the water went quiet again.`, 'warn', 'HAZARD');
+    sfx('strike');
+    return 'repelled';
+  }
+  const bomber = teamKit('boom');
+  if (bomber) {
+    bomber.gear.kit.charges--;
+    exp.crates++;
+    log(`The line breaks — ${bomber.name} drops a depth grenade. The concussion rolls; whatever it was is paste, and its hoard is theirs. (${bomber.gear.kit.charges} left)`, 'warn', 'HAZARD');
+    sfx('impact');
+    return 'grenade';
+  }
+  const able = state.crew.filter(m => !m.wounded);
+  const victim = pick(able);
+  const medic = teamKit('heal');
+  if (medic && medic !== victim) {
+    medic.gear.kit.charges--;
+    log(`Something takes hold of ${victim.name} in the dark — ${medic.name} gets them clear and patches them on the sand. (${medic.gear.kit.charges} dressings left)`, 'danger', 'HAZARD');
+  } else {
+    victim.wounded = true;
+    log(`Something takes hold of ${victim.name} in the dark. The divers pull them out torn — ${victim.name} is out until the port.`, 'danger', 'HAZARD');
+    sfx('strike');
+  }
+  return 'wound';
 }
 
 let activeSubKey = 'erebus';
@@ -3223,6 +3302,8 @@ function expeditionTick() {
   } else if (roll < relicChance + 0.60) {
     state.air = Math.min(activeSub().air, state.air + 8);
     log('The divers tap a trapped pocket and pass gas up the line. +8 air.', '', 'DIVE TEAM');
+  } else if (roll < relicChance + 0.72) {
+    resolveHazard(exp);
   } else {
     log(pick([
       'Hand signals on the line: still searching.',
@@ -4189,7 +4270,7 @@ function endGame(title, summary) {
   state.cargo = 0; state.relics = 0;
   state.crew = [];
   state.expedition = null;
-  state._outfitOffer = null; state._hireOffer = null;
+  state._outfitOffer = null; state._hireOffer = null; state._armoryOffer = null;
   state.moves = 0; state.maxDepth = 0;
   state.trail = []; state.pingMemory = new Map();
   state.pingArrows = null; state.ping = null;
@@ -4225,6 +4306,7 @@ function restart() {
   state.expedition = null;
   state.crew = [];
   state._hireOffer = null;
+  state._armoryOffer = null;
   state.alive = true;
   state.cameraX = 0; state.cameraY = 0;
   state.panX = 0; state.panY = 0;
@@ -4303,6 +4385,10 @@ function surface() {
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
       sfx('bell');
     }
+    if (atPort && state.crew.some(m => m.wounded)) {
+      for (const m of state.crew) m.wounded = false;
+      log('The port surgeon sees to the wounded. The crew stands whole again.', '', 'PORT');
+    }
     if (atPort && state.relics > 0) {
       state.relicsBanked += state.relics;
       log(`${state.relics} relic${state.relics > 1 ? 's' : ''} go ashore under guard. The collectors will pay well, someday. ${state.relicsBanked} in the vault.`, 'strange', 'PORT');
@@ -4355,7 +4441,7 @@ function surface() {
           && performance.now() < ho.until
           && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
         state.cargoBanked -= CREW_HIRE_COST;
-        state.crew.push({ name: ho.name, role: ho.role, xp: 0 });
+        state.crew.push({ name: ho.name, role: ho.role, xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } });
         state._hireOffer = null;
         log(`${ho.name} signs aboard as ${ho.role}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.) Crew ${state.crew.length}/${cap}.`, '', 'CREW');
         sfx('bell');
@@ -4366,6 +4452,44 @@ function surface() {
       if (!state._outfitOffer && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
         state._hireOffer = { name: pick(CREW_NAMES), role: pick(CREW_ROLES), q: state.q, r: state.r, until: performance.now() + 45000 };
         log(`On the dock: ${state._hireOffer.name}, a ${state._hireOffer.role} looking for a berth — ${CREW_HIRE_COST} crates for the sign-on. Press Surface again to take them on.`, 'warn', 'CREW');
+      }
+      // The armory: one piece at a time, for a hand with an empty slot.
+      // Offers defer to the outfitter and the hiring hall.
+      const affordable = (g) => (g.cost.crates || 0) <= state.cargoBanked && (g.cost.relics || 0) <= state.relicsBanked;
+      const ao = state._armoryOffer;
+      if (!state._outfitOffer && !state._hireOffer && ao && ao.q === state.q && ao.r === state.r
+          && performance.now() < ao.until && state.crew[ao.mIdx] && GEAR[ao.key] && affordable(GEAR[ao.key])) {
+        const g = GEAR[ao.key];
+        const m = state.crew[ao.mIdx];
+        if (!m.gear) m.gear = { weapon: null, armor: null, kit: null };
+        state.cargoBanked -= (g.cost.crates || 0);
+        state.relicsBanked -= (g.cost.relics || 0);
+        m.gear[g.slot] = g.slot === 'kit' ? { key: ao.key, charges: g.charges } : ao.key;
+        state._armoryOffer = null;
+        const price = g.cost.relics ? `${g.cost.relics} relic${g.cost.relics > 1 ? 's' : ''}` : `${g.cost.crates} crates`;
+        log(`${m.name} takes the ${g.name}${g.strange ? ' — it hums against their palm' : ''}. (${price} spent; bank ${state.cargoBanked}, vault ${state.relicsBanked}.)`, g.strange ? 'strange' : '', 'ARMORY');
+        sfx('bell');
+        updateHUD();
+        render();
+        return;
+      }
+      if (!state._outfitOffer && !state._hireOffer && state.crew.length > 0) {
+        const cands = [];
+        state.crew.forEach((m, i) => {
+          const gr = m.gear || {};
+          for (const k in GEAR) {
+            const g = GEAR[k];
+            const empty = g.slot === 'kit' ? !(gr.kit && gr.kit.charges > 0) : !gr[g.slot];
+            if (empty && affordable(g)) cands.push({ mIdx: i, key: k });
+          }
+        });
+        if (cands.length) {
+          const c = pick(cands);
+          const g = GEAR[c.key];
+          const price = g.cost.relics ? `${g.cost.relics} relic${g.cost.relics > 1 ? 's' : ''}` : `${g.cost.crates} crates`;
+          state._armoryOffer = { mIdx: c.mIdx, key: c.key, q: state.q, r: state.r, until: performance.now() + 45000 };
+          log(`The armory: a ${g.name} would fit ${state.crew[c.mIdx].name}'s hands — ${price}. Press Surface again to arm them.`, 'warn', 'ARMORY');
+        }
       }
     }
     if (state.air >= sub.air) {
@@ -4480,6 +4604,7 @@ function resumeGame(save) {
   state.expedition = save.expedition || null;
   state.crew = save.crew || [];
   state._hireOffer = null;
+  state._armoryOffer = null;
   worldSeed = save.seed;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);

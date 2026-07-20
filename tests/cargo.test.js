@@ -141,6 +141,33 @@ check(st2.cargo === 3 && st2.cargoBanked === 1, 'cargo + bank survive reload', '
 check(sb2.__subKey() === 'charon', 'the bought boat survives reload', 'sub=' + sb2.__subKey());
 check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.crew[0].name + ', xp ' + st2.crew[0].xp));
 
+// 5. Gear & hazards: the armed, the unarmed, and the grenade
+{
+  st.crew.length = 0;
+  st.crew.push({ name: 'A', role: 'diver', xp: 0, wounded: false, gear: { weapon: 'lance', armor: 'wardsuit', kit: null } });
+  st.crew.push({ name: 'B', role: 'diver', xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } });
+  const expF = { crates: 0, relics: 0 };
+  check(sb.resolveHazard(expF) === 'repelled' && !st.crew.some(m => m.wounded), 'an armed team drives the dark off (7 vs threat<=5)', 'hero xp=' + st.crew[0].xp);
+  st.crew[0].gear = { weapon: null, armor: null, kit: null };
+  check(sb.resolveHazard(expF) === 'wound' && st.crew.some(m => m.wounded), 'an unarmed team takes a wound');
+  for (const m of st.crew) m.wounded = false;
+  st.crew[0].gear.kit = { key: 'grenades', charges: 1 };
+  check(sb.resolveHazard(expF) === 'grenade' && st.crew[0].gear.kit.charges === 0 && expF.crates >= 1, 'a grenade buys the win when the line breaks');
+  st.crew[1].wounded = true;
+  st.q = 0; st.r = 0; st.currentDepth = 0; st.hull = 130; st.air = 450;
+  st.cargo = 0; st.relics = 0; st.cargoBanked = 0; st.relicsBanked = 0;
+  st._outfitOffer = null; st._hireOffer = null; st._armoryOffer = null;
+  sb.surface();
+  check(!st.crew.some(m => m.wounded), 'the port surgeon makes the crew whole');
+  st.crew.push({ name: 'C', role: 'engineer', xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } });
+  st.cargoBanked = 10; st.relicsBanked = 0; st.air = 450; st.hull = 130;
+  sb.surface();
+  check(!!st._armoryOffer, 'the armory lays out a piece', st._armoryOffer && st._armoryOffer.key);
+  sb.surface();
+  const armed = st.crew.some(m => m.gear && (m.gear.weapon || m.gear.armor || (m.gear.kit && m.gear.kit.charges > 0)));
+  check(armed && st.cargoBanked < 10, 'a second press arms a hand', 'bank=' + st.cargoBanked);
+}
+
 // 4. The death ruling: the sea keeps what was aboard; the port keeps the bank
 {
   const st3 = sb2.__state();
