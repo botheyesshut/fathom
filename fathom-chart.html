@@ -1821,7 +1821,7 @@ function generateChunk(cq, cr) {
         if (!opts.length) continue;
         const depth = opts[Math.floor(crand() * opts.length)];
         const roll = crand();
-        const type = depth >= 2400 ? (roll < 0.55 ? 'lurker' : roll < 0.80 ? 'drifter' : 'eel')
+        const type = depth >= 2400 ? (roll < 0.38 ? 'lurker' : roll < 0.58 ? 'baro' : roll < 0.80 ? 'drifter' : 'eel')
                    : depth >= 1200 ? (roll < 0.40 ? 'lurker' : roll < 0.70 ? 'drifter' : 'eel')
                    :                 (roll < 0.22 ? 'lurker' : roll < 0.60 ? 'drifter' : 'eel');
         spawnCreature(type, h.q, h.r, depth);
@@ -1838,6 +1838,12 @@ function generateChunk(cq, cr) {
         const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
         const opts = caveDepthsAt(h);
         if (opts.length) spawnShoal(h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+      }
+      // A silt-lurcher, buried in the sediment of a cave cell.
+      if (crand() < 0.12) {
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (opts.length) spawnCreature('silt', h.q, h.r, opts[Math.floor(crand() * opts.length)]);
       }
     }
   }
@@ -2466,9 +2472,9 @@ function render() {
     ct.setAttribute('dominant-baseline', 'central');
     ct.setAttribute('font-family', 'JetBrains Mono, monospace');
     ct.setAttribute('font-size', c.type === 'drifter' ? '14' : c.type === 'eel' ? '11' : '12');
-    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : '#d05048');
+    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : c.type === 'silt' ? '#8a7048' : c.type === 'baro' ? '#8050b0' : '#d05048');
     ct.setAttribute('filter', 'url(#softglow)');
-    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : '⊗';
+    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : c.type === 'silt' ? '▲' : c.type === 'baro' ? '●' : '⊗';
     g.appendChild(ct);
   }
 
@@ -3415,6 +3421,14 @@ function spawnCreature(type, q, r, depth) {
     c.interest = 0; c.fleeing = false;
     c.cunning = rng(); c.tenacity = rng(); c.aggression = rng();
   }
+  if (type === 'silt') { // floor ambusher: patience sets its trigger reach
+    c.patience = mulberry32(hashStr(worldSeed + ':silt:' + q + ':' + r + ':' + depth))();
+    c.spent = 0;
+  }
+  if (type === 'baro') { // deep pressure-wraith: won't rise above ceilingLimit
+    const rng = mulberry32(hashStr(worldSeed + ':baro:' + q + ':' + r + ':' + depth));
+    c.ceilingLimit = Math.max(1200, snapToGrid(depth - (480 + Math.floor(rng() * 600))));
+  }
   state.creatures.push(c);
 }
 
@@ -3591,6 +3605,53 @@ function tickRival(c, dPlayer) {
   }
 }
 
+// Silt-lurcher: buried on the floor, it only threatens when you come DOWN to
+// its layer. It ambushes hard from a short reach (patience), then recedes to
+// dig back in — and it never leaves its depth, so a climb of one band escapes.
+function siltShuffle(c) {
+  if (rand() >= 0.4) return;
+  const o = hexNeighbors(c.q, c.r).filter(n => cells.has(cellKey(n.q, n.r, c.depth)) && !cells.has(cellKey(n.q, n.r, c.depth + DEPTH_GRID)));
+  if (o.length) { const n = pick(o); c.q = n.q; c.r = n.r; }
+}
+function tickSilt(c, dPlayer) {
+  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
+  if (!sameSlice) { siltShuffle(c); return; } // you're not in its layer — it waits
+  const trigger = 1 + Math.round(c.patience * 2); // 1..3
+  if (c.spent > 0) { c.spent--; siltShuffle(c); return; }
+  if (dPlayer === 1) {
+    const dmg = 8 + Math.floor(rand() * 9); // 8-16: an ambush bites deep
+    state.hull = Math.max(0, state.hull - dmg);
+    state.lastFailTime = performance.now();
+    log(`The floor erupts — something buried seizes the hull. -${dmg} hull.`, 'danger', 'AMBUSH');
+    sfx('strike');
+    c.spent = 3; // it digs back in
+    return;
+  }
+  if (dPlayer <= trigger) lurkerStep(c, state.q, state.r); else siltShuffle(c);
+}
+
+// Barotaur: a pressure-wraith of the deep bands. It hunts prey that lingers
+// below, but it cannot rise past its ceilingLimit — climb a band or two and it
+// falls away into the black. Greed in the deep is what feeds it.
+function tickBaro(c, dPlayer) {
+  if (state.currentDepth < c.ceilingLimit - DEPTH_GRID) { if (rand() < 0.3) lurkerWander(c); return; }
+  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
+  if (sameSlice && dPlayer === 1) {
+    const dmg = 6 + Math.floor(rand() * 9);
+    state.hull = Math.max(0, state.hull - dmg);
+    state.lastFailTime = performance.now();
+    log(`The pressure itself seems to close a fist on the hull. -${dmg} hull.`, 'danger', 'STRIKE');
+    sfx('strike');
+    return;
+  }
+  if (dPlayer <= 16 && c.depth !== state.currentDepth) {
+    const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
+    const nd = c.depth + dd;
+    if (nd >= c.ceilingLimit && cells.has(cellKey(c.q, c.r, nd))) { c.depth = nd; return; }
+  }
+  lurkerStep(c, state.q, state.r);
+}
+
 // The shoalfang turn: close a ring around the sub and pin it. Each member
 // claims an unoccupied hex of the sub's ring; a bold school presses from any
 // distance, a timid one only when near — and a loud noise scatters the timid.
@@ -3755,6 +3816,8 @@ function creatureTick() {
     else if (c.type === 'eel') tickEel(c, d);
     else if (c.type === 'rival') tickRival(c, d);
     else if (c.type === 'shoal') tickShoal(c, d);
+    else if (c.type === 'silt') tickSilt(c, d);
+    else if (c.type === 'baro') tickBaro(c, d);
     else tickLurker(c, d, silent);
     const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     const depthOff = Math.abs(c.depth - state.currentDepth);
@@ -3772,6 +3835,8 @@ function creatureTick() {
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
                  : c.type === 'rival' ? 'engine noise — another boat under power'
                  : c.type === 'shoal' ? 'a school, circling to surround you'
+                 : c.type === 'silt' ? 'something buried, waiting on the floor'
+                 : c.type === 'baro' ? 'a vast pressure, pacing you in the deep'
                  : lurkWhat;
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
       log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, hunting || c.fleeing ? 'danger' : 'strange', 'CONTACT');

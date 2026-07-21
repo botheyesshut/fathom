@@ -41,7 +41,7 @@ function freshContext(storage) {
   sandbox.__ping = pingEl;
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
-  const injected = script + '\nfunction __cells(){ return cells; }\nfunction __state(){ return state; }\nfunction __spawned(){ return spawnedChunks; }\nfunction __ck(q,r,d){ return cells.has(cellKey(q,r,d)); }\nfunction __kind(q,r,d){ const c = cells.get(cellKey(q,r,d)); return c ? c.kind : null; }';
+  const injected = script + '\nfunction __cells(){ return cells; }\nfunction __state(){ return state; }\nfunction __spawned(){ return spawnedChunks; }\nfunction __ck(q,r,d){ return cells.has(cellKey(q,r,d)); }\nfunction __kind(q,r,d){ const c = cells.get(cellKey(q,r,d)); return c ? c.kind : null; }\nfunction __set(q,r,d){ cells.set(cellKey(q,r,d), {type:"passage",kind:"passage"}); }';
   try { vm.runInContext(injected, sandbox, { timeout: 15000 }); } catch (e) { /* DOM init throw expected */ }
   return sandbox;
 }
@@ -200,6 +200,33 @@ const toBuoy1 = Math.min(...st.creatures.map(c => shd(c, { q: 8, r: -6 })));
 check(toBuoy1 < toBuoy0, 'a decoy buoy pulls the school toward it', toBuoy0 + ' → ' + toBuoy1);
 check(st.buoys[0] && st.buoys[0].turns === 5, 'the buoy burns down its turns', st.buoys[0] && st.buoys[0].turns);
 st.buoys = [];
+
+// ---- 4f. Silt-lurcher: floor ambush that can't leave its layer ----
+st.creatures.length = 0; st.buoys = [];
+st.q = 0; st.r = -6; st.hull = 200;
+sb.spawnCreature('silt', 1, -6, 480); // buried at 480m
+const SI = st.creatures[0]; SI.patience = 1; SI.spent = 0;
+st.currentDepth = 480; // you come down into its layer, adjacent
+const sd0 = SI.depth;
+let siltHit = false; const sh0 = st.hull;
+for (let i = 0; i < 6 && !siltHit; i++) { sb.creatureTick(); if (st.hull < sh0) siltHit = true; }
+check(siltHit, 'the buried silt-lurcher ambushes when you come to the floor', 'hull ' + sh0 + '→' + st.hull);
+check(SI.depth === sd0, 'the silt-lurcher never leaves its depth layer', 'depth ' + SI.depth);
+
+// ---- 4g. Barotaur: hunts in the deep, falls away when you climb out ----
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.hull = 200;
+for (let q = -1; q <= 4; q++) { sb.__set(q, -6, 3000); sb.__set(q, -6, 1800); sb.__set(q, -6, 2400); }
+sb.spawnCreature('baro', 3, -6, 3000);
+const BA = st.creatures[0]; BA.ceilingLimit = 2400;
+st.currentDepth = 3000; // deep with it
+const bd0 = shd(BA, st);
+for (let i = 0; i < 6; i++) sb.creatureTick();
+check(shd(BA, st) < bd0, 'the barotaur closes on prey in the deep', bd0 + '→' + shd(BA, st));
+const bdepth = BA.depth;
+st.currentDepth = 1800; // you climb two bands, above its ceiling
+for (let i = 0; i < 6; i++) sb.creatureTick();
+check(BA.depth >= BA.ceilingLimit, 'the barotaur cannot follow above its ceiling — you escape', 'depth ' + BA.depth + ' vs limit ' + BA.ceilingLimit);
 
 // ---- 5b. Rival salvager: seeks the nearest unworked site and strips it ----
 st.creatures.length = 0;
