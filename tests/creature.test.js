@@ -207,6 +207,24 @@ check(toBuoy1 < toBuoy0, 'a decoy buoy pulls the school toward it', toBuoy0 + ' 
 check(st.buoys[0] && st.buoys[0].turns === 5, 'the buoy burns down its turns', st.buoys[0] && st.buoys[0].turns);
 st.buoys = [];
 
+// ---- 4j. Tidehulk: its wake takes the boat, its bulk blocks the passage ----
+st.creatures.length = 0; st.buoys = [];
+st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
+for (let q = -3; q <= 3; q++) for (let r = -9; r <= -3; r++) sb.__set(q, r, 0);
+sb.spawnCreature('hulk', 1, -6, 0);
+const HK = st.creatures[0]; HK.predictability = 1; HK.phase = 2; // moves next tick
+const pq0 = st.q, pr0 = st.r, ph0 = st.hull;
+let wake = false;
+for (let i = 0; i < 9 && !wake; i++) { sb.creatureTick(); if (st.q !== pq0 || st.r !== pr0 || st.hull < ph0) wake = true; }
+check(wake, 'the tidehulk\'s wake shoves the boat (or slams it)', 'moved to (' + st.q + ',' + st.r + '), hull ' + st.hull);
+// Its bulk is an outright wall.
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.hull = 200;
+sb.spawnCreature('hulk', 1, -6, 0);
+const bh = st.hull;
+sb.move(1, -6);
+check(st.q === 0 && st.r === -6 && st.hull === bh, 'nothing gets past a tidehulk', 'still at (' + st.q + ',' + st.r + ')');
+
 // ---- 4i. Chorus: sings, draws hunters, never bites ----
 st.creatures.length = 0; st.buoys = [];
 st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
