@@ -1839,11 +1839,17 @@ function generateChunk(cq, cr) {
         const opts = caveDepthsAt(h);
         if (opts.length) spawnShoal(h.q, h.r, opts[Math.floor(crand() * opts.length)]);
       }
+      // An anglerlure, wearing the face of a prize.
+      if (crand() < 0.10) {
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (opts.length) spawnCreature('angler', h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+      }
       // A silt-lurcher, buried in the sediment of a cave cell.
       if (crand() < 0.12) {
         const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
         const opts = caveDepthsAt(h);
-        if (opts.length) spawnCreature('silt', h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+        if (opts.length) spawnCreature('silt', h.q, h.r, Math.max(...opts)); // the bottom, where sediment lies
       }
     }
   }
@@ -2472,9 +2478,10 @@ function render() {
     ct.setAttribute('dominant-baseline', 'central');
     ct.setAttribute('font-family', 'JetBrains Mono, monospace');
     ct.setAttribute('font-size', c.type === 'drifter' ? '14' : c.type === 'eel' ? '11' : '12');
-    ct.setAttribute('fill', c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : c.type === 'silt' ? '#8a7048' : c.type === 'baro' ? '#8050b0' : '#d05048');
+    const angMask = c.type === 'angler' && !c.revealed ? ANGLER_MASK[c.mask] : null;
+    ct.setAttribute('fill', angMask ? angMask.col : c.type === 'angler' ? '#e05070' : c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : c.type === 'silt' ? '#8a7048' : c.type === 'baro' ? '#8050b0' : '#d05048');
     ct.setAttribute('filter', 'url(#softglow)');
-    ct.textContent = c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : c.type === 'silt' ? '▲' : c.type === 'baro' ? '●' : '⊗';
+    ct.textContent = angMask ? angMask.ch : c.type === 'angler' ? '✸' : c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : c.type === 'silt' ? '▲' : c.type === 'baro' ? '●' : '⊗';
     g.appendChild(ct);
   }
 
@@ -2921,6 +2928,15 @@ function ping() {
     const [q, r] = k.split(',').map(Number);
     const tile = tileAt(q, r);
     revealAt(q, r, state.currentDepth);
+    // An active ping catches what the ear cannot: a "prize" with a heartbeat.
+    for (const cr of state.creatures) {
+      if (cr.type !== 'angler' || cr.revealed) continue;
+      if (cr.q !== q || cr.r !== r) continue;
+      if (Math.abs(cr.depth - state.currentDepth) > DEPTH_GRID) continue;
+      cr.revealed = true;
+      log('The ping comes back wrong — that prize has a heartbeat. It is alive, and it is waiting.', 'strange', 'ECHO');
+      sfx('contact');
+    }
     totalHexes++;
     if (!tile.wall) openHexes++;
     const d = hexDistance({q, r}, {q: state.q, r: state.r});
@@ -3425,6 +3441,13 @@ function spawnCreature(type, q, r, depth) {
     c.patience = mulberry32(hashStr(worldSeed + ':silt:' + q + ':' + r + ':' + depth))();
     c.spent = 0;
   }
+  if (type === 'angler') { // a lure wearing a POI's face until a ping finds it
+    const rng = mulberry32(hashStr(worldSeed + ':angler:' + q + ':' + r + ':' + depth));
+    c.revealed = false;
+    c.patience = rng();
+    c.cunning = rng();
+    c.mask = ['salvage', 'signal', 'ruin'][Math.floor(rng() * 3)];
+  }
   if (type === 'baro') { // deep pressure-wraith: won't rise above ceilingLimit
     const rng = mulberry32(hashStr(worldSeed + ':baro:' + q + ':' + r + ':' + depth));
     c.ceilingLimit = Math.max(1200, snapToGrid(depth - (480 + Math.floor(rng() * 600))));
@@ -3442,7 +3465,10 @@ function spawnShoal(q, r, depth) {
   for (const [dq, dr] of [[0,0],[1,0],[0,1],[1,-1],[-1,1],[-1,0],[0,-1]]) {
     if (placed >= 3) break;
     const sq = q + dq, sr = r + dr;
-    if (!cells.has(cellKey(sq, sr, depth))) continue;
+    // The school belongs in the caves — a neighbouring cell existing isn't
+    // enough, it must be cave water, not open shelf ocean.
+    const cell = cells.get(cellKey(sq, sr, depth));
+    if (!cell || cell.kind === 'water') continue;
     state.creatures.push({ id: 'shoal:' + sq + ',' + sr + ',' + depth, type: 'shoal', q: sq, r: sr, depth, boldness, spooked: 0 });
     placed++;
   }
@@ -3603,6 +3629,34 @@ function tickRival(c, dPlayer) {
     const nbrs = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth));
     if (nbrs.length) { const n = nbrs[Math.floor(rand() * nbrs.length)]; c.q = n.q; c.r = n.r; }
   }
+}
+
+// The faces an anglerlure wears — it borrows a real prize's glyph and colour.
+const ANGLER_MASK = {
+  salvage: { ch: '✕', col: '#f4b860' },
+  signal:  { ch: '◉', col: '#b870e8' },
+  ruin:    { ch: '◙', col: '#d89248' },
+};
+
+// Anglerlure: it does not hunt — it WAITS, wearing the face of a wreck or a
+// signal, perfectly still. Passive sonar hears movement, and this thing does
+// not move, so the ear never finds it; only an active ping catches the lie.
+// Come alongside believing it's a prize and it unfolds. Once seen through, its
+// trick is spent and it withdraws, sullen, into the dark.
+function tickAngler(c, dPlayer) {
+  const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
+  if (!c.revealed) {
+    if (sameSlice && dPlayer <= 1) {
+      const dmg = 10 + Math.floor(rand() * 9); // 10-18: the trap is the point
+      state.hull = Math.max(0, state.hull - dmg);
+      state.lastFailTime = performance.now();
+      c.revealed = true;
+      log(`The wreck unfolds — it was never a wreck. Something closes on the hull. -${dmg} hull.`, 'danger', 'AMBUSH');
+      sfx('strike');
+    }
+    return; // otherwise it holds absolutely still
+  }
+  if (dPlayer <= 6 && rand() < 0.7) lurkerFlee(c, dPlayer);
 }
 
 // Silt-lurcher: buried on the floor, it only threatens when you come DOWN to
@@ -3816,6 +3870,7 @@ function creatureTick() {
     else if (c.type === 'eel') tickEel(c, d);
     else if (c.type === 'rival') tickRival(c, d);
     else if (c.type === 'shoal') tickShoal(c, d);
+    else if (c.type === 'angler') tickAngler(c, d);
     else if (c.type === 'silt') tickSilt(c, d);
     else if (c.type === 'baro') tickBaro(c, d);
     else tickLurker(c, d, silent);
@@ -3823,7 +3878,8 @@ function creatureTick() {
     const depthOff = Math.abs(c.depth - state.currentDepth);
     // Silent running = deaf: no passive contacts while the sonar's off.
     const hunting = c.type === 'lurker' && (c.interest || 0) >= LURK_HUNT;
-    if (!silent && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
+    const hidden = c.type === 'angler' && !c.revealed; // it holds still — the ear can't hear it
+    if (!silent && !hidden && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
         (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
       state._lastContactLog = now;
       const dir = bearing(state.q, state.r, c.q, c.r);
@@ -3835,6 +3891,7 @@ function creatureTick() {
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
                  : c.type === 'rival' ? 'engine noise — another boat under power'
                  : c.type === 'shoal' ? 'a school, circling to surround you'
+                 : c.type === 'angler' ? 'something that was pretending, withdrawing'
                  : c.type === 'silt' ? 'something buried, waiting on the floor'
                  : c.type === 'baro' ? 'a vast pressure, pacing you in the deep'
                  : lurkWhat;

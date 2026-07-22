@@ -64,7 +64,11 @@ const creatures = st.creatures;
 let badCell = 0, badKind = 0;
 for (const c of creatures) {
   if (!sb.__ck(c.q, c.r, c.depth)) badCell++;
-  else { const k = sb.__kind(c.q, c.r, c.depth); if (k !== 'passage' && k !== 'chamber') badKind++; }
+  // Creatures spawn in passage/chamber cells, but a later-generated
+  // neighbouring chunk may carve a sea or a cavern beach over that same cell
+  // (kind promotion only ever goes upward). All are valid open cave space —
+  // what must never happen is a creature in shelf water or in stone.
+  else { const k = sb.__kind(c.q, c.r, c.depth); if (!['passage','chamber','sea','beach'].includes(k)) badKind++; }
 }
 check(creatures.length >= 5, 'creatures spawned across cave chunks', creatures.length + ' spawned (drifters ' + creatures.filter(c => c.type === 'drifter').length + ', lurkers ' + creatures.filter(c => c.type === 'lurker').length + ')');
 check(badCell === 0, 'every creature sits in an open cell', badCell + ' in stone');
@@ -177,6 +181,7 @@ check(hd(FL, st) > fd0, 'a fleeing beast opens the distance', fd0 + ' → ' + hd
 // ---- 4d. Shoalfang: a trio spawns, closes on the sub, and bites ----
 st.creatures.length = 0;
 st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
+for (let q = -2; q <= 2; q++) for (let r = -12; r <= -9; r++) sb.__set(q, r, 0); // cave water for the school
 sb.spawnShoal(0, -10, 0);
 check(st.creatures.length === 3 && st.creatures.every(c => c.type === 'shoal'), 'shoalfang spawns as a trio', st.creatures.length + ' fish');
 const shd = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
@@ -191,6 +196,7 @@ check(st.hull < hull0, 'the school bites once it surrounds you', 'hull ' + hull0
 // ---- 4e. Decoy buoy: pulls the school off the boat ----
 st.creatures.length = 0; st.buoys = [];
 st.q = 0; st.r = -6; st.currentDepth = 0;
+for (let q = -2; q <= 2; q++) for (let r = -10; r <= -7; r++) sb.__set(q, r, 0); // cave water for the school
 sb.spawnShoal(0, -8, 0);
 for (const c of st.creatures) c.boldness = 1;
 st.buoys.push({ q: 8, r: -6, depth: 0, turns: 10 });
@@ -200,6 +206,29 @@ const toBuoy1 = Math.min(...st.creatures.map(c => shd(c, { q: 8, r: -6 })));
 check(toBuoy1 < toBuoy0, 'a decoy buoy pulls the school toward it', toBuoy0 + ' → ' + toBuoy1);
 check(st.buoys[0] && st.buoys[0].turns === 5, 'the buoy burns down its turns', st.buoys[0] && st.buoys[0].turns);
 st.buoys = [];
+
+// ---- 4h. Anglerlure: holds still wearing a prize's face until a ping finds it ----
+st.creatures.length = 0; st.buoys = [];
+st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
+sb.spawnCreature('angler', 4, -6, 0);
+const AN = st.creatures[0];
+check(['salvage', 'signal', 'ruin'].includes(AN.mask), 'the anglerlure wears a real prize\'s face', 'mask=' + AN.mask);
+const aq0 = AN.q, ar0 = AN.r, ah0 = st.hull;
+for (let i = 0; i < 5; i++) sb.creatureTick();
+check(AN.q === aq0 && AN.r === ar0 && st.hull === ah0, 'it holds absolutely still and does not hunt', 'stayed at (' + AN.q + ',' + AN.r + ')');
+check(!AN.revealed, 'passive sonar never finds a thing that does not move');
+st.q = AN.q - 1; st.r = AN.r; // come alongside believing it a prize
+sb.creatureTick();
+check(st.hull < ah0 && AN.revealed, 'coming alongside springs the trap', 'hull ' + ah0 + '→' + st.hull);
+// A ping should have caught it BEFORE the trap sprang.
+st.creatures.length = 0; st.hull = 200;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('angler', 2, -6, 0);
+const AN2 = st.creatures[0];
+sb.__ping.value = '3';
+sb.ping();
+check(AN2.revealed && st.hull === 200, 'an active ping sees through the lie without a scratch', 'revealed=' + AN2.revealed);
+sb.__ping.value = '2';
 
 // ---- 4f. Silt-lurcher: floor ambush that can't leave its layer ----
 st.creatures.length = 0; st.buoys = [];
