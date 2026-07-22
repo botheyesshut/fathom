@@ -207,6 +207,19 @@ check(toBuoy1 < toBuoy0, 'a decoy buoy pulls the school toward it', toBuoy0 + ' 
 check(st.buoys[0] && st.buoys[0].turns === 5, 'the buoy burns down its turns', st.buoys[0] && st.buoys[0].turns);
 st.buoys = [];
 
+// ---- 4i. Chorus: sings, draws hunters, never bites ----
+st.creatures.length = 0; st.buoys = [];
+st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
+sb.spawnCreature('chorus', 3, -6, 0);
+sb.spawnCreature('lurker', 5, -6, 0);
+const CH = st.creatures[0], LK = st.creatures[1];
+CH.period = 1; CH.volume = 1; LK.interest = 0;
+const chq = CH.q, chr = CH.r;
+for (let i = 0; i < 4; i++) sb.creatureTick();
+check(st.hull === 200, 'the chorus never bites — it only sings', 'hull ' + st.hull);
+check((LK.interest || 0) > 0, 'its song turns real hunters toward the water', 'lurker interest ' + LK.interest);
+check(CH.q === chq && CH.r === chr, 'the colony stays where it is rooted');
+
 // ---- 4h. Anglerlure: holds still wearing a prize's face until a ping finds it ----
 st.creatures.length = 0; st.buoys = [];
 st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;

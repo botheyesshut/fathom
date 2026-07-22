@@ -1839,6 +1839,12 @@ function generateChunk(cq, cr) {
         const opts = caveDepthsAt(h);
         if (opts.length) spawnShoal(h.q, h.r, opts[Math.floor(crand() * opts.length)]);
       }
+      // A chorus — a singing colony that fills the water with false voices.
+      if (crand() < 0.08) {
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (opts.length) spawnCreature('chorus', h.q, h.r, opts[Math.floor(crand() * opts.length)]);
+      }
       // An anglerlure, wearing the face of a prize.
       if (crand() < 0.10) {
         const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
@@ -2479,9 +2485,9 @@ function render() {
     ct.setAttribute('font-family', 'JetBrains Mono, monospace');
     ct.setAttribute('font-size', c.type === 'drifter' ? '14' : c.type === 'eel' ? '11' : '12');
     const angMask = c.type === 'angler' && !c.revealed ? ANGLER_MASK[c.mask] : null;
-    ct.setAttribute('fill', angMask ? angMask.col : c.type === 'angler' ? '#e05070' : c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : c.type === 'silt' ? '#8a7048' : c.type === 'baro' ? '#8050b0' : '#d05048');
+    ct.setAttribute('fill', angMask ? angMask.col : c.type === 'angler' ? '#e05070' : c.type === 'chorus' ? '#70c8c0' : c.type === 'drifter' ? '#5a8a72' : c.type === 'eel' ? '#c8b040' : c.type === 'rival' ? '#7090b8' : c.type === 'shoal' ? '#a0b840' : c.type === 'silt' ? '#8a7048' : c.type === 'baro' ? '#8050b0' : '#d05048');
     ct.setAttribute('filter', 'url(#softglow)');
-    ct.textContent = angMask ? angMask.ch : c.type === 'angler' ? '✸' : c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : c.type === 'silt' ? '▲' : c.type === 'baro' ? '●' : '⊗';
+    ct.textContent = angMask ? angMask.ch : c.type === 'angler' ? '✸' : c.type === 'chorus' ? '¤' : c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : c.type === 'silt' ? '▲' : c.type === 'baro' ? '●' : '⊗';
     g.appendChild(ct);
   }
 
@@ -3441,6 +3447,11 @@ function spawnCreature(type, q, r, depth) {
     c.patience = mulberry32(hashStr(worldSeed + ':silt:' + q + ':' + r + ':' + depth))();
     c.spent = 0;
   }
+  if (type === 'chorus') { // a singing polyp colony: loud, harmless, and a liar
+    const rng = mulberry32(hashStr(worldSeed + ':chorus:' + q + ':' + r + ':' + depth));
+    c.volume = rng();
+    c.period = 2 + Math.floor(rng() * 3); // sings every 2-4 turns
+  }
   if (type === 'angler') { // a lure wearing a POI's face until a ping finds it
     const rng = mulberry32(hashStr(worldSeed + ':angler:' + q + ':' + r + ':' + depth));
     c.revealed = false;
@@ -3628,6 +3639,25 @@ function tickRival(c, dPlayer) {
   if (rand() < 0.4) {
     const nbrs = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth));
     if (nbrs.length) { const n = nbrs[Math.floor(rand() * nbrs.length)]; c.q = n.q; c.r = n.r; }
+  }
+}
+
+const COMPASS = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+
+// Chorus: a polyp colony that never attacks and cannot be fought — it SINGS.
+// Every few turns it throws its voice into the water: real hunters turn toward
+// the song and converge on the area, and the boat's passive sonar reports
+// contacts that were never there. Near a chorus, your instruments are liars.
+// The only counter is to recognise the water is poisoned and leave it.
+function tickChorus(c, dPlayer) {
+  c.phase = (c.phase + 1) % (c.period || 3);
+  if (c.phase !== 0) return;
+  noiseMade(c.q, c.r, 2 + Math.round((c.volume || 0.5) * 3)); // hunters turn toward it
+  if (dPlayer <= 10 && rand() < 0.6) {
+    const dir = COMPASS[Math.floor(rand() * COMPASS.length)];
+    const m = (1 + Math.floor(rand() * 6)) * 60;
+    log(`Passive sonar: something moving — ${dir}, ${m} m.`, 'strange', 'CONTACT'); // a voice thrown
+    sfx('contact');
   }
 }
 
@@ -3860,6 +3890,10 @@ function creatureTick() {
   expeditionTick(); // dive teams work on the same clock the deep hunts on
   const now = performance.now();
   const silent = sonarSilent(); // running dark this turn?
+  // Near a chorus the water is full of thrown voices — real contacts get lost
+  // in the noise, so the ear can no longer be trusted to report what's there.
+  const masked = state.creatures.some(x => x.type === 'chorus'
+    && hexDistance({q: x.q, r: x.r}, {q: state.q, r: state.r}) <= 8);
   // Decoy buoys shout into the water, pulling the sound-hunters off the boat.
   for (const b of state.buoys) { noiseMade(b.q, b.r, 3); b.turns--; }
   if (state.buoys.length) state.buoys = state.buoys.filter(b => b.turns > 0);
@@ -3870,6 +3904,7 @@ function creatureTick() {
     else if (c.type === 'eel') tickEel(c, d);
     else if (c.type === 'rival') tickRival(c, d);
     else if (c.type === 'shoal') tickShoal(c, d);
+    else if (c.type === 'chorus') tickChorus(c, d);
     else if (c.type === 'angler') tickAngler(c, d);
     else if (c.type === 'silt') tickSilt(c, d);
     else if (c.type === 'baro') tickBaro(c, d);
@@ -3879,7 +3914,7 @@ function creatureTick() {
     // Silent running = deaf: no passive contacts while the sonar's off.
     const hunting = c.type === 'lurker' && (c.interest || 0) >= LURK_HUNT;
     const hidden = c.type === 'angler' && !c.revealed; // it holds still — the ear can't hear it
-    if (!silent && !hidden && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
+    if (!silent && !hidden && !(masked && rand() < 0.5) && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
         (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
       state._lastContactLog = now;
       const dir = bearing(state.q, state.r, c.q, c.r);
@@ -3891,6 +3926,7 @@ function creatureTick() {
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
                  : c.type === 'rival' ? 'engine noise — another boat under power'
                  : c.type === 'shoal' ? 'a school, circling to surround you'
+                 : c.type === 'chorus' ? 'a chorus of voices, none of them answering'
                  : c.type === 'angler' ? 'something that was pretending, withdrawing'
                  : c.type === 'silt' ? 'something buried, waiting on the floor'
                  : c.type === 'baro' ? 'a vast pressure, pacing you in the deep'
