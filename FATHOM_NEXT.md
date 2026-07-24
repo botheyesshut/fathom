@@ -62,7 +62,7 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 
 ## Build ladder — every stage ships playable
 1. ~~**The Threshold**~~ **DONE 2026-07-24** — walk into a ruin. See "STAGE 1 AS BUILT" below.
-2. **Dark and Wet** — air timer, flooding, something in there with you. Hide, run, seal a door.
+2. ~~**Dark and Wet**~~ **DONE 2026-07-24** — flooding from the breach, bulkheads, a tenant. See "STAGE 2 AS BUILT".
 3. **Boarders** — on-foot combat; crew become bodies that can be lost.
 4. **The Claim** — designate a base. Dock, storage, level-1 defenses.
 5. **Digging & Fitting** — carve, furnish, bulkheads, pumps, decks.
@@ -80,6 +80,18 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 - **Harness note**: interior.test needs the WHOLE script to boot (restart/resumeGame/doSave are at the very bottom), so its sandbox must supply real no-op `addEventListener`/`location`/`matchMedia`. The other suites let that throw and get away with it because they only need early functions.
 - **Verified in a real browser** (not just stubs): 22-tile lamp pool, `@`, breach glyph, vignette, a real tap walking a step, loot picked up once, and the mode switch back to the hex chart.
 - **KNOBS SEAN HAS NOT FELT YET** (do not pre-tune): `LAMP_R`, `FOOT_AIR`, rubble rate 0.07, loot density, relic odds 0.22, room count/size. Deck legibility at the memory-dim end is the most likely first complaint.
+
+## STAGE 2 AS BUILT — Dark and Wet (2026-07-24)
+**The central idea: the sea comes in the way YOU did.** `foot.water` is seeded with the entry breach, so the flood source is always between the captain and the way out. Go deeper for better loot, and the water is behind you the whole time.
+- `FLOOD_EVERY=2` steps per advance; `floodAdvance()` spreads orthogonally through carved tiles only. A full deck goes under in ~25 advances (~50 steps) — that is the clock.
+- Wading costs `FOOT_AIR*3`. Rubble still +1.
+- **Bulkheads**: generated only in *throats* (a corridor tile open on two opposite sides, walled on the others) — a door in the middle of a room seals nothing. Max 3 per deck. `foot.closed` is overlay. A dogged bulkhead stops the flood, stops the body, and stops the tenant, and cuts off everything beyond it — including, if you are careless, your own exit.
+- **`sealDoor()`** on `#btn-seal` (shown only while ashore, via `syncFootControls()` called from `render()`): toggles the adjacent door. Refuses to seat a bulkhead that is already under water.
+- **The tenant** (`chunk.dweller`, 55% of decks, spawns in the room farthest from the breach): hunts by proximity inside `DWELLER_EAR=9`, walks the same floor you do, blocked by dogged bulkheads. On contact it takes your air line (-40..70 air). **You cannot kill it at this stage — the answer is a door, not a weapon**, which is the setting's law made mechanical. Stage 3 adds the desperate option.
+- Drawn under the same constitution: the tenant is visible only inside `LAMP_R`.
+- Old saves are backfilled in `resumeGame()` (water/closed/tick/dweller) so a Stage 1 save still loads.
+- **interior.test.js is now 33 checks.** The Stage 2 invariants: water never enters stone, a saturated deck leaves nothing dry, a dogged bulkhead never floods and passes neither body nor tenant, doors sit in throats, the tenant never walks through stone (120-step sweep), flood + seals round-trip through a reload.
+- **KNOBS NOT YET FELT**: `FLOOD_EVERY`, wading multiplier ×3, `DWELLER_EAR`, dweller damage 40-70, dweller spawn rate 0.55, max 3 doors.
 
 ---
 

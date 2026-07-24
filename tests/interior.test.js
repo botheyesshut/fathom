@@ -58,6 +58,9 @@ try { vm.runInContext(script +
   '\nfunction __st(){ return state; }' +
   '\nfunction __start(){ gameStarted = true; }' +
   '\nfunction __save(){ doSave(true); }' +
+  '\nfunction __flood(){ return floodAdvance(); }' +
+  '\nfunction __seal(){ sealDoor(); }' +
+  '\nfunction __dwell(){ dwellerStep(); }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -208,11 +211,11 @@ site.x = ch.entry.x; site.y = ch.entry.y;
 sandbox.__st().foot = null;
 // Re-enter cleanly and leave by the breach for the real exit path.
 sandbox.__enter(sq, sr, 600);
-const f2 = sandbox.__foot();
-f2.crates = 3; f2.relics = 1;
-const inward2 = [[f2.x, f2.y - 1], [f2.x, f2.y + 1], [f2.x - 1, f2.y], [f2.x + 1, f2.y]]
+const fExit = sandbox.__foot();
+fExit.crates = 3; fExit.relics = 1;
+const inward2 = [[fExit.x, fExit.y - 1], [fExit.x, fExit.y + 1], [fExit.x - 1, fExit.y], [fExit.x + 1, fExit.y]]
   .find(([x, y]) => !sandbox.__solid(x, y));
-const ex = f2.x, ey = f2.y;
+const ex = fExit.x, ey = fExit.y;
 sandbox.__step(inward2[0], inward2[1]);   // one step in
 sandbox.__step(ex, ey);                   // and back out through the breach
 check(sandbox.__foot() === null, 'stepping onto the breach ends the dive', 'back aboard');
@@ -232,6 +235,97 @@ check(sandbox.__st().q === held.q && sandbox.__st().r === held.r && sandbox.__st
   'the boat cannot be driven while the captain is inside a ruin',
   'held at ' + held.q + ',' + held.r + ' @' + held.d + 'm');
 check(sandbox.__foot() !== null, 'and the body stays where it was', 'still ashore');
+
+//--- 8. Stage 2: the sea follows you in through the hole you made ------------
+// Find a deck that actually has a bulkhead AND a tenant, so these assertions
+// are about real geometry and not a lucky empty room.
+let site2 = null;
+for (let q = 0; q < 40 && !site2; q++) {
+  const c2 = sandbox.__int(q, 7, 660);
+  if (c2.doors.length && c2.dweller) site2 = { q: q, ch: c2 };
+}
+check(!!site2, 'decks generate bulkheads and tenants', site2 ? 'found at q=' + site2.q : 'none in 40 decks');
+
+const ch2 = site2.ch;
+sandbox.__st().foot = null;
+sandbox.__enter(site2.q, 7, 660);
+let f2 = sandbox.__foot();
+check(f2.water.length === 1 && f2.water[0] === ch2.entry.x + ',' + ch2.entry.y,
+  'the sea starts at the breach you came in by', 'source ' + f2.water[0]);
+check(!!f2.dweller && ch2.tiles.has(f2.dweller.x + ',' + f2.dweller.y),
+  'the tenant stands on real floor', f2.dweller ? f2.dweller.x + ',' + f2.dweller.y : '-');
+
+// Run the flood to saturation. It must never wet a tile that is not carved.
+let grew = 0, guard = 0;
+while (sandbox.__flood() && guard++ < 600) grew++;
+const dry = [...ch2.tiles.keys()].filter(k => !f2.water.includes(k));
+const inStone = f2.water.filter(k => !ch2.tiles.has(k));
+check(inStone.length === 0, 'water never gets into solid rock', f2.water.length + ' tiles wet, 0 in stone');
+check(f2.water.length > 1 && grew > 1, 'the water advances through the deck', grew + ' advances');
+check(dry.length === 0, 'with nothing sealed, the whole deck goes under eventually', dry.length + ' left dry');
+
+// A dogged bulkhead holds the sea. Re-enter clean, seal a door, saturate.
+sandbox.__st().foot = null;
+sandbox.__enter(site2.q, 7, 660);
+f2 = sandbox.__foot();
+const doorK = ch2.doors[0];
+f2.closed.push(doorK);
+guard = 0;
+while (sandbox.__flood() && guard++ < 600);
+check(!f2.water.includes(doorK), 'a dogged bulkhead does not flood', 'door ' + doorK + ' still dry');
+
+// It stops a body too.
+const dK = doorK.indexOf(',');
+const doorX = +doorK.slice(0, dK), doorY = +doorK.slice(dK + 1);
+const sides = [[0,-1],[1,0],[0,1],[-1,0]].map(([ax, ay]) => ({ x: doorX + ax, y: doorY + ay }))
+  .filter(p => ch2.tiles.has(p.x + ',' + p.y));
+check(sides.length === 2, 'a bulkhead sits in a throat, not in the middle of a room', sides.length + ' open sides');
+f2.x = sides[0].x; f2.y = sides[0].y;
+sandbox.__step(doorX, doorY);
+f2 = sandbox.__foot();
+check(f2.x === sides[0].x && f2.y === sides[0].y, 'a dogged bulkhead will not let you through',
+  'held at ' + f2.x + ',' + f2.y);
+
+// And it stops the tenant: put it on the far side and let it hunt.
+f2.dweller = { x: sides[1].x, y: sides[1].y };
+sandbox.__dwell();
+f2 = sandbox.__foot();
+check(!(f2.dweller.x === doorX && f2.dweller.y === doorY),
+  'and the tenant cannot come through it either',
+  'it is at ' + f2.dweller.x + ',' + f2.dweller.y);
+
+// Undogging it with the Seal control puts everything back in play.
+f2.x = sides[0].x; f2.y = sides[0].y;
+sandbox.__seal();                       // adjacent door is closed -> hauls it open
+f2 = sandbox.__foot();
+check(!f2.closed.includes(doorK), 'the Seal control hauls a dogged bulkhead open again', 'reopened');
+sandbox.__seal();                       // and shuts it again
+f2 = sandbox.__foot();
+check(f2.closed.includes(doorK), 'and dogs it shut again', 'sealed');
+
+// The tenant walks the deck for a long stretch and never leaves the floor.
+sandbox.__st().foot = null;
+sandbox.__enter(site2.q, 7, 660);
+f2 = sandbox.__foot();
+let tenantInStone = 0;
+for (let i = 0; i < 120; i++) {
+  sandbox.__dwell();
+  const d = sandbox.__foot().dweller;
+  if (d && !ch2.tiles.has(d.x + ',' + d.y)) tenantInStone++;
+}
+check(tenantInStone === 0, 'the tenant never walks through stone', '120 steps swept');
+
+// Drowning state round-trips: water and dogged bulkheads are overlay.
+f2.closed.push(ch2.doors[0]);
+sandbox.__flood(); sandbox.__flood();
+const wetBefore = sandbox.__foot().water.length, shutBefore = sandbox.__foot().closed.length;
+sandbox.__save();
+sandbox.__st().foot = null;
+sandbox.__resume();
+const after2 = sandbox.__foot();
+check(!!after2 && after2.water.length === wetBefore && after2.closed.length === shutBefore,
+  'the flood and the sealed bulkheads survive a reload',
+  after2 ? after2.water.length + ' wet, ' + after2.closed.length + ' sealed' : 'lost');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
