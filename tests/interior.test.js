@@ -67,6 +67,7 @@ try { vm.runInContext(script +
   '\nfunction __baseTick(){ baseTick(); }' +
   '\nfunction __fortify(){ fortifyBase(); }' +
   '\nfunction __creatures(){ return state.creatures; }' +
+  '\nfunction __isTenant(k){ return !!TENANTS[k]; }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -631,7 +632,10 @@ check(sandbox.__foot() && sandbox.__foot().water.length > wetBefore2,
   'a forced station floods like anything else the sea is in',
   wetBefore2 + ' -> ' + (sandbox.__foot() ? sandbox.__foot().water.length : '?'));
 
-// Repump puts it right.
+// Repump puts it right. (A breach now also leaves a BOARDER — that whole path
+// is section 12's job; here we clear it to isolate the pump/flood mechanic.)
+sandbox.__base().boarder = null;
+if (sandbox.__foot()) sandbox.__foot().dweller = null;
 sandbox.__st().cargo = 10;
 sandbox.__claim();                       // on a breached station this repumps
 check(sandbox.__base().breached === false && sandbox.__foot().water.length === 0,
@@ -644,6 +648,81 @@ sandbox.__resume();
 check(sandbox.__base() && sandbox.__base().defence === 1 && sandbox.__base().breached === false,
   'the station\'s defences and condition survive a reload',
   sandbox.__base() ? 'defence ' + sandbox.__base().defence : 'lost');
+
+//--- 12. The boarding: a forced lock puts the thing INSIDE ------------------
+// The two-layer siege closes here — a breach is no longer settled at the lock,
+// the besieger comes in and becomes a tenant you fight room to room.
+sandbox.__st().foot = null;
+sandbox.__st().creatures = [];
+sandbox.__st().alive = true;
+sandbox.__st().air = 200000;
+const B = sandbox.__base();
+B.breached = false; B.siege = null; B.boarder = null; B.threat = 0; B.defence = 2;
+B.stores.crates = 20; B.stores.relics = 6;
+
+// Captain is NOT in the station when the lock gives.
+sandbox.__st().creatures = [{ id: 'z', type: 'hulk', q: B.q, r: B.r, depth: B.d, besieging: true }];
+B.siege = { power: 99, breach: 99 };
+sandbox.__baseTick();
+check(!!B.boarder && B.breached, 'a forced lock leaves a boarder in residence', B.boarder ? B.boarder.kind + ' aboard' : 'none');
+check(sandbox.__isTenant(B.boarder.kind), 'the boarder is a real interior tenant kind', B.boarder.kind);
+const besiegerGone = !sandbox.__creatures().some(c => c.besieging && !c.gone);
+check(besiegerGone, 'and it has left the water — it is inside now, not at the lock', 'water clear');
+
+// Walk back into the breached station: it is flooded AND occupied.
+sandbox.__st().foot = null;
+sandbox.__enter(B.q, B.r, B.d);
+let fb2 = sandbox.__foot();
+check(!!fb2.dweller && fb2.dweller.boarder, 're-entering a taken station finds the boarder at home',
+  fb2.dweller ? fb2.dweller.kind : 'empty');
+check(fb2.water.length > 0, 'and the station is flooded, like any forced ruin', fb2.water.length + ' wet');
+
+// You cannot pump out around it.
+sandbox.__st().cargo = 20;
+sandbox.__claim();   // breached -> repump, but a boarder blocks it
+check(B.breached === true, 'you cannot pump out a station with something loose in it', 'still breached');
+
+// Flee mid-fight and its wounds persist (stored on the base, not just foot).
+fb2.dweller.x = fb2.x; fb2.dweller.y = fb2.y + 1;
+if (sandbox.__solid(fb2.x, fb2.y + 1)) { fb2.dweller.x = fb2.x + 1; fb2.dweller.y = fb2.y; }
+fb2.dweller.tough = 30; fb2.dweller.hurt = 0;
+sandbox.__st().crew = [{ name: 'T', role: 'diver', xp: 0, gear: { weapon: 'axe' } }];
+sandbox.__fight();
+const woundedTo = B.boarder.hurt;
+check(woundedTo > 0, 'wounding the boarder is recorded on the station itself', 'hurt=' + woundedTo);
+sandbox.__st().foot = null;                 // flee
+sandbox.__enter(B.q, B.r, B.d);             // and come back
+check(sandbox.__foot().dweller.hurt === woundedTo, 'the boarder is still hurt when you come back for it',
+  'hurt=' + sandbox.__foot().dweller.hurt);
+
+// Kill it, and only then can you pump out.
+sandbox.__st().crew = [{ name: 'T', role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit' } }];
+let fb3 = sandbox.__foot();
+const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dy]) => ({ x: fb3.x + dx, y: fb3.y + dy }))
+  .find(p => !sandbox.__solid(p.x, p.y));
+let g = 0;
+while (sandbox.__foot() && sandbox.__foot().dweller && g++ < 60) {
+  const cur = sandbox.__foot();
+  cur.dweller.x = nb.x; cur.dweller.y = nb.y;
+  sandbox.__fight();
+}
+check(sandbox.__base().boarder === null, 'putting the boarder down clears the station of it', 'cleared');
+sandbox.__st().cargo = 20;
+sandbox.__claim();   // now repump succeeds
+check(sandbox.__base().breached === false && sandbox.__foot().water.length === 0,
+  'and now the station pumps out and is yours again', 'dry and held');
+
+// The whole mess round-trips through a reload while still occupied.
+sandbox.__st().foot = null;
+sandbox.__st().creatures = [{ id: 'z2', type: 'lurker', q: B.q, r: B.r, depth: B.d, besieging: true }];
+B.breached = false; B.siege = { power: 99, breach: 99 }; B.boarder = null; B.defence = 1;
+sandbox.__baseTick();                        // breach with nobody home
+sandbox.__save();
+sandbox.__st().base = null;
+sandbox.__resume();
+check(sandbox.__base() && sandbox.__base().boarder && sandbox.__base().breached,
+  'a taken station is still taken after a reload',
+  sandbox.__base() && sandbox.__base().boarder ? sandbox.__base().boarder.kind + ' still aboard' : 'lost');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

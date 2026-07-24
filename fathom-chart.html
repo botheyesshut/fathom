@@ -3810,10 +3810,23 @@ function enterInterior(tile) {
   const d = state.currentDepth;
   const ch = interiorAt(tile.q, tile.r, d);
   const claimed = stationSecure(tile.q, tile.r, d);
-  // A claimed deck was stripped when you cleared it — its loot does not grow
-  // back just because the substrate still remembers where it was.
+  const own = isBaseDeck(tile.q, tile.r, d);
+  // A station deck was stripped when you cleared it — its loot does not grow
+  // back just because the substrate still remembers where it was, and a breach
+  // does not restock it either.
   const took = [];
-  if (claimed) for (const [k, t] of ch.tiles) if (t.loot) took.push(k);
+  if (own) for (const [k, t] of ch.tiles) if (t.loot) took.push(k);
+
+  // Who is on the deck. A breached station holds whatever forced the lock, in
+  // residence at the breach until you clear it — that overrides the substrate's
+  // own tenant. Otherwise it is the deck's generated tenant, unless cleared.
+  let dweller = null;
+  if (own && state.base.boarder) {
+    const bd = state.base.boarder;
+    dweller = { x: ch.entry.x, y: ch.entry.y, kind: bd.kind, tough: bd.tough, hurt: bd.hurt || 0, boarder: true };
+  } else if (!claimed && !own && ch.dweller && !isDeckCleared(tile.q, tile.r, d)) {
+    dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 };
+  }
 
   state.foot = {
     q: tile.q, r: tile.r, d: d,
@@ -3825,9 +3838,7 @@ function enterInterior(tile) {
     // breach has been made into a lock, which is what claiming is for.
     water: claimed ? [] : [ch.entry.x + ',' + ch.entry.y],
     closed: [],
-    dweller: (!claimed && ch.dweller && !isDeckCleared(tile.q, tile.r, d))
-      ? { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 }
-      : null,
+    dweller: dweller,
   };
   lampSweep();
   if (claimed) {
@@ -3867,7 +3878,7 @@ function claimOrStore() {
   }
   state.cargo -= CLAIM_COST;
   state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0 },
-                 defence: 0, threat: 0, siege: null, breached: false };
+                 defence: 0, threat: 0, siege: null, breached: false, boarder: null };
   f.water = [];
   f.dweller = null;
   log('You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
@@ -3897,6 +3908,15 @@ const DEFENCES = [
 
 function baseDefence() { return DEFENCES[Math.min(DEFENCES.length - 1, (state.base && state.base.defence) || 0)]; }
 
+// What the thing in the water becomes once it is inside your walls. A boarder
+// is siege-grade — tougher than the deck's native tenants, because it just
+// beat a lock to get here.
+const BOARDER_AS = { eel: 'whisper', silt: 'hollow', lurker: 'clutch', baro: 'warden', hulk: 'warden', drifter: 'clutch', rival: 'hollow' };
+function boarderFrom(creatureType) {
+  const kind = BOARDER_AS[creatureType] || 'hollow';
+  return { kind: kind, tough: Math.max(4, Math.round(TENANTS[kind].tough * 1.3)), hurt: 0 };
+}
+
 function startSiege() {
   const b = state.base;
   // Deeper stations draw worse things to the door.
@@ -3919,15 +3939,24 @@ function breachStation() {
   b.siege = null; b.threat = 0;
   b.breached = true;
   if (b.defence > 0) b.defence--;   // the works are wrecked getting in
-  for (const c of state.creatures) if (c.besieging) c.besieging = false;
-  log(`The telegraph stops. The lock is open, the sea is in your station, and the works are wrecked. You lose ${plural(lostC, 'crate')} and ${plural(lostR, 'relic')}.`, 'danger', 'SIEGE');
+  // The thing that beat the lock does not stay in the water — it comes inside,
+  // and takes up residence as a tenant you must clear before you can pump out.
+  let boarderType = 'lurker';
+  for (const c of state.creatures) if (c.besieging) { boarderType = c.type; c.besieging = false; c.gone = true; }
+  b.boarder = boarderFrom(boarderType);
+  log(`The telegraph stops. The lock is open, the sea is in your station, and something has come in with it. You lose ${plural(lostC, 'crate')} and ${plural(lostR, 'relic')}.`, 'danger', 'SIEGE');
   sfx('impact');
-  // If the captain is standing in it when it goes, the water comes to them.
+  // If the captain is standing in it when it goes, both the water AND the thing
+  // come down the passage at them, then and there.
   const f = state.foot;
   if (f && isBaseDeck(f.q, f.r, f.d)) {
     const ch = footChunk();
-    if (ch) f.water = [ch.entry.x + ',' + ch.entry.y];
-    log('The lock lets go above you. Cold water comes down the passage in a wall.', 'danger', 'WATER');
+    if (ch) {
+      f.water = [ch.entry.x + ',' + ch.entry.y];
+      f.dweller = { x: ch.entry.x, y: ch.entry.y, kind: b.boarder.kind, tough: b.boarder.tough, hurt: 0, boarder: true };
+      f.metTenant = false;
+    }
+    log('The lock lets go above you. Cold water comes down the passage in a wall — and something rides in on it.', 'danger', 'WATER');
   }
 }
 
@@ -3984,6 +4013,10 @@ const REPUMP_COST = 4;
 function repumpStation() {
   const b = state.base, f = state.foot;
   if (!b || !f) return;
+  if (b.boarder || (f.dweller && f.dweller.boarder)) {
+    log('Something is still loose in the station. The pumps will not seat the lock around it — put it down first.', 'warn', 'STATION');
+    return;
+  }
   const have = state.cargo + b.stores.crates;
   if (have < REPUMP_COST) {
     log(`Reseating the lock takes ${plural(REPUMP_COST, 'crate')} of plate. Between the station and the boat there are ${have}.`, 'warn', 'STATION');
@@ -4210,13 +4243,21 @@ function fightTenant() {
 
   if (t.hurt >= (t.tough || spec.tough)) {
     log(spec.hurt, 'warn', 'BOARDING');
-    log('The deck is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
+    if (t.boarder) {
+      // The thing that took your station is dead in it. The sea is still in
+      // here — but the deck is yours to pump out again.
+      state.base.boarder = null;
+      log('It goes down in the flooded passage of your own station. The deck is yours again — now get the water out.', '', 'BOARDING');
+    } else {
+      log('The deck is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
+      if (!state.clearedDecks) state.clearedDecks = [];
+      const k = deckKey(f.q, f.r, f.d);
+      if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
+    }
     f.dweller = null;
-    if (!state.clearedDecks) state.clearedDecks = [];
-    const k = deckKey(f.q, f.r, f.d);
-    if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
     sfx('bell');
   } else {
+    if (t.boarder && state.base && state.base.boarder) state.base.boarder.hurt = t.hurt; // persist if you flee mid-fight
     log(swing > 1 ? pickLoose(SWING_HIT) : pickLoose(SWING_POOR), '', 'BOARDING');
     sfx('strike');
     dwellerStep();   // and it answers
@@ -5378,6 +5419,12 @@ const SPACE_FIRST = {
     'You come up into daylight. The sea moves under the hull the way it has always moved, indifferent and busy.',
     'Surface. Wind across the casing, and a sky the colour of wet slate.',
     'The Erebus rides the top of the water. Above is only weather; below is everything else.',
+    'Weather, after all that water. The swell takes the hull and rocks it like it means something by it.',
+    'Open sky, such as it is. Cloud in every direction and the sea getting on with its business underneath.',
+    'Air on the casing — real air — and a horizon doing nothing in particular.',
+    'Daylight. Plain, grey, and entirely real, with no depth gauge arguing about it.',
+    'The conning tower breaks the chop first, and the rest of the hull follows it up.',
+    'Sea and sky, in their usual argument. Neither one troubles you much.',
   ],
   shaft: [
     'You seem to have entered a vertical tunnel. Dark water haunts below. The tunnel beckons you back toward the open water above.',
@@ -5385,18 +5432,35 @@ const SPACE_FIRST = {
     'The passage stands on end here — a flooded shaft, cut or worn, running away in both directions.',
     'This is a vertical tube. The rock face looks scraped by things that fell, or climbed, through it over uncountable ages.',
     'The lights find wall on every side and nothing ahead. The only argument this place makes is up, or down.',
+    'The shaft drops away below and climbs away above, and the boat hangs in the middle of both arguments.',
+    'Rock closes in on every side but two. Up, and down — the whole of the choice you have left.',
+    'A flooded well in the stone, going further than the lights admit to.',
+    'Straight up, straight down. The rock does not trouble itself with anything in between.',
+    'The walls stand close and vertical, worn smooth by water that has been going one way or the other for a very long time.',
   ],
   tunnel: [
     'A tunnel, barely wider than the boat. The walls run past on both sides, close enough to count the courses in the rock.',
     'The passage narrows to a throat and goes on. Two ways out of here, and both of them are the same way.',
     'A bore in the rock, running level. Whatever cut it was patient, and was not interested in turning.',
     'The way narrows. The hull noise comes back off the walls almost before it leaves.',
+    'The rock closes to a corridor here, just wide enough for the hull and not an inch to spare.',
+    'A crack in the stone, opened out to boat width and no wider.',
+    'Walls to either hand, close enough that the lights catch both at once.',
+    'The passage runs straight and level, cut by something with no interest in curves.',
+    'Stone on both beams. The gap between them was not made with a boat in mind, but it will do.',
+    'Something cut this straight, long before you got here, and left it at that.',
   ],
   junction: [
     'The passage opens into a junction. Ways lead off, and the water between them is still.',
     'Several throats meet here. The current, such as it is, cannot decide between them.',
     'A meeting of tunnels. Sediment has piled where the flows argue with each other.',
     'The rock opens into a hub of some kind. More than one way on from here.',
+    'Ways branch off here in more than one direction, and the water is undecided about all of them.',
+    'The tunnel forgets itself and becomes several tunnels at once.',
+    'Currents cross here, faint and going nowhere in particular, where more than one passage lets out.',
+    'This is a crossing of some kind — old water finding old water, and neither giving way.',
+    'More than one throat opens off this spot, and the chart cannot yet tell you which is which.',
+    'A confluence in the rock. Whatever cut these passages met itself coming the other way.',
   ],
   expanse: [
     'The walls fall away. Whether you are in an underground chamber, a lake, a sea or a river you cannot tell.',
@@ -5404,36 +5468,80 @@ const SPACE_FIRST = {
     'The boat swims out into a great flooded room. Nothing answers the lights but distance.',
     'Space, suddenly — the pressure of stone lifts off the hull and the water goes wide in every direction.',
     'The chamber is enormous, or it is merely dark. The instruments decline to distinguish.',
+    'Everything opens at once — floor, ceiling, walls, all of it gone past the reach of the lights.',
+    'The hull noise stops coming back. That is how you know how big this is.',
+    'No wall answers the sonar in any direction worth mentioning.',
+    'A cavern, or something too large to be called anything so specific.',
+    'The dark here has room to spread out, and it takes full advantage.',
   ],
   deadend: [
     'The passage ends. Rock ahead, rock to either side — whatever cut this gave up here, or was interrupted.',
     'A blind pocket. The lights find the end of the world about two boat-lengths off.',
     'This is as far as it goes. The face ahead is unbroken and very old.',
+    'Rock, flat across the whole of the passage. Nothing to do here but turn around.',
+    'The way simply stops. No collapse, no reason given, just stone where the tunnel should continue.',
+    'Whatever this passage was going toward, it did not arrive.',
+    'The lights catch a wall dead ahead, and the water goes no further than it.',
+    'You have come to the end of it, wherever it was going.',
+    'The tunnel simply stops here. There is nowhere further to put the hull.',
+    'A stub of a passage, and nothing at the end of it worth the swim.',
   ],
   pocket: [
     'A closed pocket of water, sealed on every side. The boat sits in it like a coin in a jar.',
     'Stone all around. Whatever brought water into this hole, it was not a route.',
+    'A bubble of water in solid rock, closed on every side but the one you came in by.',
+    'The lights go out in every direction and come straight back. There is nowhere else for them to go.',
+    'Walls close around the hull on all sides at once, and stay there.',
+    'This is a hole with water in it, and not much more can be said for it.',
+    'No way on from here. The rock simply closes up around the boat.',
+    'A blind cell in the stone, just large enough to turn the boat around in, if you are patient.',
+    'The chart will show this as a dot with nothing leading from it, because that is what it is.',
+    'Rock on every heading the sonar tries. This is the whole of the place.',
   ],
   nook: [
     'A pocket off the side of the shaft — room enough to hold station in, and not much else.',
     'The rock bellies out here into a small blind room. The only ways on are vertical.',
     'A niche in the wall of the passage. Something could wait in a place like this.',
+    'A hollow in the wall, off the main way, just big enough to matter.',
+    'The passage bulges here into a small chamber and then thinks better of it.',
+    'Something has worn a shallow room into the rock beside the main channel.',
+    'A recess, no bigger than the boat, tucked off the side of the passage.',
+    'The wall opens into a shallow bay of stone, barely worth the name of a room.',
+    'Off the main passage, a small blind space — the kind of place that could be hiding anything, or nothing.',
+    'A dimple in the rock wall, deep enough to hide the hull from anything passing in the main channel.',
   ],
 };
 
 const SPACE_AGAIN = {
-  surface: ['The surface again. The light is a shock every time.', 'Up top once more, the swell working along the casing.'],
+  surface: ['The surface again. The light is a shock every time.', 'Up top once more, the swell working along the casing.',
+    'Daylight, and no more impressed by it than the last time.', 'Topside again. Nothing has changed up here either.',
+    'The same grey sky waiting where you left it.', 'Back on top. The horizon has not moved an inch.'],
   shaft: [
     'Your sub still braves the vertical tube.',
     'The shaft again. The same scraped rock going past, up and down.',
     'Still in the chimney. The walls have not moved, whatever the dark suggests.',
+    'Up and down, same as before, and no closer to a decision.',
+    'The vertical tube again. It has not grown any friendlier.',
+    'Back in the throat of the shaft.',
   ],
-  tunnel: ['The close tunnel again, walls near enough to touch.', 'Back in the bore. It has not widened.'],
-  junction: ['The junction again. The same several ways on.', 'Back at the meeting of passages.'],
-  expanse: ['The open water again — as unmeasured as before.', 'Back out in the wide dark.'],
-  deadend: ['The blind end again. Still blind.', 'The dead face of rock, unchanged.'],
-  pocket: ['The sealed pocket again.', 'Still boxed in on every side.'],
-  nook: ['The blind nook again, off the side of the shaft.', 'Back in the niche.'],
+  tunnel: ['The close tunnel again, walls near enough to touch.', 'Back in the bore. It has not widened.',
+    'Still narrow. Still close. Nothing to add.', 'The same tight bore, walls unchanged.',
+    'No wider than it was the last time through.', 'Back between the same two walls.'],
+  junction: ['The junction again. The same several ways on.', 'Back at the meeting of passages.',
+    'Same crossing, same choice on offer.', 'The ways still meet here, exactly as before.',
+    'Nothing new at the junction. The water still cannot decide.', 'Back where the passages argue with each other.'],
+  expanse: ['The open water again — as unmeasured as before.', 'Back out in the wide dark.',
+    'Still open, still vast, still nothing to measure it by.', 'The big room again. The lights still find nothing.',
+    'Space again, on every side.', 'Wide water, unchanged, and no more forthcoming than last time.'],
+  deadend: ['The blind end again. Still blind.', 'The dead face of rock, unchanged.',
+    'Still a dead end. It has not opened up in your absence.', 'Rock, exactly where you left it.',
+    'No further than before. There was never going to be.', 'The wall again, exactly as unmoved as before.'],
+  pocket: ['The sealed pocket again.', 'Still boxed in on every side.',
+    'Closed in, same as ever.', 'The little cell of water again. It has not widened.',
+    'Rock on every side, exactly as before.', 'Still nowhere else for the light to go.'],
+  nook: ['The blind nook again, off the side of the shaft.', 'Back in the niche.',
+    'The small blind room again, off the shaft.', 'Same tucked-away corner, same nothing in it.',
+    'Back in the hollow off the passage.', 'Still just a dent in the rock, and nothing more.'],
 };
 
 const DIR_COUNT = {
@@ -5456,6 +5564,16 @@ const WALL_FACE = [
   'The face ahead is scored with long parallel grooves. You decide not to wonder what makes those.',
   'Solid rock, furred over with something soft and colourless that has never needed light.',
   'The wall is packed sediment gone hard as brick, studded with shells of no species you know.',
+  'The hull takes it flat-on, and the whole frame answers with a groan.',
+  'Rock, and a great deal of it. The chart never promised otherwise.',
+  'The lights come up hard against a face of dark, wet mineral, and go no further.',
+  'Something in the stone catches the lamp once and is gone — a vein of ore, or an eye.',
+  'The wall bears long scratches, deep and evenly spaced, at a height that means nothing good.',
+  'A face of rock, pitted all over as though something had spent a very long time working at it.',
+  'The stone here reads warm to the sonar, in a way stone is not supposed to.',
+  'Bare rock, slick with a film that was not there on the way in.',
+  'Impact comes back as a dull, wet thud — more give in the sound than rock should have.',
+  'Cold stone. Unbroken. Patient.',
 ];
 
 const WALL_UNDER = [
@@ -5463,6 +5581,10 @@ const WALL_UNDER = [
   'The floor of the place stops the dive',
   'Silt boils up as the hull settles onto rock',
   'The bottom arrives sooner than the instruments promised',
+  'The keel finds bottom hard, and the dive is over',
+  'Rock underfoot before the gauges expected it',
+  'The descent ends against a floor the sonar missed',
+  'Sediment cushions nothing; the hull feels all of it',
 ];
 
 const WALL_OVER = [
@@ -5470,6 +5592,10 @@ const WALL_OVER = [
   'Rock overhead, and the boat finds it with the casing',
   'The ceiling is right there, and the hull says so',
   'The rise ends against stone you could not see',
+  'The casing meets rock before the depth gauge can object',
+  'Overhead is suddenly solid, and the climb is finished',
+  'Stone closes off the rise without any warning worth the name',
+  'The lights find ceiling an instant before the hull does',
 ];
 
 const HEDGE = [
@@ -5477,6 +5603,10 @@ const HEDGE = [
   'Beyond that, the chart is blank.',
   'Where the others go, nobody has written down.',
   'The rest are only openings; what is past them is anyone\'s guess.',
+  'What lies past the others is not written down anywhere aboard.',
+  'That is as far as anyone before you got, if anyone did.',
+  'None of the far ends have made it onto the chart yet.',
+  'The instruments have opinions about the near ways only; the rest are guesses.',
 ];
 
 // What the boat can honestly say about the ways out. The vertical column is
@@ -5510,12 +5640,21 @@ const DEPTH_MOOD = {
   sunlit: [
     'Light still reaches down here, green and used up.',
     'The water holds a little daylight, and the shapes in it are almost honest.',
+    'The light from above thins fast now, and gives out well short of comfort.',
+    'Green light, filtered and used-up, falls just far enough to be a nuisance rather than a help.',
+    'Sun somewhere far above. Down here it arrives as a rumour, not a light.',
+    'A colour still comes through, on the good days — thin green, but a colour.',
+    'Shafts of pale light reach down and give out before they mean anything.',
     '',
   ],
   upper: [
     'The last of the light gave out a while back. Everything now is what the lamps say it is.',
     'Cold water, and quiet enough to hear the boat think.',
     'Sediment hangs where nothing has disturbed it in a long time.',
+    'No light reaches this far. The lamps are the only opinion on the matter.',
+    'The water has gone properly cold, the kind that gets into the hull and stays.',
+    'Quiet, in the particular way water is quiet when nothing living wants to be heard.',
+    'The dark starts here in earnest, and does not apologise for it.',
     '',
   ],
   middle: [
@@ -5523,18 +5662,29 @@ const DEPTH_MOOD = {
     'Something creaks aft and then thinks better of it.',
     'The dark down here has weight, and it leans.',
     'The water is old. It has not been anywhere in a very long time.',
+    'The hull ticks now and then, adjusting to a pressure it never used to have to answer.',
+    'Nothing down here has seen the sun, and none of it minds the lack.',
+    'The instruments read the depth and say nothing else about it, which is its own kind of comment.',
     '',
   ],
   deep: [
     'The hull complains steadily now, a slow conversation with the pressure.',
     'This is deep water. The lamps look small and apologetic in it.',
     'Whatever lives at this depth does not need eyes, and has not needed them for an age.',
+    'Every rivet in the hull has an opinion now, and none of them is reassuring.',
+    'The dark has a texture at this depth, and the lights do not so much cut it as borrow from it.',
+    'Sound travels strangely down here, and arrives having changed its mind about something.',
+    'This far down, the water keeps its own counsel, and has for longer than anything above it has existed.',
     '',
   ],
   abyss: [
     'The pressure is a hand closed loosely around the boat.',
     'Nothing at this depth has any business being seen. Including you.',
     'The dark here is not an absence of light. It is a material, and the boat is in it.',
+    'There is no bottom on the chart at this depth, and increasingly little reason to expect one.',
+    'The hull holds, for now, and for now is doing a great deal of work in that sentence.',
+    'At this depth the word deep has stopped meaning very much.',
+    'Whatever built the pressure gauge did not seriously expect to be read this far down.',
     '',
   ],
 };
@@ -6384,6 +6534,7 @@ function resumeGame(save) {
     if (b.threat == null) b.threat = 0;
     if (b.siege === undefined) b.siege = null;
     if (b.breached == null) b.breached = false;
+    if (b.boarder === undefined) b.boarder = null;
     if (!b.stores) b.stores = { crates: 0, relics: 0 };
   }
   state.clearedDecks = save.clearedDecks || [];
