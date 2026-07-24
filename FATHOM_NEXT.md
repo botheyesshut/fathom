@@ -73,7 +73,7 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 ## Build ladder — every stage ships playable
 1. ~~**The Threshold**~~ **DONE 2026-07-24** — walk into a ruin. See "STAGE 1 AS BUILT" below.
 2. ~~**Dark and Wet**~~ **DONE 2026-07-24** — flooding from the breach, bulkheads, a tenant. See "STAGE 2 AS BUILT".
-3. **Boarders** — on-foot combat; crew become bodies that can be lost.
+3. ~~**Boarders**~~ **DONE 2026-07-24** — on-foot combat off the existing GEAR sheet. See "STAGE 3 AS BUILT". (Crew as bodies that can be LOST is still outstanding.)
 4. ~~**The Claim**~~ **DONE 2026-07-24** — a station is a ruin you sealed. See "STAGE 4 AS BUILT". (Level-1 DEFENCES still outstanding — that is Stage 6's business.)
 5. **Digging & Fitting** — carve, furnish, bulkheads, pumps, decks.
 6. **Siege** — MOB invasion: water assault → breach → interior fight.
@@ -115,6 +115,17 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 - **interior.test.js is now 55 checks.** Stage 4 invariants: tenant blocks the claim, cost enforced, pumps clear the water, a station never floods across 60 steps, stow/draw round-trips, second station refused, re-entry dry with no loot regrowth, **stores survive `endGame()`**, and the station survives a reload.
 - **UX fix found only in a live browser**: standing ON the lock there is no neighbour to tap to leave, so the tile underfoot becomes its own exit target. Headless tests could never have caught that.
 - **KNOBS NOT YET FELT**: `CLAIM_COST`, one-station limit, whether stations should also refill air (they probably should — that is a strong candidate for the next pass).
+
+## STAGE 3 AS BUILT — Boarders (2026-07-24)
+Built on the EXISTING `GEAR`/`teamScore()` sheet — the comment at the top of GEAR said the stats were abstract so they could "resolve expedition hazards now and per-tile dungeon combat later". That was this. No parallel combat system was invented.
+- **`TENANTS`** — four kinds, each with glyph, colour, toughness, damage range and three prose lines (`look` on first sight, `hurt` on breaking, `near` when it is close but unseen): **hollow** (Ω, 7), **whisper** (ʬ, 4, dims the lamp), **clutch** (ॐ, 14), **warden** (Ψ, 22). `tenantTough()` hash-varies each INDIVIDUAL ±25% — the bestiary's law, indoors.
+- **`fightTenant()`** on `#btn-fight`, shown ONLY when the thing is within reach. Swing = `1 + randInt(atk*2)`; unarmed is `rand()<0.3 ? 1 : 0` and says so plainly ("the armoury at the dock sells boarding axes"). Armour (`teamScore().def`) soaks up to 60% of its answer — crew gear at MAN scale, per the standing law.
+- **It answers every round you fail to finish it.** A clutch on an axe took 5 rounds and ~100 air in live play. Violence stays the expensive answer; a door is still cheaper.
+- **`state.clearedDecks`** (overlay, saved) records driven-off tenants by `deckKey`. The substrate keeps generating the thing forever; this is the record that says you dealt with it. `enterInterior` consults it.
+- **TRAP THE BATTERY CAUGHT**: `claimOrStore()` was checking `ch.dweller` (substrate) not `f.dweller` (live), so a deck you had just cleared still refused to be claimed — breaking the entire point of the stage. **Always ask the overlay, never the generator, about things the player has changed.**
+- **TWO FAULTS ONLY A BROWSER FOUND**: `spec.name.replace(/^a /, 'It')` produced "**Itwhisper** has you in the dark" (now `theTenant()` → "The whisper"); and Ping/Fire/Launch Decoy sat in the control row while ashore doing nothing but scolding — now hidden by `syncFootControls`. **Read the rendered log, not just the test output.**
+- **interior.test.js is now 66 checks.**
+- **KNOBS NOT YET FELT**: tenant toughnesses, damage ranges, swing formula, armour cap 60%, spawn rate 0.55, whether a driven-off tenant should ever come BACK.
 
 ---
 

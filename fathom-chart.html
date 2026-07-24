@@ -731,6 +731,7 @@
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
     <button class="btn" id="btn-claim" style="display:none" title="Claim this deck as your station — seals the breach into a lock and pumps the water out. Inside your own station, stows or draws out your goods.">Claim Deck</button>
+    <button class="btn" id="btn-fight" style="display:none" title="Board it — fight with whatever the crew's locker holds. Expensive, and it answers every round you do not finish it.">Board It</button>
     <button class="btn primary" id="btn-surface">Surface</button>
     <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
   </div>
@@ -1922,6 +1923,9 @@ const state = {
   // The station, once a deck has been claimed and pumped dry. One only, for
   // now. What is stowed here is NOT aboard, so the sea cannot take it.
   base: null,
+  // Decks whose tenant has been driven off. The substrate goes on generating
+  // the thing; this is the overlay record that says you already dealt with it.
+  clearedDecks: [],
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -1968,6 +1972,12 @@ function setViewport() {
 function syncFootControls(inside) {
   const seal = document.getElementById('btn-seal');
   if (seal) seal.style.display = inside ? '' : 'none';
+  // Boat controls are dead weight while the captain is off the boat — they do
+  // nothing but scold. Hide them rather than leave the row full of refusals.
+  for (const id of ['btn-ping', 'btn-fire', 'btn-launch']) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = inside ? 'none' : '';
+  }
   const claim = document.getElementById('btn-claim');
   if (!claim) return;
   claim.style.display = inside ? '' : 'none';
@@ -1978,6 +1988,14 @@ function syncFootControls(inside) {
   if (!isBaseDeck(f.q, f.r, f.d)) claim.textContent = 'Claim Deck';
   else if (f.crates + f.relics + state.cargo + state.relics > 0) claim.textContent = 'Stow Goods';
   else claim.textContent = 'Draw Goods';
+
+  // Boarding only offers itself when the thing is actually within reach — a
+  // dead control is worse than no control.
+  const fight = document.getElementById('btn-fight');
+  if (!fight) return;
+  const t = f.dweller;
+  const reach = !!t && Math.abs(t.x - f.x) + Math.abs(t.y - f.y) <= 1;
+  fight.style.display = reach ? '' : 'none';
 }
 
 function render() {
@@ -3551,6 +3569,46 @@ const FLOOD_EVERY = 2;  // steps between advances of the water
 const DWELLER_EAR = 9;  // tiles at which the thing below notices you
 const interiorCache = new Map();   // 'q,r,d' -> chunk (substrate; cleared on reseed)
 
+// What lives on a drowned deck. Each kind forces a different answer, and each
+// INDIVIDUAL varies within its species range — the same law the bestiary in
+// the water obeys. Toughness is what a boarding party has to get through
+// before the thing decides the deck is not worth it.
+const TENANTS = {
+  hollow: {
+    name: 'a hollow man', glyph: 'Ω', color: '#9fc4a8', tough: 7, hit: [30, 55],
+    look: 'Something that used to be crew stands in the dark, patient, and turns its head as the lamp finds it.',
+    hurt: 'It comes apart at the seams and does not put itself back together.',
+    near: 'Somewhere close, plate scrapes on plate at about walking pace.',
+  },
+  clutch: {
+    name: 'a clutch', glyph: 'ॐ', color: '#c8a06a', tough: 14, hit: [45, 75],
+    look: 'A knot of limbs fills the passage, too many and all of them wrong, working slowly against itself.',
+    hurt: 'The knot loosens, sheds most of itself, and drags what is left away into the dark.',
+    near: 'Something heavy shifts nearby, and goes on shifting for longer than it should take.',
+  },
+  whisper: {
+    name: 'a whisper', glyph: 'ʬ', color: '#bfa8e0', tough: 4, hit: [15, 30],
+    look: 'A thin pale shape, barely there, and the lamp dims wherever it stands.',
+    hurt: 'It thins out to nothing at all, and the lamp comes back up.',
+    near: 'The lamp gutters for no reason you can name.',
+  },
+  warden: {
+    name: 'a warden', glyph: 'Ψ', color: '#a8d68c', tough: 22, hit: [55, 90],
+    look: 'It was built to keep people out of this deck, and it is still doing the job.',
+    hurt: 'It goes down on one side, gives up the passage, and withdraws into the deep of the structure.',
+    near: 'Something enormous is moving through the structure, and it is not in a hurry.',
+  },
+};
+
+// "a whisper" -> "The whisper". Names are stored with their article because
+// they read better that way in most sentences, and worse in this one.
+function theTenant(spec) { return spec.name.replace(/^an? /, 'The '); }
+
+function tenantTough(kind, seedStr) {
+  const base = (TENANTS[kind] || TENANTS.hollow).tough;
+  return Math.max(2, Math.round(base * (0.75 + mulberry32(hashStr('tough:' + seedStr))() * 0.5)));
+}
+
 // Deterministic deck: rooms chained by L-corridors, with the entry breach hung
 // off room 0. The chaining is what GUARANTEES every carved tile is reachable
 // from the entry — the battery asserts it by flood fill, because loot stranded
@@ -3638,7 +3696,9 @@ function interiorAt(q, r, d) {
       const dd = Math.abs(c.x - ex) + Math.abs(c.y - ey);
       if (dd > bestD) { bestD = dd; best = c; }
     }
-    if (best) dweller = { x: best.x, y: best.y };
+    const kinds = Object.keys(TENANTS);
+    const kind = kinds[Math.floor(rnd() * kinds.length)];
+    if (best) dweller = { x: best.x, y: best.y, kind: kind, tough: tenantTough(kind, key) };
   }
 
   // Fallen structure, then what is worth carrying out. Rubble stays PASSABLE:
@@ -3714,6 +3774,15 @@ function isBaseDeck(q, r, d) {
   return !!b && b.q === q && b.r === r && b.d === d;
 }
 
+function deckKey(q, r, d) { return q + ',' + r + ',' + d; }
+
+// A deck whose tenant you drove off stays driven off. Overlay, saved — the
+// substrate goes on generating the thing; this is the record that says you
+// already dealt with it.
+function isDeckCleared(q, r, d) {
+  return (state.clearedDecks || []).includes(deckKey(q, r, d));
+}
+
 const STATION_ARRIVE = [
   'Your own hatch light, still burning where you left it.',
   'The station. The lock cycles, and the deck beyond it is dry.',
@@ -3741,7 +3810,9 @@ function enterInterior(tile) {
     // breach has been made into a lock, which is what claiming is for.
     water: claimed ? [] : [ch.entry.x + ',' + ch.entry.y],
     closed: [],
-    dweller: (!claimed && ch.dweller) ? { x: ch.dweller.x, y: ch.dweller.y } : null,
+    dweller: (!claimed && ch.dweller && !isDeckCleared(tile.q, tile.r, d))
+      ? { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 }
+      : null,
   };
   lampSweep();
   if (claimed) {
@@ -3767,7 +3838,9 @@ function claimOrStore() {
     log('You already hold a station, and the Erebus can only supply the one.', 'warn', 'STATION');
     return;
   }
-  if (ch.dweller) {
+  // Ask the LIVE tenant, not the generator — a deck you drove something off
+  // still has a dweller in its substrate, and always will.
+  if (f.dweller) {
     log('Something still lives on this deck. You are not about to seal yourself in with it.', 'warn', 'STATION');
     return;
   }
@@ -3855,14 +3928,21 @@ function dwellerStep() {
   }
   if (best) { d.x = best.x; d.y = best.y; dist = bestD; }
 
+  const spec = TENANTS[d.kind] || TENANTS.hollow;
   if (dist === 0) {
-    // It goes for the line, because that is what kills a diver.
-    const loss = 40 + randInt(30);
+    // It goes for the line, because that is what kills a diver. Plates and a
+    // wardsuit soak some of it — crew gear acting at MAN scale, as the law says.
+    const armor = teamScore().def;
+    const raw = spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1);
+    const loss = Math.max(6, Math.round(raw * (1 - Math.min(0.6, armor * 0.15))));
     state.air = Math.max(0, state.air - loss);
-    log(`It has you in the dark. Something tears, and your line is venting hard. (-${loss} air)`, 'danger', 'ATTACK');
+    log(`${theTenant(spec)} has you in the dark. Something tears, and your line is venting hard. (-${loss} air)`, 'danger', 'ATTACK');
     sfx('strike');
-  } else if (dist <= 2 && rand() < 0.55) {
-    log('Something moves close by, and it is not the water.', 'warn', 'CONTACT');
+  } else if (dist === 1 && !f.metTenant) {
+    f.metTenant = true;
+    log(spec.look, 'danger', 'CONTACT');
+  } else if (dist <= 3 && rand() < 0.5) {
+    log(spec.near, 'warn', 'CONTACT');
   }
 }
 
@@ -3948,6 +4028,69 @@ function sealDoor() {
     return;
   }
   log('No bulkhead within reach.', 'warn', 'BULKHEAD');
+}
+
+const SWING_HIT = [
+  'You get it square, and it gives ground.',
+  'The blow lands somewhere that matters. It recoils.',
+  'You drive in hard. Something in it breaks.',
+  'A good stroke, and it comes off worse for it.',
+];
+const SWING_POOR = [
+  'You catch it a glancing blow. It barely notices.',
+  'You strike, and it takes it the way rock takes rain.',
+  'Your swing goes wide in the dark.',
+];
+
+// Boarding action. Violence is the EXPENSIVE answer and the game should feel
+// that: you fight with what the crew's locker holds, an unarmed captain is
+// nearly helpless and is told so plainly, and the thing answers every round
+// you fail to finish it. A door remains the cheaper solution.
+function fightTenant() {
+  const f = state.foot;
+  const ch = footChunk();
+  if (!f || !ch || !state.alive) return;
+  const t = f.dweller;
+  if (!t) { log('There is nothing on this deck to fight.', 'warn', 'BOARDING'); return; }
+  if (Math.abs(t.x - f.x) + Math.abs(t.y - f.y) > 1) {
+    log('It is not within reach. You would have to go to it, which is its own kind of decision.', 'warn', 'BOARDING');
+    return;
+  }
+
+  const spec = TENANTS[t.kind] || TENANTS.hollow;
+  const atk = teamScore().atk;
+  if (atk <= 0 && !f.warnedUnarmed) {
+    f.warnedUnarmed = true;
+    log('Nobody in the party is carrying anything worth the name. The armoury at the dock sells boarding axes and spearguns — until then this is bare hands against it.', 'warn', 'BOARDING');
+  }
+
+  const swing = atk > 0 ? 1 + randInt(atk * 2) : (rand() < 0.3 ? 1 : 0);
+  t.hurt = (t.hurt || 0) + swing;
+  f.steps++;
+  state.air = Math.max(0, state.air - FOOT_AIR);
+
+  if (t.hurt >= (t.tough || spec.tough)) {
+    log(spec.hurt, 'warn', 'BOARDING');
+    log('The deck is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
+    f.dweller = null;
+    if (!state.clearedDecks) state.clearedDecks = [];
+    const k = deckKey(f.q, f.r, f.d);
+    if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
+    sfx('bell');
+  } else {
+    log(swing > 1 ? pickLoose(SWING_HIT) : pickLoose(SWING_POOR), '', 'BOARDING');
+    sfx('strike');
+    dwellerStep();   // and it answers
+  }
+
+  if (state.air <= 0) {
+    log('The tanks run dry in the dark.', 'danger', 'AIR');
+    checkDeath();
+    if (!state.alive) { state.foot = null; return; }
+  }
+  updateHUD();
+  render();
+  scheduleSave();
 }
 
 function leaveInterior(prefix) {
@@ -4078,7 +4221,8 @@ function renderInterior() {
   // when your lamp is on it, and not one tile sooner.
   const dw = f.dweller;
   if (dw && Math.hypot(dw.x - f.x, dw.y - f.y) <= LAMP_R) {
-    glyph(dw.x, dw.y, 'Ψ', '#a8d68c', 17, 1);
+    const spec = TENANTS[dw.kind] || TENANTS.hollow;
+    glyph(dw.x, dw.y, spec.glyph, spec.color, 17, 1);
   }
 
   // Standing ON the lock, there is no neighbour to tap to get out of it — so
@@ -5745,6 +5889,7 @@ function restart() {
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
+  state.clearedDecks = [];
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -6025,6 +6170,7 @@ function doSave(force) {
       expedition: state.expedition,
       foot: state.foot,
       base: state.base,
+      clearedDecks: state.clearedDecks,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -6079,6 +6225,7 @@ function resumeGame(save) {
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
   state.base = save.base || null;
+  state.clearedDecks = save.clearedDecks || [];
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
     // A save written before the sea came in still has to load.
@@ -6149,6 +6296,7 @@ document.getElementById('btn-launch').addEventListener('click', launchDecoy);
 document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
+document.getElementById('btn-fight').addEventListener('click', fightTenant);
 document.getElementById('btn-fire').addEventListener('click', fireWeapon);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);

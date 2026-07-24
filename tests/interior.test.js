@@ -63,6 +63,7 @@ try { vm.runInContext(script +
   '\nfunction __dwell(){ dwellerStep(); }' +
   '\nfunction __claim(){ claimOrStore(); }' +
   '\nfunction __base(){ return state.base; }' +
+  '\nfunction __fight(){ fightTenant(); }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -432,6 +433,91 @@ sandbox.__st().base = null;
 sandbox.__resume();
 check(sandbox.__base() && sandbox.__base().stores.crates === 7 && sandbox.__base().q === clean.q,
   'and the station survives a reload', sandbox.__base() ? 'held' : 'lost');
+
+//--- 10. Stage 3: boarding ---------------------------------------------------
+// Violence must stay the expensive answer: unarmed is near-useless, armed is
+// possible, and the reward is that the deck becomes claimable at all.
+sandbox.__st().foot = null;
+sandbox.__st().base = null;
+sandbox.__st().clearedDecks = [];
+sandbox.__st().alive = true;
+sandbox.__st().crew = [];
+sandbox.__st().air = 200000;
+
+const kinds = new Set(), individuals = new Set();
+for (let q = 0; q < 60; q++) {
+  const c = sandbox.__int(q, 13, 840);
+  if (c.dweller) { kinds.add(c.dweller.kind); individuals.add(c.dweller.kind + ':' + c.dweller.tough); }
+}
+check(kinds.size >= 2, 'decks hold more than one kind of tenant', [...kinds].join(', '));
+check(individuals.size > kinds.size, 'and individuals vary within their kind',
+  individuals.size + ' distinct across ' + kinds.size + ' kinds');
+
+// Put the tenant out of reach — boarding must refuse.
+sandbox.__enter(site2.q, 7, 660);
+let ft = sandbox.__foot();
+const openNbr = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+  .map(([dx, dy]) => ({ x: ft.x + dx, y: ft.y + dy }))
+  .find(p => !sandbox.__solid(p.x, p.y));
+ft.dweller.x = ft.x + 6; ft.dweller.y = ft.y;
+ft.dweller.hurt = 0;
+sandbox.__fight();
+check(sandbox.__foot().dweller.hurt === 0, 'you cannot board something out of reach', 'refused');
+
+// Bare hands: twenty rounds should barely scratch it.
+ft.dweller.x = openNbr.x; ft.dweller.y = openNbr.y;
+ft.dweller.tough = 40; ft.dweller.hurt = 0;
+for (let i = 0; i < 20; i++) {
+  const cur = sandbox.__foot();
+  if (!cur || !cur.dweller) break;
+  cur.dweller.x = openNbr.x; cur.dweller.y = openNbr.y;   // hold it in reach
+  sandbox.__fight();
+}
+const barehanded = sandbox.__foot() && sandbox.__foot().dweller ? sandbox.__foot().dweller.hurt : 999;
+check(barehanded < 12, 'bare hands against it is not a plan', barehanded + ' damage in 20 rounds');
+
+// Armed with relic-work: the same twenty rounds settle it.
+sandbox.__st().crew = [{ name: 'Test', role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit' } }];
+sandbox.__st().foot = null;
+sandbox.__st().air = 200000;
+sandbox.__enter(site2.q, 7, 660);
+ft = sandbox.__foot();
+const nbr2 = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+  .map(([dx, dy]) => ({ x: ft.x + dx, y: ft.y + dy }))
+  .find(p => !sandbox.__solid(p.x, p.y));
+ft.dweller.tough = 28; ft.dweller.hurt = 0;   // a warden-weight individual
+const airAtBoarding = sandbox.__st().air;
+let rounds = 0;
+while (sandbox.__foot() && sandbox.__foot().dweller && rounds++ < 60) {
+  const cur = sandbox.__foot();
+  cur.dweller.x = nbr2.x; cur.dweller.y = nbr2.y;
+  sandbox.__fight();
+}
+check(sandbox.__foot() && !sandbox.__foot().dweller, 'an armed party can drive a heavy one off the deck', rounds + ' rounds');
+check(rounds >= 3, 'and a heavy tenant is not a one-punch affair', rounds + ' rounds to break it');
+check(sandbox.__st().air < airAtBoarding, 'it answers every round you fail to finish it',
+  'air ' + airAtBoarding + ' -> ' + sandbox.__st().air);
+check(sandbox.__st().clearedDecks.includes(site2.q + ',7,660'),
+  'and the deck is recorded as cleared', sandbox.__st().clearedDecks.join(' | '));
+
+// It stays driven off.
+sandbox.__st().foot = null;
+sandbox.__enter(site2.q, 7, 660);
+check(sandbox.__foot().dweller === null, 'a cleared deck does not regrow its tenant', 'still empty');
+
+// THE POINT: a deck you cleared can now be claimed, which it could not before.
+sandbox.__st().cargo = 10;
+sandbox.__claim();
+check(!!sandbox.__base() && sandbox.__base().q === site2.q,
+  'and a cleared deck can be claimed — which is what boarding is FOR',
+  sandbox.__base() ? 'station cut at ' + sandbox.__base().q + ',7' : 'still refused');
+
+sandbox.__st().foot = null;
+sandbox.__save();
+sandbox.__st().clearedDecks = [];
+sandbox.__resume();
+check(sandbox.__st().clearedDecks.includes(site2.q + ',7,660'),
+  'cleared decks survive a reload', sandbox.__st().clearedDecks.length + ' recorded');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
