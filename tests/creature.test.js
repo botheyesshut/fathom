@@ -41,7 +41,7 @@ function freshContext(storage) {
   sandbox.__ping = pingEl;
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
-  const injected = script + '\nfunction __cells(){ return cells; }\nfunction __state(){ return state; }\nfunction __spawned(){ return spawnedChunks; }\nfunction __ck(q,r,d){ return cells.has(cellKey(q,r,d)); }\nfunction __kind(q,r,d){ const c = cells.get(cellKey(q,r,d)); return c ? c.kind : null; }\nfunction __set(q,r,d){ cells.set(cellKey(q,r,d), {type:"passage",kind:"passage"}); }';
+  const injected = script + '\nfunction __cells(){ return cells; }\nfunction __state(){ return state; }\nfunction __spawned(){ return spawnedChunks; }\nfunction __ck(q,r,d){ return cells.has(cellKey(q,r,d)); }\nfunction __kind(q,r,d){ const c = cells.get(cellKey(q,r,d)); return c ? c.kind : null; }\nfunction __set(q,r,d){ cells.set(cellKey(q,r,d), {type:"passage",kind:"passage"}); }\nfunction __seed(s){ worldSeed=s; world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); spawnedChunks.clear(); state.creatures=[]; }';
   try { vm.runInContext(injected, sandbox, { timeout: 15000 }); } catch (e) { /* DOM init throw expected */ }
   return sandbox;
 }
@@ -55,6 +55,8 @@ const check = (ok, label, detail) => {
 const store = memStorage();
 const sb = freshContext(store);
 sb.restart();
+sb.__seed(20260723); // pin a fixed world so the spawn-validity sweep is deterministic
+sb.tileAt(0, 0);
 const st = sb.__state();
 
 // ---- 1. Spawn validity over a wide cave region ----
