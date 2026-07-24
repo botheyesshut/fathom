@@ -131,6 +131,7 @@ check(st.relics === 0 && st.relicsBanked === 2, 'relics bank in the vault at por
 
 st.cargo = 3; // three more crates aboard
 st.cargoBanked = 1; // restock the ledger after the yard/outfitter tests
+st.armament = 'harpoon'; st.torpedoes = 2; // and armed, to prove arms round-trip
 sb.doSave();
 const raw = JSON.parse(store.getItem('fathom-save-v1'));
 check(raw.cargo === 3 && raw.cargoBanked === 1, 'save carries cargo + bank', JSON.stringify({c: raw.cargo, b: raw.cargoBanked}));
@@ -138,6 +139,7 @@ const sb2 = freshContext(store);
 sb2.startGame();
 const st2 = sb2.__state();
 check(st2.cargo === 3 && st2.cargoBanked === 1, 'cargo + bank survive reload', 'cargo=' + st2.cargo + ' banked=' + st2.cargoBanked);
+check(st2.armament === st.armament && st2.torpedoes === st.torpedoes, 'armaments survive reload', 'arm=' + st2.armament + ' torps=' + st2.torpedoes);
 check(sb2.__subKey() === 'charon', 'the bought boat survives reload', 'sub=' + sb2.__subKey());
 check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.crew[0].name + ', xp ' + st2.crew[0].xp));
 
@@ -166,6 +168,22 @@ check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.cre
   sb.surface();
   const armed = st.crew.some(m => m.gear && (m.gear.weapon || m.gear.armor || (m.gear.kit && m.gear.kit.charges > 0)));
   check(armed && st.cargoBanked < 10, 'a second press arms a hand', 'bank=' + st.cargoBanked);
+
+  // Boat armaments. Isolate the arms offer from the rest of the dock chain:
+  // crew full AND fully geared (no hire, no crew-armory offer), hull topped
+  // (no yard), cargo/relics empty aboard, and only ONE arm affordable at a
+  // time so the offer is deterministic.
+  st.crew = [];
+  for (let i = 0; i < 4; i++) st.crew.push({ name: 'x' + i, role: 'diver', xp: 0, wounded: false, gear: { weapon: 'axe', armor: 'plates', kit: { key: 'firstaid', charges: 1 } } });
+  st.armament = null; st.torpedoes = 0; st.hull = 9999; st.air = 450;
+  st.cargo = 0; st.relics = 0;
+  st._outfitOffer = null; st._hireOffer = null; st._armoryOffer = null; st._armsOffer = null;
+  st.cargoBanked = 20; st.relicsBanked = 0; // only the harpoon is affordable
+  sb.surface(); sb.surface(); // offer, then buy
+  check(st.armament === 'harpoon' && st.cargoBanked === 12, 'the dock bolts on a harpoon for crates', 'arm=' + st.armament + ' bank=' + st.cargoBanked);
+  st.relicsBanked = 5; st._armsOffer = null; // now only torpedoes (harpoon owned)
+  sb.surface(); sb.surface();
+  check(st.torpedoes === 3 && st.relicsBanked === 3, 'the armorer trades torpedoes for relics', 'torps=' + st.torpedoes + ' vault=' + st.relicsBanked);
 }
 
 // 6. Unnatural growth: a living, varied hazard that bites every pass (not once)

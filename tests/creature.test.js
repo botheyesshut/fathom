@@ -288,6 +288,38 @@ st.currentDepth = 1800; // you climb two bands, above its ceiling
 for (let i = 0; i < 6; i++) sb.creatureTick();
 check(BA.depth >= BA.ceilingLimit, 'the barotaur cannot follow above its ceiling — you escape', 'depth ' + BA.depth + ' vs limit ' + BA.ceilingLimit);
 
+// ---- 4k. Combat: the harpoon drives things off; the leviathan shrugs; it's loud ----
+st.creatures.length = 0; st.buoys = [];
+st.q = 0; st.r = -6; st.currentDepth = 0; st.hull = 200;
+st.armament = 'harpoon'; st.torpedoes = 0;
+sb.spawnCreature('lurker', 1, -6, 0); // adjacent
+const CBL = st.creatures[0]; CBL.interest = 100; CBL.dmgTaken = 0;
+let broke = false;
+for (let i = 0; i < 8 && !broke; i++) { sb.fireWeapon(); if (CBL.fleeing) broke = true; }
+check(broke, 'the harpoon eventually drives a lurker off (it flees)', 'fleeing=' + CBL.fleeing);
+// A tidehulk cannot be driven off by a harpoon.
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('hulk', 1, -6, 0);
+const CBH = st.creatures[0];
+for (let i = 0; i < 15; i++) sb.fireWeapon();
+check(!CBH.fleeing && !CBH.gone, 'a harpoon cannot break a tidehulk', 'still here');
+// Firing is loud — it wakes a distant hunter.
+st.creatures.length = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('eel', 1, -6, 0);      // a target to fire at
+sb.spawnCreature('lurker', 7, -6, 0);   // a listener 7 hexes off
+const CBW = st.creatures[1]; CBW.interest = 0;
+sb.fireWeapon();
+check((CBW.interest || 0) > 0, 'a shot is a shout — it wakes hunters in earshot', 'lurker interest ' + CBW.interest);
+// No weapon, no fire.
+st.creatures.length = 0; st.armament = null; st.torpedoes = 0;
+st.q = 0; st.r = -6; st.currentDepth = 0;
+sb.spawnCreature('lurker', 1, -6, 0);
+const h0 = st.hull; sb.fireWeapon();
+check(st.creatures.length === 1 && !st.creatures[0].fleeing, 'an unarmed boat cannot fire', 'creature untouched');
+st.armament = 'harpoon';
+
 // ---- 5b. Rival salvager: seeks the nearest unworked site and strips it ----
 st.creatures.length = 0;
 st.q = 0; st.r = -16; st.currentDepth = 0; // inside sim range (24), outside stand-off (2)

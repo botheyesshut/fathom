@@ -726,6 +726,7 @@
   </div>
   <div id="controls-row">
     <button class="btn" id="btn-ping">Ping</button>
+    <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn primary" id="btn-surface">Surface</button>
     <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
@@ -1923,6 +1924,10 @@ const state = {
   crew: [],
   // Decoy buoys in the water: { q, r, depth, turns }. Transient — not saved.
   buoys: [],
+  // Boat armaments (fight the bestiary). Bought at the dock; lost with the boat.
+  armament: null,   // null | 'harpoon' (reusable, adjacent)
+  torpedoes: 0,     // consumable, ranged, heavy
+
 };
 
 //=============================================================================
@@ -2849,6 +2854,72 @@ function soundColumn(sq, sr, cd, nq, nr, depthRange) {
     if ((above !== null || !upClear) && (below !== null || !downClear)) break;
   }
   return { above, below };
+}
+
+// ---- COMBAT: boat armaments. Creatures strike the hull, so you answer them
+// at boat scale — a harpoon for what's alongside, a torpedo for what isn't.
+// Firing is LOUD and rarely the safe answer; most things you can only drive
+// OFF, not kill, and each species answers a wound in its own way.
+const WEAPONS = {
+  harpoon: { power: 6,  range: 1, loud: 3 }, // reusable, adjacent, moderate
+  torpedo: { power: 16, range: 3, loud: 5 }, // consumable, ranged, heavy
+};
+const CREATURE_TOUGH = { drifter: 6, lurker: 10, eel: 4, shoal: 3, silt: 12, baro: 26, angler: 10, chorus: 8, hulk: 999 };
+function creatureTough(c) {
+  const base = CREATURE_TOUGH[c.type] || 10;
+  return Math.max(1, Math.round(base * (0.7 + mulberry32(hashStr('tough:' + (c.id || c.type)))() * 0.6)));
+}
+
+// Land a weapon hit. Damage accumulates; crossing the creature's toughness
+// breaks it — and how it breaks depends on what it is.
+function hitCreature(c, power) {
+  const dmg = Math.max(1, power - 2 + Math.floor(rand() * 5));
+  c.dmgTaken = (c.dmgTaken || 0) + dmg;
+  const nm = c.type === 'hulk' ? 'the leviathan' : c.type === 'shoal' ? 'the school' : c.type === 'chorus' ? 'the colony' : 'it';
+  if (c.dmgTaken < creatureTough(c)) {
+    if (c.type === 'hulk') { log('The leviathan takes the hit and does not so much as turn. You will not kill this with what you carry.', 'warn', 'FIRE'); return; }
+    if (c.type === 'lurker') c.interest = Math.min(100, (c.interest || 0) + 25); // a wound only enrages it
+    if (c.type === 'shoal') c.spooked = Math.max(c.spooked || 0, 1);
+    log(`You put ${dmg} into ${nm}, but it holds.`, 'warn', 'FIRE');
+    return;
+  }
+  if (c.type === 'shoal') { for (const o of state.creatures) if (o.type === 'shoal') o.spooked = 8; log('The school breaks apart and scatters into the dark.', '', 'FIRE'); }
+  else if (c.type === 'silt') { c.spent = 6; c.dmgTaken = 0; log('The buried thing convulses and digs deep — gone, for now.', '', 'FIRE'); }
+  else if (c.type === 'lurker') { c.fleeing = true; c.interest = 0; c.dmgTaken = 0; log('It recoils, breaks off, and flees into the black.', '', 'FIRE'); }
+  else if (c.type === 'chorus') { c.gone = true; log('The colony bursts and goes silent. The water clears.', '', 'FIRE'); }
+  else { c.gone = true; log(`You drive ${nm} off — it will not be back soon.`, '', 'FIRE'); }
+  sfx('strike');
+}
+
+// Fire on the nearest hostile in reach: the harpoon for anything alongside,
+// a torpedo for a threat a little further out (never a rival — that's PvP,
+// for later). An action, and a loud one.
+function fireWeapon() {
+  if (!state.alive || !gameStarted) return;
+  const withD = state.creatures
+    .filter(c => c.type !== 'rival' && !c.gone && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID)
+    .map(c => ({ c, d: hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) }))
+    .sort((a, b) => a.d - b.d);
+  const adj = withD.find(x => x.d === 1);
+  let key = null, target = null;
+  if (adj && state.armament === 'harpoon') { key = 'harpoon'; target = adj.c; }
+  else if (state.torpedoes > 0) {
+    const inR = withD.find(x => x.d <= WEAPONS.torpedo.range);
+    if (inR) { key = 'torpedo'; target = inR.c; state.torpedoes--; }
+  }
+  if (!key) {
+    if (!state.armament && state.torpedoes <= 0) log('You carry no weapon. Buy an armament at the dock.', 'warn');
+    else log('Nothing in your sights.', 'warn');
+    return;
+  }
+  log(key === 'torpedo' ? 'A torpedo runs hot into the dark.' : 'The harpoon gun fires.', '', 'FIRE');
+  sfx(key === 'torpedo' ? 'impact' : 'strike');
+  hitCreature(target, WEAPONS[key].power);
+  noiseMade(state.q, state.r, WEAPONS[key].loud); // a shot is a shout — the deep hears it
+  creatureTick();
+  updateHUD();
+  render();
+  schedulePregen();
 }
 
 // Launch a decoy buoy — it shrieks into the water for ten turns, and the
@@ -4692,9 +4763,10 @@ function endGame(title, summary) {
   state.q = 0; state.r = 0; state.currentDepth = 0;
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
+  state.armament = null; state.torpedoes = 0;
   state.crew = [];
   state.expedition = null;
-  state._outfitOffer = null; state._hireOffer = null; state._armoryOffer = null;
+  state._outfitOffer = null; state._hireOffer = null; state._armoryOffer = null; state._armsOffer = null;
   state.moves = 0; state.maxDepth = 0;
   state.trail = []; state.pingMemory = new Map();
   state.pingArrows = null; state.ping = null;
@@ -4727,10 +4799,12 @@ function restart() {
   state.moves = 0; state.poisFound = [];
   state.cargo = 0; state.cargoBanked = 0;
   state.relics = 0; state.relicsBanked = 0;
+  state.armament = null; state.torpedoes = 0;
   state.expedition = null;
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
+  state._armsOffer = null;
   state.alive = true;
   state.cameraX = 0; state.cameraY = 0;
   state.panX = 0; state.panY = 0;
@@ -4916,6 +4990,31 @@ function surface() {
           log(`The armory: a ${g.name} would fit ${state.crew[c.mIdx].name}'s hands — ${price}. Press Surface again to arm them.`, 'warn', 'ARMORY');
         }
       }
+      // Boat armaments: a harpoon gun (crates, once) or torpedoes (relics).
+      const so = state._armsOffer;
+      if (!state._outfitOffer && !state._hireOffer && !state._armoryOffer && so && so.q === state.q && so.r === state.r && performance.now() < so.until) {
+        if (so.kind === 'harpoon' && state.armament !== 'harpoon' && state.cargoBanked >= 8) {
+          state.cargoBanked -= 8; state.armament = 'harpoon'; state._armsOffer = null;
+          log(`A harpoon gun is bolted to the bow. (8 crates; bank ${state.cargoBanked}.) It won't kill much, but it buys you a breath.`, '', 'ARMORY');
+          sfx('bell'); updateHUD(); render(); return;
+        }
+        if (so.kind === 'torpedo' && state.relicsBanked >= 2) {
+          state.relicsBanked -= 2; state.torpedoes += 3; state._armsOffer = null;
+          log(`Three torpedoes, traded for relic-work. (2 relics; ${state.torpedoes} aboard.) Spend them on what you cannot outrun.`, 'strange', 'ARMORY');
+          sfx('bell'); updateHUD(); render(); return;
+        }
+      }
+      if (!state._outfitOffer && !state._hireOffer && !state._armoryOffer && !state._armsOffer) {
+        const arms = [];
+        if (state.armament !== 'harpoon' && state.cargoBanked >= 8) arms.push('harpoon');
+        if (state.relicsBanked >= 2) arms.push('torpedo');
+        if (arms.length) {
+          state._armsOffer = { kind: pick(arms), q: state.q, r: state.r, until: performance.now() + 45000 };
+          log(state._armsOffer.kind === 'harpoon'
+            ? 'The dockworks will bolt a harpoon gun to your bow — 8 crates. Press Surface again to take it.'
+            : 'The armorer has torpedoes, if you pay in relic-work — 2 relics for three. Press Surface again to load them.', 'warn', 'ARMORY');
+        }
+      }
     }
     if (state.air >= sub.air) {
       log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
@@ -4976,6 +5075,7 @@ function doSave(force) {
       visited: [...visited], revealed: rev,
       creatures: state.creatures, spawnedChunks: [...spawnedChunks],
       cargo: state.cargo, cargoBanked: state.cargoBanked,
+      armament: state.armament, torpedoes: state.torpedoes,
       relics: state.relics, relicsBanked: state.relicsBanked,
       expedition: state.expedition,
       crew: state.crew,
@@ -5024,6 +5124,9 @@ function resumeGame(save) {
   state.creatures = save.creatures || [];
   state.cargo = save.cargo || 0;
   state.cargoBanked = save.cargoBanked || 0;
+  state.armament = save.armament || null;
+  state.torpedoes = save.torpedoes || 0;
+  state._armsOffer = null;
   state.relics = save.relics || 0;
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
@@ -5083,6 +5186,7 @@ if (diveBtn) {
 
 document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-launch').addEventListener('click', launchDecoy);
+document.getElementById('btn-fire').addEventListener('click', fireWeapon);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
