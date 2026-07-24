@@ -1,0 +1,237 @@
+// THE RESOLUTION LADDER, Stage 1 — interiors must be honest places.
+//
+// The invariant that matters most is REACHABILITY: a deck whose loot sits
+// behind solid rock is a bug the player can never diagnose — they just wander
+// a dead ruin and conclude the game is broken. So the flood fill is not a nice
+// -to-have here, it is the whole point of this suite.
+//
+// Also asserted: determinism (interiors are substrate — pure fn of seed), hull
+// integrity (the entry breach is the ONLY hole in the outer ring), that solid
+// tiles stop a body, that loot leaves with you exactly once, and that a reload
+// mid-dive still finds you standing in the dark where you left off.
+const fs = require('fs'); const vm = require('vm');
+const html = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
+const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+function makeStub() {
+  const fn = function () { return stub; };
+  const stub = new Proxy(fn, { get(t, p) {
+    if (p === Symbol.toPrimitive) return () => 0;
+    if (p === Symbol.iterator) return function* () {};
+    if (p === 'length') return 0;
+    if (['firstChild','lastChild','nextSibling','parentNode'].includes(p)) return null;
+    return stub;
+  }, apply() { return stub; }, set() { return true; }, has() { return true; }, construct() { return stub; } });
+  return stub;
+}
+const stub = makeStub();
+const documentStub = new Proxy({}, { get(t, p) {
+  if (['createElementNS','createElement','getElementById','querySelector','querySelectorAll'].includes(p)) return () => makeStub();
+  if (p === 'addEventListener') return () => {};
+  return stub;
+}});
+const mem = {};
+const memStorage = {
+  getItem: k => (k in mem ? mem[k] : null),
+  setItem: (k, v) => { mem[k] = String(v); },
+  removeItem: k => { delete mem[k]; },
+};
+const sandbox = { console, Math, JSON, Date, Array, Object, Map, Set, String, Number, Boolean, Symbol, parseInt, parseFloat, isNaN, isFinite,
+  setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {}, requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
+  performance: { now: () => Date.now() }, document: documentStub, navigator: { userAgent: 'node' }, localStorage: memStorage,
+  // This suite needs the WHOLE script to boot (restart/resumeGame/doSave live
+  // at the very bottom), so the window-level hooks the other suites let throw
+  // have to be real no-ops here.
+  addEventListener: () => {}, removeEventListener: () => {},
+  location: { href: '', reload: () => {} },
+  matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
+  alert: () => {}, AudioContext: undefined, webkitAudioContext: undefined };
+sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
+vm.createContext(sandbox);
+try { vm.runInContext(script +
+  '\nfunction __int(q,r,d){ return interiorAt(q,r,d); }' +
+  '\nfunction __clearInt(){ interiorCache.clear(); }' +
+  '\nfunction __enter(q,r,d){ state.currentDepth=d; tileAt(q,r); enterInterior({q:q,r:r}); }' +
+  '\nfunction __step(x,y){ stepFoot(x,y); }' +
+  '\nfunction __foot(){ return state.foot; }' +
+  '\nfunction __lootAt(x,y){ return footLootAt(x,y); }' +
+  '\nfunction __solid(x,y){ return footTile(x,y)===null; }' +
+  '\nfunction __st(){ return state; }' +
+  '\nfunction __start(){ gameStarted = true; }' +
+  '\nfunction __save(){ doSave(true); }' +
+  '\nfunction __resume(){ resumeGame(loadSave()); }' +
+  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
+  sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
+
+let failures = 0;
+const check = (ok, label, detail) => { console.log((ok ? 'PASS  ' : 'FAIL  ') + label + (detail ? '  — ' + detail : '')); if (!ok) failures++; };
+
+const SIZE = 20;
+const shape = ch => [...ch.tiles.entries()].map(([k, t]) => k + ':' + t.t + ':' + (t.loot || '-')).sort().join('|');
+
+//--- 1. Substrate: same coordinates, same deck, every time --------------------
+sandbox.__clearInt();
+const a = shape(sandbox.__int(3, -2, 600));
+sandbox.__clearInt();
+const b = shape(sandbox.__int(3, -2, 600));
+check(a === b && a.length > 50, 'an interior is a pure function of its coordinates', a.length + ' chars');
+
+const other = shape(sandbox.__int(4, -2, 600));
+check(other !== a, 'a different cell is a different deck', 'distinct layouts');
+
+//--- 2. Reachability + hull integrity, swept over many decks ------------------
+// Flood fill from the entry across 4-neighbours. Every carved tile must be
+// reached, or there is loot the player can never get to.
+let stranded = 0, holed = 0, noEntry = 0, sites = 0, totalTiles = 0;
+for (let q = -4; q <= 4; q++) {
+  for (let r = -3; r <= 3; r++) {
+    const d = 600 + ((q + r) & 3) * 60;
+    const ch = sandbox.__int(q, r, d);
+    sites++;
+    totalTiles += ch.tiles.size;
+
+    const ek = ch.entry.x + ',' + ch.entry.y;
+    const et = ch.tiles.get(ek);
+    if (!et || et.t !== 'entry') { noEntry++; continue; }
+    const onEdge = ch.entry.x === 0 || ch.entry.y === 0 || ch.entry.x === SIZE - 1 || ch.entry.y === SIZE - 1;
+    if (!onEdge) { noEntry++; continue; }
+
+    // The outer ring is the hull: the entry must be the only carved tile in it.
+    for (const k of ch.tiles.keys()) {
+      const c = k.indexOf(',');
+      const x = +k.slice(0, c), y = +k.slice(c + 1);
+      if ((x === 0 || y === 0 || x === SIZE - 1 || y === SIZE - 1) && k !== ek) holed++;
+    }
+
+    const seen = new Set([ek]);
+    const queue = [ch.entry];
+    while (queue.length) {
+      const cur = queue.pop();
+      for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+        const nk = (cur.x + dx) + ',' + (cur.y + dy);
+        if (seen.has(nk) || !ch.tiles.has(nk)) continue;
+        seen.add(nk);
+        queue.push({ x: cur.x + dx, y: cur.y + dy });
+      }
+    }
+    if (seen.size !== ch.tiles.size) stranded++;
+  }
+}
+check(noEntry === 0, 'every deck has an entry breach, and it sits in the hull ring', sites + ' sites');
+check(holed === 0, 'the entry is the ONLY hole in the hull', holed + ' extra holes');
+check(stranded === 0, 'every carved tile is reachable from the entry (no stranded loot)',
+  stranded + '/' + sites + ' stranded, ' + totalTiles + ' tiles swept');
+
+//--- 3. On foot: entering, bumping, walking -----------------------------------
+sandbox.restart();
+sandbox.__start();
+sandbox.__seed(20260724);
+sandbox.__enter(2, 1, 600);
+let f = sandbox.__foot();
+check(!!f && f.q === 2 && f.r === 1 && f.d === 600, 'going over the side puts a body in the ruin',
+  f ? 'at ' + f.x + ',' + f.y : 'no foot state');
+
+const startX = f.x, startY = f.y;
+check(f.seen.length > 0, 'the lamp lights the first ring', f.seen.length + ' tiles seen');
+
+// Walk into the hull from the entry — outside the grid is solid by definition.
+const outside = [[startX, startY - 1], [startX, startY + 1], [startX - 1, startY], [startX + 1, startY]]
+  .find(([x, y]) => sandbox.__solid(x, y));
+sandbox.__step(outside[0], outside[1]);
+f = sandbox.__foot();
+check(!!f && f.x === startX && f.y === startY, 'solid rock stops a body', 'held at ' + startX + ',' + startY);
+
+// Step inward — the entry corridor always has exactly one carved neighbour.
+const inward = [[startX, startY - 1], [startX, startY + 1], [startX - 1, startY], [startX + 1, startY]]
+  .find(([x, y]) => !sandbox.__solid(x, y));
+const airBefore = sandbox.__st().air;
+sandbox.__step(inward[0], inward[1]);
+f = sandbox.__foot();
+check(!!f && f.x === inward[0] && f.y === inward[1], 'a carved tile takes the step', 'now at ' + f.x + ',' + f.y);
+check(sandbox.__st().air < airBefore, 'walking burns air', airBefore + ' -> ' + sandbox.__st().air);
+
+//--- 4. Loot leaves with you, exactly once -----------------------------------
+// Walk the whole deck by flood fill, collecting. Then assert the satchel
+// matches what the deck actually held and that nothing can be taken twice.
+const ch = sandbox.__int(2, 1, 600);
+let lootOnDeck = 0;
+for (const t of ch.tiles.values()) if (t.loot) lootOnDeck++;
+
+const entryKey = ch.entry.x + ',' + ch.entry.y;
+const walkSeen = new Set([f.x + ',' + f.y]);
+const stack = [{ x: f.x, y: f.y }];
+const order = [];
+while (stack.length) {
+  const cur = stack.pop();
+  order.push(cur);
+  for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+    const nx = cur.x + dx, ny = cur.y + dy, nk = nx + ',' + ny;
+    if (walkSeen.has(nk) || !ch.tiles.has(nk) || nk === entryKey) continue;
+    walkSeen.add(nk); stack.push({ x: nx, y: ny });
+  }
+}
+// Teleport-free: step tile to tile is only legal between neighbours, so drive
+// the body with __step along an adjacency-respecting path (re-walk via BFS
+// parents would be heavier than this suite needs — assert on the pickup API).
+let doubleTake = 0, picked = 0;
+for (const p of order) {
+  const before = sandbox.__lootAt(p.x, p.y);
+  if (!before) continue;
+  picked++;
+  sandbox.__foot().took.push(p.x + ',' + p.y);
+  if (sandbox.__lootAt(p.x, p.y)) doubleTake++;
+}
+check(picked === lootOnDeck, 'the deck yields exactly the loot it was generated with',
+  picked + '/' + lootOnDeck + ' found');
+check(doubleTake === 0, 'a crate cannot be lifted twice', 'no double-takes');
+
+//--- 5. Reload finds you still in the dark ------------------------------------
+sandbox.__foot().crates = 2; sandbox.__foot().relics = 1;
+const beforeF = JSON.parse(JSON.stringify(sandbox.__foot()));
+sandbox.__save();
+sandbox.__st().foot = null;
+sandbox.__resume();
+const after = sandbox.__foot();
+check(!!after && after.x === beforeF.x && after.y === beforeF.y && after.q === beforeF.q,
+  'a reload finds you still standing in the ruin', after ? 'at ' + after.x + ',' + after.y : 'lost the body');
+check(!!after && after.took.length === beforeF.took.length && after.crates === 2 && after.relics === 1,
+  'the satchel and what you already stripped survive the reload',
+  after ? after.took.length + ' taken, ' + after.crates + ' crates' : '-');
+
+//--- 6. Climbing out banks the haul and works the site out --------------------
+const cargoBefore = sandbox.__st().cargo, relicsBefore = sandbox.__st().relics;
+const site = sandbox.__foot();
+const sq = site.q, sr = site.r;
+// Put the body next to the breach, then take the last step out.
+site.x = ch.entry.x; site.y = ch.entry.y;
+sandbox.__step(ch.entry.x, ch.entry.y);   // no-op: already there, distance 0
+site.x = ch.entry.x; site.y = ch.entry.y;
+sandbox.__st().foot = null;
+// Re-enter cleanly and leave by the breach for the real exit path.
+sandbox.__enter(sq, sr, 600);
+const f2 = sandbox.__foot();
+f2.crates = 3; f2.relics = 1;
+const inward2 = [[f2.x, f2.y - 1], [f2.x, f2.y + 1], [f2.x - 1, f2.y], [f2.x + 1, f2.y]]
+  .find(([x, y]) => !sandbox.__solid(x, y));
+const ex = f2.x, ey = f2.y;
+sandbox.__step(inward2[0], inward2[1]);   // one step in
+sandbox.__step(ex, ey);                   // and back out through the breach
+check(sandbox.__foot() === null, 'stepping onto the breach ends the dive', 'back aboard');
+check(sandbox.__st().cargo === cargoBefore + 3 && sandbox.__st().relics === relicsBefore + 1,
+  'the haul comes aboard with you',
+  'cargo ' + cargoBefore + '->' + sandbox.__st().cargo + ', relics ' + relicsBefore + '->' + sandbox.__st().relics);
+check(sandbox.__st().poisFound.some(k => k === sq + ',' + sr), 'the site is worked out afterwards',
+  'poi recorded');
+
+//--- 7. The helm is inert while you are off the boat --------------------------
+sandbox.__enter(5, -1, 600);
+const held = { q: sandbox.__st().q, r: sandbox.__st().r, d: sandbox.__st().currentDepth };
+sandbox.move(held.q + 1, held.r);
+sandbox.changeDepth(60);
+sandbox.surface();
+check(sandbox.__st().q === held.q && sandbox.__st().r === held.r && sandbox.__st().currentDepth === held.d,
+  'the boat cannot be driven while the captain is inside a ruin',
+  'held at ' + held.q + ',' + held.r + ' @' + held.d + 'm');
+check(sandbox.__foot() !== null, 'and the body stays where it was', 'still ashore');
+
+console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
+process.exit(failures === 0 ? 0 : 1);

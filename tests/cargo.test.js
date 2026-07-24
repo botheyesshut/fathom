@@ -96,21 +96,23 @@ check(!!st._hireOffer && st.crew.length === 0, 'a hand waits on the dock', st._h
 sb.surface();
 check(st.crew.length === 1 && st.cargoBanked === 0, 'second press signs them aboard', st.crew[0] && (st.crew[0].name + ' the ' + st.crew[0].role));
 
-// 2d. Expeditions: hold station over a ruin, the crew works it out
+// 2d. The resolution ladder: a ruin no longer rolls dice for divers — the
+// captain goes down there in person. Full on-foot mechanics are interior.test's
+// business; here we only prove the ECONOMY seam, that the ruin hands off to a
+// body and that the haul that body carries lands aboard.
 st.q = 5; st.r = -9; st.currentDepth = 300; st.hull = 130; st.air = 400;
+sb.tileAt(5, -9);   // handleTile is only ever reached on a real world tile
 const ruinTile = { type: 'ruin', poi: 'ruin', q: 5, r: -9, ceiling: 0, floor: 300 };
 sb.handleTile(ruinTile);
-check(!!st.expedition, 'divers go over the side at the ruin');
-let spins = 0;
-while (st.expedition && spins++ < 12) sb.creatureTick();
-check(!st.expedition && st.poisFound.includes('5,-9'), 'expedition completes; the site is worked out', 'haul aboard: ' + st.cargo + ' crates, ' + st.relics + ' relics');
-st.q = 6; st.r = -9; st.currentDepth = 300;
-const ruin2 = { type: 'ruin', poi: 'ruin', q: 6, r: -9, ceiling: 0, floor: 300 };
-sb.handleTile(ruin2);
-check(!!st.expedition, 'a second team goes down');
-st.q = 0; st.r = -6; // the boat moves off
-sb.creatureTick();
-check(!st.expedition && st.poisFound.includes('6,-9'), 'moving off recalls the team; site spent');
+check(!!st.foot && !st.expedition, 'the ruin puts the captain over the side, not dice',
+  st.foot ? 'ashore at ' + st.foot.x + ',' + st.foot.y : 'no body');
+check(sb.ashore() === true, 'and the helm is locked out while he is inside');
+st.foot.crates = 2; st.foot.relics = 1;   // a haul stowed on the way round
+const cargoPre = st.cargo, relicPre = st.relics;
+sb.leaveInterior('The team climbs back out');
+check(!st.foot && st.cargo === cargoPre + 2 && st.relics === relicPre + 1,
+  'climbing out brings the haul aboard', 'cargo=' + st.cargo + ' relics=' + st.relics);
+check(st.poisFound.includes('5,-9'), 'the ruin is worked out afterwards');
 // 2e. Cavern beach: landfall gives air + a crew expedition; returns refill
 sb.__setCell(0, -8, 60, 'beach');
 st.q = 0; st.r = -8; st.currentDepth = 60; st.air = 100; st.expedition = null;

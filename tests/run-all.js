@@ -7,9 +7,13 @@
 //   creature.test — spawns in open cave cells, sound-wake, hunt+strike,
 //                   blocking, 60-tick stone-violation sweep, save v2/v1
 //   cargo.test    — dive-to-the-prize collection, port banking, the yard
+//   ping.test     — soundColumn: sonar is not X-ray
+//   interior.test — the resolution ladder: deck determinism, hull integrity,
+//                   FULL reachability from the entry, loot taken once, reload
+//                   mid-dive, and the helm locked out while ashore
 const { spawnSync } = require('child_process');
 const path = require('path');
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

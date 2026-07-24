@@ -1912,6 +1912,9 @@ const state = {
   pingMemory: new Map(),
   // Living things in the water. Overlay state — saved with the run.
   creatures: [],
+  // One rung down the ladder: the body, when the captain is off the boat and
+  // inside an interior. null means aboard. Overlay — saved with the run.
+  foot: null,
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -1955,6 +1958,10 @@ function setViewport() {
 }
 
 function render() {
+  // One rung down the resolution ladder the chart is a different world: square
+  // tiles, lamplight, a body instead of a boat.
+  if (state.foot) { renderInterior(); return; }
+
   // Clear
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
@@ -2895,7 +2902,7 @@ function hitCreature(c, power) {
 // a torpedo for a threat a little further out (never a rival — that's PvP,
 // for later). An action, and a loud one.
 function fireWeapon() {
-  if (!state.alive || !gameStarted) return;
+  if (!state.alive || !gameStarted || ashore()) return;
   const withD = state.creatures
     .filter(c => c.type !== 'rival' && !c.gone && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID)
     .map(c => ({ c, d: hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) }))
@@ -2926,7 +2933,7 @@ function fireWeapon() {
 // sound-hunters mob it instead of you. The captain's answer to a swarm with
 // no guns: make a louder target, and slip away in the confusion.
 function launchDecoy() {
-  if (!state.alive || !gameStarted) return;
+  if (!state.alive || !gameStarted || ashore()) return;
   if (state.air < 6) { log('Not enough air to charge a decoy.', 'warn'); return; }
   state.air -= 6;
   state.buoys.push({ q: state.q, r: state.r, depth: state.currentDepth, turns: 10 });
@@ -2939,6 +2946,7 @@ function launchDecoy() {
 }
 
 function ping() {
+  if (ashore()) return;
   const power = pingPower();
   if (power === 0) {
     log('Sonar is silent.', 'warn');
@@ -3146,7 +3154,7 @@ function flagMoveFail(q, r, color) {
 // Wait — a passive turn. The boat holds station. Air is consumed (or recovered)
 // per the current depth, and an ambient flavor line fires occasionally.
 function wait() {
-  if (!state.alive) return;
+  if (!state.alive || ashore()) return;
   state.moves++;
   state.lastMoveTime = performance.now();
   tickPingMemory();
@@ -3162,7 +3170,7 @@ function wait() {
 }
 
 function move(q, r) {
-  if (!state.alive) return;
+  if (!state.alive || ashore()) return;
   const tile = tileAt(q, r);
   // Only allow attempted moves to actual adjacent hexes
   if (hexDistance({q, r}, {q: state.q, r: state.r}) !== 1) return;
@@ -3408,9 +3416,10 @@ function startExpedition(tile, kind) {
     crates: 0,
     relics: 0,
   };
-  log(kind === 'ruin'
-    ? 'The boat holds station over the ruin. Two divers go over the side, lights dropping away into the structure.'
-    : kind === 'beach'
+  // Ruins are no longer worked this way — the captain walks them in person
+  // (see enterInterior). What is left here is the abstract dive: beaches and
+  // signals, where there is nothing built to walk through.
+  log(kind === 'beach'
     ? 'The crew wades ashore by lamplight — the first dry ground in miles. They fan out across the sand.'
     : 'The boat holds station on the signal. A diver goes over the side, homing on the pulse.', '', 'DIVE TEAM');
 }
@@ -3482,6 +3491,320 @@ function finishExpedition(prefix) {
   if (exp.crates) hauls.push(`${exp.crates} crate${exp.crates > 1 ? 's' : ''}`);
   if (exp.relics) hauls.push(`${exp.relics} relic${exp.relics > 1 ? 's' : ''}`);
   log(`${prefix}${hauls.length ? ' with ' + hauls.join(' and ') : ', empty-handed'}. The site is worked out.`, '', 'DIVE TEAM');
+}
+
+//=============================================================================
+// THE RESOLUTION LADDER — INTERIORS (Stage 1: The Threshold)
+//
+// A coarse 60 m cell can hold an INTERIOR: a local SQUARE grid at 3 m tiles,
+// 20 to the deck edge (60 / 20 = 3 — the meter stays the invariant). Hexes
+// outside for open water, squares inside for built space; the grid change is
+// how the player knows which world they are standing in.
+//
+// Same law as `cells`, one level down: ABSENT = SOLID. Generated interiors are
+// SUBSTRATE — pure fn(seed), rebuilt on demand, never saved. Only what the
+// player carried out is overlay, so the multiplayer seam survives the descent.
+//
+// The constitution survives it too: on foot you see by lamplight and by memory
+// of where you have already walked. Nothing else.
+//=============================================================================
+const INT_SIZE = 20;    // tiles to a deck edge
+const INT_TILE_M = 3;   // metres per tile (60 / INT_SIZE)
+const INT_PX = 22;      // world units per tile when drawn — sized so the lit
+                        // pool roughly fills a phone screen at the usual zoom
+const LAMP_R = 4;       // tiles the lamp reaches (~12 m of lamplight)
+const FOOT_AIR = 2;     // air burned per step on foot
+const interiorCache = new Map();   // 'q,r,d' -> chunk (substrate; cleared on reseed)
+
+// Deterministic deck: rooms chained by L-corridors, with the entry breach hung
+// off room 0. The chaining is what GUARANTEES every carved tile is reachable
+// from the entry — the battery asserts it by flood fill, because loot stranded
+// behind solid rock is the one failure the player can never diagnose.
+function interiorAt(q, r, d) {
+  const key = q + ',' + r + ',' + d;
+  const hit = interiorCache.get(key);
+  if (hit) return hit;
+
+  const rnd = mulberry32(hashStr('interior:' + key));
+  const tiles = new Map();
+  // The outer ring stays solid — a deck needs a hull. The entry is punched
+  // through it afterwards, and is the only hole.
+  const carve = (x, y) => {
+    if (x < 1 || y < 1 || x > INT_SIZE - 2 || y > INT_SIZE - 2) return;
+    const k = x + ',' + y;
+    if (!tiles.has(k)) tiles.set(k, { t: 'floor' });
+  };
+
+  const rooms = [];
+  const want = 4 + Math.floor(rnd() * 3);          // 4-6 chambers
+  for (let tries = 0; tries < want * 8 && rooms.length < want; tries++) {
+    const w = 3 + Math.floor(rnd() * 4);
+    const h = 3 + Math.floor(rnd() * 4);
+    const x = 1 + Math.floor(rnd() * (INT_SIZE - 2 - w));
+    const y = 1 + Math.floor(rnd() * (INT_SIZE - 2 - h));
+    if (rooms.some(o => x < o.x + o.w + 1 && x + w + 1 > o.x &&
+                        y < o.y + o.h + 1 && y + h + 1 > o.y)) continue;
+    rooms.push({ x, y, w, h });
+  }
+  if (!rooms.length) rooms.push({ x: 8, y: 8, w: 4, h: 4 });
+  for (const rm of rooms)
+    for (let y = rm.y; y < rm.y + rm.h; y++)
+      for (let x = rm.x; x < rm.x + rm.w; x++) carve(x, y);
+
+  const mid = rm => ({ x: Math.floor(rm.x + rm.w / 2), y: Math.floor(rm.y + rm.h / 2) });
+  // Both endpoints sit inside the hull ring, and an L path between them never
+  // leaves the box they span — so carve() never has to refuse a corridor step.
+  const corridor = (a, b) => {
+    let x = a.x, y = a.y;
+    while (x !== b.x) { carve(x, y); x += x < b.x ? 1 : -1; }
+    while (y !== b.y) { carve(x, y); y += y < b.y ? 1 : -1; }
+    carve(x, y);
+  };
+  for (let i = 1; i < rooms.length; i++) corridor(mid(rooms[i - 1]), mid(rooms[i]));
+
+  const c0 = mid(rooms[0]);
+  const side = Math.floor(rnd() * 4);
+  const ex = side === 2 ? 0 : side === 3 ? INT_SIZE - 1 : c0.x;
+  const ey = side === 0 ? 0 : side === 1 ? INT_SIZE - 1 : c0.y;
+  corridor({ x: Math.min(INT_SIZE - 2, Math.max(1, ex)),
+             y: Math.min(INT_SIZE - 2, Math.max(1, ey)) }, c0);
+  tiles.set(ex + ',' + ey, { t: 'entry' });
+
+  // Fallen structure, then what is worth carrying out. Rubble stays PASSABLE:
+  // an impassable scatter could seal a corridor and strand the loot behind it.
+  for (const t of tiles.values()) if (t.t === 'floor' && rnd() < 0.07) t.t = 'rubble';
+  for (let i = 1; i < rooms.length; i++) {
+    const rm = rooms[i];
+    const n = rnd() < 0.55 ? 1 : rnd() < 0.5 ? 2 : 0;
+    for (let j = 0; j < n; j++) {
+      const x = rm.x + Math.floor(rnd() * rm.w), y = rm.y + Math.floor(rnd() * rm.h);
+      const t = tiles.get(x + ',' + y);
+      if (t && t.t !== 'entry' && !t.loot) t.loot = rnd() < 0.22 ? 'relic' : 'crate';
+    }
+  }
+
+  const chunk = { tiles, entry: { x: ex, y: ey }, rooms };
+  interiorCache.set(key, chunk);
+  return chunk;
+}
+
+function footChunk() {
+  const f = state.foot;
+  return f ? interiorAt(f.q, f.r, f.d) : null;
+}
+
+// null means solid — the same "absent = stone" reading the boat obeys.
+function footTile(x, y) {
+  const ch = footChunk();
+  return ch ? (ch.tiles.get(x + ',' + y) || null) : null;
+}
+
+// Loot lives in the substrate but TAKING is overlay, so the cache is never
+// mutated — reload cannot resurrect a crate you already carried off.
+function footLootAt(x, y) {
+  const t = footTile(x, y);
+  if (!t || !t.loot) return null;
+  return state.foot.took.includes(x + ',' + y) ? null : t.loot;
+}
+
+function lampSweep() {
+  const f = state.foot;
+  if (!f) return;
+  const R = Math.ceil(LAMP_R);
+  for (let dy = -R; dy <= R; dy++) {
+    for (let dx = -R; dx <= R; dx++) {
+      if (dx * dx + dy * dy > LAMP_R * LAMP_R) continue;
+      const x = f.x + dx, y = f.y + dy;
+      if (x < 0 || y < 0 || x >= INT_SIZE || y >= INT_SIZE) continue;
+      const k = x + ',' + y;
+      if (!f.seen.includes(k)) f.seen.push(k);
+    }
+  }
+}
+
+// While the captain is off the boat, the helm is somebody else's problem.
+// Every boat-scale control reports the same truth: you are not aboard.
+function ashore() {
+  if (!state.foot) return false;
+  log('You are not aboard. The boat holds station somewhere above you.', 'warn', 'ASHORE');
+  return true;
+}
+
+// The threshold. You stop rolling dice about the divers and become one.
+function enterInterior(tile) {
+  const ch = interiorAt(tile.q, tile.r, state.currentDepth);
+  state.foot = {
+    q: tile.q, r: tile.r, d: state.currentDepth,
+    x: ch.entry.x, y: ch.entry.y,
+    crates: 0, relics: 0, steps: 0,
+    seen: [], took: [],
+  };
+  lampSweep();
+  log('You go over the side with them. The lamp finds a breach in the structure — and past it, trapped air, and a floor nobody has walked in a very long time.', 'strange', 'ASHORE');
+  sfx('bell');
+  updateHUD();
+  render();
+  scheduleSave();
+}
+
+function stepFoot(x, y) {
+  const f = state.foot;
+  if (!f || !state.alive) return;
+  if (Math.abs(x - f.x) + Math.abs(y - f.y) !== 1) return;
+
+  const t = footTile(x, y);
+  if (!t) {
+    log('Rock, or plate rusted to rock. No way through there.', '', 'DARK');
+    return;
+  }
+
+  f.x = x; f.y = y; f.steps++;
+  state.air = Math.max(0, state.air - FOOT_AIR - (t.t === 'rubble' ? 1 : 0));
+  lampSweep();
+
+  const loot = footLootAt(x, y);
+  if (loot) {
+    f.took.push(x + ',' + y);
+    if (loot === 'relic') { f.relics++; log('Something the Fall did not manage to eat. You work it free and stow it.', 'strange', 'RELIC'); }
+    else { f.crates++; log('A crate, still sound. You sling it and go on.', '', 'SALVAGE'); }
+    sfx('bell');
+  } else if (t.t === 'rubble' && rand() < 0.3) {
+    log('You pick a way over fallen structure. It shifts under the weight.', '', 'DARK');
+  }
+
+  if (t.t === 'entry') { leaveInterior('You haul yourself back out through the breach'); return; }
+
+  if (state.air <= 0) {
+    log('The tanks run dry in the dark.', 'danger', 'AIR');
+    checkDeath();
+    if (!state.alive) { state.foot = null; return; }
+  }
+  updateHUD();
+  render();
+  scheduleSave();
+}
+
+function leaveInterior(prefix) {
+  const f = state.foot;
+  if (!f) return;
+  state.foot = null;
+  state.cargo += f.crates;
+  state.relics += f.relics;
+  for (const m of state.crew) if (m.role === 'diver') m.xp++;   // dives season divers
+  const hk = hexKey(f.q, f.r);
+  if (!state.poisFound.includes(hk)) state.poisFound.push(hk);
+  setTile(f.q, f.r, 'passage');
+  const hauls = [];
+  if (f.crates) hauls.push(`${f.crates} crate${f.crates > 1 ? 's' : ''}`);
+  if (f.relics) hauls.push(`${f.relics} relic${f.relics > 1 ? 's' : ''}`);
+  log(`${prefix}${hauls.length ? ' with ' + hauls.join(' and ') : ', empty-handed'}. The site is worked out.`, '', 'DIVE TEAM');
+  updateHUD();
+  render();
+  scheduleSave();
+}
+
+// The chart, one level down. Only lamplight and memory are drawn.
+function renderInterior() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const f = state.foot;
+  const ch = footChunk();
+  if (!ch) return;
+
+  // The interior owns its own defs — render() clears the tree on every frame,
+  // so the vignette gradient has to be re-declared on this side of the ladder.
+  const idefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  idefs.innerHTML = `
+    <radialGradient id="vignette" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="45%" stop-color="#000000" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+  `;
+  svg.appendChild(idefs);
+
+  const camX = f.x * INT_PX, camY = f.y * INT_PX;
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('transform', `translate(${-camX}, ${-camY})`);
+  svg.appendChild(g);
+  worldGroupEl = g; lastCamX = camX; lastCamY = camY;
+
+  const box = (x, y, fill, op) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    el.setAttribute('x', x * INT_PX - INT_PX / 2);
+    el.setAttribute('y', y * INT_PX - INT_PX / 2);
+    el.setAttribute('width', INT_PX);
+    el.setAttribute('height', INT_PX);
+    el.setAttribute('fill', fill);
+    if (op != null) el.setAttribute('opacity', op);
+    g.appendChild(el);
+    return el;
+  };
+  const glyph = (x, y, char, color, size, op) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    el.setAttribute('x', x * INT_PX);
+    el.setAttribute('y', y * INT_PX + (size || 8) * 0.35);
+    el.setAttribute('text-anchor', 'middle');
+    el.setAttribute('font-size', size || 8);
+    el.setAttribute('fill', color);
+    if (op != null) el.setAttribute('opacity', op);
+    el.textContent = char;
+    g.appendChild(el);
+    return el;
+  };
+
+  for (const k of f.seen) {
+    const c = k.indexOf(',');
+    const x = +k.slice(0, c), y = +k.slice(c + 1);
+    const t = ch.tiles.get(k);
+    const lit = Math.hypot(x - f.x, y - f.y) <= LAMP_R;
+    const dim = lit ? 1 : 0.4;                // memory is dimmer than lamplight
+    // Walls sit just above the void so the shape of the room reads; lamplit
+    // deck is markedly brighter, because that is the whole point of a lamp.
+    if (!t) { box(x, y, '#1b1712', dim * 0.95); continue; }
+    if (t.t === 'entry') {
+      box(x, y, '#1b3f4a', dim);
+      glyph(x, y, '≈', '#6ecfae', 13, dim);
+    } else {
+      box(x, y, t.t === 'rubble' ? '#433727' : '#3a3126', dim);
+      if (t.t === 'rubble') glyph(x, y, '·', '#8a7758', 15, dim);
+    }
+    const loot = state.foot.took.includes(k) ? null : (t.loot || null);
+    if (loot === 'crate') glyph(x, y, '▪', '#f4b860', 13, dim);
+    else if (loot === 'relic') glyph(x, y, '✦', '#c88ce8', 14, dim);
+  }
+
+  // Tap-to-walk targets on the four neighbours. Solid ones stay tappable so a
+  // wrong guess reads as a bump in the dark, not a dead control.
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const nx = f.x + dx, ny = f.y + dy;
+    const walk = !!footTile(nx, ny);
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    hit.setAttribute('x', nx * INT_PX - INT_PX / 2);
+    hit.setAttribute('y', ny * INT_PX - INT_PX / 2);
+    hit.setAttribute('width', INT_PX);
+    hit.setAttribute('height', INT_PX);
+    hit.setAttribute('fill', walk ? 'rgba(94,184,154,0.05)' : 'rgba(0,0,0,0.001)');
+    if (walk) {
+      hit.setAttribute('stroke', 'rgba(94,184,154,0.5)');
+      hit.setAttribute('stroke-width', '0.7');
+      hit.setAttribute('stroke-dasharray', '2 2');
+    }
+    hit.style.cursor = walk ? 'pointer' : 'not-allowed';
+    hit.addEventListener('click', () => stepFoot(nx, ny));
+    g.appendChild(hit);
+  }
+
+  glyph(f.x, f.y, '@', '#f2e8cf', 16, 1);
+
+  const vignette = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  const vw = viewW / zoom, vh = viewH / zoom;
+  vignette.setAttribute('x', -vw / 2);
+  vignette.setAttribute('y', -vh / 2);
+  vignette.setAttribute('width', vw);
+  vignette.setAttribute('height', vh);
+  vignette.setAttribute('fill', 'url(#vignette)');
+  vignette.setAttribute('pointer-events', 'none');
+  svg.appendChild(vignette);
 }
 
 //=============================================================================
@@ -4227,7 +4550,7 @@ function checkDeath() {
 // the same hex requires there to be no stone between them (i.e., volumes have
 // been merged or there's an opening shaft connecting them).
 function changeDepth(deltaMeters) {
-  if (!state.alive) return;
+  if (!state.alive || ashore()) return;
   const sub = activeSub();
   const tile = getTile(state.q, state.r);
   if (!tile || tile.wall) return;
@@ -4487,9 +4810,10 @@ function handleTile(tile) {
           if (rand() < 0.5) log(`The ruin lies broken on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to put divers on it.`, 'warn', 'FOUND');
           break;
         }
-        if (!state.expedition) {
+        // Ruins are no longer worked by dice: you go down there yourself.
+        if (!state.expedition && !state.foot) {
           log(pickFlavor(FLAVOR.ruin), '', 'FOUND');
-          startExpedition(tile, 'ruin');
+          enterInterior(tile);
         }
       }
       break;
@@ -4801,6 +5125,7 @@ function restart() {
   state.relics = 0; state.relicsBanked = 0;
   state.armament = null; state.torpedoes = 0;
   state.expedition = null;
+  state.foot = null;
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -4823,6 +5148,7 @@ function restart() {
   nodeCache.clear(); // lattice + edge memos and the carve registry are seed-dependent
   edgeCache.clear();
   carvedFeatures.clear();
+  interiorCache.clear();   // interiors are substrate — they belong to the old seed
   spawnedChunks.clear();
   state.creatures = [];
   state.buoys = [];
@@ -4862,7 +5188,7 @@ function restart() {
 //=============================================================================
 
 function surface() {
-  if (!state.alive) return;
+  if (!state.alive || ashore()) return;
   const sub = activeSub();
   const tile = getTile(state.q, state.r);
   if (!tile || tile.wall) return;
@@ -5078,6 +5404,7 @@ function doSave(force) {
       armament: state.armament, torpedoes: state.torpedoes,
       relics: state.relics, relicsBanked: state.relicsBanked,
       expedition: state.expedition,
+      foot: state.foot,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -5117,6 +5444,7 @@ function resumeGame(save) {
   state.pingMemory = new Map();
   world.clear(); cells.clear(); revealed.clear(); visited.clear();
   generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear();
+  interiorCache.clear();
   // Creatures + spawn history restore BEFORE generation, so already-rolled
   // chunks don't re-roll their inhabitants into duplicates.
   spawnedChunks.clear();
@@ -5130,6 +5458,7 @@ function resumeGame(save) {
   state.relics = save.relics || 0;
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
+  state.foot = save.foot || null;   // reload can find you still inside the ruin
   state.crew = save.crew || [];
   state._hireOffer = null;
   state._armoryOffer = null;

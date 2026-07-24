@@ -14,9 +14,72 @@
 
 **Awaiting Sean's ruling:** (1) can expeditions KILL crew, not just wound? (2) NERVE/sanity as a third crew stat (Lovecraft pressure meter)? (3) weapons at boat scale — torpedoes/countermeasures?
 
-**Biggest remaining builds:** cell-delta overlay → claim-a-beach bases (also the multiplayer sync mechanism) → on-foot dungeon mode via the resolution ladder.
+**Biggest remaining builds:** the RESOLUTION LADDER — see the spec immediately below. Sean ratified its four forks on 2026-07-24; it supersedes the ordering in "CREW / DUNGEON / BASE" (on-foot now comes BEFORE base-building, because you must be able to walk a base before you can defend one).
 
 **Git:** account pinned repo-locally (`credential.https://github.com.username=botheyesshut`) — undo with `git config --local --unset credential.https://github.com.username`. If a push ever hangs, it's the credential picker: `git config --global credential.guiPrompt false` turns the hang into an instant error.
+
+---
+
+# THE RESOLUTION LADDER — on-foot mode & bases (SPEC, ratified by Sean 2026-07-24)
+
+**Why it comes before base-building:** Sean wants to walk his base room to room, because invasions happen *inside* it. You cannot defend a place you cannot stand in. So on-foot is the prerequisite, not the sequel.
+
+## The four ratified forks (do not re-litigate)
+1. **Interior grid = SQUARE.** Hex outside (open water, free movement), square inside (built space: corridors, bulkheads, doors). Hexes do not nest cleanly; built space is rectilinear; and the grid change itself tells the player which mode they are in.
+2. **First on-foot content = the ruin expedition.** `startExpedition()` is already an abstraction of exactly this ("two divers go over the side"). Stage 1 makes it literal — the divers stop being dice and become you. Beach/signal expeditions keep the abstract path for now.
+3. **Flooding is the keystone, from Stage 2.** Not a late polish layer — interiors must be designed around it from day one.
+4. **Architecture set here, content stages handoff-friendly.** Stage 1 fixes coordinates, view switch, and save schema; later stages inherit them.
+
+## Architecture
+- **Two grids, one world.** Coarse: hex `q,r` + depth `d`, 60m cells, `absent = stone`. Fine: a coarse cell may hold an **interior chunk** — a local square grid, **3m tiles, 20×20 per deck**. `60/3 = 20`, so this obeys the standing law *"grids nest in integer divisors of 60"*.
+- **Same law, one level down.** `interiors: Map<"q,r,d", chunk>`, `chunk.tiles: Map<"x,y", tile>`, **absent = solid rock/hull**. Sparse; exists only where something is carved or built. This is deliberately the same idiom as `cells` so the mental model transfers.
+- **Substrate/overlay split preserved.** Generated interiors (wrecks, ruins) are pure fn(seed) — regenerated, NEVER saved. Player carving, furniture, and what they looted are overlay — saved. The multiplayer seam survives intact for free.
+- **Epistemic law extends downward.** On foot you see by **lamplight radius** plus what you have already walked. The chart still shows only what the body could know.
+
+## The threshold (the lock)
+You cannot step out at 3,000m. Transition happens at a **lock**: a wreck's air pocket, a ruin's sealed chamber, a cavern beach, or a base's moon pool. Two ways through, and they are the whole game in miniature:
+- **The door** — open it. Needs a key, a cutter, or a charge. It is *loud* (feeds `noiseMade`).
+- **The breach** — make a hole. Now it floods.
+
+## Flooding (Stage 2 keystone)
+An interior is dry space held against the sea; every wall is a dam. Breach a tile and water spreads along connected floor, falling deck to deck. **Bulkhead doors** seal sections — closing one saves the base and dooms whoever is on the wrong side. Defenders may deliberately flood a corridor; attackers may breach to flush defenders out. Air is the clock (reuse `state.air`); water is the pressure. One mechanic buys dungeon tension, fortress engineering, and the siege system at once — and it is the truest image in the setting: *the sea getting in.*
+
+## The two-layer siege (Sean's amphibious assault, mapped)
+| Layer | Grid | System |
+|---|---|---|
+| **Water assault** — approach through caves, beat nets/mines/baffles/turrets | Hex (coarse) | **Already shipped.** Defenses are new features + entities, not a new system. |
+| **The threshold** — force the lock | — | New, small |
+| **Boarding action** — room to room, cover, crew, floods | Square (fine) | New, the big lift |
+
+## Discovery reuses the predator AI wholesale
+A base has a **noise signature** (machinery, pumps, light). It is not on anyone's chart until found; your own pings and engines leak. Monsters find your base exactly as they already find your boat: `noiseMade()` → interest → beeline. No new AI. This yields the intended tension: **depth is both moat and magnet** — deep means few players can reach you, and it means the things down there can.
+
+## Defense ladder (TW2002 shape)
+Start with a **rusted grate** (lock rating 1) and a crew of one. Then: sonar baffles → nets → mines → hardened lock → turrets → bulkheads → pumps → traps → garrison.
+
+## Digging (high-level unlock)
+Carving a fine tile costs time, tools, and power, and **displaces water**. You dig into stone; breach into a flooded cell without a bulkhead behind you and you drown your own fortress. Multi-cell fortresses are chunks stitched at cell edges — the ceiling is unbounded, but **start single-cell** (400 tiles/deck is already a serious fortress).
+
+## Build ladder — every stage ships playable
+1. ~~**The Threshold**~~ **DONE 2026-07-24** — walk into a ruin. See "STAGE 1 AS BUILT" below.
+2. **Dark and Wet** — air timer, flooding, something in there with you. Hide, run, seal a door.
+3. **Boarders** — on-foot combat; crew become bodies that can be lost.
+4. **The Claim** — designate a base. Dock, storage, level-1 defenses.
+5. **Digging & Fitting** — carve, furnish, bulkheads, pumps, decks.
+6. **Siege** — MOB invasion: water assault → breach → interior fight.
+7. **Rivals** — player raids (multiplayer).
+
+## STAGE 1 AS BUILT (all battery-gated; `interior.test.js` is the sixth suite)
+- **Constants**: `INT_SIZE=20`, `INT_TILE_M=3`, `INT_PX=22` (draw size), `LAMP_R=4`, `FOOT_AIR=2`.
+- **`interiorAt(q,r,d)`** — substrate, cached in `interiorCache` (cleared in restart AND resumeGame; it belongs to the seed). 4-6 rooms rejection-sampled, chained by L-corridors, entry breach hung off room 0. Rubble is PASSABLE by design (+1 air) — an impassable scatter could seal a corridor and strand loot.
+- **`state.foot`** = `{q,r,d,x,y,crates,relics,steps,seen[],took[]}` or null. Overlay, saved, restored by resumeGame — a reload finds you still inside.
+- **Loot never mutates the substrate.** `footLootAt()` consults `foot.took`, so a reload cannot resurrect a crate you already carried off. Copy this pattern for Stage 5 carving.
+- **`render()` branches at the top** to `renderInterior()`, which re-declares its own `<defs>` (render() wipes the tree every frame — the vignette gradient must be re-created on this side of the ladder or it silently vanishes).
+- **`ashore()`** guards move/changeDepth/ping/wait/fireWeapon/launchDecoy/surface. **TRAP FOUND THE HARD WAY:** leaving `state.foot` set at the end of a test cascades 10 failures through every port/economy check downstream, because `surface()` is guarded. Any test that enters an interior MUST leave it.
+- **Ruins no longer call `startExpedition`** — its 'ruin' branch was deleted as dead. Beach/signal expeditions still use the abstract dice path.
+- **Harness note**: interior.test needs the WHOLE script to boot (restart/resumeGame/doSave are at the very bottom), so its sandbox must supply real no-op `addEventListener`/`location`/`matchMedia`. The other suites let that throw and get away with it because they only need early functions.
+- **Verified in a real browser** (not just stubs): 22-tile lamp pool, `@`, breach glyph, vignette, a real tap walking a step, loot picked up once, and the mode switch back to the hex chart.
+- **KNOBS SEAN HAS NOT FELT YET** (do not pre-tune): `LAMP_R`, `FOOT_AIR`, rubble rate 0.07, loot density, relic odds 0.22, room count/size. Deck legibility at the memory-dim end is the most likely first complaint.
 
 ---
 
