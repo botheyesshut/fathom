@@ -3189,7 +3189,7 @@ function move(q, r) {
     const dmg = 4 + Math.floor(rand() * 5); // 4-8 hull damage
     state.hull = Math.max(0, state.hull - dmg);
     state.lastMoveTime = performance.now();
-    log(`The hull strikes rock. No passage there. -${dmg} hull.`, 'danger', 'IMPACT');
+    log(`${pickLoose(WALL_FACE)} -${dmg} hull.`, 'danger', 'IMPACT');
     flagMoveFail(q, r, '#a04030');
     noiseMade(q, r, 2); // metal on rock carries — hunters hear it
     sfx('impact');
@@ -3211,9 +3211,9 @@ function move(q, r) {
     if (near && near.deltaMeters > 0 && near.deltaMeters <= PING_LEVELS[activeSub().sonarMaxPower].depthRange) {
       const delta = Math.max(1, Math.round(near.deltaMeters));
       const dir = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
-      log(`The hull strikes rock. Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
+      log(`${pickLoose(WALL_FACE)} Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
     } else {
-      log(`The hull strikes rock. No passage at this depth. -${dmg} hull.`, 'danger', 'IMPACT');
+      log(`${pickLoose(WALL_FACE)} Not at this depth, at any rate. -${dmg} hull.`, 'danger', 'IMPACT');
     }
     flagMoveFail(q, r, '#a04030');
     noiseMade(q, r, 2); // metal on rock carries — hunters hear it
@@ -4746,8 +4746,7 @@ function changeDepth(deltaMeters) {
       // Floor: striking rock below (seabed or chamber floor)
       const dmg = 4 + Math.floor(rand() * 5);
       state.hull = Math.max(0, state.hull - dmg);
-      const what = cur.kind === 'water' ? 'The seabed' : 'The chamber floor';
-      log(`${what} stops the dive. -${dmg} hull.`, 'danger', 'IMPACT');
+      log(`${pickLoose(WALL_UNDER)}. -${dmg} hull.`, 'danger', 'IMPACT');
       flagMoveFail(state.q, state.r, '#a04030');
       state.lastMoveTime = performance.now();
       noiseMade(state.q, state.r, 2); // impacts ring through the water
@@ -4761,8 +4760,7 @@ function changeDepth(deltaMeters) {
       } else {
         const dmg = 4 + Math.floor(rand() * 5);
         state.hull = Math.max(0, state.hull - dmg);
-        const what = cur.kind === 'water' ? 'The shallows' : 'The chamber ceiling';
-        log(`${what} stops the rise. -${dmg} hull.`, 'danger', 'IMPACT');
+        log(`${pickLoose(WALL_OVER)}. -${dmg} hull.`, 'danger', 'IMPACT');
         flagMoveFail(state.q, state.r, '#a04030');
         state.lastMoveTime = performance.now();
         checkDeath();
@@ -5016,6 +5014,35 @@ const DIR_COUNT = {
   5: ['five ways open from here', 'the rock is riddled — five ways on'],
   6: ['ways lead off on every side', 'six ways out, which is to say the rock here is more hole than rock'],
 };
+
+// The rock, when you find it with the hull. This fires often enough that one
+// fixed sentence would wear a groove in the game within an hour.
+const WALL_FACE = [
+  'The hull comes up against rock — a face of it, unbroken, and older than anything with a name.',
+  'Stone. The lights find a wall of it, water-smoothed and entirely closed.',
+  'The bow finds rock and stops finding anything else. Whatever passage you imagined is not there.',
+  'A wall, close-grained and wet, wholly uninterested in your business.',
+  'Rock, banded and folded, laid down a long time before the sea took any of this.',
+  'The lights show stone streaked pale where something has bled minerals down it for centuries.',
+  'Rock — and it rings when the hull meets it, like something a great deal thicker than it looks.',
+  'The face ahead is scored with long parallel grooves. You decide not to wonder what makes those.',
+  'Solid rock, furred over with something soft and colourless that has never needed light.',
+  'The wall is packed sediment gone hard as brick, studded with shells of no species you know.',
+];
+
+const WALL_UNDER = [
+  'The seabed comes up to meet the keel',
+  'The floor of the place stops the dive',
+  'Silt boils up as the hull settles onto rock',
+  'The bottom arrives sooner than the instruments promised',
+];
+
+const WALL_OVER = [
+  'The roof of the chamber stops the rise',
+  'Rock overhead, and the boat finds it with the casing',
+  'The ceiling is right there, and the hull says so',
+  'The rise ends against stone you could not see',
+];
 
 const HEDGE = [
   'The chart has nothing to say about the rest.',
