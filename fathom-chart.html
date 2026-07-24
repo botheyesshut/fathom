@@ -730,6 +730,7 @@
     <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
+    <button class="btn" id="btn-claim" style="display:none" title="Claim this deck as your station — seals the breach into a lock and pumps the water out. Inside your own station, stows or draws out your goods.">Claim Deck</button>
     <button class="btn primary" id="btn-surface">Surface</button>
     <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
   </div>
@@ -1012,6 +1013,7 @@ const TILES = {
   salvage:  { name: 'wreckage',            char: '✕',  cost: 1,  color: '#1a1410', poi: 'salvage' },
   deadend:  { name: 'a dead end',          char: '•',  cost: 1,  color: '#0a1622', poi: 'deadend' },
   surface:  { name: 'the surface',         char: '☼',  cost: 0,  color: '#1a2818', poi: 'surface' },
+  base:     { name: 'your station',        char: '⌂',  cost: 1,  color: '#12241f', poi: 'base' },
 };
 
 function mulberry32(a) {
@@ -1917,6 +1919,9 @@ const state = {
   // One rung down the ladder: the body, when the captain is off the boat and
   // inside an interior. null means aboard. Overlay — saved with the run.
   foot: null,
+  // The station, once a deck has been claimed and pumped dry. One only, for
+  // now. What is stowed here is NOT aboard, so the sea cannot take it.
+  base: null,
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -1963,6 +1968,16 @@ function setViewport() {
 function syncFootControls(inside) {
   const seal = document.getElementById('btn-seal');
   if (seal) seal.style.display = inside ? '' : 'none';
+  const claim = document.getElementById('btn-claim');
+  if (!claim) return;
+  claim.style.display = inside ? '' : 'none';
+  if (!inside) return;
+  const f = state.foot;
+  if (!f) return;
+  // One control, three meanings, chosen by where you stand and what you hold.
+  if (!isBaseDeck(f.q, f.r, f.d)) claim.textContent = 'Claim Deck';
+  else if (f.crates + f.relics + state.cargo + state.relics > 0) claim.textContent = 'Stow Goods';
+  else claim.textContent = 'Draw Goods';
 }
 
 function render() {
@@ -2407,6 +2422,7 @@ function render() {
         else if (tile.poi === 'surface') color = '#f4b860';
         else if (tile.poi === 'opening') color = '#f4b860'; // warm — the way back up
         else if (tile.poi === 'deadend') color = '#3a4858';
+        else if (tile.poi === 'base') color = '#6ecfae';  // your own hatch light
         else if (tile.type === 'kelp') color = '#3a6850';
         else if (tile.type === 'current') color = '#4090c8';
         else if (tile.type === 'chasm') color = '#7050a0';
@@ -3685,23 +3701,112 @@ function ashore() {
   return true;
 }
 
+//--- THE CLAIM (Stage 4) -----------------------------------------------------
+// Your station is a ruin you sealed against the sea. That is the whole design:
+// claiming converts the breach you came in by into a lock, the pumps take the
+// water back out, and the deck becomes a dry place that is yours and stays
+// yours. You cannot claim a deck that still has a tenant — which is precisely
+// what gives on-foot combat something to be for.
+const CLAIM_COST = 6;   // crates of plate, valves and pumps, hauled down and spent
+
+function isBaseDeck(q, r, d) {
+  const b = state.base;
+  return !!b && b.q === q && b.r === r && b.d === d;
+}
+
+const STATION_ARRIVE = [
+  'Your own hatch light, still burning where you left it.',
+  'The station. The lock cycles, and the deck beyond it is dry.',
+  'Home, of a kind. The pumps are still running.',
+  'Your lock, your lights, your air. It is not much, and it is yours.',
+];
+
 // The threshold. You stop rolling dice about the divers and become one.
 function enterInterior(tile) {
-  const ch = interiorAt(tile.q, tile.r, state.currentDepth);
+  const d = state.currentDepth;
+  const ch = interiorAt(tile.q, tile.r, d);
+  const claimed = isBaseDeck(tile.q, tile.r, d);
+  // A claimed deck was stripped when you cleared it — its loot does not grow
+  // back just because the substrate still remembers where it was.
+  const took = [];
+  if (claimed) for (const [k, t] of ch.tiles) if (t.loot) took.push(k);
+
   state.foot = {
-    q: tile.q, r: tile.r, d: state.currentDepth,
+    q: tile.q, r: tile.r, d: d,
     x: ch.entry.x, y: ch.entry.y,
     crates: 0, relics: 0, steps: 0, tick: 0,
-    seen: [], took: [],
+    seen: [], took: took,
     // The sea comes in the way you did. The breach you entered by is the
-    // source, so the water is always between you and the way out.
-    water: [ch.entry.x + ',' + ch.entry.y],
+    // source, so the water is always between you and the way out — unless the
+    // breach has been made into a lock, which is what claiming is for.
+    water: claimed ? [] : [ch.entry.x + ',' + ch.entry.y],
     closed: [],
-    dweller: ch.dweller ? { x: ch.dweller.x, y: ch.dweller.y } : null,
+    dweller: (!claimed && ch.dweller) ? { x: ch.dweller.x, y: ch.dweller.y } : null,
   };
   lampSweep();
-  log('You go over the side with them. The lamp finds a breach in the structure — and past it, trapped air, and a floor nobody has walked in a very long time.', 'strange', 'ASHORE');
-  log('Water is already coming through the hole you came in by. It will not stop.', 'warn', 'WATER');
+  if (claimed) {
+    log('You cycle the lock and step into your own station. Dry deck, and the pumps muttering somewhere below.', '', 'STATION');
+  } else {
+    log('You go over the side with them. The lamp finds a breach in the structure — and past it, trapped air, and a floor nobody has walked in a very long time.', 'strange', 'ASHORE');
+    log('Water is already coming through the hole you came in by. It will not stop.', 'warn', 'WATER');
+  }
+  sfx('bell');
+  updateHUD();
+  render();
+  scheduleSave();
+}
+
+// One button, three jobs, decided by where you are standing and what you are
+// carrying — because a phone screen has no room for three.
+function claimOrStore() {
+  const f = state.foot;
+  const ch = footChunk();
+  if (!f || !ch || !state.alive) return;
+  if (isBaseDeck(f.q, f.r, f.d)) return storeAtBase();
+  if (state.base) {
+    log('You already hold a station, and the Erebus can only supply the one.', 'warn', 'STATION');
+    return;
+  }
+  if (ch.dweller) {
+    log('Something still lives on this deck. You are not about to seal yourself in with it.', 'warn', 'STATION');
+    return;
+  }
+  if (state.cargo < CLAIM_COST) {
+    log(`Claiming a deck takes ${CLAIM_COST} crates of plate and pumps. There are ${state.cargo} aboard.`, 'warn', 'STATION');
+    return;
+  }
+  state.cargo -= CLAIM_COST;
+  state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0 } };
+  f.water = [];
+  f.dweller = null;
+  log('You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
+  sfx('bell');
+  updateHUD();
+  render();
+  scheduleSave();
+}
+
+function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+// Stores are NOT aboard, so the sea cannot take them when it takes the boat.
+// That is the whole economic point of a station: it is the only place besides
+// the distant dock where a relic is safe.
+function storeAtBase() {
+  const f = state.foot, b = state.base;
+  if (!f || !b) return;
+  const c = f.crates + state.cargo, r = f.relics + state.relics;
+  if (c || r) {
+    b.stores.crates += c; b.stores.relics += r;
+    f.crates = 0; f.relics = 0; state.cargo = 0; state.relics = 0;
+    log(`Struck below into the station: ${plural(c, 'crate')} and ${plural(r, 'relic')}. The sea cannot take what is not aboard.`, '', 'STATION');
+  } else if (b.stores.crates || b.stores.relics) {
+    f.crates += b.stores.crates; f.relics += b.stores.relics;
+    log(`Drawn out of the station: ${plural(b.stores.crates, 'crate')} and ${plural(b.stores.relics, 'relic')}. Carry it out through the lock.`, '', 'STATION');
+    b.stores.crates = 0; b.stores.relics = 0;
+  } else {
+    log('The station is empty, and so are your hands.', 'warn', 'STATION');
+    return;
+  }
   sfx('bell');
   updateHUD();
   render();
@@ -3795,12 +3900,15 @@ function stepFoot(x, y) {
 
   if (t.t === 'entry') { leaveInterior('You haul yourself back out through the breach'); return; }
 
-  // The deck answers back: the sea gains, and the thing takes its step.
+  // The deck answers back: the sea gains, and the thing takes its step. A
+  // claimed station does neither — that is what you paid the pumps for.
   f.tick++;
-  if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
-    log('Behind you, the water finds another doorway.', 'warn', 'WATER');
+  if (!isBaseDeck(f.q, f.r, f.d)) {
+    if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
+      log('Behind you, the water finds another doorway.', 'warn', 'WATER');
+    }
+    dwellerStep();
   }
-  dwellerStep();
 
   if (state.air <= 0) {
     log('The tanks run dry in the dark.', 'danger', 'AIR');
@@ -3851,7 +3959,15 @@ function leaveInterior(prefix) {
   for (const m of state.crew) if (m.role === 'diver') m.xp++;   // dives season divers
   const hk = hexKey(f.q, f.r);
   if (!state.poisFound.includes(hk)) state.poisFound.push(hk);
-  setTile(f.q, f.r, 'passage');
+  // A claimed deck keeps its mark on the chart; a stripped one goes back to
+  // being ordinary water.
+  const own = isBaseDeck(f.q, f.r, f.d);
+  setTile(f.q, f.r, own ? 'base' : 'passage');
+  if (own) {
+    log('You cycle the lock behind you and swim up to the boat. The station holds.', '', 'STATION');
+    updateHUD(); render(); scheduleSave();
+    return;
+  }
   const hauls = [];
   if (f.crates) hauls.push(`${f.crates} crate${f.crates > 1 ? 's' : ''}`);
   if (f.relics) hauls.push(`${f.relics} relic${f.relics > 1 ? 's' : ''}`);
@@ -3963,6 +4079,22 @@ function renderInterior() {
   const dw = f.dweller;
   if (dw && Math.hypot(dw.x - f.x, dw.y - f.y) <= LAMP_R) {
     glyph(dw.x, dw.y, 'Ψ', '#a8d68c', 17, 1);
+  }
+
+  // Standing ON the lock, there is no neighbour to tap to get out of it — so
+  // the tile underfoot becomes its own way out.
+  if (footTile(f.x, f.y) && footTile(f.x, f.y).t === 'entry') {
+    const out = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    out.setAttribute('x', f.x * INT_PX - INT_PX / 2);
+    out.setAttribute('y', f.y * INT_PX - INT_PX / 2);
+    out.setAttribute('width', INT_PX);
+    out.setAttribute('height', INT_PX);
+    out.setAttribute('fill', 'rgba(110,207,174,0.08)');
+    out.setAttribute('stroke', 'rgba(110,207,174,0.75)');
+    out.setAttribute('stroke-width', '0.9');
+    out.style.cursor = 'pointer';
+    out.addEventListener('click', () => leaveInterior('You climb back out through the lock'));
+    g.appendChild(out);
   }
 
   glyph(f.x, f.y, '@', '#f2e8cf', 16, 1);
@@ -5196,6 +5328,14 @@ function airCounsel() {
 }
 
 function handleTile(tile) {
+  // Your own station opens to you every time, at the depth you cut it — no
+  // first-visit gate, because you are meant to keep coming back.
+  if (!state.foot && isBaseDeck(tile.q, tile.r, state.currentDepth)) {
+    log(pickLoose(STATION_ARRIVE), '', 'STATION');
+    enterInterior(tile);
+    return;
+  }
+
   // First-time visits get a flavor log
   const firstVisit = !state.poisFound.includes(hexKey(tile.q, tile.r));
   const atSurface = state.currentDepth <= 1;
@@ -5604,6 +5744,7 @@ function restart() {
   state.armament = null; state.torpedoes = 0;
   state.expedition = null;
   state.foot = null;
+  state.base = null;   // a new ocean is a new seed; the old station is not in it
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -5883,6 +6024,7 @@ function doSave(force) {
       relics: state.relics, relicsBanked: state.relicsBanked,
       expedition: state.expedition,
       foot: state.foot,
+      base: state.base,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -5936,6 +6078,7 @@ function resumeGame(save) {
   state.relics = save.relics || 0;
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
+  state.base = save.base || null;
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
     // A save written before the sea came in still has to load.
@@ -6005,6 +6148,7 @@ document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-launch').addEventListener('click', launchDecoy);
 document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
+document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fire').addEventListener('click', fireWeapon);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);

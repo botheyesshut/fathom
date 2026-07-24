@@ -74,7 +74,7 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 1. ~~**The Threshold**~~ **DONE 2026-07-24** — walk into a ruin. See "STAGE 1 AS BUILT" below.
 2. ~~**Dark and Wet**~~ **DONE 2026-07-24** — flooding from the breach, bulkheads, a tenant. See "STAGE 2 AS BUILT".
 3. **Boarders** — on-foot combat; crew become bodies that can be lost.
-4. **The Claim** — designate a base. Dock, storage, level-1 defenses.
+4. ~~**The Claim**~~ **DONE 2026-07-24** — a station is a ruin you sealed. See "STAGE 4 AS BUILT". (Level-1 DEFENCES still outstanding — that is Stage 6's business.)
 5. **Digging & Fitting** — carve, furnish, bulkheads, pumps, decks.
 6. **Siege** — MOB invasion: water assault → breach → interior fight.
 7. **Rivals** — player raids (multiplayer).
@@ -102,6 +102,19 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 - Old saves are backfilled in `resumeGame()` (water/closed/tick/dweller) so a Stage 1 save still loads.
 - **interior.test.js is now 33 checks.** The Stage 2 invariants: water never enters stone, a saturated deck leaves nothing dry, a dogged bulkhead never floods and passes neither body nor tenant, doors sit in throats, the tenant never walks through stone (120-step sweep), flood + seals round-trip through a reload.
 - **KNOBS NOT YET FELT**: `FLOOD_EVERY`, wading multiplier ×3, `DWELLER_EAR`, dweller damage 40-70, dweller spawn rate 0.55, max 3 doors.
+
+## STAGE 4 AS BUILT — The Claim (2026-07-24)
+**Your station is a ruin you sealed against the sea.** Flooding is what made this design available: claiming converts the breach you came in by into a **lock**, the pumps put the water out, and the deck stays dry and yours.
+- `state.base = {q, r, d, stores:{crates, relics}}` — **one only** for now. Overlay, saved, cleared by `restart()` (a new seed is a new ocean).
+- `CLAIM_COST = 6` crates aboard. **Refused if the deck still has a tenant** — which is exactly what gives Stage 3's on-foot combat a job. Refused if you already hold a station.
+- `isBaseDeck(q,r,d)` gates everything: `enterInterior` seeds no water and no dweller, `stepFoot` skips both `floodAdvance()` and `dwellerStep()`, `leaveInterior` sets the hex to the new `TILES.base` (`⌂`, poi colour `#6ecfae`) instead of consuming it to 'passage'.
+- **Loot does not grow back**: entering a claimed deck prefills `foot.took` with every loot key in the chunk. Substrate still remembers where the crates were; the overlay says you already have them. Copy this for Stage 5 carving.
+- `handleTile` opens the station **before** the first-visit gate, so you can come back forever. The depth must match — the hatch is where you cut it.
+- **One button, three jobs** (`#btn-claim` via `claimOrStore()`, label set in `syncFootControls`): *Claim Deck* off-station, *Stow Goods* when carrying, *Draw Goods* when empty-handed. A phone has no room for three buttons.
+- **THE ECONOMIC POINT**: stores are NOT aboard, so `endGame()` cannot take them. A station is the only place besides the far-off dock where a relic is safe. That is the whole reason to want one, and it is asserted in the battery.
+- **interior.test.js is now 55 checks.** Stage 4 invariants: tenant blocks the claim, cost enforced, pumps clear the water, a station never floods across 60 steps, stow/draw round-trips, second station refused, re-entry dry with no loot regrowth, **stores survive `endGame()`**, and the station survives a reload.
+- **UX fix found only in a live browser**: standing ON the lock there is no neighbour to tap to leave, so the tile underfoot becomes its own exit target. Headless tests could never have caught that.
+- **KNOBS NOT YET FELT**: `CLAIM_COST`, one-station limit, whether stations should also refill air (they probably should — that is a strong candidate for the next pass).
 
 ---
 

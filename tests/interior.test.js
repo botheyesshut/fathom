@@ -61,6 +61,8 @@ try { vm.runInContext(script +
   '\nfunction __flood(){ return floodAdvance(); }' +
   '\nfunction __seal(){ sealDoor(); }' +
   '\nfunction __dwell(){ dwellerStep(); }' +
+  '\nfunction __claim(){ claimOrStore(); }' +
+  '\nfunction __base(){ return state.base; }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -326,6 +328,110 @@ const after2 = sandbox.__foot();
 check(!!after2 && after2.water.length === wetBefore && after2.closed.length === shutBefore,
   'the flood and the sealed bulkheads survive a reload',
   after2 ? after2.water.length + ' wet, ' + after2.closed.length + ' sealed' : 'lost');
+
+//--- 9. Stage 4: the claim ---------------------------------------------------
+// Your station is a ruin you sealed against the sea, so the refusals matter as
+// much as the claim: you must not be able to seal yourself in with a tenant.
+sandbox.__st().foot = null;
+sandbox.__st().base = null;
+sandbox.__st().air = 4000;
+sandbox.__enter(site2.q, 7, 660);        // this deck has a tenant
+sandbox.__st().cargo = 20;
+sandbox.__claim();
+check(sandbox.__base() === null, 'a deck with a tenant on it cannot be claimed', 'refused');
+
+let clean = null;
+for (let q = 0; q < 80 && !clean; q++) {
+  const c = sandbox.__int(q, 9, 720);
+  if (!c.dweller) clean = { q: q, ch: c };
+}
+check(!!clean, 'tenantless decks exist to be claimed', clean ? 'found at q=' + clean.q : 'none in 80');
+
+sandbox.__st().foot = null;
+sandbox.__enter(clean.q, 9, 720);
+sandbox.__st().cargo = 2;
+sandbox.__claim();
+check(sandbox.__base() === null, 'claiming costs crates you must actually have', 'refused on 2 crates');
+
+sandbox.__st().cargo = 9;
+sandbox.__claim();
+const based = sandbox.__base();
+check(!!based && based.q === clean.q && based.r === 9 && based.d === 720,
+  'a tenantless deck can be claimed', based ? 'claimed at ' + based.q + ',9 @720m' : 'not claimed');
+check(sandbox.__st().cargo === 9 - 6, 'and the plate and pumps are paid for', '9 -> ' + sandbox.__st().cargo);
+check(sandbox.__foot().water.length === 0, 'the pumps take the water back out', 'deck dry');
+
+// However long you walk your own station, the sea stays outside it.
+for (let i = 0; i < 60; i++) {
+  const fw = sandbox.__foot();
+  if (!fw) break;
+  const opts = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+    .map(([dx, dy]) => [fw.x + dx, fw.y + dy])
+    .filter(([x, y]) => !sandbox.__solid(x, y) && !(x === clean.ch.entry.x && y === clean.ch.entry.y));
+  if (!opts.length) break;
+  const o = opts[i % opts.length];
+  sandbox.__step(o[0], o[1]);
+}
+check(sandbox.__foot() && sandbox.__foot().water.length === 0,
+  'a claimed station never floods, however long you walk it',
+  sandbox.__foot() ? sandbox.__foot().water.length + ' wet after ' + sandbox.__foot().steps + ' steps' : 'left the deck');
+
+// Stow and draw.
+sandbox.__st().cargo = 4; sandbox.__st().relics = 2;
+sandbox.__foot().crates = 1;
+sandbox.__claim();
+check(sandbox.__base().stores.crates === 5 && sandbox.__base().stores.relics === 2,
+  'goods stow into the station', sandbox.__base().stores.crates + ' crates, ' + sandbox.__base().stores.relics + ' relics');
+check(sandbox.__st().cargo === 0 && sandbox.__st().relics === 0 && sandbox.__foot().crates === 0,
+  'and leave both your hands and the boat', 'cleared');
+sandbox.__claim();
+check(sandbox.__foot().crates === 5 && sandbox.__base().stores.crates === 0,
+  'and can be drawn back out again', 'carrying ' + sandbox.__foot().crates);
+
+// Only one station.
+sandbox.__st().foot = null;
+let clean2 = null;
+for (let q = 0; q < 80 && !clean2; q++) {
+  const c = sandbox.__int(q, 11, 780);
+  if (!c.dweller) clean2 = { q: q, ch: c };
+}
+if (clean2) {
+  sandbox.__enter(clean2.q, 11, 780);
+  sandbox.__st().cargo = 30;
+  sandbox.__claim();
+  check(sandbox.__base().q === clean.q && sandbox.__base().r === 9,
+    'a second station is refused — the Erebus supplies one', 'still at ' + sandbox.__base().q + ',9');
+}
+
+// Re-entering your own station: no water, and the loot does not grow back.
+sandbox.__st().foot = null;
+sandbox.__enter(clean.q, 9, 720);
+let liftable = 0;
+for (const k of clean.ch.tiles.keys()) {
+  const c = k.indexOf(',');
+  if (sandbox.__lootAt(+k.slice(0, c), +k.slice(c + 1))) liftable++;
+}
+check(sandbox.__foot().water.length === 0 && !sandbox.__foot().dweller,
+  're-entering the station finds it dry and empty', 'as left');
+check(liftable === 0, 'and a claimed station does not regrow its loot', liftable + ' liftable');
+
+// THE POINT OF A STATION: the sea takes what is aboard, never what is stowed.
+sandbox.__st().foot = null;
+sandbox.__base().stores.crates = 7; sandbox.__base().stores.relics = 3;
+sandbox.__st().cargo = 2; sandbox.__st().relics = 1;
+sandbox.endGame('The deep has you.', 'test');
+check(sandbox.__st().cargo === 0 && sandbox.__st().relics === 0,
+  'the sea still keeps what was aboard', 'cargo/relics zeroed');
+check(sandbox.__base() && sandbox.__base().stores.crates === 7 && sandbox.__base().stores.relics === 3,
+  'but the station is untouched by drowning — that is what it is FOR',
+  sandbox.__base() ? sandbox.__base().stores.crates + ' crates, ' + sandbox.__base().stores.relics + ' relics held' : 'station lost');
+
+sandbox.__st().alive = true;
+sandbox.__save();
+sandbox.__st().base = null;
+sandbox.__resume();
+check(sandbox.__base() && sandbox.__base().stores.crates === 7 && sandbox.__base().q === clean.q,
+  'and the station survives a reload', sandbox.__base() ? 'held' : 'lost');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
