@@ -76,7 +76,7 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 3. ~~**Boarders**~~ **DONE 2026-07-24** — on-foot combat off the existing GEAR sheet. See "STAGE 3 AS BUILT". (Crew as bodies that can be LOST is still outstanding.)
 4. ~~**The Claim**~~ **DONE 2026-07-24** — a station is a ruin you sealed. See "STAGE 4 AS BUILT". (Level-1 DEFENCES still outstanding — that is Stage 6's business.)
 5. **Digging & Fitting** — carve, furnish, bulkheads, pumps, decks.
-6. **Siege** — MOB invasion: water assault → breach → interior fight.
+6. ~~**Siege**~~ **DONE 2026-07-24** — MOB invasion of a station. See "STAGE 6 AS BUILT". (PLAYER raids are Stage 7 / multiplayer.)
 7. **Rivals** — player raids (multiplayer).
 
 ## STAGE 1 AS BUILT (all battery-gated; `interior.test.js` is the sixth suite)
@@ -126,6 +126,18 @@ Built on the EXISTING `GEAR`/`teamScore()` sheet — the comment at the top of G
 - **TWO FAULTS ONLY A BROWSER FOUND**: `spec.name.replace(/^a /, 'It')` produced "**Itwhisper** has you in the dark" (now `theTenant()` → "The whisper"); and Ping/Fire/Launch Decoy sat in the control row while ashore doing nothing but scolding — now hidden by `syncFootControls`. **Read the rendered log, not just the test output.**
 - **interior.test.js is now 66 checks.**
 - **KNOBS NOT YET FELT**: tenant toughnesses, damage ranges, swing formula, armour cap 60%, spawn rate 0.55, whether a driven-off tenant should ever come BACK.
+
+## STAGE 6 AS BUILT — The Siege (2026-07-24)
+**Depth is a moat and a magnet both.** A station is discovered the same way the boat is — by NOISE — and deeper stations draw worse besiegers.
+- `state.base` gains `defence` (index into `DEFENCES`), `threat` (0→100 accrual), `siege` ({power, breach} or null), `breached` (bool). All overlay, saved, backfilled in `resumeGame` for pre-siege saves.
+- **`DEFENCES`** ladder (TW2002 shape): rusted grate(hold 1, free) → sonar baffles(3,4cr) → net barrage(6,8) → hardened lock(10,14) → shot-turret(16,22). `fortifyBase()` on `#btn-fortify` spends the STATION'S OWN stored crates, not aboard cargo.
+- **Discovery is noise-driven**: `noiseMade()` adds to `base.threat` scaled by loudness and nearness to the lock — the DOMINANT term. A quiet captain is besieged rarely; pinging/fighting/ballasting near home invites it. Idle accrual (`baseTick`, +0.2 +depth/5000 per turn) is the slow floor. `baseTick()` is called from `move`/`changeDepth`/`wait`.
+- **THE BESIEGER IS A REAL `state.creatures` ENTITY** (`spawnCreature` at the lock, `besieging:true`), depth-pooled (≥2400m → lurker/baro/hulk; shallower → lurker/silt/eel). So it can be seen, blocked, harpooned, decoyed — the siege only advances while something is actually AT the lock (`baseTick` finds `c.besieging && !c.gone`). **Kill it and the siege lifts. This is the player's whole agency here** — verified both branches in-browser.
+- **Breach** (`breach≥100`): lose 60% stored crates / 50% relics, defence drops one (works wrecked), `breached=true`. `stationSecure()` (not `isBaseDeck`) now gates enterInterior/stepFoot flood-skip — **a forced station floods like any other ruin** until `repumpStation()` (4cr) reseats the lock. If the captain is standing in it when it goes, the sea comes down on them.
+- **The four-way claim button**: Claim Deck / Stow Goods / Draw Goods / Repump Station, by context.
+- **interior.test.js is now 82 checks.** Siege invariants: threat accrues to a siege, besieger is real and at the lock, breach advances only while it is there, killing it lifts the siege, defences measurably slow the breach, fortify spends station crates and is refused when it cannot pay, breach costs stores + a defence level + floods the deck, a breached station floods when walked, repump fixes it, all of it survives a reload.
+- **KNOBS NOT YET FELT**: threat accrual rates, `noiseMade` base-term weight ×5, siege power `5+d/900`, breach rate `(power-hold)*0.8`, breach losses 60%/50%, `REPUMP_COST`, `DEFENCES` costs/holds.
+- **NOT YET BUILT**: the besieger does not yet actually enter the interior and fight you room-to-room — a breach is resolved at the lock, abstractly. Making the besieger walk in and become an on-foot tenant is the natural next deepening (all the pieces exist: it is already a creature, the interior already hosts tenants).
 
 ---
 

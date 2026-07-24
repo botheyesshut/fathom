@@ -64,6 +64,9 @@ try { vm.runInContext(script +
   '\nfunction __claim(){ claimOrStore(); }' +
   '\nfunction __base(){ return state.base; }' +
   '\nfunction __fight(){ fightTenant(); }' +
+  '\nfunction __baseTick(){ baseTick(); }' +
+  '\nfunction __fortify(){ fortifyBase(); }' +
+  '\nfunction __creatures(){ return state.creatures; }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -518,6 +521,129 @@ sandbox.__st().clearedDecks = [];
 sandbox.__resume();
 check(sandbox.__st().clearedDecks.includes(site2.q + ',7,660'),
   'cleared decks survive a reload', sandbox.__st().clearedDecks.length + ' recorded');
+
+//--- 11. Stage 6: the siege --------------------------------------------------
+// A station has to be losable, or holding one means nothing.
+sandbox.__st().foot = null;
+sandbox.__st().alive = true;
+sandbox.__st().creatures = [];
+const bs = sandbox.__base();
+bs.threat = 0; bs.siege = null; bs.breached = false; bs.defence = 0;
+bs.stores.crates = 20; bs.stores.relics = 4;
+
+let ticks = 0;
+while (!sandbox.__base().siege && ticks++ < 4000) sandbox.__baseTick();
+check(!!sandbox.__base().siege, 'threat accrues until something comes for the station', ticks + ' turns of quiet');
+const besiegers = sandbox.__creatures().filter(c => c.besieging);
+check(besiegers.length === 1, 'the besieger is a REAL creature, not a number',
+  besiegers.length ? besiegers[0].type + ' at ' + besiegers[0].q + ',' + besiegers[0].r : 'none');
+check(besiegers[0].q === bs.q && besiegers[0].r === bs.r && besiegers[0].depth === bs.d,
+  'and it is at the lock, where you can reach it', 'on station');
+
+// Drive it off and the siege lifts.
+const breachSoFar = sandbox.__base().siege.breach;
+sandbox.__baseTick();
+check(sandbox.__base().siege.breach > breachSoFar, 'it works at the lock every turn it is left alone',
+  breachSoFar.toFixed(1) + ' -> ' + sandbox.__base().siege.breach.toFixed(1));
+sandbox.__creatures().forEach(c => { c.gone = true; });
+sandbox.__baseTick();
+check(sandbox.__base().siege === null, 'killing it lifts the siege', 'station holds');
+
+// Noise on your own doorstep is the DOMINANT term — a quiet captain is
+// besieged rarely, a loud one often. (Runs here, after the besieger checks,
+// because it deliberately clears the creature list.)
+{
+  const b2 = sandbox.__base();
+  b2.siege = null; b2.threat = 0;
+  sandbox.__st().creatures = [];
+  sandbox.noiseMade(b2.q, b2.r, 5);
+  const loudNear = b2.threat;
+  b2.threat = 0;
+  sandbox.noiseMade(b2.q + 40, b2.r, 5);
+  const loudFar = b2.threat;
+  check(loudNear > loudFar, 'noise at the lock draws far more attention than noise miles off',
+    'near +' + loudNear.toFixed(1) + ' vs far +' + loudFar.toFixed(1));
+  b2.threat = 0;
+}
+
+// Defences slow the breach — measurably.
+function breachRate(defenceLevel) {
+  const b = sandbox.__base();
+  b.defence = defenceLevel; b.siege = { power: 14, breach: 0 };
+  sandbox.__st().creatures = [{ id: 'x', type: 'lurker', q: b.q, r: b.r, depth: b.d, besieging: true }];
+  sandbox.__baseTick();
+  return b.siege ? b.siege.breach : 999;
+}
+const rawRate = breachRate(0), heldRate = breachRate(3);
+check(heldRate < rawRate, 'a fortified lock holds it up',
+  'grate ' + rawRate.toFixed(1) + '/turn vs hardened ' + heldRate.toFixed(1) + '/turn');
+
+// Fortifying spends what is struck below.
+sandbox.__st().foot = null;
+sandbox.__enter(sandbox.__base().q, sandbox.__base().r, sandbox.__base().d);
+const bb = sandbox.__base();
+bb.defence = 0; bb.breached = false; bb.stores.crates = 20;
+sandbox.__fortify();
+check(bb.defence === 1 && bb.stores.crates === 20 - 4, 'fortifying spends the station\'s own crates',
+  'defence ' + bb.defence + ', ' + bb.stores.crates + ' crates left');
+bb.stores.crates = 1;
+sandbox.__fortify();
+check(bb.defence === 1, 'and is refused when the station cannot pay', 'held at ' + bb.defence);
+
+// The breach itself: stores lost, works wrecked, and the sea gets in.
+bb.stores.crates = 10; bb.stores.relics = 4; bb.defence = 2;
+bb.siege = { power: 99, breach: 99 };
+sandbox.__st().creatures = [{ id: 'y', type: 'lurker', q: bb.q, r: bb.r, depth: bb.d, besieging: true }];
+sandbox.__baseTick();
+check(bb.breached === true && bb.siege === null, 'a lock left long enough gives way', 'breached');
+check(bb.stores.crates < 10 && bb.stores.relics < 4, 'and the station loses part of what was struck below',
+  bb.stores.crates + ' crates, ' + bb.stores.relics + ' relics left');
+check(bb.defence === 1, 'the works are wrecked getting in', 'defence 2 -> ' + bb.defence);
+check(sandbox.__foot() && sandbox.__foot().water.length > 0,
+  'and the sea comes in on the captain standing in it',
+  sandbox.__foot() ? sandbox.__foot().water.length + ' wet' : 'no body');
+
+// A breached station drowns like any other ruin until it is pumped out.
+const wetBefore2 = sandbox.__foot().water.length;
+// Walk a real connected path inward — stepFoot only accepts ADJACENT tiles, so
+// a precomputed list goes stale the moment the body moves.
+{
+  const bch = sandbox.__int(bb.q, bb.r, bb.d);
+  const start = { x: sandbox.__foot().x, y: sandbox.__foot().y };
+  const ek = bch.entry.x + ',' + bch.entry.y;
+  const prevMap = new Map([[start.x + ',' + start.y, null]]);
+  const queue = [start];
+  let far = start;
+  while (queue.length) {
+    const cur = queue.shift();
+    far = cur;
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      const nx = cur.x + dx, ny = cur.y + dy, nk = nx + ',' + ny;
+      if (prevMap.has(nk) || !bch.tiles.has(nk) || nk === ek) continue;
+      prevMap.set(nk, cur); queue.push({ x: nx, y: ny });
+    }
+  }
+  const walk = [];
+  for (let c = far; c; c = prevMap.get(c.x + ',' + c.y)) walk.unshift(c);
+  for (const p of walk.slice(1, 10)) { if (sandbox.__foot()) sandbox.__step(p.x, p.y); }
+}
+check(sandbox.__foot() && sandbox.__foot().water.length > wetBefore2,
+  'a forced station floods like anything else the sea is in',
+  wetBefore2 + ' -> ' + (sandbox.__foot() ? sandbox.__foot().water.length : '?'));
+
+// Repump puts it right.
+sandbox.__st().cargo = 10;
+sandbox.__claim();                       // on a breached station this repumps
+check(sandbox.__base().breached === false && sandbox.__foot().water.length === 0,
+  'repumping reseats the lock and takes the water back out', 'dry again');
+
+sandbox.__st().foot = null;
+sandbox.__save();
+sandbox.__st().base = null;
+sandbox.__resume();
+check(sandbox.__base() && sandbox.__base().defence === 1 && sandbox.__base().breached === false,
+  'the station\'s defences and condition survive a reload',
+  sandbox.__base() ? 'defence ' + sandbox.__base().defence : 'lost');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

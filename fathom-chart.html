@@ -732,6 +732,7 @@
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
     <button class="btn" id="btn-claim" style="display:none" title="Claim this deck as your station — seals the breach into a lock and pumps the water out. Inside your own station, stows or draws out your goods.">Claim Deck</button>
     <button class="btn" id="btn-fight" style="display:none" title="Board it — fight with whatever the crew's locker holds. Expensive, and it answers every round you do not finish it.">Board It</button>
+    <button class="btn" id="btn-fortify" style="display:none" title="Spend what is struck below in the station on the next thing between it and the sea">Fortify</button>
     <button class="btn primary" id="btn-surface">Surface</button>
     <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
   </div>
@@ -1984,10 +1985,15 @@ function syncFootControls(inside) {
   if (!inside) return;
   const f = state.foot;
   if (!f) return;
-  // One control, three meanings, chosen by where you stand and what you hold.
-  if (!isBaseDeck(f.q, f.r, f.d)) claim.textContent = 'Claim Deck';
+  // One control, four meanings, chosen by where you stand and what you hold.
+  const own = isBaseDeck(f.q, f.r, f.d);
+  if (!own) claim.textContent = 'Claim Deck';
+  else if (state.base.breached) claim.textContent = 'Repump Station';
   else if (f.crates + f.relics + state.cargo + state.relics > 0) claim.textContent = 'Stow Goods';
   else claim.textContent = 'Draw Goods';
+
+  const fort = document.getElementById('btn-fortify');
+  if (fort) fort.style.display = (own && !state.base.breached) ? '' : 'none';
 
   // Boarding only offers itself when the thing is actually within reach — a
   // dead control is worse than no control.
@@ -3198,6 +3204,7 @@ function flagMoveFail(q, r, color) {
 // per the current depth, and an ambient flavor line fires occasionally.
 function wait() {
   if (!state.alive || ashore()) return;
+  baseTick();   // holding station is still a turn, and the sea keeps working
   state.moves++;
   state.lastMoveTime = performance.now();
   tickPingMemory();
@@ -3338,6 +3345,7 @@ function move(q, r) {
   maybeBeach();
   creatureTick();
   airCounsel();
+  baseTick();
   checkDeath();
 
   updateHUD();
@@ -3776,6 +3784,13 @@ function isBaseDeck(q, r, d) {
 
 function deckKey(q, r, d) { return q + ',' + r + ',' + d; }
 
+// Yours AND still sealed. A station whose lock has been forced is your deck in
+// name only — the sea is in it and it behaves like any other drowning ruin
+// until you pump it out and reseat the lock.
+function stationSecure(q, r, d) {
+  return isBaseDeck(q, r, d) && !(state.base && state.base.breached);
+}
+
 // A deck whose tenant you drove off stays driven off. Overlay, saved — the
 // substrate goes on generating the thing; this is the record that says you
 // already dealt with it.
@@ -3794,7 +3809,7 @@ const STATION_ARRIVE = [
 function enterInterior(tile) {
   const d = state.currentDepth;
   const ch = interiorAt(tile.q, tile.r, d);
-  const claimed = isBaseDeck(tile.q, tile.r, d);
+  const claimed = stationSecure(tile.q, tile.r, d);
   // A claimed deck was stripped when you cleared it — its loot does not grow
   // back just because the substrate still remembers where it was.
   const took = [];
@@ -3833,7 +3848,9 @@ function claimOrStore() {
   const f = state.foot;
   const ch = footChunk();
   if (!f || !ch || !state.alive) return;
-  if (isBaseDeck(f.q, f.r, f.d)) return storeAtBase();
+  if (isBaseDeck(f.q, f.r, f.d)) {
+    return state.base.breached ? repumpStation() : storeAtBase();
+  }
   if (state.base) {
     log('You already hold a station, and the Erebus can only supply the one.', 'warn', 'STATION');
     return;
@@ -3849,7 +3866,8 @@ function claimOrStore() {
     return;
   }
   state.cargo -= CLAIM_COST;
-  state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0 } };
+  state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0 },
+                 defence: 0, threat: 0, siege: null, breached: false };
   f.water = [];
   f.dweller = null;
   log('You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
@@ -3860,6 +3878,127 @@ function claimOrStore() {
 }
 
 function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+//--- THE SIEGE (Stage 6) -----------------------------------------------------
+// A station is discovered the same way the boat is: by noise, and by sitting
+// in water that has things in it. Depth is a moat and a magnet both — deep
+// water keeps other captains off and brings worse neighbours.
+//
+// The besieger is a REAL creature in state.creatures, not an abstraction, so
+// it can be seen, blocked, harpooned and driven off with the systems that
+// already exist. Kill it and the siege lifts. Ignore it and it gets through.
+const DEFENCES = [
+  { name: 'a rusted grate',   hold: 1,  cost: 0 },
+  { name: 'sonar baffles',    hold: 3,  cost: 4 },
+  { name: 'a net barrage',    hold: 6,  cost: 8 },
+  { name: 'a hardened lock',  hold: 10, cost: 14 },
+  { name: 'a shot-turret',    hold: 16, cost: 22 },
+];
+
+function baseDefence() { return DEFENCES[Math.min(DEFENCES.length - 1, (state.base && state.base.defence) || 0)]; }
+
+function startSiege() {
+  const b = state.base;
+  // Deeper stations draw worse things to the door.
+  const pool = b.d >= 2400 ? ['lurker', 'baro', 'hulk'] : ['lurker', 'silt', 'eel'];
+  const type = pool[Math.floor(rand() * pool.length)];
+  spawnCreature(type, b.q, b.r, b.d);
+  const c = state.creatures[state.creatures.length - 1];
+  if (c) { c.besieging = true; c.awake = true; }
+  b.siege = { power: 5 + Math.round(b.d / 900) + randInt(4), breach: 0 };
+  b.threat = 0;
+  log('Your station telegraph starts up, far off and steady. Something has found the lock and has begun working at it.', 'danger', 'SIEGE');
+  sfx('bell');
+}
+
+function breachStation() {
+  const b = state.base;
+  const lostC = Math.ceil(b.stores.crates * 0.6);
+  const lostR = Math.ceil(b.stores.relics * 0.5);
+  b.stores.crates -= lostC; b.stores.relics -= lostR;
+  b.siege = null; b.threat = 0;
+  b.breached = true;
+  if (b.defence > 0) b.defence--;   // the works are wrecked getting in
+  for (const c of state.creatures) if (c.besieging) c.besieging = false;
+  log(`The telegraph stops. The lock is open, the sea is in your station, and the works are wrecked. You lose ${plural(lostC, 'crate')} and ${plural(lostR, 'relic')}.`, 'danger', 'SIEGE');
+  sfx('impact');
+  // If the captain is standing in it when it goes, the water comes to them.
+  const f = state.foot;
+  if (f && isBaseDeck(f.q, f.r, f.d)) {
+    const ch = footChunk();
+    if (ch) f.water = [ch.entry.x + ',' + ch.entry.y];
+    log('The lock lets go above you. Cold water comes down the passage in a wall.', 'danger', 'WATER');
+  }
+}
+
+function baseTick() {
+  const b = state.base;
+  if (!b) return;
+  if (b.defence == null) b.defence = 0;
+  if (b.threat == null) b.threat = 0;
+
+  if (!b.siege) {
+    b.threat += 0.2 + b.d / 5000;
+    if (b.threat >= 100) startSiege();
+    return;
+  }
+  // A siege only advances while something is actually at the lock. Drive it
+  // off — with a harpoon, a decoy, or patience — and the station holds.
+  const att = state.creatures.find(c => c.besieging && !c.gone);
+  if (!att) {
+    log('Whatever was working at your lock is not there any more. The station holds.', '', 'STATION');
+    b.siege = null; b.threat = 0;
+    return;
+  }
+  const spec = baseDefence();
+  b.siege.breach += Math.max(0.5, (b.siege.power - spec.hold) * 0.8);
+  if (b.siege.breach >= 100) { breachStation(); return; }
+  if (rand() < 0.35) {
+    log(`The telegraph is still sounding. Something is ${Math.round(b.siege.breach)}% of the way through ${spec.name}.`, 'warn', 'SIEGE');
+  }
+}
+
+// Spend what is stowed in the station on the next thing between it and the sea.
+function fortifyBase() {
+  const b = state.base;
+  const f = state.foot;
+  if (!b || !f || !isBaseDeck(f.q, f.r, f.d)) return;
+  if (b.breached) { log('Pump the station out and reseat the lock before you bolt anything else to it.', 'warn', 'STATION'); return; }
+  const next = DEFENCES[(b.defence || 0) + 1];
+  if (!next) { log('There is nothing further to bolt onto this lock. It is as hard as you can make it.', 'warn', 'STATION'); return; }
+  if (b.stores.crates < next.cost) {
+    log(`Fitting ${next.name} takes ${plural(next.cost, 'crate')} struck below. The station holds ${b.stores.crates}.`, 'warn', 'STATION');
+    return;
+  }
+  b.stores.crates -= next.cost;
+  b.defence = (b.defence || 0) + 1;
+  log(`You fit ${next.name} across the approach. It will not stop everything. It will slow most things.`, '', 'STATION');
+  sfx('bell');
+  updateHUD(); render(); scheduleSave();
+}
+
+const REPUMP_COST = 4;
+
+// Putting a forced station back in order. Cheaper than cutting a new one, and
+// the whole reason a breach is a setback rather than an ending.
+function repumpStation() {
+  const b = state.base, f = state.foot;
+  if (!b || !f) return;
+  const have = state.cargo + b.stores.crates;
+  if (have < REPUMP_COST) {
+    log(`Reseating the lock takes ${plural(REPUMP_COST, 'crate')} of plate. Between the station and the boat there are ${have}.`, 'warn', 'STATION');
+    return;
+  }
+  let owed = REPUMP_COST;
+  const fromStore = Math.min(owed, b.stores.crates);
+  b.stores.crates -= fromStore; owed -= fromStore;
+  state.cargo -= owed;
+  b.breached = false;
+  f.water = [];
+  log('You reseat the lock, dog it down, and set the pumps going again. The deck comes back out of the water an inch at a time.', '', 'STATION');
+  sfx('bell');
+  updateHUD(); render(); scheduleSave();
+}
 
 // Stores are NOT aboard, so the sea cannot take them when it takes the boat.
 // That is the whole economic point of a station: it is the only place besides
@@ -3983,7 +4122,7 @@ function stepFoot(x, y) {
   // The deck answers back: the sea gains, and the thing takes its step. A
   // claimed station does neither — that is what you paid the pumps for.
   f.tick++;
-  if (!isBaseDeck(f.q, f.r, f.d)) {
+  if (!stationSecure(f.q, f.r, f.d)) {
     if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
       log('Behind you, the water finds another doorway.', 'warn', 'WATER');
     }
@@ -4350,6 +4489,18 @@ function creatureCanEnter(c, q, r, depth) {
 function noiseMade(q, r, loudness) {
   if (!loudness) return;
   const reach = 2 + loudness * 3;
+
+  // A station is found the same way the boat is: by noise. Working loudly on
+  // your own doorstep is how the deep learns there is a door. This is the
+  // dominant term — quiet captains are besieged rarely, noisy ones often.
+  const b = state.base;
+  if (b && !b.siege) {
+    const bd = hexDistance({ q: b.q, r: b.r }, { q, r });
+    if (bd <= reach + 4) {
+      b.threat = (b.threat || 0) + loudness * 5 * (1 - bd / (reach + 5));
+    }
+  }
+
   for (const c of state.creatures) {
     if (c.type !== 'lurker' || c.fleeing) continue;
     if (Math.abs(c.depth - state.currentDepth) > 3 * DEPTH_GRID) continue;
@@ -5085,6 +5236,7 @@ function changeDepth(deltaMeters) {
   // The same hex is a different room at a different depth — the boat says so.
   if (rand() < 0.55) log(describeSpace('again'), '', 'WATER');
   airCounsel();
+  baseTick();
 
   // Z-axis context — describe what's above and below the sub in the current hex.
   // Only log when there's a meaningful Z context (vertical space > 30 meters), and
@@ -6225,6 +6377,15 @@ function resumeGame(save) {
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
   state.base = save.base || null;
+  if (state.base) {
+    // Stations saved before the siege existed still have to load.
+    const b = state.base;
+    if (b.defence == null) b.defence = 0;
+    if (b.threat == null) b.threat = 0;
+    if (b.siege === undefined) b.siege = null;
+    if (b.breached == null) b.breached = false;
+    if (!b.stores) b.stores = { crates: 0, relics: 0 };
+  }
   state.clearedDecks = save.clearedDecks || [];
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
@@ -6297,6 +6458,7 @@ document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
+document.getElementById('btn-fortify').addEventListener('click', fortifyBase);
 document.getElementById('btn-fire').addEventListener('click', fireWeapon);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
