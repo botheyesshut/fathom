@@ -12,6 +12,16 @@
 
 **THE BOTTLENECK IS PLAYTESTING, NOT BUILDING.** ~25 tuning knobs are set to Fable's guesses and have never been felt by a human. Sean's verdicts gate the tuning pass. Do not invent scope to feel busy.
 
+## THE WATER, DESCRIBED (2026-07-24) — Sean's "more English" ask, and the air fix
+**Sean died of asphyxiation because nothing ever told him where air comes from.** That is a teaching failure, not a tuning one. Ruling taken: **no scripted tutorial yet** (it would go stale every stage); instead the game teaches diegetically, out of world state, which does not rot.
+- `describeSpace(mode)` builds Infocom-style room prose from REAL voxel geometry — `spaceAround()` counts open neighbours at this depth, sounds the column up and down, and checks what the chart knows. `spaceClass()` names it: surface / shaft / tunnel / junction / expanse / deadend / nook / pocket.
+- **Constitution holds at prose level**: what is known is stated, what is not is HEDGED (`HEDGE[]`, fired only when ≥2 open ways are uncharted, and only 35% of the time — said every time it stops meaning anything). Known-ness is counted over OPEN neighbours only; counting it over all six made the boat hedge about walls.
+- `mode:'first'` is **hash-stable per place** so the world feels solid; `'again'` is loose so a second LOOK finds new words. Full description on first arrival, 40% on re-entry, 55% on depth change.
+- **`#btn-look`** — free LOOK action. Ashore it calls `describeDeck()` instead (open sides, how close the water is, whether the tenant is near).
+- **`airCounsel()`** — four rungs (50/30/15/7%), each fires once, each says what to DO ("the tanks refill three ways: at the surface, at trapped gas pockets, and on cavern beaches"), and the ladder re-arms after a refill. Verified firing in order and re-arming.
+- **TRAP**: a "dead end" was being reported with open water above and below it — `spaceClass` must treat any vertical opening as a way on. That was a logic bug the prose exposed; read generated text as WRITING, not just as code that runs. `scratchpad/prose-sample.js` dumps a wide sample for exactly this.
+- **Still wanted**: descriptions for walls when you strike them, weather/current, more depth-band moods, interior room prose per room type.
+
 **Awaiting Sean's ruling:** (1) can expeditions KILL crew, not just wound? (2) NERVE/sanity as a third crew stat (Lovecraft pressure meter)? (3) weapons at boat scale — torpedoes/countermeasures?
 
 **Biggest remaining builds:** the RESOLUTION LADDER — see the spec immediately below. Sean ratified its four forks on 2026-07-24; it supersedes the ordering in "CREW / DUNGEON / BASE" (on-foot now comes BEFORE base-building, because you must be able to walk a base before you can defend one).

@@ -726,6 +726,7 @@
   </div>
   <div id="controls-row">
     <button class="btn" id="btn-ping">Ping</button>
+    <button class="btn" id="btn-look" title="Look about you — describes the water, or the deck you are standing on. Costs nothing.">Look</button>
     <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
@@ -3277,11 +3278,18 @@ function move(q, r) {
   detectZoneTransition(q, r);
 
   // Reveal
+  const firstHere = !visited.has(hexKey(q, r));
   visited.add(hexKey(q, r));
   revealAt(q, r, state.currentDepth);
   for (const n of hexNeighbors(q, r)) {
     revealAt(n.q, n.r, state.currentDepth);
   }
+
+  // The boat reports the water it has come into, before anything happens in
+  // it. New water always gets the full account; water you have already been
+  // through only speaks up sometimes, so the log stays readable.
+  if (firstHere) log(describeSpace('first'), '', 'WATER');
+  else if (rand() < 0.4) log(describeSpace('again'), '', 'WATER');
 
   // React to tile
   handleTile(tile);
@@ -3295,6 +3303,7 @@ function move(q, r) {
   // The water answers: landfall, creatures, then death checks.
   maybeBeach();
   creatureTick();
+  airCounsel();
   checkDeath();
 
   updateHUD();
@@ -4799,6 +4808,10 @@ function changeDepth(deltaMeters) {
   }
   state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
 
+  // The same hex is a different room at a different depth — the boat says so.
+  if (rand() < 0.55) log(describeSpace('again'), '', 'WATER');
+  airCounsel();
+
   // Z-axis context — describe what's above and below the sub in the current hex.
   // Only log when there's a meaningful Z context (vertical space > 30 meters), and
   // throttle to avoid spam on small back-and-forth movements.
@@ -4878,6 +4891,282 @@ const POI_DESCRIPTIONS = {
   surface:  'The dock and the shore',
   deadend:  'A dead end',
 };
+
+//=============================================================================
+// THE WATER, DESCRIBED — Infocom in a diving bell.
+//
+// Every line below is generated from the ACTUAL voxel geometry around the
+// boat: how many neighbours are open at this depth, how far the column runs
+// before it meets stone, what the chart already knows. The prose is never
+// decorative — it is the boat's own report, and it obeys the same constitution
+// as the chart. What is known is stated. What is not known is HEDGED. Nothing
+// is described that the boat could not perceive.
+//
+// It also carries the teaching load, deliberately. A captain who cannot work
+// out where air comes from will drown, and a scripted tutorial would go stale
+// every time a new stage lands. Prose generated from world state does not.
+//=============================================================================
+
+// Stable pick: the same place reads the same way every time you arrive, so the
+// world feels solid. Loose pick: a second LOOK finds new words for it.
+function pickStable(arr, seedStr) { return arr[Math.floor(mulberry32(hashStr(seedStr))() * arr.length)]; }
+function pickLoose(arr) { return arr[Math.floor(rand() * arr.length)]; }
+
+function spaceAround(q, r, d) {
+  const step = DEPTH_GRID;
+  const up = !!cells.get(cellKey(q, r, d - step));
+  const down = !!cells.get(cellKey(q, r, d + step));
+  // Known-ness is counted only over the OPEN neighbours — comparing charted
+  // hexes against open ones would make the boat hedge about walls.
+  let lateral = 0, lateralKnown = 0;
+  for (const n of hexNeighbors(q, r)) {
+    if (!cells.get(cellKey(n.q, n.r, d))) continue;
+    lateral++;
+    const k = hexKey(n.q, n.r);
+    if (visited.has(k) || revealed.has(k)) lateralKnown++;
+  }
+  let upRun = 0;
+  for (let dd = d - step; dd >= 0 && cells.get(cellKey(q, r, dd)); dd -= step) upRun++;
+  let downRun = 0;
+  for (let dd = d + step; downRun < 30 && cells.get(cellKey(q, r, dd)); dd += step) downRun++;
+  return { up, down, lateral, lateralKnown, upRun, downRun, surfaced: d <= 0 };
+}
+
+// A dead end has to actually be dead. Water open above or below is a way on,
+// so it is never a dead end — it is a shaft, or a nook off one.
+function spaceClass(s) {
+  if (s.surfaced) return 'surface';
+  const vert = s.up || s.down;
+  if (s.lateral === 0) return vert ? 'shaft' : 'pocket';
+  if (!vert && s.lateral === 1) return 'deadend';
+  if (s.lateral <= 2 && (s.upRun >= 2 || s.downRun >= 2)) return 'shaft';
+  if (s.lateral === 1) return 'nook';
+  if (s.lateral === 2) return 'tunnel';
+  if (s.lateral >= 5) return 'expanse';
+  return 'junction';
+}
+
+const SPACE_FIRST = {
+  surface: [
+    'The boat breaks out into open air. Grey light, a grey swell, and the horizon going nowhere in particular.',
+    'You come up into daylight. The sea moves under the hull the way it has always moved, indifferent and busy.',
+    'Surface. Wind across the casing, and a sky the colour of wet slate.',
+    'The Erebus rides the top of the water. Above is only weather; below is everything else.',
+  ],
+  shaft: [
+    'You seem to have entered a vertical tunnel. Dark water haunts below. The tunnel beckons you back toward the open water above.',
+    'A chimney in the rock. The boat hangs in it like a stone in a throat, and the walls go up and down past the reach of the lights.',
+    'The passage stands on end here — a flooded shaft, cut or worn, running away in both directions.',
+    'This is a vertical tube. The rock face looks scraped by things that fell, or climbed, through it over uncountable ages.',
+    'The lights find wall on every side and nothing ahead. The only argument this place makes is up, or down.',
+  ],
+  tunnel: [
+    'A tunnel, barely wider than the boat. The walls run past on both sides, close enough to count the courses in the rock.',
+    'The passage narrows to a throat and goes on. Two ways out of here, and both of them are the same way.',
+    'A bore in the rock, running level. Whatever cut it was patient, and was not interested in turning.',
+    'The way narrows. The hull noise comes back off the walls almost before it leaves.',
+  ],
+  junction: [
+    'The passage opens into a junction. Ways lead off, and the water between them is still.',
+    'Several throats meet here. The current, such as it is, cannot decide between them.',
+    'A meeting of tunnels. Sediment has piled where the flows argue with each other.',
+    'The rock opens into a hub of some kind. More than one way on from here.',
+  ],
+  expanse: [
+    'The walls fall away. Whether you are in an underground chamber, a lake, a sea or a river you cannot tell.',
+    'Open water. The lights go out into it and do not come back, which tells you something about the size of the place.',
+    'The boat swims out into a great flooded room. Nothing answers the lights but distance.',
+    'Space, suddenly — the pressure of stone lifts off the hull and the water goes wide in every direction.',
+    'The chamber is enormous, or it is merely dark. The instruments decline to distinguish.',
+  ],
+  deadend: [
+    'The passage ends. Rock ahead, rock to either side — whatever cut this gave up here, or was interrupted.',
+    'A blind pocket. The lights find the end of the world about two boat-lengths off.',
+    'This is as far as it goes. The face ahead is unbroken and very old.',
+  ],
+  pocket: [
+    'A closed pocket of water, sealed on every side. The boat sits in it like a coin in a jar.',
+    'Stone all around. Whatever brought water into this hole, it was not a route.',
+  ],
+  nook: [
+    'A pocket off the side of the shaft — room enough to hold station in, and not much else.',
+    'The rock bellies out here into a small blind room. The only ways on are vertical.',
+    'A niche in the wall of the passage. Something could wait in a place like this.',
+  ],
+};
+
+const SPACE_AGAIN = {
+  surface: ['The surface again. The light is a shock every time.', 'Up top once more, the swell working along the casing.'],
+  shaft: [
+    'Your sub still braves the vertical tube.',
+    'The shaft again. The same scraped rock going past, up and down.',
+    'Still in the chimney. The walls have not moved, whatever the dark suggests.',
+  ],
+  tunnel: ['The close tunnel again, walls near enough to touch.', 'Back in the bore. It has not widened.'],
+  junction: ['The junction again. The same several ways on.', 'Back at the meeting of passages.'],
+  expanse: ['The open water again — as unmeasured as before.', 'Back out in the wide dark.'],
+  deadend: ['The blind end again. Still blind.', 'The dead face of rock, unchanged.'],
+  pocket: ['The sealed pocket again.', 'Still boxed in on every side.'],
+  nook: ['The blind nook again, off the side of the shaft.', 'Back in the niche.'],
+};
+
+const DIR_COUNT = {
+  3: ['passages lead off in three directions', 'three ways on from here', 'the rock opens three ways'],
+  4: ['four ways lead off', 'passages run off in four directions', 'four throats open out of this one'],
+  5: ['five ways open from here', 'the rock is riddled — five ways on'],
+  6: ['ways lead off on every side', 'six ways out, which is to say the rock here is more hole than rock'],
+};
+
+const HEDGE = [
+  'The chart has nothing to say about the rest.',
+  'Beyond that, the chart is blank.',
+  'Where the others go, nobody has written down.',
+  'The rest are only openings; what is past them is anyone\'s guess.',
+];
+
+// What the boat can honestly say about the ways out. The vertical column is
+// sounded by the hull's own lights and by what has been charted; laterals it
+// can only count where the chart already reaches, so unknown neighbours make
+// the sentence hedge instead of lie.
+function exitsClause(s) {
+  if (s.lateral === 0 && !s.up && !s.down) return 'Nothing leads anywhere. ';
+
+  const vert = [];
+  if (s.upRun >= 3) vert.push(pickLoose(['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
+  else if (s.up) vert.push(pickLoose(['there is a way up', 'the roof is open above you', 'water continues overhead']));
+  if (s.downRun >= 3) vert.push(pickLoose(['it drops away below into nothing you can sound', 'the dark goes down a long way', 'below, the column falls further than the lights reach']));
+  else if (s.down) vert.push(pickLoose(['the floor is open below', 'there is a way down', 'water continues beneath the keel']));
+  if (!vert.length && !s.surfaced) vert.push(pickLoose(['rock above and rock below', 'the water here is a flat seam in the stone']));
+
+  // Two clauses is a sentence; three is a list, and a list stops being read.
+  const parts = [];
+  if (vert.length) parts.push(vert.length === 2 && rand() < 0.45 ? vert.join(' and ') : pickLoose(vert));
+  if (s.lateral >= 3) parts.push(pickLoose(DIR_COUNT[Math.min(6, s.lateral)]));
+  if (!parts.length) return '';
+
+  // Hedge only when the chart is genuinely ignorant of several ways on, and
+  // then only sometimes — said every time, it stops meaning anything.
+  const unknown = s.lateral - s.lateralKnown;
+  const hedge = (unknown >= 2 && rand() < 0.35) ? ' ' + pickLoose(HEDGE) : '';
+  return parts.join('; ').replace(/^./, c => c.toUpperCase()) + '.' + hedge + ' ';
+}
+
+const DEPTH_MOOD = {
+  sunlit: [
+    'Light still reaches down here, green and used up.',
+    'The water holds a little daylight, and the shapes in it are almost honest.',
+    '',
+  ],
+  upper: [
+    'The last of the light gave out a while back. Everything now is what the lamps say it is.',
+    'Cold water, and quiet enough to hear the boat think.',
+    'Sediment hangs where nothing has disturbed it in a long time.',
+    '',
+  ],
+  middle: [
+    'The pressure has begun to take an interest in the hull.',
+    'Something creaks aft and then thinks better of it.',
+    'The dark down here has weight, and it leans.',
+    'The water is old. It has not been anywhere in a very long time.',
+    '',
+  ],
+  deep: [
+    'The hull complains steadily now, a slow conversation with the pressure.',
+    'This is deep water. The lamps look small and apologetic in it.',
+    'Whatever lives at this depth does not need eyes, and has not needed them for an age.',
+    '',
+  ],
+  abyss: [
+    'The pressure is a hand closed loosely around the boat.',
+    'Nothing at this depth has any business being seen. Including you.',
+    'The dark here is not an absence of light. It is a material, and the boat is in it.',
+    '',
+  ],
+};
+
+function depthBand(d) {
+  if (d <= 0) return 'sunlit';
+  if (d <= 300) return 'sunlit';
+  if (d <= 1200) return 'upper';
+  if (d <= 2400) return 'middle';
+  if (d <= 4800) return 'deep';
+  return 'abyss';
+}
+
+// The full report. mode 'first' is stable per place; 'again' varies, so that
+// looking twice gives you new words for the same rock.
+function describeSpace(mode) {
+  const q = state.q, r = state.r, d = state.currentDepth;
+  const s = spaceAround(q, r, d);
+  const cls = spaceClass(s);
+  const seed = 'space:' + hexKey(q, r) + '@' + Math.round(d);
+  const lead = mode === 'first'
+    ? pickStable(SPACE_FIRST[cls] || SPACE_FIRST.junction, seed)
+    : pickLoose(SPACE_AGAIN[cls] || SPACE_AGAIN.junction);
+  const exits = exitsClause(s);
+  const mood = mode === 'first'
+    ? pickStable(DEPTH_MOOD[depthBand(d)], seed + ':mood')
+    : (rand() < 0.5 ? pickLoose(DEPTH_MOOD[depthBand(d)]) : '');
+  return (lead + ' ' + exits + mood).replace(/\s+/g, ' ').trim();
+}
+
+// The deck, described. On foot the same rules apply, one rung down: lamplight
+// and memory, and the water is a character in the room.
+function describeDeck() {
+  const f = state.foot;
+  const ch = footChunk();
+  if (!f || !ch) return '';
+  let open = 0, wet = 0;
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const nk = (f.x + dx) + ',' + (f.y + dy);
+    if (ch.tiles.has(nk) && !f.closed.includes(nk)) open++;
+    if (f.water.includes(nk)) wet++;
+  }
+  const lead = open <= 1
+    ? pickLoose(['The lamp finds walls on three sides. This is a corner of the structure, and a poor one to be caught in.', 'A dead end. Plate and rock, and nowhere on from here.'])
+    : open >= 3
+    ? pickLoose(['The deck opens out — several ways on from here, all of them dark.', 'A junction of passageways. The lamp picks out openings and gives up on each in turn.'])
+    : pickLoose(['A passage running two ways through the structure.', 'Corridor. Plate underfoot, rust in long streaks down the walls.']);
+  const water = wet === 0
+    ? pickLoose(['For the moment the deck here is dry.', 'No water yet, though you can hear it working somewhere behind you.'])
+    : wet >= 3
+    ? 'The water is all around you now, and rising.'
+    : pickLoose(['Water laps at the edge of the lamplight.', 'The sea has found this passage. It is ankle-deep and patient.']);
+  const near = f.dweller && Math.abs(f.dweller.x - f.x) + Math.abs(f.dweller.y - f.y) <= 3
+    ? ' Something is moving very close by.' : '';
+  return lead + ' ' + water + near;
+}
+
+function lookAround() {
+  if (!state.alive) return;
+  if (state.foot) { log(describeDeck(), '', 'LOOK'); return; }
+  log(describeSpace('again'), '', 'LOOK');
+}
+
+// Air literacy. The captain who drowns because nobody told them where air
+// comes from is a design failure, not a skill issue — so the boat says it out
+// loud, once per threshold crossed, and says what to DO about it.
+const AIR_STEPS = [
+  { at: 0.50, cls: '', text: 'Half the air is gone. The tanks refill three ways: at the surface, at trapped gas pockets, and on cavern beaches.' },
+  { at: 0.30, cls: 'warn', text: 'Air down to a third. Sunlit water lies above — surfacing tops the tanks right off. Pockets and beaches will do it too.' },
+  { at: 0.15, cls: 'warn', text: 'Air critical. Turn for the surface now, or for any pocket the chart already knows. Every move costs.' },
+  { at: 0.07, cls: 'danger', text: 'The scrubbers are failing. Whatever you were down here for, it is no longer worth it.' },
+];
+
+function airCounsel() {
+  const sub = activeSub();
+  const pct = state.air / Math.max(1, sub.air);
+  if (state._airMark == null) state._airMark = 1;
+  // Refilling resets the ladder, so the counsel fires again next time down.
+  if (pct > state._airMark + 0.08) state._airMark = 1;
+  for (const step of AIR_STEPS) {
+    if (pct <= step.at && state._airMark > step.at) {
+      state._airMark = step.at;
+      log(step.text, step.cls, 'AIR');
+      return;
+    }
+  }
+}
 
 function handleTile(tile) {
   // First-time visits get a flavor log
@@ -5688,6 +5977,7 @@ if (diveBtn) {
 document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-launch').addEventListener('click', launchDecoy);
 document.getElementById('btn-seal').addEventListener('click', sealDoor);
+document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-fire').addEventListener('click', fireWeapon);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
