@@ -12,6 +12,37 @@
 
 **THE BOTTLENECK IS PLAYTESTING, NOT BUILDING.** ~25 tuning knobs are set to Fable's guesses and have never been felt by a human. Sean's verdicts gate the tuning pass. Do not invent scope to feel busy.
 
+## CREW AS PEOPLE — the big design (Sean ratified the 4 forks 2026-07-24)
+**The spine: a crew member is a HISTORY, not a number.** This is the deliberate move away from HP+XP toward mature/emergent/surprising/fair. Sean's four ratified decisions:
+1. **Small positioned party** — crew are individual BODIES on the deck grid (1-3 along), can be hurt, cut off by a sealed door or rising water, and lost. Not an abstract pool, not a full X-COM squad.
+2. **Full condition system — NO hit-point pool.** Harm inflicts a NAMED, specific state from a seeded table ("crushed hand — no two-handed weapon", "flooded lung — actions cost extra air", "the shakes"). Fair because legible + actionable; unpredictable because WHICH condition varies; strategic because each changes what the body can do. `member.wounded` is the proto-version; conditions generalise it (keep `wounded` as a derived flag so existing dial/hazard/port code keeps working).
+3. **Soft survival** — `stores` feed a VIGOR axis. Hunger/water/warmth NEVER kill directly (no Oregon-Trail bookkeeping); they are a MULTIPLIER on danger — depleted crew wound worse and fray faster. The reason to turn back for base/port. Base/port re-provisions.
+4. **Break into horror** — beyond death: a mind pushed past breaking walks off into the structure, and a body lost in the deep can resurface later as the **hollow-man tenant wearing a uniform you issued** (`state.lostCrew` → hollow-man `wornName`). Closes the setting's loop on itself.
+
+**Three pressures, not one bar** (each = proximity-to-a-bad-condition, not HP): **Body** (physical), **Nerve** (the Lovecraft axis — low nerve reads froze/fled/dropped-the-lamp/fired-wild, not "insane"), **Vigor** (fed from stores).
+**Gear changes the ODDS, not the arithmetic**: `atk`/`def` stop meaning damage/soak and become how the wound table TILTS — a wardsuit deletes the worst rows; relic-work gives strange edges.
+**Tenure = scars + traits + trust, not bigger numbers**: staying with you accretes history (double-edged scars, earned traits, reliability under nerve-pressure). Portable whether or not aboard/in the party.
+**On-foot combat beyond turn-based**: position (a doorway = one-at-a-time), commitment (striking is loud/exposes — the silence grammar indoors), light (fight what the lamp shows), and NO damage numbers (you read the body).
+
+**BUILD ORDER (this is a multi-push feature — do NOT try it in one drop):**
+- **A. Condition foundation + combat wiring** — ✅ **DONE 2026-07-24** (see below).
+- **B. Positioning** — crew as bodies occupying interior tiles, cut off by doors/water. The biggest render change; its own focused push. **Bring the crew-status ROSTER UI with it** (push A has NO on-screen roster — crew state comes only through the log; acceptable for now, but the panel is wanted and positioning is its natural home).
+- **C. Tenure** — scars/traits/trust progression. NOTE: `member.scars[]` already accretes (incap conditions leave a scar), and `scar` strings exist on CONDITIONS — the data is being collected; C is about making scars/traits DO something.
+KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-subagent work against the schema.
+
+### STAGE A AS BUILT — the crew are people now (2026-07-24)
+- **`CONDITIONS` table** (near GEAR): named states, each `{pressure:body|nerve, tier:1-3, atk/def/airMult/nerve deltas, incap, mortal, got:prose, scar}`. 10 to start (bruised…bleedingOut, shaken…unstrung).
+- **Member fields** (lazy via `crewVitals(m)`, so old saves/hires upgrade for free): `nerve` (0-100, def 70), `conditions[]`, `dying`, `scars[]`. Legacy `wounded` kept as a DERIVED flag (set on incap) so all existing dial/hazard/port code still works.
+- **`inflictCondition(m, severity01)`**: `eff = severity·vigorMult − crewDef·0.12`; eff→maxTier; picks a condition in-band. **`if(m.lost) return`** guard (browser caught the dead still being wounded — regression-tested). Nerve-conditions call `frayNerve`; incap sets `wounded`; scar recorded; mortal sets `dying`.
+- **`frayNerve(m, amount)`**: ×vigorMult; ≤0 → `loseCrew(m,'broke')`. Also `if(m.lost) return`.
+- **`loseCrew(m, how)`**: splice from crew, push `{name,role,how}` to `state.lostCrew`. how = broke/taken/drowned, each its own prose.
+- **`vigorMult()`** from `state.stores` (100→1.0, 0→1.6). `provisionTick()` per boat-move (0.4) and foot-step (0.3); refills at port (full) and on entering a secure station (+40). Crossing below 33 warns once. **Never kills directly.**
+- **Combat wiring**: `dwellerStep` dist-0 → `tenantStrikesParty(spec)` if any able crew (they SCREEN the captain: wounds land on THEM + fray nerve; a `dying` body hit again is lost unless a kit auto-spends); else the captain's air pays, as before. **OFFENSE is decoupled from conditions** — `bestWeaponAtk()` (best weapon among non-lost crew, captain wields it) drives the swing, so wounding crew never makes a fight unwinnable (fairness is the brief). `teamScore()` now condition-aware for def/hazards.
+- **THE LOOP CLOSES**: `enterInterior` (OVERLAY, never the pure substrate) gives a generated `hollow` dweller a 40% `worn = <lostCrew name>`; `dwellerStep` first-sight logs the uniform line. Verified: a broken Marchetti resurfaced as a hollow man wearing his own uniform.
+- **Persistence**: `stores`, `lostCrew` saved; crew conditions/nerve ride on the member objects; `resumeGame` runs `crewVitals` on each. Round-trip tested.
+- **Port**: surgeon+shore now clears conditions, restores nerve to 100, refills stores — **scars stay** (they are the record). 
+- **interior.test.js → 110 checks.** KNOBS NOT FELT: nerve start 70 / fray 8-per-hit, condition tiers & effects, `vigorMult` 0.6 span, `provisionTick` rates, station +40, worn chance 0.4, `crewDef·0.12` armour tilt (currently strong — a wardsuit deleted ALL tier-2 at sev 0.7 in test).
+
 ## THE WATER, DESCRIBED (2026-07-24) — Sean's "more English" ask, and the air fix
 **Sean died of asphyxiation because nothing ever told him where air comes from.** That is a teaching failure, not a tuning one. Ruling taken: **no scripted tutorial yet** (it would go stale every stage); instead the game teaches diegetically, out of world state, which does not rot.
 - `describeSpace(mode)` builds Infocom-style room prose from REAL voxel geometry — `spaceAround()` counts open neighbours at this depth, sounds the column up and down, and checks what the chart knows. `spaceClass()` names it: surface / shaft / tunnel / junction / expanse / deadend / nook / pocket.

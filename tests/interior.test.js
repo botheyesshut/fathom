@@ -68,6 +68,12 @@ try { vm.runInContext(script +
   '\nfunction __fortify(){ fortifyBase(); }' +
   '\nfunction __creatures(){ return state.creatures; }' +
   '\nfunction __isTenant(k){ return !!TENANTS[k]; }' +
+  '\nfunction __inflict(m,s){ return inflictCondition(m,s); }' +
+  '\nfunction __fray(m,a){ frayNerve(m,a); }' +
+  '\nfunction __vigor(){ return vigorMult(); }' +
+  '\nfunction __crewAtk(m){ return crewAtk(m); }' +
+  '\nfunction __provision(a){ provisionTick(a); }' +
+  '\nfunction __condTier(k){ return CONDITIONS[k] ? CONDITIONS[k].tier : 0; }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -695,8 +701,16 @@ sandbox.__enter(B.q, B.r, B.d);             // and come back
 check(sandbox.__foot().dweller.hurt === woundedTo, 'the boarder is still hurt when you come back for it',
   'hurt=' + sandbox.__foot().dweller.hurt);
 
-// Kill it, and only then can you pump out.
-sandbox.__st().crew = [{ name: 'T', role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit' } }];
+// Kill it, and only then can you pump out. A real boarding party — three armed,
+// armoured, kitted hands — because one lone diver against a siege-grade boarder
+// breaks under the horror, and the new combat is honest about that.
+sandbox.__foot().dweller.tough = 12; sandbox.__foot().dweller.hurt = 0;
+sandbox.__st().stores = 100;
+sandbox.__st().crew = [
+  { name: 'Ansel',  role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit', kit: { key: 'firstaid', charges: 2 } } },
+  { name: 'Brune',  role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit', kit: { key: 'firstaid', charges: 2 } } },
+  { name: 'Cole',   role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit', kit: { key: 'firstaid', charges: 2 } } },
+];
 let fb3 = sandbox.__foot();
 const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dy]) => ({ x: fb3.x + dx, y: fb3.y + dy }))
   .find(p => !sandbox.__solid(p.x, p.y));
@@ -706,7 +720,7 @@ while (sandbox.__foot() && sandbox.__foot().dweller && g++ < 60) {
   cur.dweller.x = nb.x; cur.dweller.y = nb.y;
   sandbox.__fight();
 }
-check(sandbox.__base().boarder === null, 'putting the boarder down clears the station of it', 'cleared');
+check(sandbox.__base().boarder === null, 'a boarding party puts the boarder down and clears the station', 'cleared in ' + g);
 sandbox.__st().cargo = 20;
 sandbox.__claim();   // now repump succeeds
 check(sandbox.__base().breached === false && sandbox.__foot().water.length === 0,
@@ -723,6 +737,100 @@ sandbox.__resume();
 check(sandbox.__base() && sandbox.__base().boarder && sandbox.__base().breached,
   'a taken station is still taken after a reload',
   sandbox.__base() && sandbox.__base().boarder ? sandbox.__base().boarder.kind + ' still aboard' : 'lost');
+
+//--- 13. The crew, as people: conditions, nerve, vigor, the break ------------
+// A crew member is a history, not a number. These assert the model directly.
+sandbox.__st().foot = null;
+sandbox.__st().stores = 100;
+
+// A hard blow inflicts a NAMED condition, and it degrades what the body can do.
+const mm = { name: 'Vane', role: 'diver', xp: 0, gear: { weapon: 'axe', armor: null, kit: null } };
+sandbox.__st().crew = [mm];
+let got = null;
+for (let i = 0; i < 40 && !got; i++) got = sandbox.__inflict(mm, 0.9);   // heavy, unarmoured
+check(!!got && mm.conditions.length > 0, 'a hard blow inflicts a named condition, not a number',
+  mm.conditions.join(', '));
+const atkClean = sandbox.__crewAtk({ gear: { weapon: 'axe' }, conditions: [] });
+mm.conditions = ['gashed'];
+check(sandbox.__crewAtk(mm) < atkClean, 'a wound degrades what the body can do', 'atk ' + atkClean + ' -> ' + sandbox.__crewAtk(mm));
+
+// Armour deletes the worst ROWS of the table — from the identical blow, a
+// wardsuit body collects fewer SERIOUS (tier 2+) wounds than a bare one. Count
+// severity, not merely whether something landed.
+function seriousWounds(armor, n) {
+  let serious = 0;
+  for (let i = 0; i < n; i++) {
+    const b = { name: 'x', role: 'diver', gear: { armor: armor }, conditions: [], nerve: 100 };
+    sandbox.__inflict(b, 0.7);
+    for (const k of b.conditions) if (sandbox.__condTier(k) >= 2) serious++;
+  }
+  return serious;
+}
+sandbox.__st().stores = 100;   // isolate armour from vigor
+const bareSerious = seriousWounds(null, 200), wardSerious = seriousWounds('wardsuit', 200);
+check(wardSerious < bareSerious, 'armour tilts the wound table away from its worst rows',
+  'serious wounds — bare ' + bareSerious + ' vs warded ' + wardSerious + ' (of 200)');
+
+// Empty stores make every blow land harder — Vigor as a multiplier, never a
+// death clock of its own.
+sandbox.__st().stores = 100; const vFull = sandbox.__vigor();
+sandbox.__st().stores = 0;   const vEmpty = sandbox.__vigor();
+check(vEmpty > vFull && vFull === 1, 'stores multiply danger but never kill directly', 'full ' + vFull + ' empty ' + vEmpty.toFixed(2));
+sandbox.__st().stores = 50;
+sandbox.__provision(20);
+check(sandbox.__st().stores === 30, 'provisions depend down as time passes', 'stores=' + sandbox.__st().stores);
+
+// Nerve is the Lovecraft axis: fray it to nothing and the person BREAKS and is
+// gone — removed from the crew, remembered in lostCrew for a later ruin.
+sandbox.__st().stores = 100;
+const nn = { name: 'Roon', role: 'diver', xp: 0, nerve: 20, conditions: [], gear: {} };
+sandbox.__st().crew = [nn];
+sandbox.__st().lostCrew = [];
+sandbox.__fray(nn, 30);
+check(sandbox.__st().crew.length === 0, 'fraying a nerve to nothing breaks the person', 'crew ' + sandbox.__st().crew.length);
+check(sandbox.__st().lostCrew.length === 1 && sandbox.__st().lostCrew[0].how === 'broke',
+  'and the lost are remembered, by name and by how', sandbox.__st().lostCrew[0] && sandbox.__st().lostCrew[0].name);
+
+// The gone are INERT. A lost member must not be wounded or frayed again — the
+// browser caught this: dead crew were still collecting conditions and warnings.
+const dead = { name: 'Ghost', role: 'diver', nerve: 10, conditions: [], scars: [], dying: false, gear: {} };
+sandbox.__st().crew = [dead]; sandbox.__st().lostCrew = [];
+sandbox.__fray(dead, 30);                        // breaks them
+check(dead.lost === true, 'a broken member is marked lost', 'lost=' + dead.lost);
+const condsAtLoss = dead.conditions.length, lostAtLoss = sandbox.__st().lostCrew.length;
+sandbox.__fray(dead, 30);                         // no-ops
+sandbox.__inflict(dead, 0.9);                     // no-ops
+check(dead.conditions.length === condsAtLoss && sandbox.__st().lostCrew.length === lostAtLoss,
+  'the gone take no further wounds and are lost only once',
+  dead.conditions.length + ' conds, ' + sandbox.__st().lostCrew.length + ' lost');
+
+// THE LOOP CLOSES: a lost hand can come back as a hollow man wearing the
+// uniform you issued. It is OVERLAY (enterInterior), never the substrate.
+sandbox.__st().lostCrew = [{ name: 'Roon', role: 'diver', how: 'broke' }];
+let worn = null;
+for (let q = 0; q < 200 && !worn; q++) {
+  const c = sandbox.__int(q, 17, 900);
+  if (c.dweller && c.dweller.kind === 'hollow') {
+    sandbox.__st().foot = null;
+    sandbox.__st().clearedDecks = [];
+    sandbox.__enter(q, 17, 900);
+    if (sandbox.__foot().dweller && sandbox.__foot().dweller.worn) worn = sandbox.__foot().dweller.worn;
+  }
+}
+check(worn === 'Roon', 'a lost crewman can surface as a hollow man wearing your uniform', 'worn: ' + worn);
+
+// It all survives a reload — conditions, nerve, stores, the lost.
+sandbox.__st().foot = null;
+sandbox.__st().crew = [{ name: 'Vane', role: 'diver', xp: 2, nerve: 44, conditions: ['gashed', 'floodedLung'], scars: [], dying: false, gear: { weapon: 'axe' } }];
+sandbox.__st().stores = 37;
+sandbox.__st().lostCrew = [{ name: 'Roon', role: 'diver', how: 'broke' }];
+sandbox.__save();
+sandbox.__st().crew = []; sandbox.__st().stores = 100; sandbox.__st().lostCrew = [];
+sandbox.__resume();
+const rv = sandbox.__st().crew[0];
+check(rv && rv.nerve === 44 && rv.conditions.length === 2 && sandbox.__st().stores === 37 && sandbox.__st().lostCrew.length === 1,
+  'conditions, nerve, stores and the lost all survive a reload',
+  rv ? 'nerve ' + rv.nerve + ', ' + rv.conditions.length + ' conditions, stores ' + sandbox.__st().stores : 'crew lost');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

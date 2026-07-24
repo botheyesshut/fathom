@@ -927,9 +927,11 @@ const GEAR = {
 function teamScore() {
   let atk = 0, def = 0;
   for (const m of state.crew) {
-    if (m.wounded || !m.gear) continue;
-    if (m.gear.weapon && GEAR[m.gear.weapon]) atk += GEAR[m.gear.weapon].atk;
-    if (m.gear.armor && GEAR[m.gear.armor]) def += GEAR[m.gear.armor].def;
+    if (m.lost || memberIncapacitated(m) || !m.gear) continue;
+    // Conditions bite here: a gashed arm swings weaker, a wrenched shoulder
+    // guards worse. The gear is only the starting point.
+    atk += crewAtk(m);
+    def += crewDef(m);
   }
   return { atk, def };
 }
@@ -940,6 +942,174 @@ function teamKit(prop) { // first able member carrying a charged kit with `prop`
     if (GEAR[m.gear.kit.key] && GEAR[m.gear.kit.key][prop]) return m;
   }
   return null;
+}
+
+//=============================================================================
+// THE CREW, AS PEOPLE — conditions, not hit points.
+//
+// A crew member is a HISTORY, not a number. Harm does not subtract from a pool;
+// it inflicts a NAMED, specific state drawn from a seeded table. You read the
+// person, never a bar. Fair, because every condition is legible and you can act
+// on it. Unpredictable, because WHICH one a bad exchange gives varies. And it
+// is the setting made mechanical: the deep does not deal damage, it does things
+// TO people — crushes a hand, floods a lung, frays a nerve until it goes.
+//
+// Three pressures, none of them an HP bar: Body, Nerve (the Lovecraft axis),
+// and Vigor (fed by stores — the survival multiplier that never kills on its
+// own). Gear tilts the wound table away from its worst rows; it does not soak.
+//=============================================================================
+const CONDITIONS = {
+  // tier: severity 1-3. atk/def: deltas to what the member contributes.
+  // airMult: multiplies this member's air cost. incap: cannot work/fight.
+  // mortal: opens a window — a struck-again dying body is lost.
+  bruised:     { pressure: 'body', tier: 1, got: 'takes a hard knock and swears through it' },
+  gashed:      { pressure: 'body', tier: 1, atk: -1, got: 'is opened along the arm — bleeding, but working' },
+  wrenched:    { pressure: 'body', tier: 1, def: -1, got: 'wrenches something going down, and moves the worse for it' },
+  crushedHand: { pressure: 'body', tier: 2, atk: -2, incap: true, got: 'has a hand crushed against the plating — no good on a weapon now', scar: 'a ruined hand' },
+  floodedLung: { pressure: 'body', tier: 2, airMult: 1.6, got: 'goes under and comes up wrong — water in the lungs, and every breath costs', scar: 'a drowned lung' },
+  brokenLeg:   { pressure: 'body', tier: 2, incap: true, got: 'goes down with a leg bent the wrong way', scar: 'a leg that never set right' },
+  bleedingOut: { pressure: 'body', tier: 3, mortal: true, got: 'is torn deep and the blood will not stop. There is a little time, and not much' },
+  shaken:      { pressure: 'nerve', tier: 1, nerve: -20, got: 'has the look of someone who has seen the shape of it now' },
+  theShakes:   { pressure: 'nerve', tier: 2, atk: -1, nerve: -30, got: 'cannot hold a hand steady, and knows it' },
+  unstrung:    { pressure: 'nerve', tier: 2, incap: true, nerve: -40, got: 'stops being any use — just stands, and stares at the dark', scar: 'a mind that flinches now' },
+};
+
+// Every member carries their record. Old saves (and freshly hired hands) are
+// brought up to spec here, so nothing downstream has to null-check.
+function crewVitals(m) {
+  if (m.nerve == null) m.nerve = 70;
+  if (!Array.isArray(m.conditions)) m.conditions = [];
+  if (m.dying == null) m.dying = false;
+  if (!Array.isArray(m.scars)) m.scars = [];
+  return m;
+}
+
+// Stores feed Vigor. Full stores = the deep is merely lethal; empty stores =
+// the deep is lethal AND you are hungry, cold, and slower to take it. Never a
+// death clock of its own — a multiplier on everything else's danger.
+function vigorMult() {
+  const s = state.stores == null ? 100 : state.stores;
+  return 1 + (1 - Math.max(0, Math.min(100, s)) / 100) * 0.6; // 1.0 full → 1.6 empty
+}
+
+// Time passes, and provisions go down with it. Slow — this is a reason to head
+// home over a long run, not a clock ticking in your ear. Crossing into hunger
+// (below a third) is worth saying out loud, once.
+function provisionTick(amount) {
+  const before = state.stores == null ? 100 : state.stores;
+  state.stores = Math.max(0, before - (amount || 0.4));
+  if (before > 33 && state.stores <= 33) {
+    log('Stores are running low. The crew feels it — hungry hands take a wound harder, and the dark leans heavier. Time to think about turning back.', 'warn', 'STORES');
+  }
+}
+
+function conditionEffect(m, prop) {
+  crewVitals(m);
+  let sum = 0;
+  for (const key of m.conditions) { const c = CONDITIONS[key]; if (c && c[prop]) sum += c[prop]; }
+  return sum;
+}
+function memberIncapacitated(m) {
+  crewVitals(m);
+  return m.conditions.some(k => CONDITIONS[k] && CONDITIONS[k].incap);
+}
+function crewAtk(m) { return Math.max(0, (m.gear && m.gear.weapon && GEAR[m.gear.weapon] ? GEAR[m.gear.weapon].atk : 0) + conditionEffect(m, 'atk')); }
+function crewDef(m) { return Math.max(0, (m.gear && m.gear.armor && GEAR[m.gear.armor] ? GEAR[m.gear.armor].def : 0) + conditionEffect(m, 'def')); }
+
+// Your offense is the best weapon in the party's locker — the captain wields it,
+// and a wounded hand can still pass it over. This is DELIBERATELY decoupled from
+// the condition churn: the deep costs you bodies and your screen, never your
+// ability to keep swinging. Combat that spirals unwinnable is not fair, and
+// fairness is the whole brief. Only losing the weapon-carrier (lost, not merely
+// hurt) takes the weapon out of the fight.
+function bestWeaponAtk() {
+  let best = 0;
+  for (const m of party()) if (m.gear && m.gear.weapon && GEAR[m.gear.weapon]) best = Math.max(best, GEAR[m.gear.weapon].atk);
+  return best;
+}
+
+// The living party ashore with you — the bodies the deep can reach. Positioning
+// (who stands where) is a later push; for now they screen the captain as a group.
+function party() { return state.crew.filter(m => !m.lost); }
+function ableParty() { return party().filter(m => !memberIncapacitated(crewVitals(m))); }
+
+// Inflict a wound. severity01 (0..1) is the raw menace of the blow; the member's
+// own armour deletes the worst rows, and low Vigor puts them back. Returns the
+// condition inflicted, or null on a glancing miss.
+function inflictCondition(m, severity01) {
+  if (m.lost) return null;   // the gone are inert — no wounding a body already taken
+  crewVitals(m);
+  const eff = Math.max(0, Math.min(1, severity01 * vigorMult() - crewDef(m) * 0.12));
+  const maxTier = eff > 0.72 ? 3 : eff > 0.4 ? 2 : eff > 0.12 ? 1 : 0;
+  if (maxTier === 0) return null;
+  const pool = Object.keys(CONDITIONS).filter(k => CONDITIONS[k].tier <= maxTier && CONDITIONS[k].tier >= Math.max(1, maxTier - 1));
+  const key = pool[Math.floor(rand() * pool.length)];
+  const c = CONDITIONS[key];
+  m.conditions.push(key);
+  if (c.nerve) frayNerve(m, -c.nerve, true);
+  if (c.incap) m.wounded = true;          // keep the legacy flag honest
+  if (c.scar && !m.scars.includes(c.scar)) m.scars.push(c.scar);
+  if (c.mortal) m.dying = true;
+  log(`${m.name} ${c.got}.`, c.mortal ? 'danger' : 'warn', 'WOUND');
+  return c;
+}
+
+// Nerve is the Lovecraft axis. It does not read "insane" — it reads froze,
+// fled, dropped the lamp. Fray it to nothing and the person breaks: they walk
+// off into the structure, and they do not come back with you.
+function frayNerve(m, amount, quiet) {
+  if (m.lost) return;        // a nerve that has already gone cannot fray further
+  crewVitals(m);
+  m.nerve = Math.max(0, Math.min(100, m.nerve - Math.round(amount * vigorMult())));
+  if (m.nerve <= 0 && !m.lost) loseCrew(m, 'broke');
+  else if (!quiet && m.nerve < 25) log(`${m.name} is close to breaking.`, 'warn', 'NERVE');
+}
+
+// A crew member is lost — killed, taken, or broken and gone into the dark. The
+// body does not simply vanish from the world: it is remembered, and a drowned
+// ruin may one day give it back wearing the uniform you issued.
+function loseCrew(m, how) {
+  if (m.lost) return;
+  m.lost = true;
+  const i = state.crew.indexOf(m);
+  if (i >= 0) state.crew.splice(i, 1);
+  if (!state.lostCrew) state.lostCrew = [];
+  state.lostCrew.push({ name: m.name, role: m.role, how: how });
+  if (how === 'broke') {
+    log(`${m.name} stops answering the line. When the lamp swings back, there is only the dark, and the sound of something moving away through the structure.`, 'danger', 'LOST');
+  } else if (how === 'taken') {
+    log(`${m.name} is taken in the dark, all at once, and is simply not there any more.`, 'danger', 'LOST');
+  } else {
+    log(`${m.name} does not come up with the rest of you.`, 'danger', 'LOST');
+  }
+  sfx('theft');
+}
+
+// The deep, landing a blow on the party. Crew screen the captain — bring people
+// and they take the wounds; go alone and it is your own air line that pays. A
+// body already dying that gets hit again is lost, unless a kit is spent first.
+function tenantStrikesParty(spec) {
+  const severity01 = (spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1)) / 100;
+  const front = ableParty();
+  if (!front.length) return false;      // nobody to screen — caller drains the captain's air
+  // A dying body is the one the deep finishes. Otherwise the freshest hand takes the blow.
+  const dying = front.find(m => m.dying);
+  const victim = dying || front[Math.floor(rand() * front.length)];
+  crewVitals(victim);
+  if (victim.dying) {
+    const medic = teamKit('heal');
+    if (medic) {
+      medic.gear.kit.charges--;
+      victim.dying = false;
+      log(`${victim.name} is going, and ${medic.name} gets a dressing on it in time. (${medic.gear.kit.charges} left)`, 'warn', 'BOARDING');
+    } else {
+      loseCrew(victim, 'taken');
+    }
+    return true;
+  }
+  inflictCondition(victim, severity01);
+  frayNerve(victim, 8);                  // even a near miss in the dark costs nerve
+  return true;
 }
 
 // Something in the dark below — the expedition hazard. Armed, armored teams
@@ -1927,6 +2097,11 @@ const state = {
   // Decks whose tenant has been driven off. The substrate goes on generating
   // the thing; this is the overlay record that says you already dealt with it.
   clearedDecks: [],
+  // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
+  // on its own. Depletes away from port/base, tops up at either.
+  stores: 100,
+  // Crew you have lost, by name and role. A drowned ruin may give one back.
+  lostCrew: [],
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -3345,6 +3520,7 @@ function move(q, r) {
   maybeBeach();
   creatureTick();
   airCounsel();
+  provisionTick();
   baseTick();
   checkDeath();
 
@@ -3826,6 +4002,13 @@ function enterInterior(tile) {
     dweller = { x: ch.entry.x, y: ch.entry.y, kind: bd.kind, tough: bd.tough, hurt: bd.hurt || 0, boarder: true };
   } else if (!claimed && !own && ch.dweller && !isDeckCleared(tile.q, tile.r, d)) {
     dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 };
+    // The loop closes here — OVERLAY, never the substrate, so determinism holds.
+    // A hollow man on a strange deck may be one of your own, come back wearing
+    // the uniform you issued. It reads as a hollow man until the lamp is on it.
+    if (dweller.kind === 'hollow' && state.lostCrew && state.lostCrew.length && rand() < 0.4) {
+      const idx = Math.floor(rand() * state.lostCrew.length);
+      dweller.worn = state.lostCrew[idx].name;
+    }
   }
 
   state.foot = {
@@ -3843,6 +4026,7 @@ function enterInterior(tile) {
   lampSweep();
   if (claimed) {
     log('You cycle the lock and step into your own station. Dry deck, and the pumps muttering somewhere below.', '', 'STATION');
+    if (state.stores < 90) { state.stores = Math.min(100, state.stores + 40); log('The station\'s lockers put something back in the boat — a stay here is nearly as good as a run home.', '', 'STORES'); }
   } else {
     log('You go over the side with them. The lamp finds a breach in the structure — and past it, trapped air, and a floor nobody has walked in a very long time.', 'strange', 'ASHORE');
     log('Water is already coming through the hole you came in by. It will not stop.', 'warn', 'WATER');
@@ -4102,17 +4286,24 @@ function dwellerStep() {
 
   const spec = TENANTS[d.kind] || TENANTS.hollow;
   if (dist === 0) {
-    // It goes for the line, because that is what kills a diver. Plates and a
-    // wardsuit soak some of it — crew gear acting at MAN scale, as the law says.
-    const armor = teamScore().def;
-    const raw = spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1);
-    const loss = Math.max(6, Math.round(raw * (1 - Math.min(0.6, armor * 0.15))));
-    state.air = Math.max(0, state.air - loss);
-    log(`${theTenant(spec)} has you in the dark. Something tears, and your line is venting hard. (-${loss} air)`, 'danger', 'ATTACK');
+    // The party screens the captain. Bring crew and the deep wounds THEM — a
+    // named hurt, or a nerve fraying toward the break. Go alone and there is
+    // no screen: it goes for your own air line, the way it always has.
+    if (!tenantStrikesParty(spec)) {
+      const armor = teamScore().def;
+      const raw = spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1);
+      const loss = Math.max(6, Math.round(raw * (1 - Math.min(0.6, armor * 0.15))));
+      state.air = Math.max(0, state.air - loss);
+      log(`${theTenant(spec)} has you in the dark. Something tears, and your line is venting hard. (-${loss} air)`, 'danger', 'ATTACK');
+    }
     sfx('strike');
   } else if (dist === 1 && !f.metTenant) {
     f.metTenant = true;
-    log(spec.look, 'danger', 'CONTACT');
+    if (d.worn) {
+      log(`The lamp finds a hollow man wearing what is left of a uniform you gave out yourself. ${d.worn} — or what has ${d.worn}'s face — turns its head toward the light.`, 'danger', 'CONTACT');
+    } else {
+      log(spec.look, 'danger', 'CONTACT');
+    }
   } else if (dist <= 3 && rand() < 0.5) {
     log(spec.near, 'warn', 'CONTACT');
   }
@@ -4161,6 +4352,7 @@ function stepFoot(x, y) {
     }
     dwellerStep();
   }
+  provisionTick(0.3);   // a body ashore eats into the stores too
 
   if (state.air <= 0) {
     log('The tanks run dry in the dark.', 'danger', 'AIR');
@@ -4230,13 +4422,13 @@ function fightTenant() {
   }
 
   const spec = TENANTS[t.kind] || TENANTS.hollow;
-  const atk = teamScore().atk;
-  if (atk <= 0 && !f.warnedUnarmed) {
+  const armed = bestWeaponAtk();
+  if (armed <= 0 && !f.warnedUnarmed) {
     f.warnedUnarmed = true;
     log('Nobody in the party is carrying anything worth the name. The armoury at the dock sells boarding axes and spearguns — until then this is bare hands against it.', 'warn', 'BOARDING');
   }
 
-  const swing = atk > 0 ? 1 + randInt(atk * 2) : (rand() < 0.3 ? 1 : 0);
+  const swing = armed > 0 ? 1 + randInt(armed * 2) : (rand() < 0.3 ? 1 : 0);
   t.hurt = (t.hurt || 0) + swing;
   f.steps++;
   state.air = Math.max(0, state.air - FOOT_AIR);
@@ -6192,6 +6384,8 @@ function restart() {
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
   state.clearedDecks = [];
+  state.stores = 100;
+  state.lostCrew = [];
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -6276,9 +6470,18 @@ function surface() {
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
       sfx('bell');
     }
-    if (atPort && state.crew.some(m => m.wounded)) {
-      for (const m of state.crew) m.wounded = false;
-      log('The port surgeon sees to the wounded. The crew stands whole again.', '', 'PORT');
+    if (atPort && state.crew.some(m => m.wounded || (m.conditions && m.conditions.length) || m.dying)) {
+      // The surgeon mends the flesh; the shore mends the nerve. Scars stay —
+      // they are the record, and the record is the point.
+      for (const m of state.crew) {
+        crewVitals(m);
+        m.conditions = []; m.wounded = false; m.dying = false; m.nerve = 100;
+      }
+      log('The port surgeon sees to the wounded, and a night ashore does the rest. The crew stands whole again — older, and marked, but whole.', '', 'PORT');
+    }
+    if (atPort && state.stores < 100) {
+      state.stores = 100;
+      log('The boat re-provisions at the dock — water, salt meat, lamp oil, and dry berths.', '', 'PORT');
     }
     if (atPort && state.relics > 0) {
       state.relicsBanked += state.relics;
@@ -6332,7 +6535,7 @@ function surface() {
           && performance.now() < ho.until
           && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
         state.cargoBanked -= CREW_HIRE_COST;
-        state.crew.push({ name: ho.name, role: ho.role, xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } });
+        state.crew.push(crewVitals({ name: ho.name, role: ho.role, xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } }));
         state._hireOffer = null;
         log(`${ho.name} signs aboard as ${ho.role}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.) Crew ${state.crew.length}/${cap}.`, '', 'CREW');
         sfx('bell');
@@ -6473,6 +6676,8 @@ function doSave(force) {
       foot: state.foot,
       base: state.base,
       clearedDecks: state.clearedDecks,
+      stores: state.stores,
+      lostCrew: state.lostCrew,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -6538,6 +6743,9 @@ function resumeGame(save) {
     if (!b.stores) b.stores = { crates: 0, relics: 0 };
   }
   state.clearedDecks = save.clearedDecks || [];
+  state.stores = save.stores == null ? 100 : save.stores;
+  state.lostCrew = save.lostCrew || [];
+  for (const m of state.crew) crewVitals(m);   // bring older/hired hands up to spec
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
     // A save written before the sea came in still has to load.
