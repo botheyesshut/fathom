@@ -596,6 +596,25 @@
   }
 
   /* ====== GAME OVER ====== */
+  #trade {
+    position: fixed; inset: 0; background: rgba(4, 8, 16, 0.86); display: none;
+    align-items: center; justify-content: center; z-index: 56; padding: 1.2rem; backdrop-filter: blur(6px);
+  }
+  #trade.show { display: flex; }
+  #trade #trade-creed {
+    padding: 0 1.1rem 0.6rem; margin: 0; color: #9db8b0; font-family: 'Cormorant Garamond', serif;
+    font-style: italic; font-size: 1.02rem; line-height: 1.4;
+  }
+  #trade #trade-crates {
+    padding: 0.5rem 1.1rem; border-bottom: 1px solid var(--sonar-dim); color: var(--sonar);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em; font-variant-numeric: tabular-nums;
+  }
+  #trade-scroll { overflow-y: auto; padding: 0.2rem 0.4rem 0.6rem; -webkit-overflow-scrolling: touch; }
+  .trade-sect {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #6d8a88; padding: 0.9rem 0.6rem 0.4rem;
+  }
+
   #inventory {
     position: fixed;
     inset: 0;
@@ -715,6 +734,21 @@
   <div id="inv-panel">
     <div id="inv-head"><span>The Hold</span><button class="btn" id="inv-close">Close</button></div>
     <div id="inv-list"></div>
+  </div>
+</div>
+
+<!-- TRADE (with an enclave) -->
+<div id="trade">
+  <div id="inv-panel">
+    <div id="inv-head"><span id="trade-name">the peoples</span><button class="btn" id="trade-close">Cast Off</button></div>
+    <p id="trade-creed"></p>
+    <div id="trade-crates"></div>
+    <div id="trade-scroll">
+      <div class="trade-sect">They will sell</div>
+      <div id="trade-buy"></div>
+      <div class="trade-sect">They will take</div>
+      <div id="trade-sell"></div>
+    </div>
   </div>
 </div>
 
@@ -1027,9 +1061,9 @@ const ITEMS = {
                 flavor: 'It fits a lock somewhere. Locks in the deep are kept shut for reasons.' },
   seachart:   { name: 'a water-stained sea chart', kind: 'chart', glyph: '✵', col: '#e0c060', val: 3, find: 5, depth: 300,
                 flavor: 'A hand marked a position on this, and pressed hard doing it.' },
-  idol:       { name: 'a carved idol of no faith you know', kind: 'valuable', glyph: '☥', col: '#c88ce8', val: 6, strange: true, find: 3, depth: 1800, props: ['cursed', 'luminous', 'sig'], sig: 'unplaced',
+  idol:       { name: 'a carved idol of no faith you know', kind: 'valuable', glyph: '☥', col: '#c88ce8', val: 6, strange: true, find: 3, depth: 1800, props: ['cursed', 'luminous', 'sig'], sig: 'dagon',
                 flavor: 'It is heavier than it should be, and warm, and you would rather it were not looking at you. It sheds a faint light, and since it came aboard the crew have started to dream.' },
-  ingot:      { name: 'a bar of pre-Fall alloy', kind: 'valuable', glyph: '▬', col: '#d0d0b0', val: 4, find: 4, depth: 600, props: ['heavy', 'sig'], sig: 'unplaced',
+  ingot:      { name: 'a bar of pre-Fall alloy', kind: 'valuable', glyph: '▬', col: '#d0d0b0', val: 4, find: 4, depth: 600, props: ['heavy', 'sig'], sig: 'confluence',
                 flavor: 'Whatever this metal is, nobody has made it since, and everybody wants it. It is dead weight in the hold until you find who.' },
 
   // ---- salvaged pre-Fall tech: mundane once, miraculous now ----
@@ -1066,15 +1100,15 @@ const ITEMS = {
                 flavor: 'It rings, once, when the water goes truly still — and the crew sleep a little easier for hearing it. There is not much mercy down here. This is some.' },
   lens:       { name: 'a scrying lens',           kind: 'use', glyph: '⊚', col: '#b090d0', see: true, val: 3, strange: true, find: 3, depth: 1800, props: ['seeing'],
                 flavor: 'Ground from something that was never glass. Look through it and the water gives up what it was pretending not to be.' },
-  blackpearl: { name: 'a black pearl',            kind: 'valuable', glyph: '⬤', col: '#9070b0', val: 6, strange: true, find: 3, depth: 2400, props: ['luminous', 'sig'], sig: 'unplaced',
+  blackpearl: { name: 'a black pearl',            kind: 'valuable', glyph: '⬤', col: '#9070b0', val: 6, strange: true, find: 3, depth: 2400, props: ['luminous', 'sig'], sig: 'dagon',
                 flavor: 'Big as a closed fist, and it holds a light it never lets go of. It came out of something vast, and the vast thing is not necessarily done with it.' },
   specimenjar:{ name: 'a sealed specimen jar',    kind: 'valuable', glyph: '⚱', col: '#8aa870', val: 4, strange: true, find: 3, depth: 1800, props: ['living'],
                 flavor: 'Something in the jar has moved since you sealed it. You are almost sure of it. You would rather not become certain.' },
-  effigy:     { name: 'a drowned-wax effigy',     kind: 'valuable', glyph: '‡', col: '#c88ce8', val: 5, strange: true, find: 3, depth: 2400, props: ['cursed', 'sig'], sig: 'unplaced',
+  effigy:     { name: 'a drowned-wax effigy',     kind: 'valuable', glyph: '‡', col: '#c88ce8', val: 5, strange: true, find: 3, depth: 2400, props: ['cursed', 'sig'], sig: 'dagon',
                 flavor: 'A little figure of grey wax, and it is always warm on one side. The side that faces you. It is always the side that faces you.' },
   ambergris:  { name: 'a lump of deep ambergris', kind: 'valuable', glyph: '◕', col: '#d0c090', val: 5, find: 3, depth: 3000,
                 flavor: 'Grey and waxy and worth its weight over again — voided by something that died deeper and longer ago than the Fall itself.' },
-  scrimshaw:  { name: 'a scrimshawed bone',       kind: 'valuable', glyph: '⋔', col: '#e0d0b0', val: 3, find: 4, depth: 600, props: ['sig'], sig: 'unplaced',
+  scrimshaw:  { name: 'a scrimshawed bone',       kind: 'valuable', glyph: '⋔', col: '#e0d0b0', val: 3, find: 4, depth: 600, props: ['sig'], sig: 'confluence',
                 flavor: 'A whole drowned history scratched into old bone by a hand that had nothing else left to do but remember.' },
 
   // ---- charts & keys: knowledge, and the doors it opens ----
@@ -1110,17 +1144,53 @@ function rollItem(depth, rng) {
 //   sig      — culturally significant. Its WORTH is set by CULTURES — which is
 //              YOURS to invent (Sean). The mechanism is here; the peoples are not.
 //
-// CULTURES — who prizes what, and how much. LEFT EMPTY ON PURPOSE. Add an entry
-// keyed by an item's `sig`, e.g.  drownedkin: { name: 'the drowned kin', mult: 3 }
-// and any item tagged sig:'drownedkin' is worth 3x to them. Until a people
-// exists, a significant thing is worth its face value, waiting for a buyer.
-const CULTURES = { /* yours to fill — see the note above */ };
+// CULTURES — the peoples of the deep, what each prizes, and what each will
+// sell. Trade happens at their ENCLAVES (see spawnEnclave). `buys` sets what
+// they pay a premium for (by sig / key / kind / prop); `sells` is their stock.
+const CULTURES = {
+  dagon: {
+    name: 'the Children of Dagon', short: 'the Deep Ones', glyph: 'ᛝ', col: '#6fae72', depthBand: 'deep',
+    creed: 'They breathe the black water and worship what sleeps under it, and they are wretched and conniving and eat men with a terrible relish. But bring them a relic of their god, or flesh brought fresh, and even they will trade.',
+    buys: { sigs: ['dagon'], props: ['cursed'], relics: true, flesh: true, mult: 3.6 },
+    sells: ['blackpearl', 'idol', 'saltiron', 'lens', 'ambergris', 'chime'],
+    markup: 2.6, danger: true,
+  },
+  confluence: {
+    name: 'the Confluence', short: 'the federated mariners', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
+    buys: { sigs: ['confluence'], keys: ['ingot', 'weldkit', 'oxygen', 'hydrophone', 'pressurehull', 'ambergris'], kinds: ['fit'], mult: 2.1 },
+    sells: ['patchkit', 'weldkit', 'oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still', 'pressurehull', 'hydrophone'],
+    markup: 1.8, danger: false,
+  },
+  libertines: {
+    name: 'the Libertines', short: 'the free yards', glyph: '⚙', col: '#e0a05a', depthBand: 'mid',
+    creed: 'Every hand for itself and proud of it — patriots of nothing but their own deck, and no love at all for outsiders. But nobody alive makes a better weapon or a better boat-part, and they will sell to anyone whose crates ring true.',
+    buys: { sigs: ['libertines'], keys: ['ingot', 'warhead'], relics: true, mult: 1.8 },
+    sells: ['torpedo', 'warhead', 'sonararray', 'bafflegear', 'trimtanks', 'flare', 'lumen'],
+    markup: 2.2, danger: false,
+  },
+};
+
+// What a culture will pay for a given item (0 = they do not want it). By sig,
+// specific key, kind, or property — the union, best match wins.
+function buyMult(cultureKey, itemKey) {
+  const cu = CULTURES[cultureKey], it = ITEMS[itemKey];
+  if (!cu || !it || !cu.buys) return 0;
+  const b = cu.buys; let m = 0;
+  if (b.sigs && it.sig && b.sigs.indexOf(it.sig) >= 0) m = b.mult;
+  if (b.keys && b.keys.indexOf(itemKey) >= 0) m = Math.max(m, b.mult);
+  if (b.kinds && b.kinds.indexOf(it.kind) >= 0) m = Math.max(m, b.mult * 0.7);
+  if (b.props && it.props) for (const p of b.props) if (it.props.indexOf(p) >= 0) m = Math.max(m, b.mult);
+  return m;
+}
+function sellPriceTo(cultureKey, itemKey) { return Math.round((ITEMS[itemKey].val || 1) * buyMult(cultureKey, itemKey)); }   // crates you receive
+function buyPriceFrom(cultureKey, itemKey) { return Math.max(1, Math.round((ITEMS[itemKey].val || 1) * (CULTURES[cultureKey].markup || 2))); }   // crates you pay
 
 function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 function hasProp(key, p) { const it = ITEMS[key]; return !!(it && it.props && it.props.indexOf(p) >= 0); }
 function heldWith(p) { return Object.keys(state.items || {}).filter(k => itemCount(k) > 0 && hasProp(k, p)); }
 function countHeldWith(p) { return heldWith(p).reduce((s, k) => s + itemCount(k), 0); }
-function itemWorth(key) { const it = ITEMS[key]; if (!it) return 0; const c = it.sig && CULTURES[it.sig]; return (it.val || 0) * (c ? c.mult : 1); }
+function itemWorth(key) { const it = ITEMS[key]; if (!it) return 0; const c = it.sig && CULTURES[it.sig]; return (it.val || 0) * (c && c.buys ? c.buys.mult : 1); }
 function luminousBonus() { return countHeldWith('luminous'); }
 
 // A stress event — pressure, fire, or violence. Volatile things may go off;
@@ -1278,6 +1348,82 @@ function renderInventory() {
 }
 function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
 function closeInventory() { document.getElementById('inventory').classList.remove('show'); }
+
+//--- TRADING with the peoples -------------------------------------------------
+// You come upon an enclave and you deal — in crates, the coin of the deep. Each
+// people buys what it prizes at its own rate, and sells what it makes. Carry a
+// Dagon relic to the Deep Ones, not the mariners, and it is worth a fortune.
+let tradeAt = null;
+function checkEnclave() {
+  const e = enclaveHere();
+  const id = e ? e.id : null;
+  if (id === state._atEnclave) return;      // no change — do not re-open every step
+  state._atEnclave = id;
+  if (e) {
+    const cu = CULTURES[e.culture];
+    log(`You come upon ${cu.name}. ${cu.creed}`, cu.danger ? 'danger' : 'strange', 'ENCLAVE');
+    sfx('bell');
+    openTrade(e);
+  }
+}
+function relicCrates(cultureKey) { return Math.round(4 * (CULTURES[cultureKey].buys.mult || 1)); }
+
+function renderTrade(e) {
+  const cu = CULTURES[e.culture];
+  document.getElementById('trade-name').textContent = cu.name;
+  document.getElementById('trade-creed').textContent = cu.creed;
+  document.getElementById('trade-crates').textContent = state.cargo + ' crates aboard' + (state.relics ? ` · ${state.relics} relics` : '');
+  const buyEl = document.getElementById('trade-buy'), sellEl = document.getElementById('trade-sell');
+
+  const buyRows = cu.sells.map(k => {
+    const it = ITEMS[k], p = buyPriceFrom(e.culture, k), can = state.cargo >= p;
+    return `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
+      `<div class="in"><b>${it.name}</b><span class="fl">${it.flavor}</span></div>` +
+      `<button class="act ${can ? '' : 'none'}" ${can ? `data-buy="${k}"` : ''}>${p} cr</button></div>`;
+  }).join('');
+  buyEl.innerHTML = buyRows || '<div id="inv-empty">They have nothing to sell just now.</div>';
+
+  const owned = Object.keys(state.items || {}).filter(k => state.items[k] > 0 && buyMult(e.culture, k) > 0);
+  let sellRows = owned.map(k => {
+    const it = ITEMS[k], p = sellPriceTo(e.culture, k);
+    return `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
+      `<div class="in"><b>${it.name}</b>${state.items[k] > 1 ? ` <span class="ct">×${state.items[k]}</span>` : ''}<span class="fl">worth ${p} crates to them</span></div>` +
+      `<button class="act warn" data-sell="${k}">Sell · ${p} cr</button></div>`;
+  }).join('');
+  if (cu.buys.relics && state.relics > 0) {
+    const rp = relicCrates(e.culture);
+    sellRows += `<div class="inv-row"><div class="ig" style="color:#c88ce8">✦</div><div class="in"><b>a relic</b> <span class="ct">×${state.relics}</span><span class="fl">they hoard these — ${rp} crates apiece</span></div><button class="act warn" data-sellrelic="1">Sell · ${rp} cr</button></div>`;
+  }
+  sellEl.innerHTML = sellRows || '<div id="inv-empty">You carry nothing they want. Bring what they prize, and come back.</div>';
+
+  for (const b of buyEl.querySelectorAll('.act[data-buy]')) b.addEventListener('click', () => tradeBuy(e, b.getAttribute('data-buy')));
+  for (const b of sellEl.querySelectorAll('.act[data-sell]')) b.addEventListener('click', () => tradeSell(e, b.getAttribute('data-sell')));
+  for (const b of sellEl.querySelectorAll('.act[data-sellrelic]')) b.addEventListener('click', () => tradeSellRelic(e));
+}
+function openTrade(e) { tradeAt = e; renderTrade(e); document.getElementById('trade').classList.add('show'); }
+function closeTrade() { document.getElementById('trade').classList.remove('show'); tradeAt = null; }
+
+function tradeBuy(e, key) {
+  const p = buyPriceFrom(e.culture, key);
+  if (state.cargo < p) { log('Not crates enough for that.', 'warn', 'TRADE'); return; }
+  state.cargo -= p; giveItem(key, 1);
+  log(`Bought: ${ITEMS[key].name}, ${p} crates. ${CULTURES[e.culture].short} count it out and hand it over.`, '', 'TRADE');
+  sfx('bell'); renderTrade(e); updateHUD(); render(); scheduleSave();
+}
+function tradeSell(e, key) {
+  if (!itemCount(key)) return;
+  const p = sellPriceTo(e.culture, key);
+  takeItem(key, 1); state.cargo += p;
+  log(`Sold: ${ITEMS[key].name}, ${p} crates. It was worth more to them than to anyone.`, '', 'TRADE');
+  sfx('bell'); renderTrade(e); updateHUD(); render(); scheduleSave();
+}
+function tradeSellRelic(e) {
+  if (state.relics <= 0) return;
+  const p = relicCrates(e.culture);
+  state.relics--; state.cargo += p;
+  log(`A relic goes across the table for ${p} crates. They take it the way a drowning man takes air.`, 'strange', 'TRADE');
+  sfx('relic'); renderTrade(e); updateHUD(); render(); scheduleSave();
+}
 
 // Spend an item from the hold. One entry point; the table decides what happens.
 function useItem(key) {
@@ -2547,8 +2693,32 @@ function generateChunk(cq, cr) {
         const opts = caveDepthsAt(h);
         if (opts.length) spawnCreature('silt', h.q, h.r, Math.max(...opts)); // the bottom, where sediment lies
       }
+      // An ENCLAVE — a people who hold this water. Rare, and worth the crossing:
+      // the only place to trade with the cultures. The depth decides whose it is.
+      if (crand() < 0.05) {
+        const h = openCaveHexes[Math.floor(crand() * openCaveHexes.length)];
+        const opts = caveDepthsAt(h);
+        if (opts.length) {
+          const depth = opts[Math.floor(crand() * opts.length)];
+          const culture = depth >= 2400 ? 'dagon' : depth >= 900 ? 'libertines' : 'confluence';
+          spawnEnclave(culture, h.q, h.r, depth);
+        }
+      }
     }
   }
+}
+
+// A settlement of one of the peoples. Overlay, like creatures — rolled once per
+// chunk (spawnedChunks saved), fixed in place, and saved as state.enclaves.
+function spawnEnclave(culture, q, r, depth) {
+  if (!state.enclaves) state.enclaves = [];
+  state.enclaves.push({ id: 'enclave:' + q + ',' + r + ',' + depth, culture: culture, q: q, r: r, depth: depth });
+}
+function enclaveHere() {
+  for (const e of (state.enclaves || [])) {
+    if (hexDistance({ q: e.q, r: e.r }, { q: state.q, r: state.r }) <= 1 && Math.abs(e.depth - state.currentDepth) <= DEPTH_GRID) return e;
+  }
+  return null;
 }
 
 
@@ -2615,6 +2785,8 @@ const state = {
   fits: {},
   // Marked positions worth the trip — a clue read, a trail to follow.
   leads: [],
+  // The peoples' settlements you have found — overlay, fixed, saved.
+  enclaves: [],
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -3283,6 +3455,23 @@ function render() {
     mk.setAttribute('fill', '#f0c850'); mk.setAttribute('filter', 'url(#glow)');
     mk.textContent = '⌖';
     g.appendChild(mk);
+  }
+
+  // Enclaves — a people's settlement, a known landmark once you have found it.
+  for (const e of (state.enclaves || [])) {
+    const known = visited.has(hexKey(e.q, e.r)) || revealed.has(hexKey(e.q, e.r))
+      || hexDistance({ q: e.q, r: e.r }, { q: state.q, r: state.r }) <= passiveContactR();
+    if (!known) continue;
+    const ep = hexToPixel(e.q, e.r);
+    if (Math.abs(ep.x - camX) > halfW || Math.abs(ep.y - camY) > halfH) continue;
+    const cu = CULTURES[e.culture];
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    el.setAttribute('x', ep.x); el.setAttribute('y', ep.y);
+    el.setAttribute('text-anchor', 'middle'); el.setAttribute('dominant-baseline', 'central');
+    el.setAttribute('font-family', 'JetBrains Mono, monospace'); el.setAttribute('font-size', HEX_SIZE * 1.1);
+    el.setAttribute('fill', cu ? cu.col : '#aaa'); el.setAttribute('filter', 'url(#glow)');
+    el.textContent = cu ? cu.glyph : '?';
+    g.appendChild(el);
   }
 
   // Animated sonar wavefront — expands outward from the sub at ping origin.
@@ -4088,6 +4277,7 @@ function move(q, r) {
   maybeBeach();
   creatureTick();
   checkLeads();
+  checkEnclave();  // have we come upon one of the peoples?
   hauntTick();     // the old ones work on the crew while their relics ride below
   holdTick();      // and the rest of the hold — the soothing, the living — stirs too
   airCounsel();
@@ -7413,6 +7603,7 @@ function restart() {
   state.items = {};
   state.fits = {};
   state.leads = [];
+  state.enclaves = [];
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -7710,6 +7901,7 @@ function doSave(force) {
       items: state.items,
       fits: state.fits,
       leads: state.leads,
+      enclaves: state.enclaves,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -7783,6 +7975,7 @@ function resumeGame(save) {
   state.items = save.items || {};
   state.fits = save.fits || {};
   state.leads = save.leads || [];
+  state.enclaves = save.enclaves || [];
   for (const m of state.crew) crewVitals(m);   // bring older/hired hands up to spec
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
@@ -7855,6 +8048,7 @@ document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-hold').addEventListener('click', openInventory);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
+document.getElementById('trade-close').addEventListener('click', closeTrade);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
 document.getElementById('btn-fortify').addEventListener('click', fortifyBase);

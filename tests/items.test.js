@@ -55,6 +55,13 @@ try { vm.runInContext(script +
   '\nfunction __noise(q,r,l){ noiseMade(q,r,l); }' +
   '\nfunction __see(){ seeAround(); }' +
   '\nfunction __itemsAll(){ return Object.keys(ITEMS); }' +
+  '\nfunction __buyMult(c,k){ return buyMult(c,k); }' +
+  '\nfunction __sellTo(c,k){ return sellPriceTo(c,k); }' +
+  '\nfunction __buyFrom(c,k){ return buyPriceFrom(c,k); }' +
+  '\nfunction __spawnEnclave(c,q,r,d){ spawnEnclave(c,q,r,d); }' +
+  '\nfunction __enclaveHere(){ return enclaveHere(); }' +
+  '\nfunction __tradeSell(e,k){ tradeSell(e,k); }' +
+  '\nfunction __tradeBuy(e,k){ tradeBuy(e,k); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
@@ -197,8 +204,9 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   check(sandbox.__lampR() > dark, 'a luminous thing widens the lamp', dark + ' -> ' + sandbox.__lampR());
 
   // SIGNIFICANT: the WORTH hook works, and Cultures is left EMPTY for Sean.
-  check(Object.keys(sandbox.__cultures()).length === 0, 'the cultures registry is left empty on purpose', 'yours to fill');
-  check(sandbox.__worth('idol') > 0, 'a significant item has a base worth (x1 until a people prizes it)', 'worth=' + sandbox.__worth('idol'));
+  const cults = sandbox.__cultures();
+  check(!!cults.dagon && !!cults.confluence && !!cults.libertines, 'the three peoples now hold the registry', Object.keys(cults).join(', '));
+  check(sandbox.__worth('idol') > 6, 'a Dagon relic is worth more than its face — its people prize it', 'worth=' + sandbox.__worth('idol'));
 }
 
 //--- 8. The big roster, and the new properties it introduced -------------------
@@ -254,6 +262,46 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   s.items = { torpedo: 1 }; s.torpedoes = 0; s.foot = null;
   sandbox.__use('torpedo');
   check(s.torpedoes === 1 && !s.items.torpedo, 'a live torpedo, cradled into the tube, arms the boat', 'torps=' + s.torpedoes);
+}
+
+//--- 9. THE CULTURES: who prizes what, and trading with them --------------------
+{
+  const s = sandbox.__state();
+  s.foot = null; s.alive = true; s.items = {}; s.cargo = 0; s.relics = 0;
+
+  // The same idol is a fortune to Dagon and worthless to the mariners.
+  const toDagon = sandbox.__sellTo('dagon', 'idol');
+  const toMariners = sandbox.__sellTo('confluence', 'idol');
+  check(toDagon > 0 && toMariners === 0, 'a Dagon relic sells to the Deep Ones, not the mariners', 'dagon ' + toDagon + ' / confluence ' + toMariners);
+  // Pre-Fall alloy is the mariners' meat, and nothing to Dagon.
+  check(sandbox.__sellTo('confluence', 'ingot') > 0 && sandbox.__sellTo('dagon', 'ingot') === 0, 'pre-Fall salvage sells to the Confluence, not to Dagon', 'confluence ' + sandbox.__sellTo('confluence', 'ingot'));
+  // Where you carry a thing decides what it is worth — the whole culture economy.
+  check(toDagon > toMariners, 'the same object is worth wildly different things to different peoples', toDagon + ' vs ' + toMariners);
+
+  // Each people sells its own specialty: the Libertines make weapons.
+  check(sandbox.__buyFrom('libertines', 'torpedo') > 0 && sandbox.__buyMult('libertines', 'torpedo') >= 0, 'the free yards will sell you a torpedo', sandbox.__buyFrom('libertines', 'torpedo') + ' cr');
+
+  // A real trade: sell an idol at a Dagon enclave, get crates.
+  s.creatures = []; s.enclaves = []; s.q = 0; s.r = 0; s.currentDepth = 2400;
+  sandbox.__spawnEnclave('dagon', 0, 0, 2400);
+  const e = sandbox.__enclaveHere();
+  check(!!e && e.culture === 'dagon', 'an enclave is a place you can stand and deal', e ? e.culture : 'none');
+  s.items = { idol: 1 }; s.cargo = 0;
+  sandbox.__tradeSell(e, 'idol');
+  check(!s.items.idol && s.cargo === toDagon, 'selling a relic to its people pays out in crates', '+' + s.cargo + ' crates');
+  // And buy their stock back with the proceeds.
+  const price = sandbox.__buyFrom('dagon', 'saltiron');
+  s.cargo = price + 3;
+  sandbox.__tradeBuy(e, 'saltiron');
+  check(sandbox.__count('saltiron') === 1 && s.cargo === 3, 'and you can buy their goods with the crates', 'bought, ' + s.cargo + ' left');
+
+  // Enclaves survive a reload (overlay, like creatures).
+  s.enclaves = [{ id: 'enclave:9,9,3000', culture: 'libertines', q: 9, r: 9, depth: 3000 }];
+  sandbox.doSave(true);
+  s.enclaves = [];
+  sandbox.resumeGame(sandbox.loadSave());
+  const rs = sandbox.__state();
+  check(rs.enclaves.length === 1 && rs.enclaves[0].culture === 'libertines', 'the peoples you have found survive a reload', rs.enclaves.length + ' enclave');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
