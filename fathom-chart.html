@@ -1072,6 +1072,7 @@ function frayNerve(m, amount, quiet) {
 function loseCrew(m, how) {
   if (m.lost) return;
   m.lost = true;
+  m.ashore = false; m.fx = null; m.fy = null;   // the body leaves the deck
   const i = state.crew.indexOf(m);
   if (i >= 0) state.crew.splice(i, 1);
   if (!state.lostCrew) state.lostCrew = [];
@@ -1086,31 +1087,26 @@ function loseCrew(m, how) {
   sfx('theft');
 }
 
-// The deep, landing a blow on the party. Crew screen the captain — bring people
-// and they take the wounds; go alone and it is your own air line that pays. A
-// body already dying that gets hit again is lost, unless a kit is spent first.
-function tenantStrikesParty(spec) {
-  const severity01 = (spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1)) / 100;
-  const front = ableParty();
-  if (!front.length) return false;      // nobody to screen — caller drains the captain's air
-  // A dying body is the one the deep finishes. Otherwise the freshest hand takes the blow.
-  const dying = front.find(m => m.dying);
-  const victim = dying || front[Math.floor(rand() * front.length)];
-  crewVitals(victim);
-  if (victim.dying) {
+// The deep lands a blow on one particular body — the one it reached. A dying
+// crewman it finishes, unless a kit is spent in time; anyone else takes a named
+// wound and a fray of nerve. Position decides WHO, which is the whole point of
+// bringing a party and standing them where you stand them.
+function tenantHitMember(spec, m) {
+  crewVitals(m);
+  if (m.dying) {
     const medic = teamKit('heal');
     if (medic) {
       medic.gear.kit.charges--;
-      victim.dying = false;
-      log(`${victim.name} is going, and ${medic.name} gets a dressing on it in time. (${medic.gear.kit.charges} left)`, 'warn', 'BOARDING');
+      m.dying = false;
+      log(`${m.name} is going, and ${medic.name} gets a dressing on it in time. (${medic.gear.kit.charges} left)`, 'warn', 'BOARDING');
     } else {
-      loseCrew(victim, 'taken');
+      loseCrew(m, 'taken');
     }
-    return true;
+    return;
   }
-  inflictCondition(victim, severity01);
-  frayNerve(victim, 8);                  // even a near miss in the dark costs nerve
-  return true;
+  const severity01 = (spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1)) / 100;
+  inflictCondition(m, severity01);
+  frayNerve(m, 8);                       // even a near miss in the dark costs nerve
 }
 
 // Something in the dark below — the expedition hazard. Armed, armored teams
@@ -2173,13 +2169,14 @@ function syncFootControls(inside) {
   const dig = document.getElementById('btn-dig');
   if (dig) dig.style.display = (own && !state.base.breached && !!digTargetNear()) ? '' : 'none';
 
-  // Boarding only offers itself when the thing is actually within reach — a
-  // dead control is worse than no control.
+  // Boarding offers itself when anything of yours — you, or a crewman — is
+  // toe-to-toe with the thing. A dead control is worse than no control.
   const fight = document.getElementById('btn-fight');
   if (!fight) return;
   const t = f.dweller;
-  const reach = !!t && Math.abs(t.x - f.x) + Math.abs(t.y - f.y) <= 1;
-  fight.style.display = reach ? '' : 'none';
+  const capReach = !!t && Math.abs(t.x - f.x) + Math.abs(t.y - f.y) <= 1;
+  const crewReach = !!t && partyBodies().some(m => !memberIncapacitated(m) && Math.abs(m.fx - t.x) + Math.abs(m.fy - t.y) <= 1);
+  fight.style.display = (capReach || crewReach) ? '' : 'none';
 }
 
 function render() {
@@ -4072,7 +4069,11 @@ function enterInterior(tile) {
     closed: [],
     dweller: dweller,
   };
+  const partyN = deployParty(ch);
   lampSweep();
+  if (partyN > 0 && !claimed) {
+    log(`${partyN === 1 ? 'One hand goes' : partyN + ' hands go'} over the side with you, lamps swinging. Tap a crewman to hold their ground, or let them follow.`, '', 'DIVE TEAM');
+  }
   if (claimed) {
     log('You cycle the lock and step into your own station. Dry deck, and the pumps muttering somewhere below.', '', 'STATION');
     if (state.stores < 90) { state.stores = Math.min(100, state.stores + 40); log('The station\'s lockers put something back in the boat — a stay here is nearly as good as a run home.', '', 'STORES'); }
@@ -4376,32 +4377,38 @@ function dwellerStep() {
   const ch = footChunk();
   if (!f || !f.dweller || !ch) return;
   const d = f.dweller;
-  let dist = Math.abs(d.x - f.x) + Math.abs(d.y - f.y);
-  if (dist > DWELLER_EAR) return;
+
+  // Every body on the deck is prey. The thing goes for the NEAREST — so a hand
+  // you stand between yourself and it takes the blow meant for you.
+  const bodies = [{ captain: true, x: f.x, y: f.y }];
+  for (const m of partyBodies()) bodies.push({ m: m, x: m.fx, y: m.fy });
+  let tgt = null, dist = Infinity;
+  for (const b of bodies) { const dd = Math.abs(d.x - b.x) + Math.abs(d.y - b.y); if (dd < dist) { dist = dd; tgt = b; } }
+  if (!tgt || dist > DWELLER_EAR) return;
 
   let best = null, bestD = dist;
   for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
     const nx = d.x + dx, ny = d.y + dy, nk = nx + ',' + ny;
     if (!ch.tiles.has(nk) || f.closed.includes(nk)) continue;
-    const nd = Math.abs(nx - f.x) + Math.abs(ny - f.y);
+    if (bodyAt(nx, ny)) continue;                 // it cannot stand where a body already is
+    const nd = Math.abs(nx - tgt.x) + Math.abs(ny - tgt.y);
     if (nd < bestD) { bestD = nd; best = { x: nx, y: ny }; }
   }
-  if (best) { d.x = best.x; d.y = best.y; dist = bestD; }
+  if (best) { d.x = best.x; d.y = best.y; dist = Math.abs(d.x - tgt.x) + Math.abs(d.y - tgt.y); }
 
   const spec = TENANTS[d.kind] || TENANTS.hollow;
-  if (dist === 0) {
-    // The party screens the captain. Bring crew and the deep wounds THEM — a
-    // named hurt, or a nerve fraying toward the break. Go alone and there is
-    // no screen: it goes for your own air line, the way it always has.
-    if (!tenantStrikesParty(spec)) {
-      const armor = teamScore().def;
+  if (dist <= 1) {
+    // It reached a body. A crewman takes a named wound; the captain, with no one
+    // in the way, pays with the air line — the way it always has.
+    if (tgt.m) { tenantHitMember(spec, tgt.m); }
+    else {
       const raw = spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1);
-      const loss = Math.max(6, Math.round(raw * (1 - Math.min(0.6, armor * 0.15))));
+      const loss = Math.max(6, Math.round(raw * (1 - Math.min(0.6, teamScore().def * 0.15))));
       state.air = Math.max(0, state.air - loss);
       log(`${theTenant(spec)} has you in the dark. Something tears, and your line is venting hard. (-${loss} air)`, 'danger', 'ATTACK');
     }
     sfx('strike');
-  } else if (dist === 1 && !f.metTenant) {
+  } else if (dist === 2 && !f.metTenant) {
     f.metTenant = true;
     if (d.worn) {
       log(`The lamp finds a hollow man wearing what is left of a uniform you gave out yourself. ${d.worn} — or what has ${d.worn}'s face — turns its head toward the light.`, 'danger', 'CONTACT');
@@ -4450,11 +4457,12 @@ function stepFoot(x, y) {
   // The deck answers back: the sea gains, and the thing takes its step. A
   // claimed station does neither — that is what you paid the pumps for.
   f.tick++;
+  const broke = partyStep();   // the party keeps pace, and fights what it stands beside
   if (!stationSecure(f.q, f.r, f.d)) {
     if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
       log('Behind you, the water finds another doorway.', 'warn', 'WATER');
     }
-    dwellerStep();
+    if (!broke && f.dweller) dwellerStep();
   }
   provisionTick(0.3);   // a body ashore eats into the stores too
 
@@ -4510,6 +4518,124 @@ const SWING_POOR = [
   'Your swing goes wide in the dark.',
 ];
 
+//--- THE BOARDING PARTY, as bodies on the deck (crew push 2) ------------------
+// Your crew go over the side with you and stand where you leave them. The deep
+// takes the nearest body, so a hand you put between yourself and the thing is a
+// hand between yourself and the thing — the screen made literal. Positions are
+// what turn a crushed hand or a fraying nerve from a number into a decision.
+const PARTY_MAX = 3;   // a small party — you lead a boarding, you do not command a company
+
+function partyBodies() { return state.crew.filter(m => m.ashore && !m.lost); }
+
+// Send the able hands over the side, stood around the breach you came in by.
+function deployParty(ch) {
+  for (const m of state.crew) { m.ashore = false; m.fx = null; m.fy = null; }
+  const spots = [];
+  for (let r = 1; r <= 3 && spots.length < PARTY_MAX; r++) {
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [-1, 1], [-1, -1], [1, 1]]) {
+      const x = ch.entry.x + dx * r, y = ch.entry.y + dy * r;
+      if (x < 1 || y < 1 || x > INT_SIZE - 2 || y > INT_SIZE - 2) continue;
+      if (!ch.tiles.has(x + ',' + y)) continue;
+      if (spots.some(s => s.x === x && s.y === y)) continue;
+      spots.push({ x, y });
+      if (spots.length >= PARTY_MAX) break;
+    }
+  }
+  let i = 0;
+  for (const m of state.crew) {
+    if (i >= PARTY_MAX) break;
+    if (m.lost || memberIncapacitated(crewVitals(m))) continue;   // the hurt mind the boat
+    const s = spots[i] || { x: ch.entry.x, y: ch.entry.y };
+    m.ashore = true; m.fx = s.x; m.fy = s.y; if (m.hold == null) m.hold = false;
+    i++;
+  }
+  return i;
+}
+
+function recallParty() { for (const m of state.crew) { m.ashore = false; m.fx = null; m.fy = null; } }
+
+function bodyAt(x, y, self) {
+  const f = state.foot;
+  if (f && f.x === x && f.y === y) return true;
+  if (f && f.dweller && f.dweller.x === x && f.dweller.y === y) return true;
+  for (const m of partyBodies()) if (m !== self && m.fx === x && m.fy === y) return true;
+  return false;
+}
+
+// One greedy step toward a target, through open floor, around other bodies and
+// dogged bulkheads. No A* — a 20-tile deck does not need it.
+function bodyStepToward(m, tx, ty) {
+  const f = state.foot;
+  const d0 = Math.abs(m.fx - tx) + Math.abs(m.fy - ty);
+  let best = null, bd = d0;
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const nx = m.fx + dx, ny = m.fy + dy, nk = nx + ',' + ny;
+    if (!footTile(nx, ny)) continue;
+    if (f.closed.includes(nk)) continue;
+    if (bodyAt(nx, ny, m)) continue;
+    const nd = Math.abs(nx - tx) + Math.abs(ny - ty);
+    if (nd < bd) { bd = nd; best = { x: nx, y: ny }; }
+  }
+  if (best) { m.fx = best.x; m.fy = best.y; }
+}
+
+// Accumulate a wound on the tenant, whoever landed it. Extracted so the captain
+// and every crew body drive the same break logic. Returns true if it broke.
+function applyTenantDamage(dmg, by) {
+  const f = state.foot, t = f && f.dweller;
+  if (!t) return true;
+  t.hurt = (t.hurt || 0) + dmg;
+  const spec = TENANTS[t.kind] || TENANTS.hollow;
+  if (t.hurt >= (t.tough || spec.tough)) {
+    log(spec.hurt, 'warn', 'BOARDING');
+    if (t.boarder) {
+      state.base.boarder = null;
+      log('It goes down in the flooded passage of your own station. The deck is yours again — now get the water out.', '', 'BOARDING');
+    } else {
+      log('The deck is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
+      if (!state.clearedDecks) state.clearedDecks = [];
+      const k = deckKey(f.q, f.r, f.d);
+      if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
+    }
+    f.dweller = null; sfx('bell');
+    return true;
+  }
+  if (t.boarder && state.base && state.base.boarder) state.base.boarder.hurt = t.hurt;
+  if (by === 'you') log(dmg > 1 ? pickLoose(SWING_HIT) : pickLoose(SWING_POOR), '', 'BOARDING');
+  else if (dmg > 0) log(`${by} gets in a blow, and it tells.`, '', 'BOARDING');
+  return false;
+}
+
+// The party takes its turn: a hand toe-to-toe with the thing swings at it; the
+// rest close on the captain (unless told to hold). Returns true if the party
+// broke the tenant this turn.
+function partyStep() {
+  const f = state.foot;
+  if (!f) return false;
+  const d = f.dweller;
+  for (const m of partyBodies()) {
+    if (memberIncapacitated(m)) continue;                 // the hurt cannot press an attack
+    if (d && Math.abs(m.fx - d.x) + Math.abs(m.fy - d.y) <= 1) {
+      const wk = (m.gear && m.gear.weapon && GEAR[m.gear.weapon]) ? GEAR[m.gear.weapon].atk : 0;
+      const sw = wk > 0 ? 1 + randInt(wk * 2) : (rand() < 0.3 ? 1 : 0);
+      if (sw > 0 && applyTenantDamage(sw, m.name)) return true;
+      continue;                                            // engaged — holds the line, does not chase
+    }
+    if (m.hold) continue;
+    if (Math.abs(m.fx - f.x) + Math.abs(m.fy - f.y) > 1) bodyStepToward(m, f.x, f.y);
+  }
+  return false;
+}
+
+// Order a hand to hold their ground, or fall back in with you. The one command
+// that turns following into a line — put a body in the throat and leave it there.
+function toggleHold(m) {
+  if (!m || m.lost || !m.ashore || !state.alive) return;
+  m.hold = !m.hold;
+  log(m.hold ? `${m.name} sets to hold this ground.` : `${m.name} falls back in with you.`, '', 'DIVE TEAM');
+  sfx('bell'); render(); scheduleSave();
+}
+
 // Boarding action. Violence is the EXPENSIVE answer and the game should feel
 // that: you fight with what the crew's locker holds, an unarmed captain is
 // nearly helpless and is told so plainly, and the thing answers every round
@@ -4520,44 +4646,33 @@ function fightTenant() {
   if (!f || !ch || !state.alive) return;
   const t = f.dweller;
   if (!t) { log('There is nothing on this deck to fight.', 'warn', 'BOARDING'); return; }
-  if (Math.abs(t.x - f.x) + Math.abs(t.y - f.y) > 1) {
-    log('It is not within reach. You would have to go to it, which is its own kind of decision.', 'warn', 'BOARDING');
+
+  const capAdj = Math.abs(t.x - f.x) + Math.abs(t.y - f.y) <= 1;
+  const crewAdj = partyBodies().some(m => !memberIncapacitated(m) && Math.abs(m.fx - t.x) + Math.abs(m.fy - t.y) <= 1);
+  if (!capAdj && !crewAdj) {
+    log('Nothing of yours is toe-to-toe with it. Close with it, or move a hand up beside it, then press the attack.', 'warn', 'BOARDING');
     return;
   }
 
-  const spec = TENANTS[t.kind] || TENANTS.hollow;
-  const armed = bestWeaponAtk();
-  if (armed <= 0 && !f.warnedUnarmed) {
-    f.warnedUnarmed = true;
-    log('Nobody in the party is carrying anything worth the name. The armoury at the dock sells boarding axes and spearguns — until then this is bare hands against it.', 'warn', 'BOARDING');
-  }
-
-  const swing = armed > 0 ? 1 + randInt(armed * 2) : (rand() < 0.3 ? 1 : 0);
-  t.hurt = (t.hurt || 0) + swing;
   f.steps++;
   state.air = Math.max(0, state.air - FOOT_AIR);
+  let broke = false;
 
-  if (t.hurt >= (t.tough || spec.tough)) {
-    log(spec.hurt, 'warn', 'BOARDING');
-    if (t.boarder) {
-      // The thing that took your station is dead in it. The sea is still in
-      // here — but the deck is yours to pump out again.
-      state.base.boarder = null;
-      log('It goes down in the flooded passage of your own station. The deck is yours again — now get the water out.', '', 'BOARDING');
-    } else {
-      log('The deck is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
-      if (!state.clearedDecks) state.clearedDecks = [];
-      const k = deckKey(f.q, f.r, f.d);
-      if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
+  // The captain fights if the captain is in reach — with the best weapon the
+  // party carries, since the captain wields whatever is to hand.
+  if (capAdj) {
+    const armed = bestWeaponAtk();
+    if (armed <= 0 && !f.warnedUnarmed) {
+      f.warnedUnarmed = true;
+      log('Nobody in the party is carrying anything worth the name. The armoury at the dock sells boarding axes and spearguns — until then this is bare hands against it.', 'warn', 'BOARDING');
     }
-    f.dweller = null;
-    sfx('bell');
-  } else {
-    if (t.boarder && state.base && state.base.boarder) state.base.boarder.hurt = t.hurt; // persist if you flee mid-fight
-    log(swing > 1 ? pickLoose(SWING_HIT) : pickLoose(SWING_POOR), '', 'BOARDING');
-    sfx('strike');
-    dwellerStep();   // and it answers
+    const swing = armed > 0 ? 1 + randInt(armed * 2) : (rand() < 0.3 ? 1 : 0);
+    broke = applyTenantDamage(swing, 'you');
   }
+  // Then the party lays in, and then the thing answers whoever it can reach.
+  if (!broke) broke = partyStep();
+  if (!broke) dwellerStep();
+  sfx('strike');
 
   if (state.air <= 0) {
     log('The tanks run dry in the dark.', 'danger', 'AIR');
@@ -4572,6 +4687,7 @@ function fightTenant() {
 function leaveInterior(prefix) {
   const f = state.foot;
   if (!f) return;
+  recallParty();   // the hands that are still standing come up through the breach with you
   state.foot = null;
   state.cargo += f.crates;
   state.relics += f.relics;
@@ -4719,6 +4835,29 @@ function renderInterior() {
     out.style.cursor = 'pointer';
     out.addEventListener('click', () => leaveInterior('You climb back out through the lock'));
     g.appendChild(out);
+  }
+
+  // Your own hands — always drawn, because you know where you left them. Colour
+  // reads their state at a glance: green sound, amber marked, red going. A ring
+  // means they are holding their ground. Tap one to toggle hold / follow.
+  for (const m of partyBodies()) {
+    crewVitals(m);
+    const hurt = m.conditions.length > 0 || m.nerve < 40;
+    const col = m.dying || m.nerve < 20 ? '#e0604a' : hurt ? '#e0a94a' : '#7fce9a';
+    if (m.hold) {
+      const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      ring.setAttribute('cx', m.fx * INT_PX); ring.setAttribute('cy', m.fy * INT_PX);
+      ring.setAttribute('r', INT_PX * 0.42); ring.setAttribute('fill', 'none');
+      ring.setAttribute('stroke', col); ring.setAttribute('stroke-width', '1.2'); ring.setAttribute('opacity', '0.7');
+      g.appendChild(ring);
+    }
+    glyph(m.fx, m.fy, (m.name || '?').charAt(0).toUpperCase(), col, 13, 1);
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    hit.setAttribute('x', m.fx * INT_PX - INT_PX / 2); hit.setAttribute('y', m.fy * INT_PX - INT_PX / 2);
+    hit.setAttribute('width', INT_PX); hit.setAttribute('height', INT_PX);
+    hit.setAttribute('fill', 'rgba(0,0,0,0.001)'); hit.style.cursor = 'pointer';
+    hit.addEventListener('click', () => toggleHold(m));
+    g.appendChild(hit);
   }
 
   glyph(f.x, f.y, '@', '#f2e8cf', 16, 1);

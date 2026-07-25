@@ -26,7 +26,7 @@
 
 **BUILD ORDER (this is a multi-push feature — do NOT try it in one drop):**
 - **A. Condition foundation + combat wiring** — ✅ **DONE 2026-07-24** (see below).
-- **B. Positioning** — crew as bodies occupying interior tiles, cut off by doors/water. The biggest render change; its own focused push. **Bring the crew-status ROSTER UI with it** (push A has NO on-screen roster — crew state comes only through the log; acceptable for now, but the panel is wanted and positioning is its natural home).
+- **B. Positioning** — ✅ **DONE 2026-07-25** (see below). Roster now reads off the deck (state-coloured bodies).
 - **C. Tenure** — scars/traits/trust progression. NOTE: `member.scars[]` already accretes (incap conditions leave a scar), and `scar` strings exist on CONDITIONS — the data is being collected; C is about making scars/traits DO something.
 KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-subagent work against the schema.
 
@@ -54,6 +54,19 @@ KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-sub
 - **KNOBS NOT FELT**: `DIG_COST:2`, breach chance 0.4, dig threat +6, warren cap 2.5 / divisor 12.
 - **STILL OPEN ("Fitting")**: placing furniture/defences/bulkheads on carved tiles; player-authored chokepoints; multi-cell fortresses (dig through a cell edge into the next 60m cell — the substrate/overlay model already allows it).
 - **THE RESOLUTION LADDER IS NOW 7/7 BUILDABLE RUNGS DONE.** Rung 7 (rival PvP raids) awaits a multiplayer backend; the sub-vs-sub detection model (below) is its combat core.
+
+## CREW POSITIONING — Push B, the tactical layer that makes on-foot combat cohere (2026-07-25)
+**The abstract "screening pool" is gone. Crew are BODIES on the deck, and the deep takes the nearest one — so the screen is now literal geometry.** This is what makes the rich crew-condition system (Push A) actually pay off in play.
+- **Bodies**: on `enterInterior`, `deployParty(ch)` sends up to `PARTY_MAX=3` able crew over the side as bodies (`m.ashore, m.fx, m.fy, m.hold`), placed around the entry. Incapacitated crew stay aboard. `partyBodies()` = ashore & not lost. Fields persist on the member objects (saved/restored). `recallParty()` on `leaveInterior`; `loseCrew` clears the body.
+- **`dwellerStep` rewritten**: the tenant targets the NEAREST body (captain OR crew), paths to it (blocked by bodies/closed doors), and wounds whoever it reaches — crew via `tenantHitMember` (a named condition + nerve fray), the captain via the air line. Stand a hand between yourself and the thing and that hand takes the blow. (The old abstract `tenantStrikesParty` is deleted.)
+- **`partyStep()`** (called from `stepFoot` and `fightTenant`): a body toe-to-toe with the tenant swings its own weapon (`applyTenantDamage`); the rest follow the captain (greedy step, around bodies/walls/dogged doors) unless told to hold. Returns true if the party broke it.
+- **`fightTenant` is now one ROUND of melee**: captain swings if adjacent (best weapon in the locker), then the party lays in, then the tenant answers. Board It shows when the captain OR any crew is adjacent. `applyTenantDamage` extracted so captain and every crew body drive the same break logic.
+- **Orders**: tap a crew body → `toggleHold(m)` (hold this ground / fall back in). A held hand is the "Marchetti holds the throat while you flank" move.
+- **Roster reads off the deck**: each body drawn as its initial, coloured green (sound) / amber (marked) / red (going), with a ring when holding. No separate panel needed — the map IS the roster.
+- **interior.test.js → 137 checks.** Positioning: deploys as bodies, the screen (tenant hits the nearer crew, captain's air untouched), crew fight adjacent, follow vs hold, a positioned hand lost off the deck, recall on leave, incapacitated stay aboard, positions survive reload.
+- **BUG THE BROWSER CAUGHT (headless missed it)**: a STALE captain-only reach guard at the top of `fightTenant` (`dist(tenant,captain)>1 → return`) survived the rewrite and silently blocked every crew-only engagement — "It is not within reach" forever while a held crewman stood beside the thing doing nothing. Functions worked in isolation; only a real fight exposed it. Removed. **Lesson restated: play the actual fight, don't just green the unit.**
+- **KNOB/EDGE NOTE**: crew anchor to the CAPTAIN (follow), so if you stand still while the tenant sidesteps, the party can drift and combat stalls until you step toward it — intended (you lead), but greedy-pathing a bot around walls will stall; a human just walks around. Push C candidate: a "hold the deck / re-engage" pass action so you needn't move to pass a turn.
+- **STILL OPEN (Push C)**: tenure — scars/traits that DO something (data already accretes); party SELECTION UI (currently first 3 able auto-deploy); stranded-on-exit = lost (currently all living crew recall safely).
 
 ## SUBMARINE vs SUBMARINE (2026-07-24) — Sean: "stealthy, hair-raising, cat and mouse, Red October, NOT a slugfest"
 **The whole duel is DETECTION, and it reuses the game's existing sound grammar.** No new HP-trading — one good torpedo cripples a boat, two ends it, so nobody trades blows; you manoeuvre in the dark for the one shot that lands unheard.

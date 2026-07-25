@@ -77,6 +77,10 @@ try { vm.runInContext(script +
   '\nfunction __dig(){ digAdjacent(); }' +
   '\nfunction __digTarget(){ return digTargetNear(); }' +
   '\nfunction __footTile(x,y){ return footTile(x,y); }' +
+  '\nfunction __party(){ return partyBodies(); }' +
+  '\nfunction __partyStep(){ return partyStep(); }' +
+  '\nfunction __dwellerStep(){ dwellerStep(); }' +
+  '\nfunction __hold(m){ toggleHold(m); }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -916,6 +920,108 @@ DB2.breached = false; DB2.carved = ['5,5', '5,6', '6,6']; sandbox.__st().foot = 
 sandbox.__save(); sandbox.__st().base = null; sandbox.__resume();
 check(sandbox.__base() && sandbox.__base().carved.length === 3, 'the fortress you dug survives a reload',
   sandbox.__base() ? sandbox.__base().carved.length + ' tiles held' : 'lost');
+
+//--- 15. Crew positioning: the party as bodies on the deck -------------------
+{
+// Find a deck with a tenant, so we can test the screen.
+let psite = null;
+for (let q = 0; q < 60 && !psite; q++) { const c = sandbox.__int(q, 25, 660); if (c.dweller) psite = { q: q, ch: c }; }
+check(!!psite, 'a tenanted deck to fight over', psite ? 'q=' + psite.q : 'none');
+
+sandbox.__st().foot = null; sandbox.__st().base = null; sandbox.__st().clearedDecks = [];
+sandbox.__st().alive = true; sandbox.__st().air = 200000; sandbox.__st().stores = 100;
+sandbox.__st().crew = [
+  { name: 'Ash',   role: 'diver', xp: 0, nerve: 70, conditions: [], scars: [], dying: false, gear: { weapon: 'speargun', armor: 'wardsuit', kit: null } },
+  { name: 'Brand', role: 'diver', xp: 0, nerve: 70, conditions: [], scars: [], dying: false, gear: { weapon: 'axe', armor: 'plates', kit: null } },
+];
+sandbox.__enter(psite.q, 25, 660);
+let party = sandbox.__party();
+check(party.length === 2 && party.every(m => m.fx != null && m.ashore),
+  'the party goes over the side as bodies on the deck', party.length + ' deployed');
+
+// THE SCREEN, MADE LITERAL: put a crewman between yourself and the thing, and
+// the thing takes the crewman — your own air line goes untouched.
+const fp = sandbox.__foot(); const pch = sandbox.__int(psite.q, 25, 660);
+// A little clear run of floor to line them up on.
+let line = null;
+for (const k of pch.tiles.keys()) {
+  const c = k.indexOf(','); const x = +k.slice(0, c), y = +k.slice(c + 1);
+  if (ch.tiles.has((x + 1) + ',' + y) && ch.tiles.has((x + 2) + ',' + y) && ch.tiles.has((x + 3) + ',' + y)) { line = { x, y }; break; }
+}
+check(!!line, 'a run of floor to form a line on', line ? line.x + ',' + line.y : 'none');
+const D = fp.dweller;
+D.x = line.x; D.y = line.y;                         // the thing
+const screen = party[0]; screen.fx = line.x + 1; screen.fy = line.y;   // Ash, between
+const other = party[1]; other.fx = line.x + 3; other.fy = line.y;
+fp.x = line.x + 2; fp.y = line.y;                   // the captain, behind the screen
+fp.metTenant = true;
+const airBefore = sandbox.__st().air, ashConds0 = screen.conditions.length;
+sandbox.__dwellerStep();
+check(sandbox.__st().air === airBefore, 'the thing goes for the nearest body, not past it to you', 'air held at ' + airBefore);
+check(screen.conditions.length > ashConds0 || screen.nerve < 70 || screen.dying,
+  'the screening hand takes the blow meant for the captain', 'Ash marked');
+
+// A hand toe-to-toe with the thing lays into it.
+D.x = line.x; D.y = line.y; D.hurt = 0; D.tough = 40;
+screen.fx = line.x + 1; screen.fy = line.y;
+const hurt0 = D.hurt;
+sandbox.__partyStep();
+check(D.hurt > hurt0, 'a crewman beside the thing fights it', 'dealt ' + D.hurt);
+
+// HOLD holds; FOLLOW follows.
+const holder = party[1];
+holder.fx = line.x + 5 <= 18 ? line.x + 5 : line.x - 2; holder.fy = line.y; holder.hold = false;
+// Follow: captain far, holder not holding -> it closes.
+fp.x = holder.fx; fp.y = holder.fy;                 // stand on... no, stand away
+fp.x = line.x; fp.y = line.y + (pch.tiles.has(line.x + ',' + (line.y + 1)) ? 1 : 0);
+const distBefore = Math.abs(holder.fx - fp.x) + Math.abs(holder.fy - fp.y);
+sandbox.__st().foot.dweller = null;                 // no fight — just test movement
+sandbox.__partyStep();
+const distAfterFollow = Math.abs(holder.fx - fp.x) + Math.abs(holder.fy - fp.y);
+check(distAfterFollow <= distBefore, 'an unheld hand follows the captain', distBefore + ' -> ' + distAfterFollow);
+// Hold: set the order, move the captain, the hand stays put.
+sandbox.__hold(holder);
+check(holder.hold === true, 'the hold order sets', 'holding');
+const hx = holder.fx, hy = holder.fy;
+fp.x = line.x + (pch.tiles.has((line.x + 2) + ',' + line.y) ? 2 : 0); fp.y = line.y;
+sandbox.__partyStep();
+check(holder.fx === hx && holder.fy === hy, 'a held hand does not chase the captain', 'stayed at ' + hx + ',' + hy);
+
+// A positioned hand can be lost, and leaves the deck. Clear the field so the
+// thing can only be going for THIS body.
+sandbox.__st().foot.dweller = D; sandbox.__st().stores = 100;
+const doomed = party[0];
+fp.x = 2; fp.y = 2;                                   // captain well out of reach
+for (const m of sandbox.__party()) if (m !== doomed) { m.fx = 17; m.fy = 17; }
+doomed.hold = false; doomed.nerve = 6; doomed.dying = false; doomed.fx = 10; doomed.fy = 10;
+sandbox.__st().lostCrew = [];
+for (let i = 0; i < 8 && sandbox.__party().includes(doomed); i++) { D.x = 11; D.y = 10; sandbox.__dwellerStep(); }
+check(!sandbox.__party().includes(doomed), 'a hand pushed past breaking is lost off the deck',
+  sandbox.__st().lostCrew.length ? sandbox.__st().lostCrew[0].name + ' gone' : 'still standing');
+
+// Climbing out recalls the hands that still stand.
+const survivor = sandbox.__party()[0];
+sandbox.__st().foot.dweller = null;
+sandbox.leaveInterior('out');
+check(survivor && !survivor.ashore && survivor.fx == null, 'the party comes up with you, off the deck', 'recalled');
+
+// The incapacitated mind the boat rather than deploy.
+sandbox.__st().foot = null;
+sandbox.__st().crew = [{ name: 'Gimp', role: 'diver', xp: 0, nerve: 70, conditions: ['brokenLeg'], scars: [], dying: false, wounded: true, gear: { weapon: 'axe' } }];
+sandbox.__enter(psite.q, 25, 660);
+check(sandbox.__party().length === 0, 'a hand who cannot walk stays aboard', sandbox.__party().length + ' deployed');
+
+// Positions survive a reload.
+sandbox.__st().foot = null;
+sandbox.__st().crew = [{ name: 'Rell', role: 'diver', xp: 0, nerve: 60, conditions: [], scars: [], dying: false, gear: { weapon: 'axe' }, ashore: true, fx: 7, fy: 8, hold: true }];
+sandbox.__enter(psite.q, 25, 660);
+sandbox.__st().crew[0].ashore = true; sandbox.__st().crew[0].fx = 7; sandbox.__st().crew[0].fy = 8; sandbox.__st().crew[0].hold = true;
+sandbox.__save();
+sandbox.__st().crew = []; sandbox.__resume();
+const rell = sandbox.__st().crew[0];
+check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s position and orders survive a reload',
+  rell ? 'at ' + rell.fx + ',' + rell.fy + (rell.hold ? ' holding' : '') : 'lost');
+}
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
