@@ -45,6 +45,12 @@ try { vm.runInContext(script +
   '\nfunction __makeLead(tier,q,r,s){ makeLead(tier,q,r,s); }' +
   '\nfunction __checkLeads(){ checkLeads(); }' +
   '\nfunction __itemKinds(){ return Object.keys(ITEMS).map(k=>ITEMS[k].kind); }' +
+  '\nfunction __stress(t,i){ stressHold(t,i); }' +
+  '\nfunction __haunt(){ hauntTick(); }' +
+  '\nfunction __jettison(k){ jettisonItem(k); }' +
+  '\nfunction __worth(k){ return itemWorth(k); }' +
+  '\nfunction __lampR(){ return effLampR(); }' +
+  '\nfunction __cultures(){ return CULTURES; }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
@@ -139,6 +145,57 @@ const r = sandbox.__state();
 check(r.items.patchkit === 3 && r.items.idol === 1, 'the hold survives a reload', JSON.stringify(r.items));
 check(r.fits.depth === 2 && r.fits.sonar === 1, 'the fittings survive a reload', JSON.stringify(r.fits));
 check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were following survives a reload', r.leads.length + ' lead');
+
+//--- 7. ITEM PROPERTIES: things that behave, not just sit -----------------------
+{
+  const s = sandbox.__state();
+  s.foot = null; s.crew = []; s.alive = true;
+
+  // VOLATILE: a stress event can detonate it — hull damage, and it is gone.
+  let blew = false, tries = 0;
+  for (; tries < 40 && !blew; tries++) {
+    s.items = { warhead: 1 }; s.hull = 100;
+    sandbox.__stress('a test', 1);
+    if (!s.items.warhead) { blew = true; }
+  }
+  check(blew, 'a volatile find can detonate under stress', 'blew after ' + tries + ' shocks');
+  check(s.hull < 100, 'and it wounds the boat when it does', 'hull=' + s.hull);
+  // A non-volatile thing rides through the same shock untouched.
+  s.items = { patchkit: 1 }; s.hull = 100;
+  for (let i = 0; i < 20; i++) sandbox.__stress('a test', 1);
+  check(s.items.patchkit === 1 && s.hull === 100, 'a stable thing is unbothered by the same shock', 'patchkit safe');
+
+  // CURSED: it bleeds a crew nerve while it rides in the hold.
+  s.items = { idol: 1 }; s.crew = [{ name: 'Poe', role: 'diver', nerve: 90, conditions: [], scars: [], dying: false, gear: {} }];
+  s.stores = 100;
+  const n0 = s.crew[0].nerve;
+  for (let i = 0; i < 30; i++) sandbox.__haunt();
+  check(s.crew[0].nerve < n0, 'a cursed thing in the hold bleeds the crew\'s nerve', n0 + ' -> ' + s.crew[0].nerve);
+  // Stored below (out of the hold) it goes quiet.
+  s.items = {}; const nQuiet = s.crew[0].nerve;
+  for (let i = 0; i < 30; i++) sandbox.__haunt();
+  check(s.crew[0].nerve === nQuiet, 'out of the hold, the curse falls silent', 'held at ' + s.crew[0].nerve);
+  // And casting it back cures it outright.
+  s.items = { idol: 2 };
+  sandbox.__jettison('idol');
+  check(!s.items.idol, 'casting a cursed thing back into the sea is the cure', 'gone');
+
+  // HEAVY: dead weight costs air per move.
+  s.items = {}; s.currentDepth = 600; s.q = 0; s.r = 0; s.air = 1000;
+  sandbox.applyMoveCosts(1); const lightCost = 1000 - s.air;
+  s.items = { ingot: 2 }; s.air = 1000;
+  sandbox.applyMoveCosts(1); const heavyCost = 1000 - s.air;
+  check(heavyCost > lightCost, 'heavy cargo costs extra air to haul', lightCost + ' -> ' + heavyCost + ' air/move');
+
+  // LUMINOUS: a cold-light bead widens the lamp on foot.
+  s.items = {}; const dark = sandbox.__lampR();
+  s.items = { lumen: 2 };
+  check(sandbox.__lampR() > dark, 'a luminous thing widens the lamp', dark + ' -> ' + sandbox.__lampR());
+
+  // SIGNIFICANT: the WORTH hook works, and Cultures is left EMPTY for Sean.
+  check(Object.keys(sandbox.__cultures()).length === 0, 'the cultures registry is left empty on purpose', 'yours to fill');
+  check(sandbox.__worth('idol') > 0, 'a significant item has a base worth (x1 until a people prizes it)', 'worth=' + sandbox.__worth('idol'));
+}
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

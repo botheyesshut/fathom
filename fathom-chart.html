@@ -644,6 +644,12 @@
   }
   .inv-row .act:active { background: rgba(94,184,154,0.14); }
   .inv-row .act.none { border-color: rgba(94,184,154,0.12); color: #4a5c5a; cursor: default; }
+  .inv-row .act.warn { border-color: rgba(224,114,74,0.5); color: #e0724a; }
+  .inv-row .act.warn:active { background: rgba(224,114,74,0.14); }
+  .inv-row .in .tag {
+    display: inline-block; font-size: 0.56rem; letter-spacing: 0.14em; text-transform: uppercase;
+    border: 1px solid; border-radius: 2px; padding: 0.05rem 0.32rem; margin-left: 0.3rem; vertical-align: 1px;
+  }
   #inv-empty { padding: 2rem 1rem; text-align: center; color: #6d8a88; font-style: italic; font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; }
 
   #gameover {
@@ -1005,8 +1011,12 @@ const ITEMS = {
                 flavor: 'Clean linen, sealed against the wet. For a hand that has met something in the dark.' },
   probe:      { name: 'a sounding probe',       kind: 'use', glyph: '◎', col: '#9ed0c2', probe: true, val: 2, find: 6, depth: 600,
                 flavor: 'It drifts out on the current, listens, and comes back — and never once makes a sound of its own.' },
-  salts:      { name: 'a vial of waking salts', kind: 'use', glyph: '❦', col: '#d0b0e0', nerve: true, val: 2, find: 5, depth: 1200,
-                flavor: 'Sharp enough to call a mind back from wherever the deep was taking it.' },
+  salts:      { name: 'a vial of waking salts', kind: 'use', glyph: '❦', col: '#d0b0e0', nerve: true, val: 2, find: 5, depth: 1200, props: ['fragile'],
+                flavor: 'Sharp enough to call a mind back from wherever the deep was taking it. The vial is thin glass, and the deep is not gentle.' },
+  warhead:    { name: 'a salvaged warhead',     kind: 'valuable', glyph: '☢', col: '#e0724a', val: 5, find: 3, depth: 1200, props: ['volatile'],
+                flavor: 'Somebody\'s last argument, still live. Worth a great deal to the right buyer, and to the wrong pressure, worth all your lives.' },
+  lumen:      { name: 'a cold-light bead',      kind: 'use', glyph: '✷', col: '#bfe0ff', keep: true, val: 2, find: 4, depth: 600, props: ['luminous'],
+                flavor: 'It has burned with the same pale light since before the Fall, and asks for nothing to keep burning. Carry it and the dark gives ground.' },
   sonararray: { name: 'a salvaged sonar array', kind: 'fit', fit: 'sonar', glyph: '➰', col: '#6ecfae', val: 4, find: 4, depth: 1200,
                 fitLog: 'You splice the salvaged array into the boat. The water opens up — you hear farther now, and it costs nothing.',
                 flavor: 'Off a better boat than yours. Its owners will not miss it.' },
@@ -1017,10 +1027,10 @@ const ITEMS = {
                 flavor: 'It fits a lock somewhere. Locks in the deep are kept shut for reasons.' },
   seachart:   { name: 'a water-stained sea chart', kind: 'chart', glyph: '✵', col: '#e0c060', val: 3, find: 5, depth: 300,
                 flavor: 'A hand marked a position on this, and pressed hard doing it.' },
-  idol:       { name: 'a carved idol of no faith you know', kind: 'valuable', glyph: '☥', col: '#c88ce8', val: 6, strange: true, find: 3, depth: 1800,
-                flavor: 'It is heavier than it should be, and warm, and you would rather it were not looking at you.' },
-  ingot:      { name: 'a bar of pre-Fall alloy', kind: 'valuable', glyph: '▬', col: '#d0d0b0', val: 4, find: 4, depth: 600,
-                flavor: 'Whatever this metal is, nobody has made it since, and everybody wants it.' },
+  idol:       { name: 'a carved idol of no faith you know', kind: 'valuable', glyph: '☥', col: '#c88ce8', val: 6, strange: true, find: 3, depth: 1800, props: ['cursed', 'luminous', 'sig'], sig: 'unplaced',
+                flavor: 'It is heavier than it should be, and warm, and you would rather it were not looking at you. It sheds a faint light, and since it came aboard the crew have started to dream.' },
+  ingot:      { name: 'a bar of pre-Fall alloy', kind: 'valuable', glyph: '▬', col: '#d0d0b0', val: 4, find: 4, depth: 600, props: ['heavy', 'sig'], sig: 'unplaced',
+                flavor: 'Whatever this metal is, nobody has made it since, and everybody wants it. It is dead weight in the hold until you find who.' },
 };
 
 // The hold, and permanent fittings. Overlay — lost with the boat, unless struck
@@ -1037,6 +1047,74 @@ function rollItem(depth, rng) {
   for (const k in ITEMS) { const it = ITEMS[k]; if (!it.find) continue; if ((it.depth || 0) > depth + 300) continue; for (let i = 0; i < it.find; i++) pool.push(k); }
   if (!pool.length) return null;
   return pool[Math.floor((rng ? rng() : rand()) * pool.length)];
+}
+
+//--- ITEM PROPERTIES: tags that make a thing BEHAVE, not just sit in a list ---
+//   volatile — detonates under stress: deep pressure, a shot, a torpedo hit.
+//   fragile  — a hard blow to the boat can shatter it. Gone.
+//   cursed   — contact with the old ones. Bleeds crew nerve while it rides in
+//              the hold. Seal it below in a station, or cast it back, to quiet it.
+//   heavy    — dead weight; costs extra air to haul through the water.
+//   luminous — sheds a cold light; widens the lamp on foot.
+//   sig      — culturally significant. Its WORTH is set by CULTURES — which is
+//              YOURS to invent (Sean). The mechanism is here; the peoples are not.
+//
+// CULTURES — who prizes what, and how much. LEFT EMPTY ON PURPOSE. Add an entry
+// keyed by an item's `sig`, e.g.  drownedkin: { name: 'the drowned kin', mult: 3 }
+// and any item tagged sig:'drownedkin' is worth 3x to them. Until a people
+// exists, a significant thing is worth its face value, waiting for a buyer.
+const CULTURES = { /* yours to fill — see the note above */ };
+
+function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function hasProp(key, p) { const it = ITEMS[key]; return !!(it && it.props && it.props.indexOf(p) >= 0); }
+function heldWith(p) { return Object.keys(state.items || {}).filter(k => itemCount(k) > 0 && hasProp(k, p)); }
+function countHeldWith(p) { return heldWith(p).reduce((s, k) => s + itemCount(k), 0); }
+function itemWorth(key) { const it = ITEMS[key]; if (!it) return 0; const c = it.sig && CULTURES[it.sig]; return (it.val || 0) * (c ? c.mult : 1); }
+function luminousBonus() { return countHeldWith('luminous'); }
+
+// A stress event — pressure, fire, or violence. Volatile things may go off;
+// fragile things may shatter. Both are LOUD, and both are gone.
+function stressHold(trigger, intensity) {
+  if (!state.items) return;
+  for (const k of Object.keys(state.items)) {
+    if (!itemCount(k)) continue;
+    if (hasProp(k, 'volatile') && rand() < 0.26 * intensity) {
+      takeItem(k, 1);
+      const dmg = 22 + randInt(26);
+      state.hull = Math.max(0, state.hull - dmg);
+      log(`${ucfirst(ITEMS[k].name)} in the hold goes off — ${trigger}. The blast throws the boat and every seam screams at once. (-${dmg} hull)`, 'danger', 'BLAST');
+      noiseMade(state.q, state.r, 6);   // an explosion is the loudest thing you can do
+      sfx('impact'); checkDeath();
+      if (!state.alive) return;
+    } else if (hasProp(k, 'fragile') && rand() < 0.5 * intensity) {
+      takeItem(k, 1);
+      log(`${ucfirst(ITEMS[k].name)} does not survive the shock — thin glass, a smell of salt, and nothing left to use.`, 'warn', 'BREAK');
+    }
+  }
+}
+
+// The old ones do not let go for nothing. A cursed thing works on the crew
+// while it rides in the hold. Store it below in a station, or cast it back.
+function hauntTick() {
+  const n = countHeldWith('cursed');
+  if (!n || !state.crew.length) return;
+  if (rand() < 0.35 * Math.min(3, n)) {
+    const m = state.crew[Math.floor(rand() * state.crew.length)];
+    crewVitals(m); frayNerve(m, 3 + randInt(4));
+    if (rand() < 0.3) log(`Something in the hold is whispering, and ${m.name} has stopped pretending not to hear it.`, 'strange', 'CURSE');
+  }
+}
+
+// Cast a thing back into the sea — the only cure for a curse, and a fast way to
+// be rid of something a moment before it kills you.
+function jettisonItem(key) {
+  if (!itemCount(key)) return;
+  const it = ITEMS[key];
+  takeItem(key, itemCount(key));
+  log(hasProp(key, 'cursed')
+    ? `You put ${it.name} over the side, and do not watch it go down. The whispering stops. The dreams may take longer.`
+    : `${ucfirst(it.name)} goes over the side and is gone.`, hasProp(key, 'cursed') ? 'strange' : '', 'HOLD');
+  sfx('bell'); updateHUD(); render(); scheduleSave();
 }
 
 // The hold, opened. Everything you carry, with the one thing you can DO with
@@ -1060,20 +1138,33 @@ function renderInventory() {
     if (f.depth) bits.push(`pressure-hull +${f.depth}`);
     return bits.length ? `<div class="inv-row"><div class="ig" style="color:#6ecfae">⚙</div><div class="in"><b>fitted to the boat</b><span class="fl">${bits.join(', ')} — permanent, and it goes down with her.</span></div><div></div></div>` : '';
   };
+  // Properties, spelled out, so a cursed or volatile thing is never a surprise.
+  const PROP_TAG = {
+    volatile: { t: 'volatile', c: '#e0724a' }, cursed: { t: 'cursed', c: '#c88ce8' },
+    fragile: { t: 'fragile', c: '#d0b0e0' }, heavy: { t: 'heavy', c: '#a8a888' },
+    luminous: { t: 'luminous', c: '#bfe0ff' }, sig: { t: 'significant', c: '#e0c060' },
+  };
+  const tags = (it) => !it.props ? '' : ' ' + it.props.filter(p => PROP_TAG[p])
+    .map(p => `<span class="tag" style="color:${PROP_TAG[p].c};border-color:${PROP_TAG[p].c}66">${PROP_TAG[p].t}</span>`).join('');
   const act = (k) => {
     const it = ITEMS[k];
-    if (it.kind === 'use' || it.kind === 'chart') return `<button class="act" data-k="${k}">${it.kind === 'chart' ? 'Read' : 'Use'}</button>`;
+    if (it.kind === 'use' && !it.keep) return `<button class="act" data-k="${k}">Use</button>`;
+    if (it.kind === 'chart') return `<button class="act" data-k="${k}">Read</button>`;
     if (it.kind === 'fit') return `<button class="act" data-k="${k}">Fit</button>`;
-    return `<button class="act none">${it.kind === 'key' ? 'a key' : 'worth'}</button>`;
+    if (hasProp(k, 'cursed') || hasProp(k, 'volatile')) return `<button class="act warn" data-j="${k}">Cast Off</button>`;
+    return `<button class="act none">${it.kind === 'key' ? 'a key' : hasProp(k, 'luminous') ? 'a light' : 'worth'}</button>`;
   };
   list.innerHTML = keys.map(k => {
     const it = ITEMS[k];
     return `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
-      `<div class="in"><b>${it.name}</b>${items[k] > 1 ? ` <span class="ct">×${items[k]}</span>` : ''}<span class="fl">${it.flavor}</span></div>` +
+      `<div class="in"><b>${it.name}</b>${items[k] > 1 ? ` <span class="ct">×${items[k]}</span>` : ''}${tags(it)}<span class="fl">${it.flavor}</span></div>` +
       act(k) + '</div>';
   }).join('') + fitLine();
   for (const btn of list.querySelectorAll('.act[data-k]')) {
     btn.addEventListener('click', () => { useItem(btn.getAttribute('data-k')); renderInventory(); });
+  }
+  for (const btn of list.querySelectorAll('.act[data-j]')) {
+    btn.addEventListener('click', () => { jettisonItem(btn.getAttribute('data-j')); renderInventory(); });
   }
 }
 function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
@@ -3501,6 +3592,8 @@ function fireWeapon() {
   if (target.type === 'rival') hitRival(target, WEAPONS[key].power);
   else hitCreature(target, WEAPONS[key].power);
   noiseMade(state.q, state.r, WEAPONS[key].loud); // a shot is a shout — the deep hears it
+  stressHold('the firing shook it', 0.3);          // volatile finds do not love a fight
+  if (!state.alive) { updateHUD(); render(); return; }
   creatureTick();
   updateHUD();
   render();
@@ -3881,6 +3974,7 @@ function move(q, r) {
   maybeBeach();
   creatureTick();
   checkLeads();
+  hauntTick();     // the old ones work on the crew while their relics ride below
   airCounsel();
   provisionTick();
   baseTick();
@@ -4301,13 +4395,17 @@ function footLootAt(x, y) {
   return state.foot.took.includes(x + ',' + y) ? null : t.loot;
 }
 
+// The lamp reaches LAMP_R, plus a tile for every cold-light bead in the hold.
+function effLampR() { return LAMP_R + luminousBonus(); }
+
 function lampSweep() {
   const f = state.foot;
   if (!f) return;
-  const R = Math.ceil(LAMP_R);
+  const LR = effLampR();
+  const R = Math.ceil(LR);
   for (let dy = -R; dy <= R; dy++) {
     for (let dx = -R; dx <= R; dx++) {
-      if (dx * dx + dy * dy > LAMP_R * LAMP_R) continue;
+      if (dx * dx + dy * dy > LR * LR) continue;
       const x = f.x + dx, y = f.y + dy;
       if (x < 0 || y < 0 || x >= INT_SIZE || y >= INT_SIZE) continue;
       const k = x + ',' + y;
@@ -5110,11 +5208,12 @@ function renderInterior() {
 
   const baseDeck = onOwnDeck();
   const carvedHere = baseDeck ? baseCarved() : [];
+  const LR = effLampR();
   for (const k of f.seen) {
     const c = k.indexOf(',');
     const x = +k.slice(0, c), y = +k.slice(c + 1);
     const t = ch.tiles.get(k) || ((baseDeck && carvedHere.includes(k)) ? { t: 'carved' } : null);
-    const lit = Math.hypot(x - f.x, y - f.y) <= LAMP_R;
+    const lit = Math.hypot(x - f.x, y - f.y) <= LR;
     const dim = lit ? 1 : 0.4;                // memory is dimmer than lamplight
     // Walls sit just above the void so the shape of the room reads; lamplit
     // deck is markedly brighter, because that is the whole point of a lamp.
@@ -5164,7 +5263,7 @@ function renderInterior() {
   // The dweller obeys the same constitution as everything else: you see it
   // when your lamp is on it, and not one tile sooner.
   const dw = f.dweller;
-  if (dw && Math.hypot(dw.x - f.x, dw.y - f.y) <= LAMP_R) {
+  if (dw && Math.hypot(dw.x - f.x, dw.y - f.y) <= effLampR()) {
     const spec = TENANTS[dw.kind] || TENANTS.hollow;
     glyph(dw.x, dw.y, spec.glyph, spec.color, 17, 1);
   }
@@ -5603,6 +5702,7 @@ function tickThreats() {
       log(`The torpedo runs true. It strikes forward and the sea comes in — the whole boat rings with it. (-${dmg} hull)`, 'danger', 'TORPEDO');
       sfx('impact');
       checkDeath();
+      if (state.alive) stressHold('the torpedo hit set it off', 0.6);   // a live warhead does not love a torpedo
     } else {
       log('The torpedo runs past where you were and on into the dark. You broke the solution in time.', '', 'TORPEDO');
       sfx('ping');
@@ -6144,7 +6244,8 @@ function applyMoveCosts(tileCostMultiplier) {
     return;
   }
   const depthFactor = 1 + state.currentDepth / 400;
-  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor));
+  // Dead weight in the hold makes the boat work harder for every hex.
+  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor)) + countHeldWith('heavy');
   state.air = Math.max(0, state.air - airCost);
 
   if (state.currentDepth > safeDepthNow()) {
@@ -6258,6 +6359,8 @@ function changeDepth(deltaMeters) {
     const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter * 0.5));
     state.hull = Math.max(0, state.hull - dmg);
     sfx('groan'); // the pressure sings against the plates
+    stressHold('the pressure found it', Math.min(1, 0.35 + over / 1400)); // carrying a warhead deep is a wager
+    if (!state.alive) { updateHUD(); render(); return; }
   }
   state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
 

@@ -961,8 +961,11 @@ check(sandbox.__st().air === airBefore, 'the thing goes for the nearest body, no
 check(screen.conditions.length > ashConds0 || screen.nerve < 70 || screen.dying,
   'the screening hand takes the blow meant for the captain', 'Ash marked');
 
-// A hand toe-to-toe with the thing lays into it.
+// A hand toe-to-toe with the thing lays into it. Reset the screen to a sound,
+// armed body first — the blow it took above could have left it unable to fight.
 D.x = line.x; D.y = line.y; D.hurt = 0; D.tough = 40;
+screen.conditions = []; screen.dying = false; screen.wounded = false;
+if (!(screen.gear && screen.gear.weapon)) screen.gear = { weapon: 'axe' };
 screen.fx = line.x + 1; screen.fy = line.y;
 const hurt0 = D.hurt;
 sandbox.__partyStep();
