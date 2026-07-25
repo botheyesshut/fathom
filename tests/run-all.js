@@ -13,7 +13,7 @@
 //                   mid-dive, and the helm locked out while ashore
 const { spawnSync } = require('child_process');
 const path = require('path');
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'items'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

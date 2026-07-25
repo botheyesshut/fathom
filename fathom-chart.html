@@ -596,6 +596,56 @@
   }
 
   /* ====== GAME OVER ====== */
+  #inventory {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 8, 16, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 55;
+    padding: 1.2rem;
+    backdrop-filter: blur(6px);
+  }
+  #inventory.show { display: flex; }
+  #inv-panel {
+    width: 100%;
+    max-width: 620px;
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(12,24,32,0.98), rgba(8,16,24,0.98));
+    border: 1px solid var(--sonar-dim);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  #inv-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--sonar-dim);
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.5rem;
+    color: var(--sonar); letter-spacing: 0.06em;
+  }
+  #inv-head .btn { flex: none; padding: 0.5rem 0.9rem; font-size: 0.62rem; }
+  #inv-list { overflow-y: auto; padding: 0.4rem; -webkit-overflow-scrolling: touch; }
+  .inv-row {
+    display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: 0.7rem;
+    padding: 0.7rem 0.8rem; border-bottom: 1px solid rgba(94,184,154,0.08);
+  }
+  .inv-row .ig { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; text-align: center; }
+  .inv-row .in { color: #d8e6df; font-size: 0.9rem; }
+  .inv-row .in b { color: #fff; font-weight: 600; text-transform: capitalize; }
+  .inv-row .in .fl { display: block; color: #6d8a88; font-size: 0.76rem; font-style: italic; margin-top: 0.15rem; line-height: 1.35; }
+  .inv-row .in .ct { color: var(--sonar); font-variant-numeric: tabular-nums; }
+  .inv-row .act {
+    flex: none; background: transparent; border: 1px solid var(--sonar-dim); color: var(--sonar);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+    padding: 0.5rem 0.7rem; border-radius: 2px; cursor: pointer; white-space: nowrap;
+  }
+  .inv-row .act:active { background: rgba(94,184,154,0.14); }
+  .inv-row .act.none { border-color: rgba(94,184,154,0.12); color: #4a5c5a; cursor: default; }
+  #inv-empty { padding: 2rem 1rem; text-align: center; color: #6d8a88; font-style: italic; font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; }
+
   #gameover {
     position: fixed;
     inset: 0;
@@ -652,6 +702,14 @@
     <span class="attr">— Logbook of the Vessel Erebus, recovered</span>
   </div>
   <button id="dive">Dive</button>
+</div>
+
+<!-- THE HOLD (inventory) -->
+<div id="inventory">
+  <div id="inv-panel">
+    <div id="inv-head"><span>The Hold</span><button class="btn" id="inv-close">Close</button></div>
+    <div id="inv-list"></div>
+  </div>
 </div>
 
 <!-- GAME OVER -->
@@ -727,6 +785,7 @@
   <div id="controls-row">
     <button class="btn" id="btn-ping">Ping</button>
     <button class="btn" id="btn-look" title="Look about you — describes the water, or the deck you are standing on. Costs nothing.">Look</button>
+    <button class="btn" id="btn-hold" title="Open the hold — everything you have found. Use a consumable, bolt on a fitting, read a chart.">Hold</button>
     <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
@@ -924,6 +983,249 @@ const GEAR = {
   firstaid: { slot: 'kit',    name: 'first-aid satchel',   heal: true, charges: 2, cost: { crates: 3 } },
   grenades: { slot: 'kit',    name: 'depth grenades',      boom: true, charges: 2, cost: { crates: 5 } },
 };
+
+// ---- ITEMS: the hold. Everything found, used, fitted, hoarded, and lost with
+// the boat. One data table — add a row, get a new thing worth diving for.
+//   use      — a consumable: spend it for an effect.
+//   fit      — bolt it to the boat, permanently. Upgrades a boat stat.
+//   key      — opens a sealed cache the sea kept shut.
+//   chart    — a clue: read it to mark a distant position worth the trip.
+//   valuable — pure worth. Nothing to DO with it but keep it, guard it, and
+//              lose sleep over other captains learning you have it.
+// `find` weights how often exploration turns one up (0 = only from set-pieces).
+// `depth` is the shallowest water it tends to surface in.
+const ITEMS = {
+  patchkit:   { name: 'a patch kit',            kind: 'use', glyph: '✚', col: '#e07a5a', hull: 28, val: 1, find: 10, depth: 0,
+                flavor: 'Cold-weld compound and a roll of plate tape. It will hold. It will not hold forever.' },
+  airflask:   { name: 'a charged air flask',    kind: 'use', glyph: '◍', col: '#7fc8e0', air: 130, val: 1, find: 9, depth: 0,
+                flavor: 'Somebody charged this and never got to breathe it.' },
+  rations:    { name: 'a case of rations',      kind: 'use', glyph: '⊞', col: '#c8a86a', stores: 45, val: 1, find: 9, depth: 0,
+                flavor: 'Salt meat, hard biscuit, and water that has been worse.' },
+  dressing:   { name: 'a field dressing',       kind: 'use', glyph: '✜', col: '#e0a0a0', heal: true, val: 1, find: 8, depth: 0,
+                flavor: 'Clean linen, sealed against the wet. For a hand that has met something in the dark.' },
+  probe:      { name: 'a sounding probe',       kind: 'use', glyph: '◎', col: '#9ed0c2', probe: true, val: 2, find: 6, depth: 600,
+                flavor: 'It drifts out on the current, listens, and comes back — and never once makes a sound of its own.' },
+  salts:      { name: 'a vial of waking salts', kind: 'use', glyph: '❦', col: '#d0b0e0', nerve: true, val: 2, find: 5, depth: 1200,
+                flavor: 'Sharp enough to call a mind back from wherever the deep was taking it.' },
+  sonararray: { name: 'a salvaged sonar array', kind: 'fit', fit: 'sonar', glyph: '➰', col: '#6ecfae', val: 4, find: 4, depth: 1200,
+                fitLog: 'You splice the salvaged array into the boat. The water opens up — you hear farther now, and it costs nothing.',
+                flavor: 'Off a better boat than yours. Its owners will not miss it.' },
+  pressurehull:{ name: 'plates of pressure-hull', kind: 'fit', fit: 'depth', glyph: '▧', col: '#8ea0b0', val: 4, find: 3, depth: 2400,
+                fitLog: 'You bolt the heavy plate over the weak frames. The boat sits lower and complains less. You can take it deeper now.',
+                flavor: 'Layered alloy from something built to go where you are going.' },
+  hatchkey:   { name: 'a corroded hatch key',   kind: 'key', glyph: '⚿', col: '#d4b45a', val: 2, find: 4, depth: 300,
+                flavor: 'It fits a lock somewhere. Locks in the deep are kept shut for reasons.' },
+  seachart:   { name: 'a water-stained sea chart', kind: 'chart', glyph: '✵', col: '#e0c060', val: 3, find: 5, depth: 300,
+                flavor: 'A hand marked a position on this, and pressed hard doing it.' },
+  idol:       { name: 'a carved idol of no faith you know', kind: 'valuable', glyph: '☥', col: '#c88ce8', val: 6, strange: true, find: 3, depth: 1800,
+                flavor: 'It is heavier than it should be, and warm, and you would rather it were not looking at you.' },
+  ingot:      { name: 'a bar of pre-Fall alloy', kind: 'valuable', glyph: '▬', col: '#d0d0b0', val: 4, find: 4, depth: 600,
+                flavor: 'Whatever this metal is, nobody has made it since, and everybody wants it.' },
+};
+
+// The hold, and permanent fittings. Overlay — lost with the boat, unless struck
+// below into a station.
+function itemCount(key) { return (state.items && state.items[key]) || 0; }
+function giveItem(key, n) { if (!ITEMS[key]) return; if (!state.items) state.items = {}; state.items[key] = itemCount(key) + (n || 1); }
+function takeItem(key, n) { if (!itemCount(key)) return false; state.items[key] -= (n || 1); if (state.items[key] <= 0) delete state.items[key]; return true; }
+function fitLevel(kind) { return (state.fits && state.fits[kind]) || 0; }
+
+// A weighted roll for what exploration turns up at a given depth, or null for
+// the usual crate. Deeper water yields the rarer, better things.
+function rollItem(depth, rng) {
+  const pool = [];
+  for (const k in ITEMS) { const it = ITEMS[k]; if (!it.find) continue; if ((it.depth || 0) > depth + 300) continue; for (let i = 0; i < it.find; i++) pool.push(k); }
+  if (!pool.length) return null;
+  return pool[Math.floor((rng ? rng() : rand()) * pool.length)];
+}
+
+// The hold, opened. Everything you carry, with the one thing you can DO with
+// each — the panel is where an item stops being a line in the log and becomes a
+// decision. Valuables and keys have no action here; they are worth, and waiting.
+const ITEM_ORDER = ['use', 'fit', 'chart', 'key', 'valuable'];
+function renderInventory() {
+  const list = document.getElementById('inv-list');
+  if (!list) return;
+  const items = state.items || {};
+  const keys = Object.keys(items).filter(k => ITEMS[k] && items[k] > 0);
+  keys.sort((a, b) => ITEM_ORDER.indexOf(ITEMS[a].kind) - ITEM_ORDER.indexOf(ITEMS[b].kind));
+  if (!keys.length) {
+    list.innerHTML = '<div id="inv-empty">The hold is empty. The deep is full. Go and see.</div>';
+    return;
+  }
+  const fitLine = () => {
+    const f = state.fits || {};
+    const bits = [];
+    if (f.sonar) bits.push(`sonar +${f.sonar}`);
+    if (f.depth) bits.push(`pressure-hull +${f.depth}`);
+    return bits.length ? `<div class="inv-row"><div class="ig" style="color:#6ecfae">⚙</div><div class="in"><b>fitted to the boat</b><span class="fl">${bits.join(', ')} — permanent, and it goes down with her.</span></div><div></div></div>` : '';
+  };
+  const act = (k) => {
+    const it = ITEMS[k];
+    if (it.kind === 'use' || it.kind === 'chart') return `<button class="act" data-k="${k}">${it.kind === 'chart' ? 'Read' : 'Use'}</button>`;
+    if (it.kind === 'fit') return `<button class="act" data-k="${k}">Fit</button>`;
+    return `<button class="act none">${it.kind === 'key' ? 'a key' : 'worth'}</button>`;
+  };
+  list.innerHTML = keys.map(k => {
+    const it = ITEMS[k];
+    return `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
+      `<div class="in"><b>${it.name}</b>${items[k] > 1 ? ` <span class="ct">×${items[k]}</span>` : ''}<span class="fl">${it.flavor}</span></div>` +
+      act(k) + '</div>';
+  }).join('') + fitLine();
+  for (const btn of list.querySelectorAll('.act[data-k]')) {
+    btn.addEventListener('click', () => { useItem(btn.getAttribute('data-k')); renderInventory(); });
+  }
+}
+function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
+function closeInventory() { document.getElementById('inventory').classList.remove('show'); }
+
+// Spend an item from the hold. One entry point; the table decides what happens.
+function useItem(key) {
+  if (!itemCount(key)) return;
+  const it = ITEMS[key];
+  if (!it) return;
+  if (it.kind === 'fit') return fitItem(key);
+  if (it.kind === 'chart') return readChart(key);
+  if (it.kind === 'key') { log(it.flavor + ' There is no lock within reach that it fits.', 'warn', 'HOLD'); return; }
+  if (it.kind === 'valuable') { log(it.flavor, 'strange', 'HOLD'); return; }
+  let done = false, msg = '';
+  if (it.hull) {
+    const b = state.hull, cap = activeSub().hull;
+    if (b >= cap) { log('The hull is whole. Keep the kit for when it is not.', 'warn', 'HOLD'); return; }
+    state.hull = Math.min(cap, b + it.hull); msg = `You work the patch in. (+${state.hull - b} hull)`; done = true;
+  } else if (it.air) {
+    const b = state.air, cap = activeSub().air;
+    if (b >= cap) { log('The tanks are full. Save it.', 'warn', 'HOLD'); return; }
+    state.air = Math.min(cap, b + it.air); msg = `You crack the flask into the boat's air. (+${state.air - b} air)`; done = true;
+  } else if (it.stores) {
+    const b = state.stores == null ? 100 : state.stores;
+    if (b >= 100) { log('The lockers are full.', 'warn', 'HOLD'); return; }
+    state.stores = Math.min(100, b + it.stores); msg = 'Struck below. The crew will eat a while longer.'; done = true;
+  } else if (it.heal) {
+    if (!healOneCrew()) { log('No one aboard needs a dressing.', 'warn', 'HOLD'); return; } done = true;
+  } else if (it.nerve) {
+    if (!steadyOneCrew()) { log('No one aboard is near enough to breaking to need it.', 'warn', 'HOLD'); return; } done = true;
+  } else if (it.probe) { silentScout(); done = true; }
+  if (done) { takeItem(key, 1); if (msg) log(msg, '', 'HOLD'); sfx('bell'); updateHUD(); render(); scheduleSave(); }
+}
+
+// Bolt a fitting to the boat — permanent, and it survives death only if the
+// boat does. A better boat is one you built out of what you found.
+function fitItem(key) {
+  const it = ITEMS[key];
+  if (!state.fits) state.fits = {};
+  state.fits[it.fit] = fitLevel(it.fit) + 1;
+  takeItem(key, 1);
+  log(it.fitLog || `You fit ${it.name} to the boat.`, 'strange', 'FIT');
+  sfx('bell'); updateHUD(); updatePingDisplay(); render(); scheduleSave();
+}
+
+// A dressing mends the worst hurt aboard by one; salts pull a fraying nerve back.
+function healOneCrew() {
+  let best = null, score = 0;
+  for (const m of state.crew) { crewVitals(m); const s = (m.dying ? 100 : 0) + m.conditions.length * 10 + (m.wounded ? 5 : 0); if (s > score) { score = s; best = m; } }
+  if (!best) return false;
+  crewVitals(best); best.dying = false;
+  if (best.conditions.length) best.conditions.shift();
+  best.wounded = best.conditions.some(k => CONDITIONS[k] && CONDITIONS[k].incap);
+  best.nerve = Math.min(100, best.nerve + 10);
+  log(`You see to ${best.name}. It is not surgery, but it holds.`, '', 'HOLD');
+  return true;
+}
+function steadyOneCrew() {
+  let best = null, low = 60;
+  for (const m of state.crew) { crewVitals(m); if (m.nerve < low) { low = m.nerve; best = m; } }
+  if (!best) return false;
+  best.nerve = Math.min(100, best.nerve + 45);
+  log(`The salts bring ${best.name} back to themselves — for now.`, '', 'HOLD');
+  return true;
+}
+
+// A sounding probe: a free, SILENT sweep. It reveals the water around you and
+// points you at the nearest thing worth the trip, and it never makes a sound —
+// the answer for a captain who needs to see without being heard.
+function silentScout() {
+  const R = 4;
+  for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
+    const q = state.q + dq, r = state.r + dr;
+    if (hexDistance({ q, r }, { q: state.q, r: state.r }) <= R) { tileAt(q, r); revealAt(q, r, state.currentDepth); }
+  }
+  let best = null, bd = 13;
+  for (const [k, t] of world) {
+    if (!t.poi || t.poi === 'deadend' || t.poi === 'surface' || t.poi === 'opening') continue;
+    if (state.poisFound.includes(k)) continue;
+    const d = hexDistance({ q: t.q, r: t.r }, { q: state.q, r: state.r });
+    if (d > 0 && d < bd) { bd = d; best = t; }
+  }
+  const tell = best
+    ? ` Off ${bearing(state.q, state.r, best.q, best.r)}, ${(bd * 60 / 1000).toFixed(1)} km, it finds something worth the swim.`
+    : ' Nothing of note in reach this time.';
+  log('The probe slips away on the current, silent, and comes back with a picture of the water around you.' + tell, 'strange', 'PROBE');
+}
+
+//--- THE TRAIL: clues, marks, and caches worth the swim ----------------------
+// Exploring should LEAD somewhere. A sea chart marks a distant position; reach
+// it and you find what somebody meant to come back for — and a rich cache holds
+// the next mark. Deterministic from the source, escalating with each step, so a
+// trail is a thread you pull, not noise. This is the reward exploration lacked.
+function leadTarget(seedStr, fromQ, fromR) {
+  const rng = mulberry32(hashStr(seedStr + ':' + worldSeed));
+  const ang = rng() * Math.PI * 2;
+  const dist = 8 + Math.floor(rng() * 9);          // 8-16 hexes off
+  const dq = Math.round(Math.cos(ang) * dist);
+  const dr = Math.round(Math.sin(ang) * dist);
+  const d = snapToGrid(600 + Math.floor(rng() * 3200));
+  return { q: fromQ + dq, r: fromR + dr, d: d };
+}
+
+function makeLead(tier, fromQ, fromR, seedStr) {
+  const t = leadTarget(seedStr, fromQ, fromR);
+  if (!state.leads) state.leads = [];
+  state.leads.push({ q: t.q, r: t.r, d: t.d, tier: tier });
+  const km = (hexDistance({ q: fromQ, r: fromR }, { q: t.q, r: t.r }) * 60 / 1000).toFixed(1);
+  log(`You lay the marks onto your own chart: a position ${bearing(fromQ, fromR, t.q, t.r)}, ${km} km off, ${Math.round(t.d)} m down. Someone pressed the pen through the paper marking it. It is yours to follow now.`, 'strange', 'CHART');
+  sfx('bell');
+}
+
+function readChart(key) {
+  takeItem(key, 1);
+  makeLead(1, state.q, state.r, 'chart:' + state.q + ':' + state.r + ':' + state.moves);
+  updateHUD(); render(); scheduleSave();
+}
+
+// Each move, see whether we have arrived at a marked position.
+function checkLeads() {
+  if (!state.leads || !state.leads.length) return;
+  const remaining = [];
+  for (const L of state.leads) {
+    if (hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r }) <= 1) resolveLead(L);
+    else {
+      remaining.push(L);
+      // A nudge as you close, so the thread never goes cold in the dark.
+      const d = hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r });
+      if (d <= 4 && rand() < 0.4) log(`The marked position is close now — ${bearing(state.q, state.r, L.q, L.r)}, ${(d * 60 / 1000).toFixed(1)} km.`, '', 'CHART');
+    }
+  }
+  state.leads = remaining;
+}
+
+function resolveLead(L) {
+  const tier = L.tier || 1;
+  const crates = 2 + tier + randInt(3);
+  const relics = (rand() < 0.35 + tier * 0.15) ? 1 : 0;
+  state.cargo += crates; state.relics += relics;
+  const got = [];
+  const nItems = 1 + (rand() < 0.5 ? 1 : 0) + Math.floor(tier / 2);
+  for (let i = 0; i < nItems; i++) { const it = rollItem(state.currentDepth + tier * 300); if (it) { giveItem(it, 1); got.push(ITEMS[it].name); } }
+  const hauls = [`${crates} crate${crates > 1 ? 's' : ''}`];
+  if (relics) hauls.push('a relic');
+  if (got.length) hauls.push(got.join(', '));
+  log(`The marked position, and it was no lie: a cache, sunk and forgotten — ${hauls.join(', ')}. Somebody meant to come back for this, and never did.`, 'strange', 'CACHE');
+  sfx('relic');
+  // The thread continues: the richer the find, the likelier it hides the next mark.
+  if (rand() < 0.5 + tier * 0.08) makeLead(tier + 1, state.q, state.r, 'lead:' + L.q + ':' + L.r + ':' + tier);
+  updateHUD(); render(); scheduleSave();
+}
 
 function teamScore() {
   let atk = 0, def = 0;
@@ -1155,6 +1457,9 @@ function resolveHazard(exp) {
 
 let activeSubKey = 'erebus';
 function activeSub() { return SUBS[activeSubKey]; }
+// Pressure-hull plating buys real depth: the safe band pushes down with every
+// sheet fitted, so the deep water that was killing you becomes merely dangerous.
+function safeDepthNow() { return activeSub().safeDepth + fitLevel('depth') * 450; }
 
 // Dock economy prices — every future service the port sells lives here.
 const DOCK_PRICES = {
@@ -2099,6 +2404,12 @@ const state = {
   stores: 100,
   // Crew you have lost, by name and role. A drowned ruin may give one back.
   lostCrew: [],
+  // The hold: {itemKey: count}. Overlay — lost with the boat, unless struck
+  // below into a station. Permanent fittings: {sonar, depth, ...} levels.
+  items: {},
+  fits: {},
+  // Marked positions worth the trip — a clue read, a trail to follow.
+  leads: [],
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -2161,7 +2472,7 @@ function syncFootControls(inside) {
   const own = isBaseDeck(f.q, f.r, f.d);
   if (!own) claim.textContent = 'Claim Deck';
   else if (state.base.breached) claim.textContent = 'Repump Station';
-  else if (f.crates + f.relics + state.cargo + state.relics > 0) claim.textContent = 'Stow Goods';
+  else if (f.crates + f.relics + state.cargo + state.relics + Object.keys(state.items || {}).length > 0) claim.textContent = 'Stow Goods';
   else claim.textContent = 'Draw Goods';
 
   const fort = document.getElementById('btn-fortify');
@@ -2754,6 +3065,21 @@ function render() {
   // Flush edge lines last so they always sit on top of all stone/water fills.
   for (const el of pendingEdges) g.appendChild(el);
 
+  // Marked positions — the marks you laid off a chart. Your own hand on your own
+  // chart, so they show whether or not the water there is known: a target ⌖ in
+  // gold, drawn wherever it falls in view. Following it is the whole game of it.
+  for (const L of (state.leads || [])) {
+    const lp = hexToPixel(L.q, L.r);
+    if (Math.abs(lp.x - camX) > halfW || Math.abs(lp.y - camY) > halfH) continue;
+    const mk = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    mk.setAttribute('x', lp.x); mk.setAttribute('y', lp.y);
+    mk.setAttribute('text-anchor', 'middle'); mk.setAttribute('dominant-baseline', 'central');
+    mk.setAttribute('font-family', 'JetBrains Mono, monospace'); mk.setAttribute('font-size', HEX_SIZE * 0.9);
+    mk.setAttribute('fill', '#f0c850'); mk.setAttribute('filter', 'url(#glow)');
+    mk.textContent = '⌖';
+    g.appendChild(mk);
+  }
+
   // Animated sonar wavefront — expands outward from the sub at ping origin.
   // Two rings: a bright leading edge, and a dimmer trailing one for thickness.
   if (state.ping) {
@@ -3019,7 +3345,8 @@ function pingPower() {
 function passiveRange() {
   // Silent running: dropping the sonar slider to 0 kills passive sonar too —
   // you go deaf, but you also go quiet, and the deep loses your thread faster.
-  return pingPower() === 0 ? 0 : PASSIVE_RANGE;
+  // A salvaged sonar array widens the passive envelope, permanently and silently.
+  return pingPower() === 0 ? 0 : PASSIVE_RANGE + fitLevel('sonar');
 }
 function sonarSilent() { return pingPower() === 0; }
 
@@ -3553,6 +3880,7 @@ function move(q, r) {
   // The water answers: landfall, creatures, then death checks.
   maybeBeach();
   creatureTick();
+  checkLeads();
   airCounsel();
   provisionTick();
   baseTick();
@@ -3928,7 +4256,12 @@ function interiorAt(q, r, d) {
     for (let j = 0; j < n; j++) {
       const x = rm.x + Math.floor(rnd() * rm.w), y = rm.y + Math.floor(rnd() * rm.h);
       const t = tiles.get(x + ',' + y);
-      if (t && t.t !== 'entry' && !t.loot) t.loot = rnd() < 0.22 ? 'relic' : 'crate';
+      if (t && t.t !== 'entry' && !t.loot) {
+        // Sometimes a deck holds a real thing, not just another crate — rarer
+        // and better the deeper you have come to find it.
+        if (rnd() < 0.16) { t.loot = rollItem(d, rnd) || 'crate'; }
+        else t.loot = rnd() < 0.22 ? 'relic' : 'crate';
+      }
     }
   }
 
@@ -4111,7 +4444,7 @@ function claimOrStore() {
     return;
   }
   state.cargo -= CLAIM_COST;
-  state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0 },
+  state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0, items: {} },
                  defence: 0, threat: 0, siege: null, breached: false, boarder: null, carved: [] };
   f.water = [];
   f.dweller = null;
@@ -4326,15 +4659,28 @@ function repumpStation() {
 function storeAtBase() {
   const f = state.foot, b = state.base;
   if (!f || !b) return;
+  if (!b.stores.items) b.stores.items = {};
+  const heldKeys = Object.keys(state.items || {}).filter(k => state.items[k] > 0);
   const c = f.crates + state.cargo, r = f.relics + state.relics;
-  if (c || r) {
+  if (c || r || heldKeys.length) {
     b.stores.crates += c; b.stores.relics += r;
-    f.crates = 0; f.relics = 0; state.cargo = 0; state.relics = 0;
-    log(`Struck below into the station: ${plural(c, 'crate')} and ${plural(r, 'relic')}. The sea cannot take what is not aboard.`, '', 'STATION');
-  } else if (b.stores.crates || b.stores.relics) {
+    for (const k of heldKeys) { b.stores.items[k] = (b.stores.items[k] || 0) + state.items[k]; }
+    f.crates = 0; f.relics = 0; state.cargo = 0; state.relics = 0; state.items = {};
+    const parts = [];
+    if (c) parts.push(plural(c, 'crate'));
+    if (r) parts.push(plural(r, 'relic'));
+    if (heldKeys.length) parts.push(`${heldKeys.length} of your finds`);
+    log(`Struck below into the station: ${parts.join(', ')}. The sea cannot take what is not aboard.`, '', 'STATION');
+  } else if (b.stores.crates || b.stores.relics || Object.keys(b.stores.items).length) {
     f.crates += b.stores.crates; f.relics += b.stores.relics;
-    log(`Drawn out of the station: ${plural(b.stores.crates, 'crate')} and ${plural(b.stores.relics, 'relic')}. Carry it out through the lock.`, '', 'STATION');
-    b.stores.crates = 0; b.stores.relics = 0;
+    for (const k in b.stores.items) { if (ITEMS[k]) giveItem(k, b.stores.items[k]); }
+    const drawnItems = Object.keys(b.stores.items).length;
+    const parts = [];
+    if (b.stores.crates) parts.push(plural(b.stores.crates, 'crate'));
+    if (b.stores.relics) parts.push(plural(b.stores.relics, 'relic'));
+    if (drawnItems) parts.push(`${drawnItems} stowed find${drawnItems > 1 ? 's' : ''}`);
+    log(`Drawn out of the station: ${parts.join(', ')}. Carry it out through the lock.`, '', 'STATION');
+    b.stores.crates = 0; b.stores.relics = 0; b.stores.items = {};
   } else {
     log('The station is empty, and so are your hands.', 'warn', 'STATION');
     return;
@@ -4446,7 +4792,8 @@ function stepFoot(x, y) {
   if (loot) {
     f.took.push(x + ',' + y);
     if (loot === 'relic') { f.relics++; log('Something the Fall did not manage to eat. You work it free and stow it.', 'strange', 'RELIC'); }
-    else { f.crates++; log('A crate, still sound. You sling it and go on.', '', 'SALVAGE'); }
+    else if (loot === 'crate') { f.crates++; log('A crate, still sound. You sling it and go on.', '', 'SALVAGE'); }
+    else if (ITEMS[loot]) { giveItem(loot, 1); const it = ITEMS[loot]; log(`${it.name.charAt(0).toUpperCase() + it.name.slice(1)}. ${it.flavor}`, it.strange ? 'strange' : '', 'HOLD'); }
     sfx('bell');
   } else if (t.t === 'rubble' && rand() < 0.3) {
     log('You pick a way over fallen structure. It shifts under the weight.', '', 'DARK');
@@ -4790,6 +5137,7 @@ function renderInterior() {
     const loot = f.took.includes(k) ? null : (t.loot || null);
     if (loot === 'crate') glyph(x, y, '▪', '#f4b860', 13, dim);
     else if (loot === 'relic') glyph(x, y, '✦', '#c88ce8', 14, dim);
+    else if (ITEMS[loot]) glyph(x, y, ITEMS[loot].glyph, ITEMS[loot].col, 14, dim);
   }
 
   // Tap-to-walk targets on the four neighbours. Solid ones stay tappable so a
@@ -5799,8 +6147,8 @@ function applyMoveCosts(tileCostMultiplier) {
   const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor));
   state.air = Math.max(0, state.air - airCost);
 
-  if (state.currentDepth > sub.safeDepth) {
-    const over = state.currentDepth - sub.safeDepth;
+  if (state.currentDepth > safeDepthNow()) {
+    const over = state.currentDepth - safeDepthNow();
     const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter));
     state.hull = Math.max(0, state.hull - dmg);
     if (state.currentDepth > sub.crushDepth) {
@@ -5905,8 +6253,8 @@ function changeDepth(deltaMeters) {
     if (rand() < 0.25) log('The ballast tanks roar. The sound carries.', 'warn');
   }
 
-  if (state.currentDepth > sub.safeDepth) {
-    const over = state.currentDepth - sub.safeDepth;
+  if (state.currentDepth > safeDepthNow()) {
+    const over = state.currentDepth - safeDepthNow();
     const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter * 0.5));
     state.hull = Math.max(0, state.hull - dmg);
     sfx('groan'); // the pressure sings against the plates
@@ -6501,6 +6849,11 @@ function handleTile(tile) {
         state.hull = Math.min(subS.hull, state.hull + repair);
         state.cargo++;
         log(`Wreckage. You patch the hull with what fits and winch a crate aboard. (+${repair} hull, +1 cargo)`, '', 'SALVAGE');
+        // A wreck sometimes gives up a real thing, not just crating.
+        if (rand() < 0.30) {
+          const item = rollItem(state.currentDepth);
+          if (item) { giveItem(item, 1); const it = ITEMS[item]; log(`And more than crating: ${it.name}. ${it.flavor}`, it.strange ? 'strange' : '', 'HOLD'); }
+        }
         state.poisFound.push(hexKey(tile.q, tile.r));
         setTile(tile.q, tile.r, 'passage');
       }
@@ -6764,7 +7117,7 @@ function updateHUD() {
   const depthBar = document.getElementById('depth-bar');
   depthBar.className = 'bar-fill';
   if (state.currentDepth > sub.crushDepth) depthBar.classList.add('danger');
-  else if (state.currentDepth > sub.safeDepth) depthBar.classList.add('warn');
+  else if (state.currentDepth > safeDepthNow()) depthBar.classList.add('warn');
 
   // Update vertical depth strip if present
   updateDepthStrip();
@@ -6791,6 +7144,7 @@ function endGame(title, summary) {
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
   state.armament = null; state.torpedoes = 0;
+  state.items = {}; state.fits = {};   // the hold and every fitting go down with the boat
   state.crew = [];
   state.expedition = null;
   state._outfitOffer = null; state._hireOffer = null; state._armoryOffer = null; state._armsOffer = null;
@@ -6833,6 +7187,9 @@ function restart() {
   state.clearedDecks = [];
   state.stores = 100;
   state.lostCrew = [];
+  state.items = {};
+  state.fits = {};
+  state.leads = [];
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -7127,6 +7484,9 @@ function doSave(force) {
       clearedDecks: state.clearedDecks,
       stores: state.stores,
       lostCrew: state.lostCrew,
+      items: state.items,
+      fits: state.fits,
+      leads: state.leads,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -7191,11 +7551,15 @@ function resumeGame(save) {
     if (b.breached == null) b.breached = false;
     if (b.boarder === undefined) b.boarder = null;
     if (!b.carved) b.carved = [];
-    if (!b.stores) b.stores = { crates: 0, relics: 0 };
+    if (!b.stores) b.stores = { crates: 0, relics: 0, items: {} };
+    if (!b.stores.items) b.stores.items = {};
   }
   state.clearedDecks = save.clearedDecks || [];
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
+  state.items = save.items || {};
+  state.fits = save.fits || {};
+  state.leads = save.leads || [];
   for (const m of state.crew) crewVitals(m);   // bring older/hired hands up to spec
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
@@ -7266,6 +7630,8 @@ document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-launch').addEventListener('click', launchDecoy);
 document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
+document.getElementById('btn-hold').addEventListener('click', openInventory);
+document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
 document.getElementById('btn-fortify').addEventListener('click', fortifyBase);
@@ -7531,7 +7897,7 @@ function updateDepthStrip() {
     hexRange.style.top = top + '%';
     hexRange.style.height = (bot - top) + '%';
   }
-  safeLine.style.top = pct(sub.safeDepth) + '%';
+  safeLine.style.top = pct(safeDepthNow()) + '%';
   crushLine.style.top = pct(sub.crushDepth) + '%';
   marker.style.top = `calc(${pct(state.currentDepth)}% - 2px)`;
 
