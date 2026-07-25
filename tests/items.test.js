@@ -62,6 +62,15 @@ try { vm.runInContext(script +
   '\nfunction __enclaveHere(){ return enclaveHere(); }' +
   '\nfunction __tradeSell(e,k){ tradeSell(e,k); }' +
   '\nfunction __tradeBuy(e,k){ tradeBuy(e,k); }' +
+  '\nfunction __canBreathe(){ return canBreatheWater(); }' +
+  '\nfunction __int(q,r,d){ return interiorAt(q,r,d); }' +
+  '\nfunction __enter(q,r,d){ state.currentDepth=d; tileAt(q,r); enterInterior({q:q,r:r}); }' +
+  '\nfunction __foot(){ return state.foot; }' +
+  '\nfunction __step(x,y){ stepFoot(x,y); }' +
+  '\nfunction __corpseVal(c){ return corpseValue(c); }' +
+  '\nfunction __sellBody(e,i){ tradeSellBody(e,i); }' +
+  '\nfunction __lose(m,how){ loseCrew(m,how); }' +
+  '\nfunction __footTile(x,y){ return footTile(x,y); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
@@ -302,6 +311,116 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   sandbox.resumeGame(sandbox.loadSave());
   const rs = sandbox.__state();
   check(rs.enclaves.length === 1 && rs.enclaves[0].culture === 'libertines', 'the peoples you have found survive a reload', rs.enclaves.length + ' enclave');
+}
+
+//--- 10. DROWNED WATER: the Dagon trait made meaningful -------------------------
+{
+  const s = sandbox.__state();
+  s.foot = null; s.alive = true; s.items = {}; s.crew = []; s.air = 200000; s.stores = 100;
+
+  // Interiors generate water: shallow to wade, drowned to swim.
+  let wetDeck = null, drownedKey = null;
+  for (let q = 0; q < 80 && !wetDeck; q++) {
+    const ch = sandbox.__int(q, 31, 900);
+    for (const [k, t] of ch.tiles) if (t.wet === 'drowned') { wetDeck = { q: q, ch: ch }; drownedKey = k; break; }
+  }
+  check(!!wetDeck, 'the tunnels hold water — streams, pools, drowned passages', wetDeck ? 'found at q=' + wetDeck.q : 'none in 80 decks');
+  let shallowCount = 0, drownCount = 0, fallCount = 0;
+  for (let q = 0; q < 40; q++) {
+    const ch = sandbox.__int(q, 33, 900);
+    for (const t of ch.tiles.values()) { if (t.wet === 'shallow') shallowCount++; if (t.wet === 'drowned') drownCount++; if (t.fall) fallCount++; }
+  }
+  check(shallowCount > 0 && drownCount > 0, 'both wadeable and drowned water generate', shallowCount + ' shallow, ' + drownCount + ' drowned');
+  check(fallCount > 0, 'and water falls through broken decks', fallCount + ' falls');
+
+  // A human crew cannot breathe water. Dagon work is the only thing that changes it.
+  s.items = {};
+  check(sandbox.__canBreathe() === false, 'an air-breathing party cannot cross drowned water', 'no gills');
+  s.items = { gillhood: 1 };
+  check(sandbox.__canBreathe() === true, 'a Dagon gill-hood makes the drowned passage only a passage', 'gills');
+
+  // Crossing drowned water WITHOUT gills is a warned, expensive decision.
+  s.items = {}; s.foot = null;
+  const dc = drownedKey.indexOf(','), dx = +drownedKey.slice(0, dc), dy = +drownedKey.slice(dc + 1);
+  sandbox.__enter(wetDeck.q, 31, 900);
+  const ff = sandbox.__foot();
+  // stand beside the drowned tile
+  ff.x = dx; ff.y = dy - 1;
+  if (!sandbox.__footTile(ff.x, ff.y)) { ff.x = dx - 1; ff.y = dy; }
+  if (!sandbox.__footTile(ff.x, ff.y)) { ff.x = dx + 1; ff.y = dy; }
+  if (!sandbox.__footTile(ff.x, ff.y)) { ff.x = dx; ff.y = dy + 1; }
+  const standX = ff.x, standY = ff.y;
+  sandbox.__step(dx, dy);
+  check(sandbox.__foot().x === standX && sandbox.__foot().y === standY, 'the first attempt at drowned water is a WARNING, not a drowning', 'held back');
+  const airPre = s.air;
+  sandbox.__step(dx, dy);   // second tap: commit
+  check(sandbox.__foot().x === dx && sandbox.__foot().y === dy, 'the second is a decision — you go under', 'swam it');
+  const drownCost = airPre - s.air;
+  // With gills the same crossing is cheap.
+  s.foot = null; s.items = { gillhood: 1 }; s.air = 200000;
+  sandbox.__enter(wetDeck.q, 31, 900);
+  const gf = sandbox.__foot(); gf.x = standX; gf.y = standY;
+  const airPre2 = s.air;
+  sandbox.__step(dx, dy);
+  const gillCost = airPre2 - s.air;
+  check(gillCost < drownCost, 'and with Dagon gills it costs a fraction of what it costs a human', drownCost + ' air -> ' + gillCost + ' air');
+}
+
+//--- 11. THE CORPSE TRADE: what the Children of Dagon want most -----------------
+{
+  const s = sandbox.__state();
+  s.foot = null; s.items = {}; s.cargo = 0; s.corpses = []; s.lostCrew = []; s.alive = true; s.air = 200000;
+
+  // A hand lost ON A DECK leaves a body where they fell.
+  let site = null;
+  for (let q = 0; q < 40 && !site; q++) { const c = sandbox.__int(q, 35, 900); if (c.rooms && c.rooms.length) site = q; }
+  s.crew = [{ name: 'Halloran', role: 'diver', nerve: 70, conditions: [], scars: [], dying: false, gear: {} }];
+  sandbox.__enter(site, 35, 900);
+  const fd = sandbox.__foot();
+  const dead = s.crew[0];
+  dead.ashore = true; dead.fx = fd.x; dead.fy = fd.y;
+  sandbox.__lose(dead, 'taken');
+  check(fd.dead && fd.dead.length === 1 && fd.dead[0].name === 'Halloran', 'a hand lost on a deck leaves a body where they fell', 'body on deck');
+  // A mind that BREAKS walks off and leaves nothing to carry.
+  s.crew = [{ name: 'Vane', role: 'diver', nerve: 70, conditions: [], scars: [], dying: false, gear: {}, ashore: true, fx: fd.x, fy: fd.y }];
+  const before = fd.dead.length;
+  sandbox.__lose(s.crew[0], 'broke');
+  check(fd.dead.length === before, 'but a broken mind walks into the dark and leaves nothing behind', 'no body');
+
+  // Walking over the body takes it up — and the crew feel it.
+  s.crew = [{ name: 'Ash', role: 'diver', nerve: 80, conditions: [], scars: [], dying: false, gear: {} }];
+  const body = fd.dead[0];
+  const adj = [[0,-1],[1,0],[0,1],[-1,0]].map(([ax,ay]) => ({x: body.x+ax, y: body.y+ay})).find(p => sandbox.__footTile(p.x, p.y));
+  fd.x = adj.x; fd.y = adj.y;
+  const nerve0 = s.crew[0].nerve;
+  sandbox.__step(body.x, body.y);
+  check((s.corpses || []).length === 1, 'you can go back for your dead and take them up', s.corpses.length + ' aboard');
+  check(s.crew[0].nerve < nerve0, 'and the living watch you do it', nerve0 + ' -> ' + s.crew[0].nerve);
+
+  // Freshness decays, and it is worth less the longer you carry it.
+  const freshVal = sandbox.__corpseVal(s.corpses[0]);
+  s.corpses[0].fresh = 5;
+  const staleVal = sandbox.__corpseVal(s.corpses[0]);
+  check(staleVal < freshVal, 'the dead do not keep — Dagon pay for FRESH', freshVal + ' cr -> ' + staleVal + ' cr');
+
+  // Selling one to the Children of Dagon pays, and costs the crew dearly.
+  s.foot = null; s.corpses[0].fresh = 60; s.cargo = 0; s.enclaves = [];
+  s.crew = [{ name: 'Bell', role: 'diver', nerve: 90, conditions: [], scars: [], dying: false, gear: {} }];
+  s.q = 0; s.r = 0; s.currentDepth = 2400;
+  sandbox.__spawnEnclave('dagon', 0, 0, 2400);
+  const de = sandbox.__enclaveHere();
+  const pay = sandbox.__corpseVal(s.corpses[0]);
+  const bellNerve = s.crew[0].nerve;
+  sandbox.__sellBody(de, 0);
+  check(s.corpses.length === 0 && s.cargo === pay, 'the Children of Dagon buy the body, and pay well', '+' + s.cargo + ' crates');
+  check(s.crew[0].nerve < bellNerve - 5, 'and every hand aboard is the worse for having watched', bellNerve + ' -> ' + s.crew[0].nerve);
+
+  // It all survives a reload.
+  s.corpses = [{ name: 'Reed', fresh: 33 }];
+  sandbox.doSave(true);
+  s.corpses = [];
+  sandbox.resumeGame(sandbox.loadSave());
+  check(sandbox.__state().corpses.length === 1, 'the dead you carry survive a reload', 'still aboard');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

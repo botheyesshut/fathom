@@ -104,7 +104,23 @@ KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-sub
 - **Enclaves**: `spawnEnclave(culture,q,r,depth)` on the SAME deterministic per-chunk rail as creatures (5%/chunk, `spawnedChunks`-gated); culture chosen by depth band. `state.enclaves` is overlay, saved. Drawn on the chart with the culture's glyph/colour once known. `checkEnclave()` (in `move`) fires once on arrival (`state._atEnclave` guard), logs the creed, and opens the trade panel.
 - **Trade panel** (`#trade`, reuses the Hold's styling): creed, crates aboard, "They will sell" (their stock at `markup`) and "They will take" (only what they prize, at their rate, incl. relics at `4×mult`).
 - **items.test.js → 52 checks.** Culture checks: differential valuation both ways, each people's specialty stock, a real sell→buy loop at an enclave, enclaves survive a reload.
-- **NEXT BUILD, ALREADY PROMISED TO SEAN (do this first)**: **(1) Underwater tunnels on foot** — rivers/streams/waterfalls/pools/lakes inside interiors, so the Dagon *breathe-underwater* trait is meaningful and drowned passages are a real obstacle for human crew; **(2) the corpse trade** — Dagon `buys.flesh` is declared in data but NOT yet implemented: bringing them fresh dead (crew lost on a dive?) should be a genuine, horrible option. Both are Sean's explicit asks.
+- ~~NEXT BUILD~~ **BOTH DONE 2026-07-25 — see below.**
+
+### DROWNED TUNNELS + THE CORPSE TRADE (2026-07-25). Both of Sean's Dagon asks, built.
+**(1) WATER IN THE INTERIORS.** `interiorAt` now generates water as substrate on the tile: `t.wet = 'shallow' | 'drowned'`, plus `t.fall` (a waterfall through a broken deck).
+- **Generation**: a watercourse between two rooms (55%) whose middle stretch drowns; a pool filling a room (40%, shallow rim / drowned heart); a fall (30%). Rubble no longer generates on wet tiles. Measured: ~460 shallow / ~170 drowned tiles per 40 decks.
+- **THE POINT — drowned water is a wall to lungs and a door to Dagon.** `canBreatheWater()` = `countHeldWith('gills') > 0`. Without gills: the FIRST tap on a drowned tile is a **warning only** (`f.warnedDrown`, fair — never a surprise drowning), the second commits; crossing costs `FOOT_AIR*8` and has a 30% chance to inflict a condition + fray nerve. With gills it costs `FOOT_AIR`. **Measured 16 air vs 2.**
+- **Your crew will not follow you under.** `bodyStepToward` refuses drowned tiles without gills — the party waits at the bank and you go on alone. That is the tactical teeth: loot beyond drowned water is guarded by the water itself.
+- **THE LOOP THAT CLOSES IT**: the only source of `gills` is **`gillhood`, sold by the Children of Dagon** (`find: 0` — never found loose). Trade with the Deep Ones to earn the freedom of their own element. Shallow water = +1 air/step and prose; falls get their own line.
+- **Render**: drowned `≈` on deep blue, shallow `~` on lighter, falls `⇊`.
+
+**(2) THE CORPSE TRADE.** `buys.flesh` is now real.
+- A hand lost **on a deck** leaves a body where they fell (`foot.dead[]`, drawn `☠`). A mind that **breaks** walks into the dark and leaves nothing — you cannot sell someone who was never a body.
+- Walking onto the body takes it up → `state.corpses[{name, fresh:60}]`, and **every hand aboard loses nerve watching you do it**.
+- `corpseTick()` (in move) decays freshness and periodically frays the crew ("something in the hold that used to answer to a name"). `corpseValue` = `max(3, 14 × fresh/60)` — **Dagon pay for FRESH**, 14 crates down to 3.
+- `tradeSellBody()` at a Dagon enclave: pays out, and costs **every crew member 12 nerve**. It is the worst thing in the game, it is available, and it pays.
+- **items.test.js → 70 checks.** Water: generation, gills gate both ways, warning-then-commit, crew refuse to follow, cost differential. Corpses: body left on death but not on breaking, recovery costs nerve, freshness decays value, the sale pays and scars the crew, and it all survives a reload.
+- **KNOBS NOT FELT**: water generation rates .55/.4/.3, drowned air ×8, condition chance 0.3, corpse fresh 60 / value 14, nerve costs 4 (recover) and 12 (sell).
 - **KNOBS NOT FELT**: enclave rate 0.05/chunk, depth bands, all mults/markups, relic price `4×mult`.
 
 ## CREW POSITIONING — Push B, the tactical layer that makes on-foot combat cohere (2026-07-25)

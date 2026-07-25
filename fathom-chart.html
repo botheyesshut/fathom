@@ -1116,6 +1116,8 @@ const ITEMS = {
                 flavor: 'The last dozen entries are the same bearing, written over and over, pressed harder each time.' },
   bonekey:    { name: 'a great bone key',         kind: 'key', glyph: '⚷', col: '#d4c060', val: 2, strange: true, find: 3, depth: 1200,
                 flavor: 'Yellowed, and far too large for any lock a human hand ever turned. It fits something, somewhere, that was built to be kept shut.' },
+  gillhood:   { name: 'a gill-hood of Dagon make', kind: 'use', glyph: '❈', col: '#6fae72', keep: true, val: 5, strange: true, find: 0, depth: 2400, props: ['gills', 'sig'], sig: 'dagon',
+                flavor: 'Wet leather and something that is not leather, and it breathes for you. Wear it and a drowned passage is only a passage. The Children of Dagon make these, and part with them rarely, and never cheaply.' },
 };
 
 // The hold, and permanent fittings. Overlay — lost with the boat, unless struck
@@ -1152,7 +1154,7 @@ const CULTURES = {
     name: 'the Children of Dagon', short: 'the Deep Ones', glyph: 'ᛝ', col: '#6fae72', depthBand: 'deep',
     creed: 'They breathe the black water and worship what sleeps under it, and they are wretched and conniving and eat men with a terrible relish. But bring them a relic of their god, or flesh brought fresh, and even they will trade.',
     buys: { sigs: ['dagon'], props: ['cursed'], relics: true, flesh: true, mult: 3.6 },
-    sells: ['blackpearl', 'idol', 'saltiron', 'lens', 'ambergris', 'chime'],
+    sells: ['gillhood', 'blackpearl', 'idol', 'saltiron', 'lens', 'ambergris', 'chime'],
     markup: 2.6, danger: true,
   },
   confluence: {
@@ -1192,6 +1194,9 @@ function heldWith(p) { return Object.keys(state.items || {}).filter(k => itemCou
 function countHeldWith(p) { return heldWith(p).reduce((s, k) => s + itemCount(k), 0); }
 function itemWorth(key) { const it = ITEMS[key]; if (!it) return 0; const c = it.sig && CULTURES[it.sig]; return (it.val || 0) * (c && c.buys ? c.buys.mult : 1); }
 function luminousBonus() { return countHeldWith('luminous'); }
+// Can the party cross drowned water? Only with Dagon work — which is the whole
+// point of dealing with them: they sell you the freedom of their own element.
+function canBreatheWater() { return countHeldWith('gills') > 0; }
 
 // A stress event — pressure, fire, or violence. Volatile things may go off;
 // fragile things may shatter. Both are LOUD, and both are gone.
@@ -1258,6 +1263,19 @@ function flareOut() {
   log('The flare climbs and bursts, and the whole deep goes white for a heartbeat. You see everything — and everything sees you.', 'warn', 'FLARE');
   sfx('ping');
 }
+
+// The dead you are carrying do not keep. Dagon pay for FRESH; what you have had
+// aboard a long while is worth less to them, and worse for everyone still alive.
+function corpseTick() {
+  if (!state.corpses || !state.corpses.length) return;
+  for (const c of state.corpses) c.fresh = Math.max(0, c.fresh - 1);
+  if (state.crew.length && rand() < 0.18) {
+    const m = state.crew[Math.floor(rand() * state.crew.length)];
+    crewVitals(m); frayNerve(m, 2);
+    if (rand() < 0.25) log('Nobody goes aft if they can help it. There is something in the hold that used to answer to a name.', 'strange', 'THE DEAD');
+  }
+}
+function corpseValue(c) { return Math.max(3, Math.round(14 * (c.fresh / 60))); }
 
 // What the hold does to you each turn, beyond the curse. A soothing relic pulls
 // a fraying nerve back; a LIVING thing stirs, nibbles, and now and then grows.
@@ -1394,11 +1412,21 @@ function renderTrade(e) {
     const rp = relicCrates(e.culture);
     sellRows += `<div class="inv-row"><div class="ig" style="color:#c88ce8">✦</div><div class="in"><b>a relic</b> <span class="ct">×${state.relics}</span><span class="fl">they hoard these — ${rp} crates apiece</span></div><button class="act warn" data-sellrelic="1">Sell · ${rp} cr</button></div>`;
   }
+  // The other trade. They want it more than they want the relics, and they do
+  // not pretend otherwise. Fresh is worth most, which is its own horror.
+  if (cu.buys.flesh && (state.corpses || []).length) {
+    for (let i = 0; i < state.corpses.length; i++) {
+      const c = state.corpses[i], p = corpseValue(c);
+      const state_ = c.fresh > 40 ? 'fresh' : c.fresh > 15 ? 'no longer fresh' : 'long past fresh';
+      sellRows += `<div class="inv-row"><div class="ig" style="color:#a05858">☠</div><div class="in"><b>${c.name}</b><span class="fl">${state_} — and they are already looking at it</span></div><button class="act warn" data-sellbody="${i}">Sell · ${p} cr</button></div>`;
+    }
+  }
   sellEl.innerHTML = sellRows || '<div id="inv-empty">You carry nothing they want. Bring what they prize, and come back.</div>';
 
   for (const b of buyEl.querySelectorAll('.act[data-buy]')) b.addEventListener('click', () => tradeBuy(e, b.getAttribute('data-buy')));
   for (const b of sellEl.querySelectorAll('.act[data-sell]')) b.addEventListener('click', () => tradeSell(e, b.getAttribute('data-sell')));
   for (const b of sellEl.querySelectorAll('.act[data-sellrelic]')) b.addEventListener('click', () => tradeSellRelic(e));
+  for (const b of sellEl.querySelectorAll('.act[data-sellbody]')) b.addEventListener('click', () => tradeSellBody(e, +b.getAttribute('data-sellbody')));
 }
 function openTrade(e) { tradeAt = e; renderTrade(e); document.getElementById('trade').classList.add('show'); }
 function closeTrade() { document.getElementById('trade').classList.remove('show'); tradeAt = null; }
@@ -1417,6 +1445,18 @@ function tradeSell(e, key) {
   log(`Sold: ${ITEMS[key].name}, ${p} crates. It was worth more to them than to anyone.`, '', 'TRADE');
   sfx('bell'); renderTrade(e); updateHUD(); render(); scheduleSave();
 }
+// The worst thing you can do in this game, and it is available, and it pays.
+function tradeSellBody(e, i) {
+  const c = (state.corpses || [])[i];
+  if (!c) return;
+  const p = corpseValue(c);
+  state.corpses.splice(i, 1);
+  state.cargo += p;
+  log(`You hand ${c.name} across, and the Children of Dagon take the body with both hands and real gladness. ${p} crates. Nobody aboard looks at you on the way out.`, 'danger', 'THE DEAD');
+  for (const m of state.crew) { crewVitals(m); frayNerve(m, 12); }
+  sfx('theft'); renderTrade(e); updateHUD(); render(); scheduleSave();
+}
+
 function tradeSellRelic(e) {
   if (state.relics <= 0) return;
   const p = relicCrates(e.culture);
@@ -1725,6 +1765,13 @@ function frayNerve(m, amount, quiet) {
 function loseCrew(m, how) {
   if (m.lost) return;
   m.lost = true;
+  // A body that falls on a deck STAYS on that deck. You can go back for it —
+  // to bury it, or for the other thing, which the Children of Dagon will pay
+  // for. The broken ones walk off into the dark and leave nothing to carry.
+  if (m.ashore && state.foot && how !== 'broke') {
+    if (!state.foot.dead) state.foot.dead = [];
+    state.foot.dead.push({ name: m.name, x: m.fx, y: m.fy });
+  }
   m.ashore = false; m.fx = null; m.fy = null;   // the body leaves the deck
   const i = state.crew.indexOf(m);
   if (i >= 0) state.crew.splice(i, 1);
@@ -2787,6 +2834,8 @@ const state = {
   leads: [],
   // The peoples' settlements you have found — overlay, fixed, saved.
   enclaves: [],
+  // Your dead, carried. They do not keep, and the Deep Ones are buying.
+  corpses: [],
   // The first economy: crates aboard, and crates banked ashore at the dock.
   cargo: 0,
   cargoBanked: 0,
@@ -4280,6 +4329,7 @@ function move(q, r) {
   checkEnclave();  // have we come upon one of the peoples?
   hauntTick();     // the old ones work on the crew while their relics ride below
   holdTick();      // and the rest of the hold — the soothing, the living — stirs too
+  corpseTick();    // and the dead, if you are carrying any, go on not keeping
   airCounsel();
   provisionTick();
   baseTick();
@@ -4646,9 +4696,47 @@ function interiorAt(q, r, d) {
     if (best) dweller = { x: best.x, y: best.y, kind: kind, tough: tenantTough(kind, key) };
   }
 
+  // WATER IN THE ROCK. Some of these places were never dry: a stream finds its
+  // way through the deck, pools in the low rooms, falls through a broken floor.
+  // Shallow water you wade. DROWNED water you cannot breathe — and that is the
+  // whole point: the Children of Dagon swim it as easily as air, and you do not.
+  // A drowned passage is a wall to a human crew and a door to them.
+  const wetKeys = [];
+  if (rnd() < 0.55) {
+    // A watercourse: pick two rooms and run water along the corridor between.
+    const a = mid(rooms[Math.floor(rnd() * rooms.length)]);
+    const b = mid(rooms[Math.floor(rnd() * rooms.length)]);
+    let x = a.x, y = a.y, guard = 0;
+    while ((x !== b.x || y !== b.y) && guard++ < 60) {
+      const k = x + ',' + y;
+      if (tiles.has(k)) { tiles.get(k).wet = 'shallow'; wetKeys.push(k); }
+      if (x !== b.x) x += x < b.x ? 1 : -1;
+      else if (y !== b.y) y += y < b.y ? 1 : -1;
+    }
+    // Where the course runs deepest it drowns entirely.
+    const drownFrom = Math.floor(wetKeys.length * (0.35 + rnd() * 0.3));
+    const drownTo = Math.min(wetKeys.length, drownFrom + 2 + Math.floor(rnd() * 4));
+    for (let i = drownFrom; i < drownTo; i++) { const t = tiles.get(wetKeys[i]); if (t && t.t !== 'entry') t.wet = 'drowned'; }
+  }
+  if (rnd() < 0.4) {
+    // A pool, filling the low end of a room. Deep at its heart.
+    const rm = rooms[Math.floor(rnd() * rooms.length)];
+    for (let yy = rm.y; yy < rm.y + rm.h; yy++) for (let xx = rm.x; xx < rm.x + rm.w; xx++) {
+      const t = tiles.get(xx + ',' + yy); if (!t || t.t === 'entry') continue;
+      const edge = xx === rm.x || yy === rm.y || xx === rm.x + rm.w - 1 || yy === rm.y + rm.h - 1;
+      t.wet = edge ? 'shallow' : 'drowned';
+    }
+  }
+  if (rnd() < 0.3) {
+    // A fall — water coming down through a broken deck above, loud and cold.
+    const rm = rooms[Math.floor(rnd() * rooms.length)];
+    const c = mid(rm); const t = tiles.get(c.x + ',' + c.y);
+    if (t && t.t !== 'entry') { t.fall = true; t.wet = t.wet || 'shallow'; }
+  }
+
   // Fallen structure, then what is worth carrying out. Rubble stays PASSABLE:
   // an impassable scatter could seal a corridor and strand the loot behind it.
-  for (const t of tiles.values()) if (t.t === 'floor' && rnd() < 0.07) t.t = 'rubble';
+  for (const t of tiles.values()) if (t.t === 'floor' && !t.wet && rnd() < 0.07) t.t = 'rubble';
   for (let i = 1; i < rooms.length; i++) {
     const rm = rooms[i];
     const n = rnd() < 0.55 ? 1 : rnd() < 0.5 ? 2 : 0;
@@ -5185,11 +5273,54 @@ function stepFoot(x, y) {
     return;
   }
 
+  // DROWNED WATER. A flooded passage is a wall to a body that breathes air —
+  // and no wall at all to something that does not. Going under costs dearly and
+  // can fill a lung; the crew will not follow you in, and wait at the edge.
+  const drowned = t.wet === 'drowned';
+  if (drowned && !canBreatheWater()) {
+    if (!f.warnedDrown) {
+      f.warnedDrown = true;
+      log('The passage ahead is drowned to the deckhead — black water, no air above it at all. You can go under and swim it, and it will cost you, or you can find another way. Whatever lives down here swims it without a thought.', 'warn', 'DROWNED');
+      return;   // the first tap is a warning, the second is a decision
+    }
+  }
+
   f.x = x; f.y = y; f.steps++;
-  const wet = f.water.includes(nk);
-  state.air = Math.max(0, state.air - (wet ? FOOT_AIR * 3 : FOOT_AIR) - (t.t === 'rubble' ? 1 : 0));
-  if (wet) log('You go in up to the chest and push through. It is cold, and it is rising.', 'warn', 'WATER');
+  const flood = f.water.includes(nk);
+  let cost = FOOT_AIR + (t.t === 'rubble' ? 1 : 0);
+  if (flood) cost = FOOT_AIR * 3;
+  if (t.wet === 'shallow') cost += 1;
+  if (drowned) cost = canBreatheWater() ? FOOT_AIR : FOOT_AIR * 8;
+  state.air = Math.max(0, state.air - cost);
+  if (flood) log('You go in up to the chest and push through. It is cold, and it is rising.', 'warn', 'WATER');
+  else if (drowned && canBreatheWater()) log('You go under and swim it, easy as walking. The water is not an obstacle to you.', 'strange', 'DROWNED');
+  else if (drowned) {
+    log('You take a breath and go under. The cold takes hold of your chest, and the dark down there is total, and it is a long way across.', 'danger', 'DROWNED');
+    // A hard swim can fill a lung. The deep charges for its shortcuts.
+    if (rand() < 0.3 && state.crew.length) {
+      const m = state.crew[Math.floor(rand() * state.crew.length)];
+      crewVitals(m); inflictCondition(m, 0.55); frayNerve(m, 6);
+    }
+  } else if (t.wet === 'shallow') {
+    if (rand() < 0.35) log(t.fall
+      ? 'Water comes down through the broken deck above in a cold, steady roar. You wade under it.'
+      : 'You wade through running water, ankle-deep and colder than the air.', '', 'WATER');
+  }
   lampSweep();
+
+  // Your dead, where they fell. Taking one up is a decision you make with your
+  // eyes open: it is a burial, or it is cargo the Deep Ones will pay for.
+  if (f.dead && f.dead.length) {
+    const i = f.dead.findIndex(dd => dd.x === x && dd.y === y);
+    if (i >= 0) {
+      const body = f.dead.splice(i, 1)[0];
+      if (!state.corpses) state.corpses = [];
+      state.corpses.push({ name: body.name, fresh: 60 });
+      log(`You find ${body.name} where they fell, and take up what is left. The crew watch you do it and say nothing at all.`, 'danger', 'THE DEAD');
+      for (const m of state.crew) { crewVitals(m); frayNerve(m, 4); }
+      sfx('theft');
+    }
+  }
 
   const loot = footLootAt(x, y);
   if (loot) {
@@ -5320,9 +5451,13 @@ function bodyStepToward(m, tx, ty) {
   let best = null, bd = d0;
   for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
     const nx = m.fx + dx, ny = m.fy + dy, nk = nx + ',' + ny;
-    if (!footTile(nx, ny)) continue;
+    const nt = footTile(nx, ny);
+    if (!nt) continue;
     if (f.closed.includes(nk)) continue;
     if (bodyAt(nx, ny, m)) continue;
+    // A hand who cannot breathe water will not follow you into a drowned
+    // passage. They stop at the edge — and you go on alone, or you do not go.
+    if (nt.wet === 'drowned' && !canBreatheWater()) continue;
     const nd = Math.abs(nx - tx) + Math.abs(ny - ty);
     if (nd < bd) { bd = nd; best = { x: nx, y: ny }; }
   }
@@ -5536,7 +5671,12 @@ function renderInterior() {
       box(x, y, t.t === 'rubble' ? '#433727' : '#3a3126', dim);
       if (t.t === 'rubble') glyph(x, y, '·', '#8a7758', 15, dim);
     }
-    // The sea, laid over whatever it has already taken.
+    // Water that was always here: a stream you wade, a drowned passage you
+    // cannot breathe. Drowned reads darker and deeper than the flood does.
+    if (t.wet === 'drowned') { box(x, y, '#0d3550', dim * 0.85); glyph(x, y, '≈', '#4a90b8', 13, dim * 0.9); }
+    else if (t.wet === 'shallow') { box(x, y, '#1a4256', dim * 0.5); glyph(x, y, '~', '#5aa0c0', 12, dim * 0.7); }
+    if (t.fall) glyph(x, y, '⇊', '#8fd0e8', 14, dim);
+    // The sea coming in, laid over whatever it has already taken.
     if (f.water.includes(k)) box(x, y, '#1d4a63', dim * 0.6);
     const loot = f.took.includes(k) ? null : (t.loot || null);
     if (loot === 'crate') glyph(x, y, '▪', '#f4b860', 13, dim);
@@ -5588,6 +5728,9 @@ function renderInterior() {
     out.addEventListener('click', () => leaveInterior('You climb back out through the lock'));
     g.appendChild(out);
   }
+
+  // Your dead, lying where they fell. You always know where that is.
+  for (const dd of (f.dead || [])) glyph(dd.x, dd.y, '☠', '#a05858', 14, 1);
 
   // Your own hands — always drawn, because you know where you left them. Colour
   // reads their state at a glance: green sound, amber marked, red going. A ring
@@ -7604,6 +7747,7 @@ function restart() {
   state.fits = {};
   state.leads = [];
   state.enclaves = [];
+  state.corpses = [];
   state.crew = [];
   state._hireOffer = null;
   state._armoryOffer = null;
@@ -7902,6 +8046,7 @@ function doSave(force) {
       fits: state.fits,
       leads: state.leads,
       enclaves: state.enclaves,
+      corpses: state.corpses,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -7976,6 +8121,7 @@ function resumeGame(save) {
   state.fits = save.fits || {};
   state.leads = save.leads || [];
   state.enclaves = save.enclaves || [];
+  state.corpses = save.corpses || [];
   for (const m of state.crew) crewVitals(m);   // bring older/hired hands up to spec
   state.foot = save.foot || null;   // reload can find you still inside the ruin
   if (state.foot) {
