@@ -51,6 +51,10 @@ try { vm.runInContext(script +
   '\nfunction __worth(k){ return itemWorth(k); }' +
   '\nfunction __lampR(){ return effLampR(); }' +
   '\nfunction __cultures(){ return CULTURES; }' +
+  '\nfunction __hold(){ holdTick(); }' +
+  '\nfunction __noise(q,r,l){ noiseMade(q,r,l); }' +
+  '\nfunction __see(){ seeAround(); }' +
+  '\nfunction __itemsAll(){ return Object.keys(ITEMS); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
@@ -195,6 +199,61 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // SIGNIFICANT: the WORTH hook works, and Cultures is left EMPTY for Sean.
   check(Object.keys(sandbox.__cultures()).length === 0, 'the cultures registry is left empty on purpose', 'yours to fill');
   check(sandbox.__worth('idol') > 0, 'a significant item has a base worth (x1 until a people prizes it)', 'worth=' + sandbox.__worth('idol'));
+}
+
+//--- 8. The big roster, and the new properties it introduced -------------------
+{
+  const s = sandbox.__state();
+  s.foot = null; s.alive = true;
+  check(sandbox.__itemsAll().length >= 30, 'the item table is a great big diverse thing now', sandbox.__itemsAll().length + ' items');
+
+  // WARD: the deep stokes slower when you carry salt-iron. Same shout, less alert.
+  s.items = {}; s.fits = {}; s.currentDepth = 1500; s.q = 0; s.r = 0;
+  s.creatures = [{ type: 'lurker', q: 2, r: 0, depth: 1500, interest: 0, aggression: 0.5, fleeing: false }];
+  sandbox.__noise(0, 0, 5); const loudInterest = s.creatures[0].interest;
+  s.creatures[0].interest = 0; s.items = { saltiron: 1 };
+  sandbox.__noise(0, 0, 5); const wardedInterest = s.creatures[0].interest;
+  check(wardedInterest < loudInterest, 'a ward makes the deep stoke slower to the same noise', loudInterest + ' -> ' + wardedInterest);
+
+  // QUIETING fit: same idea, bolted to the boat, against a rival's alert.
+  s.items = {};
+  s.creatures = [{ type: 'rival', hostile: true, gone: false, crippled: false, q: 2, r: 0, depth: 1500, alert: 0 }];
+  sandbox.__noise(0, 0, 5); const loudAlert = s.creatures[0].alert;
+  s.creatures[0].alert = 0; s.fits = { quiet: 2 };
+  sandbox.__noise(0, 0, 5); const quietAlert = s.creatures[0].alert;
+  check(quietAlert < loudAlert, 'a quieting fit hands a rival less of your bearing', loudAlert + ' -> ' + quietAlert);
+  s.fits = {};
+
+  // TRIM fit: the boat slips through deep water for less air per hex.
+  s.items = {}; s.currentDepth = 3000; s.fits = {}; s.air = 1000;
+  sandbox.applyMoveCosts(1); const plainMove = 1000 - s.air;
+  s.currentDepth = 3000; s.air = 1000; s.fits = { trim: 3 };
+  sandbox.applyMoveCosts(1); const trimMove = 1000 - s.air;
+  check(trimMove < plainMove, 'fine trim tanks make deep travel cost less air', plainMove + ' -> ' + trimMove + ' air/hex');
+  s.fits = {};
+
+  // SOOTHING: a chime steadies a fraying nerve over time.
+  s.items = { chime: 1 }; s.crew = [{ name: 'Rue', role: 'diver', nerve: 40, conditions: [], scars: [], dying: false, gear: {} }];
+  s.stores = 100; const soothed0 = s.crew[0].nerve;
+  for (let i = 0; i < 40; i++) sandbox.__hold();
+  check(s.crew[0].nerve > soothed0, 'a soothing relic steadies a nerve while it rides with you', soothed0 + ' -> ' + s.crew[0].nerve);
+
+  // LIVING: a sealed jar stirs — over many turns it nibbles nerve or grows.
+  s.items = { specimenjar: 1 }; s.crew = [{ name: 'Cur', role: 'diver', nerve: 100, conditions: [], scars: [], dying: false, gear: {} }];
+  let stirred = false;
+  for (let i = 0; i < 120 && !stirred; i++) { sandbox.__hold(); if (s.crew[0].nerve < 100 || (s.items.specimenjar || 0) > 1) stirred = true; }
+  check(stirred, 'a living thing in the hold does not sit still', s.crew[0].nerve < 100 ? 'it stirred the crew' : 'it grew');
+
+  // SEEING: the lens unmasks an angler wearing a false face.
+  s.items = {}; s.currentDepth = 1800; s.q = 0; s.r = 0;
+  s.creatures = [{ type: 'angler', revealed: false, q: 2, r: 0, depth: 1800, mask: 'salvage' }];
+  sandbox.__see();
+  check(s.creatures[0].revealed === true, 'a scrying lens strips a false face off an angler', 'unmasked');
+
+  // A live torpedo, used, joins the magazine.
+  s.items = { torpedo: 1 }; s.torpedoes = 0; s.foot = null;
+  sandbox.__use('torpedo');
+  check(s.torpedoes === 1 && !s.items.torpedo, 'a live torpedo, cradled into the tube, arms the boat', 'torps=' + s.torpedoes);
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

@@ -1031,6 +1031,57 @@ const ITEMS = {
                 flavor: 'It is heavier than it should be, and warm, and you would rather it were not looking at you. It sheds a faint light, and since it came aboard the crew have started to dream.' },
   ingot:      { name: 'a bar of pre-Fall alloy', kind: 'valuable', glyph: '▬', col: '#d0d0b0', val: 4, find: 4, depth: 600, props: ['heavy', 'sig'], sig: 'unplaced',
                 flavor: 'Whatever this metal is, nobody has made it since, and everybody wants it. It is dead weight in the hold until you find who.' },
+
+  // ---- salvaged pre-Fall tech: mundane once, miraculous now ----
+  weldkit:    { name: 'a pre-Fall welding rig', kind: 'use', glyph: '⌁', col: '#e0925a', hull: 46, val: 2, find: 6, depth: 600,
+                flavor: 'There is charge in it yet for one long, bright scar down the hull. After that it is scrap like everything else.' },
+  oxygen:     { name: 'an oxygen candle',       kind: 'use', glyph: '◐', col: '#9ed8f0', air: 210, val: 2, find: 6, depth: 900,
+                flavor: 'It burns cold and gives back breath, and the writing on it is in a hand nobody living can read.' },
+  freshwater: { name: 'a cask of fresh water',  kind: 'use', glyph: '≋', col: '#8fc0e0', stores: 60, val: 1, find: 7, depth: 0,
+                flavor: 'The one thing the whole endless sea is full of, and not a drop of it will keep a crew alive.' },
+  hydrophone: { name: 'a trailing hydrophone',  kind: 'fit', fit: 'sonar', glyph: '⊙', col: '#6ecfae', val: 3, find: 4, depth: 900,
+                fitLog: 'You stream the hydrophone out astern on its wire. The water widens — you hear farther, and give nothing back.',
+                flavor: 'Trailed on a long wire, it hears what the hull is too loud to notice.' },
+  bafflegear: { name: 'sound-baffle lagging',   kind: 'fit', fit: 'quiet', glyph: '▤', col: '#8ea0a8', val: 3, find: 4, depth: 1500,
+                fitLog: 'You line the boat with lagging and dead-space. The Erebus goes quieter than she has any right to — the deep will have to work to find you now.',
+                flavor: 'Deadening for every surface that rings. A boat that does not announce itself lives longer.' },
+  trimtanks:  { name: 'fine trim tanks',        kind: 'fit', fit: 'trim', glyph: '⊟', col: '#a0c0b0', val: 3, find: 4, depth: 1500,
+                fitLog: 'You plumb in the fine trim gear. Now you slip up and down through the water for a fraction of the air it used to cost.',
+                flavor: 'Delicate ballast control off a boat built by better hands than made yours.' },
+  torpedo:    { name: 'a live torpedo',         kind: 'use', glyph: '➹', col: '#e0724a', torpedo: 1, val: 3, find: 4, depth: 900, props: ['volatile'],
+                flavor: 'One good fish, still in its cradle. Cradle it into the tube — and until you do, mind the pressure, and mind the fight.' },
+  flare:      { name: 'a signal flare',         kind: 'use', glyph: '☀', col: '#f0d060', flare: true, val: 1, find: 6, depth: 0,
+                flavor: 'It burns white and turns the whole deep to daylight for a moment. Everything near you is lit — and everything near you is looking.' },
+
+  // ---- provisions & medicine: the slow arithmetic of staying alive ----
+  antivenom:  { name: 'an ampoule of antivenom', kind: 'use', glyph: '⚕', col: '#b0e0a0', heal: true, val: 2, find: 5, depth: 900,
+                flavor: 'For a bite that keeps on biting after the teeth are long gone. It mends more than a dressing, and there is only ever the one.' },
+  still:      { name: 'a hand water-still',      kind: 'use', glyph: '⚗', col: '#a0d0c0', keep: true, val: 2, find: 4, depth: 600, props: ['preserving'],
+                flavor: 'It wrings drinkable water out of the foul, drop by patient drop. Keep it running and the lockers empty slower.' },
+
+  // ---- relic-work and the strange: what the old ones left in the dark ----
+  saltiron:   { name: 'a salt-iron ward',        kind: 'use', glyph: '✛', col: '#c0b090', keep: true, val: 3, strange: true, find: 4, depth: 1200, props: ['ward'],
+                flavor: 'Old iron, sea-cured and cold. The things that hunt the dark do not like the taste of it in the water, and give you room.' },
+  chime:      { name: 'a still-water chime',      kind: 'use', glyph: '♪', col: '#a0d0e0', keep: true, val: 3, strange: true, find: 3, depth: 1800, props: ['soothing'],
+                flavor: 'It rings, once, when the water goes truly still — and the crew sleep a little easier for hearing it. There is not much mercy down here. This is some.' },
+  lens:       { name: 'a scrying lens',           kind: 'use', glyph: '⊚', col: '#b090d0', see: true, val: 3, strange: true, find: 3, depth: 1800, props: ['seeing'],
+                flavor: 'Ground from something that was never glass. Look through it and the water gives up what it was pretending not to be.' },
+  blackpearl: { name: 'a black pearl',            kind: 'valuable', glyph: '⬤', col: '#9070b0', val: 6, strange: true, find: 3, depth: 2400, props: ['luminous', 'sig'], sig: 'unplaced',
+                flavor: 'Big as a closed fist, and it holds a light it never lets go of. It came out of something vast, and the vast thing is not necessarily done with it.' },
+  specimenjar:{ name: 'a sealed specimen jar',    kind: 'valuable', glyph: '⚱', col: '#8aa870', val: 4, strange: true, find: 3, depth: 1800, props: ['living'],
+                flavor: 'Something in the jar has moved since you sealed it. You are almost sure of it. You would rather not become certain.' },
+  effigy:     { name: 'a drowned-wax effigy',     kind: 'valuable', glyph: '‡', col: '#c88ce8', val: 5, strange: true, find: 3, depth: 2400, props: ['cursed', 'sig'], sig: 'unplaced',
+                flavor: 'A little figure of grey wax, and it is always warm on one side. The side that faces you. It is always the side that faces you.' },
+  ambergris:  { name: 'a lump of deep ambergris', kind: 'valuable', glyph: '◕', col: '#d0c090', val: 5, find: 3, depth: 3000,
+                flavor: 'Grey and waxy and worth its weight over again — voided by something that died deeper and longer ago than the Fall itself.' },
+  scrimshaw:  { name: 'a scrimshawed bone',       kind: 'valuable', glyph: '⋔', col: '#e0d0b0', val: 3, find: 4, depth: 600, props: ['sig'], sig: 'unplaced',
+                flavor: 'A whole drowned history scratched into old bone by a hand that had nothing else left to do but remember.' },
+
+  // ---- charts & keys: knowledge, and the doors it opens ----
+  logbook:    { name: 'a salt-swollen logbook',   kind: 'chart', glyph: '❑', col: '#d8c060', val: 3, find: 5, depth: 300,
+                flavor: 'The last dozen entries are the same bearing, written over and over, pressed harder each time.' },
+  bonekey:    { name: 'a great bone key',         kind: 'key', glyph: '⚷', col: '#d4c060', val: 2, strange: true, find: 3, depth: 1200,
+                flavor: 'Yellowed, and far too large for any lock a human hand ever turned. It fits something, somewhere, that was built to be kept shut.' },
 };
 
 // The hold, and permanent fittings. Overlay — lost with the boat, unless struck
@@ -1105,6 +1156,57 @@ function hauntTick() {
   }
 }
 
+// A scrying lens: reveal what the water is hiding — the anglers wearing a false
+// face — and light the near water, without a sound.
+function seeAround() {
+  const R = 5;
+  let unmasked = 0;
+  for (const c of state.creatures) {
+    if (hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) > R) continue;
+    if (Math.abs(c.depth - state.currentDepth) > DEPTH_GRID) continue;
+    if (c.type === 'angler' && !c.revealed) { c.revealed = true; unmasked++; }
+    revealAt(c.q, c.r, c.depth);
+  }
+  for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
+    const q = state.q + dq, r = state.r + dr;
+    if (hexDistance({ q, r }, { q: state.q, r: state.r }) <= R) { tileAt(q, r); revealAt(q, r, state.currentDepth); }
+  }
+  log(unmasked
+    ? `Through the lens the water gives up what it was hiding — ${unmasked} thing${unmasked > 1 ? 's' : ''} that was wearing a false face.`
+    : 'Through the lens the near water clears. Nothing here is pretending to be something else, this time.', 'strange', 'SEEING');
+}
+
+// A flare: the loud opposite of the probe. See everything around you at once —
+// and be seen by everything around you at once.
+function flareOut() {
+  const R = 6;
+  for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
+    const q = state.q + dq, r = state.r + dr;
+    if (hexDistance({ q, r }, { q: state.q, r: state.r }) <= R) { tileAt(q, r); revealAt(q, r, state.currentDepth); }
+  }
+  noiseMade(state.q, state.r, 5);
+  log('The flare climbs and bursts, and the whole deep goes white for a heartbeat. You see everything — and everything sees you.', 'warn', 'FLARE');
+  sfx('ping');
+}
+
+// What the hold does to you each turn, beyond the curse. A soothing relic pulls
+// a fraying nerve back; a LIVING thing stirs, nibbles, and now and then grows.
+function holdTick() {
+  if (countHeldWith('soothing') && state.crew.length && rand() < 0.4) {
+    let worst = null, low = 90;
+    for (const m of state.crew) { crewVitals(m); if (m.nerve < low) { low = m.nerve; worst = m; } }
+    if (worst) frayNerve(worst, -(2 + randInt(3)));   // negative fray = a nerve steadying
+  }
+  for (const k of heldWith('living')) {
+    if (rand() < 0.12 && state.crew.length) {
+      const m = state.crew[Math.floor(rand() * state.crew.length)];
+      crewVitals(m); frayNerve(m, 2 + randInt(3));
+      if (rand() < 0.25) log(`Whatever shares the hold with ${ITEMS[k].name} is not where you left it.`, 'strange', 'STIR');
+    }
+    if (rand() < 0.04) { giveItem(k, 1); log(`${ucfirst(ITEMS[k].name)}: there is more of it than there was. It is growing.`, 'strange', 'STIR'); }
+  }
+}
+
 // Cast a thing back into the sea — the only cure for a curse, and a fast way to
 // be rid of something a moment before it kills you.
 function jettisonItem(key) {
@@ -1136,6 +1238,8 @@ function renderInventory() {
     const bits = [];
     if (f.sonar) bits.push(`sonar +${f.sonar}`);
     if (f.depth) bits.push(`pressure-hull +${f.depth}`);
+    if (f.quiet) bits.push(`quieting +${f.quiet}`);
+    if (f.trim) bits.push(`trim +${f.trim}`);
     return bits.length ? `<div class="inv-row"><div class="ig" style="color:#6ecfae">⚙</div><div class="in"><b>fitted to the boat</b><span class="fl">${bits.join(', ')} — permanent, and it goes down with her.</span></div><div></div></div>` : '';
   };
   // Properties, spelled out, so a cursed or volatile thing is never a surprise.
@@ -1143,6 +1247,9 @@ function renderInventory() {
     volatile: { t: 'volatile', c: '#e0724a' }, cursed: { t: 'cursed', c: '#c88ce8' },
     fragile: { t: 'fragile', c: '#d0b0e0' }, heavy: { t: 'heavy', c: '#a8a888' },
     luminous: { t: 'luminous', c: '#bfe0ff' }, sig: { t: 'significant', c: '#e0c060' },
+    ward: { t: 'ward', c: '#c0b090' }, soothing: { t: 'soothing', c: '#a0d0e0' },
+    preserving: { t: 'preserving', c: '#a0d0c0' }, living: { t: 'living', c: '#8aa870' },
+    seeing: { t: 'seeing', c: '#b090d0' },
   };
   const tags = (it) => !it.props ? '' : ' ' + it.props.filter(p => PROP_TAG[p])
     .map(p => `<span class="tag" style="color:${PROP_TAG[p].c};border-color:${PROP_TAG[p].c}66">${PROP_TAG[p].t}</span>`).join('');
@@ -1152,7 +1259,9 @@ function renderInventory() {
     if (it.kind === 'chart') return `<button class="act" data-k="${k}">Read</button>`;
     if (it.kind === 'fit') return `<button class="act" data-k="${k}">Fit</button>`;
     if (hasProp(k, 'cursed') || hasProp(k, 'volatile')) return `<button class="act warn" data-j="${k}">Cast Off</button>`;
-    return `<button class="act none">${it.kind === 'key' ? 'a key' : hasProp(k, 'luminous') ? 'a light' : 'worth'}</button>`;
+    const passive = it.kind === 'key' ? 'a key' : hasProp(k, 'ward') ? 'a ward' : hasProp(k, 'soothing') ? 'a comfort'
+      : hasProp(k, 'preserving') ? 'at work' : hasProp(k, 'living') ? 'carry it?' : hasProp(k, 'luminous') ? 'a light' : 'worth';
+    return `<button class="act none">${passive}</button>`;
   };
   list.innerHTML = keys.map(k => {
     const it = ITEMS[k];
@@ -1197,6 +1306,9 @@ function useItem(key) {
   } else if (it.nerve) {
     if (!steadyOneCrew()) { log('No one aboard is near enough to breaking to need it.', 'warn', 'HOLD'); return; } done = true;
   } else if (it.probe) { silentScout(); done = true; }
+  else if (it.torpedo) { state.torpedoes = (state.torpedoes || 0) + it.torpedo; msg = 'You cradle the fish into the tube. One more good argument, ready to run.'; done = true; }
+  else if (it.see) { seeAround(); done = true; }
+  else if (it.flare) { flareOut(); done = true; }
   if (done) { takeItem(key, 1); if (msg) log(msg, '', 'HOLD'); sfx('bell'); updateHUD(); render(); scheduleSave(); }
 }
 
@@ -1391,7 +1503,9 @@ function vigorMult() {
 // (below a third) is worth saying out loud, once.
 function provisionTick(amount) {
   const before = state.stores == null ? 100 : state.stores;
-  state.stores = Math.max(0, before - (amount || 0.4));
+  // A water-still and the like make the lockers last: provisions drain slower.
+  const eff = (amount || 0.4) * Math.max(0.25, 1 - countHeldWith('preserving') * 0.4);
+  state.stores = Math.max(0, before - eff);
   if (before > 33 && state.stores <= 33) {
     log('Stores are running low. The crew feels it — hungry hands take a wound harder, and the dark leans heavier. Time to think about turning back.', 'warn', 'STORES');
   }
@@ -3975,6 +4089,7 @@ function move(q, r) {
   creatureTick();
   checkLeads();
   hauntTick();     // the old ones work on the crew while their relics ride below
+  holdTick();      // and the rest of the hold — the soothing, the living — stirs too
   airCounsel();
   provisionTick();
   baseTick();
@@ -5428,6 +5543,9 @@ function creatureCanEnter(c, q, r, depth) {
 function noiseMade(q, r, loudness) {
   if (!loudness) return;
   const reach = 2 + loudness * 3;
+  // A salt-iron ward in the hold, and a hull lined for silence, both make the
+  // deep less willing to fix on you — the hunters and rival boats stoke slower.
+  const damp = Math.max(0.25, (1 - countHeldWith('ward') * 0.4) * (1 - fitLevel('quiet') * 0.22));
 
   // A station is found the same way the boat is: by noise. Working loudly on
   // your own doorstep is how the deep learns there is a door. This is the
@@ -5436,7 +5554,7 @@ function noiseMade(q, r, loudness) {
   if (b && !b.siege) {
     const bd = hexDistance({ q: b.q, r: b.r }, { q, r });
     if (bd <= reach + 4) {
-      b.threat = (b.threat || 0) + loudness * 5 * (1 - bd / (reach + 5));
+      b.threat = (b.threat || 0) + loudness * 5 * (1 - bd / (reach + 5)) * damp;
     }
   }
 
@@ -5448,7 +5566,7 @@ function noiseMade(q, r, loudness) {
     if (Math.abs(c.depth - state.currentDepth) > 3 * DEPTH_GRID) continue;
     const d = hexDistance({ q: c.q, r: c.r }, { q, r });
     if (d > reach + 2) continue;
-    const spike = Math.max(10, Math.round(loudness * 16 * (1 - d / (reach + 3))));
+    const spike = Math.max(2, Math.round(loudness * 16 * (1 - d / (reach + 3)) * damp));
     c.alert = Math.min(100, (c.alert || 0) + spike);
     c.fq = q; c.fr = r;   // it marks where the sound came from and hunts there
   }
@@ -5460,7 +5578,7 @@ function noiseMade(q, r, loudness) {
     if (d > reach) continue;
     // Noise stokes interest — louder and closer bites deeper, and an eager
     // (aggressive) beast is stoked more. It turns toward where the sound came from.
-    const spike = Math.max(6, Math.round(loudness * 14 * (1 - d / (reach + 1)) * (0.6 + c.aggression * 0.8)));
+    const spike = Math.max(1, Math.round(loudness * 14 * (1 - d / (reach + 1)) * (0.6 + c.aggression * 0.8) * damp));
     const was = c.interest || 0;
     c.interest = Math.min(100, was + spike);
     c.tq = q; c.tr = r;
@@ -6244,8 +6362,9 @@ function applyMoveCosts(tileCostMultiplier) {
     return;
   }
   const depthFactor = 1 + state.currentDepth / 400;
-  // Dead weight in the hold makes the boat work harder for every hex.
-  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor)) + countHeldWith('heavy');
+  // Fine trim tanks make the boat slip through the water for less; dead weight in
+  // the hold makes her work harder for every hex.
+  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor) - fitLevel('trim')) + countHeldWith('heavy');
   state.air = Math.max(0, state.air - airCost);
 
   if (state.currentDepth > safeDepthNow()) {
@@ -6336,7 +6455,8 @@ function changeDepth(deltaMeters) {
   if (state.currentDepth > 0) {
     const absDelta = Math.abs(deltaMeters);
     const fastFactor = absDelta > sub.diveStep ? sub.diveAirCostFast / sub.diveAirCost : 1;
-    const airCost = Math.max(1, Math.round(sub.diveAirCost * fastFactor));
+    // Fine trim tanks make every foot of depth-change cost less air.
+    const airCost = Math.max(1, Math.round(sub.diveAirCost * fastFactor) - fitLevel('trim'));
     state.air = Math.max(0, state.air - airCost);
   } else {
     // Reached the surface — recover air and log a breach if we just came up

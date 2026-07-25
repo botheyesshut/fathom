@@ -81,6 +81,20 @@ KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-sub
 - **KNOBS NOT FELT**: volatile 0.26×intensity & trigger intensities, curse bleed 0.35×n & fray 3-6, heavy +1 air/each, luminous +1 tile/each, fragile 0.5×intensity.
 - **COMBO EMERGENCE (Sean will enjoy)**: the idol is cursed + luminous + significant at once — a fortune that lights your way, eats your crew's minds, and is worth a killing to a people who do not yet exist. Adding more multi-prop items is just more `props` arrays.
 
+### THE BIG ROSTER + 5 MORE PROPERTIES (2026-07-25). Sean: "great big, diverse, colorful, dangerous, awe-inspiring, internally consistent with our mythos."
+- **ITEMS is now ~34 entries**, grouped by mythos: salvaged pre-Fall tech (weldkit, oxygen candle, freshwater, hydrophone, sound-baffle lagging, trim tanks, live torpedo, flare), provisions/medicine (antivenom, hand water-still), and relic-work/the strange (salt-iron ward, still-water chime, scrying lens, black pearl, specimen jar, drowned-wax effigy, deep ambergris, scrimshaw), plus charts/keys (logbook, great bone key). Depth-gated + find-weighted.
+- **5 NEW PROPERTIES, each a real wired hook (not a label)**:
+  - **ward** → `noiseMade` `damp` factor: hunters + rival boats + base-threat all stoke slower per warded item. Item: saltiron. Defensive/stealth.
+  - **soothing** → `holdTick()` (in move): restores a fraying nerve (negative `frayNerve`). The deep's rare mercy; counters cursed. Item: chime.
+  - **preserving** → `provisionTick` multiplies drain down. Item: still. Logistics.
+  - **living** → `holdTick()`: nibbles crew nerve, and rarely GROWS (`giveItem` +1). Item: specimenjar. Scary/emergent.
+  - **seeing** → `seeAround()` use-effect: unmasks nearby anglers + reveals near water, silently. Item: lens (`see:true`).
+- **2 NEW FITS**: **quiet** (bafflegear) → shares the `noiseMade` `damp` with ward; **trim** (trimtanks) → `-fitLevel('trim')` air in BOTH `applyMoveCosts` (deep travel — where air actually drains, 9→6/hex at 3000m) and `changeDepth`. NB: trim as a flat subtraction is negligible on dive-cost alone (floors at 1) — it was retargeted to the horizontal move cost where it bites. A knob to watch.
+- **New use-effects**: `torpedo:1` (loads `state.torpedoes`, and the item is itself `volatile`), `flare` (loud radius reveal — the noisy opposite of the silent probe), `see`.
+- **Panel**: PROP_TAG extended (ward/soothing/preserving/living/seeing); passive `keep:true` relics show a flavour label (a ward / a comfort / at work / carry it?); fit summary shows quiet/trim.
+- **items.test.js → 40 checks.** New: ward damps interest, quieting damps rival alert, trim cuts deep-travel air, soothing steadies a nerve, a living jar stirs/grows, the lens unmasks an angler, a live torpedo arms the boat. Verified in a live browser (panel + tags + no console errors).
+- **STILL OPEN (Sean's own)**: the `CULTURES` registry stays empty — the peoples who prize `sig` items are his to invent. And keys (hatchkey/bonekey/cylinder) still have no locks that consume them — the keys-and-locks layer is the obvious next content beat.
+
 ## CREW POSITIONING — Push B, the tactical layer that makes on-foot combat cohere (2026-07-25)
 **The abstract "screening pool" is gone. Crew are BODIES on the deck, and the deep takes the nearest one — so the screen is now literal geometry.** This is what makes the rich crew-condition system (Push A) actually pay off in play.
 - **Bodies**: on `enterInterior`, `deployParty(ch)` sends up to `PARTY_MAX=3` able crew over the side as bodies (`m.ashore, m.fx, m.fy, m.hold`), placed around the entry. Incapacitated crew stay aboard. `partyBodies()` = ashore & not lost. Fields persist on the member objects (saved/restored). `recallParty()` on `leaveInterior`; `loseCrew` clears the body.
