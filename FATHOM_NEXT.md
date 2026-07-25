@@ -43,6 +43,19 @@ KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-sub
 - **Port**: surgeon+shore now clears conditions, restores nerve to 100, refills stores — **scars stay** (they are the record). 
 - **interior.test.js → 110 checks.** KNOBS NOT FELT: nerve start 70 / fray 8-per-hit, condition tiers & effects, `vigorMult` 0.6 span, `provisionTick` rates, station +40, worn chance 0.4, `crewDef·0.12` armour tilt (currently strong — a wardsuit deleted ALL tier-2 at sev 0.7 in test).
 
+## SUBMARINE vs SUBMARINE (2026-07-24) — Sean: "stealthy, hair-raising, cat and mouse, Red October, NOT a slugfest"
+**The whole duel is DETECTION, and it reuses the game's existing sound grammar.** No new HP-trading — one good torpedo cripples a boat, two ends it, so nobody trades blows; you manoeuvre in the dark for the one shot that lands unheard.
+- **Rivals gained a combat soul** (spawnCreature init): `hull:20`, `alert` (its fix on YOU: <30 unaware / 30-70 searching / 70+ locked), `silent`, `underPower`, `torps:3`, `reload`, `fq/fr` (last fix), `nerve` (bold vs timid), `hostile` (60% — the rest are the old salvager racers, now `tickSalvager`).
+- **Mutual, sound-based detection**: `noiseMade` now spikes rival alert + sets its fix (a ping/shot/ballast/impact hands it your bearing); a **proximity sniff** in tickRival leaks your machinery within 3 hexes unless silent-running; alert DECAYS each turn (faster when you run silent — the escape).
+- **The ghost**: a rival that cuts engines (`silent`) or isn't `underPower` gives NO passive contact and is NOT drawn (`rivalLocalized()` gate in render + the passive-contact `hidden` clause). You cannot fire on what you cannot place.
+- **The active-sonar bargain**: `ping()` sets `revealTurns=3` on rivals in range (you see them precisely) — but the same ping's `noiseMade` spikes their alert to you. Find it and be found.
+- **Firing both ways**: player torpedoes → `hitRival()` (hull; ≤8 → crippled + flees silent; ≤0 → sunk; a hit sets its alert 100 — it knows where you are now). Harpoon stays creature-only (won't hull a boat). Rival → `rivalFires()` pushes a `state.threats` torpedo with a 2-turn fuse and a loud WARNING that always reveals the shooter (fair).
+- **Evasion / `tickThreats()`** (called top of creatureTick): the fish runs to its aim and detonates on turn 0. **Break the solution** by opening the range (2+ hexes), **changing depth** (>1 slice), or a **decoy** (buoy within 2 of the aim reseats the fish onto it). Torpedo drawn as a red `◄` — a running fish is always visible, the one mercy.
+- **Persistence**: `state.threats` saved/restored/reset. Rivals ride in state.creatures.
+- **Tests**: creature.test.js +20 checks (ghost, noise→alert, silent-escape, locked-fires, hit/miss/depth/decoy resolution, hitRival cripple/sink, no-fire-on-ghost, crippled-runs, threats survive save). Full duel verified in a live browser: ping→localize→it fires→evade by range→counter-kill in 2. No console errors.
+- **KNOBS NOT FELT**: `hull:20`, `RIVAL_TORP_RANGE:3`, alert bands 30/70, decay 3/7, sniff 30/14/6, fuse 2, torpedo hit 34-54, hostile rate 0.6, decoy seduce radius 2.
+- **THE PvP SEED**: this is single-player vs an AI boat, but the detection/threat model is exactly what async-multiplayer rival raids will reuse.
+
 ## THE WATER, DESCRIBED (2026-07-24) — Sean's "more English" ask, and the air fix
 **Sean died of asphyxiation because nothing ever told him where air comes from.** That is a teaching failure, not a tuning one. Ruling taken: **no scripted tutorial yet** (it would go stale every stage); instead the game teaches diegetically, out of world state, which does not rot.
 - `describeSpace(mode)` builds Infocom-style room prose from REAL voxel geometry — `spaceAround()` counts open neighbours at this depth, sounds the column up and down, and checks what the chart knows. `spaceClass()` names it: surface / shaft / tunnel / junction / expanse / deadend / nook / pocket.

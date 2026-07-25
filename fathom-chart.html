@@ -2712,6 +2712,9 @@ function render() {
   for (const c of state.creatures) {
     if (c.depth !== state.currentDepth) continue;
     if (c.type === 'lurker' && (c.interest || 0) < LURK_STALK && !c.fleeing) continue;
+    // A rival boat is a ghost until you place it — it draws only when localized
+    // (alongside, pinged, or loud under power). Silence makes it vanish.
+    if (c.type === 'rival' && !rivalLocalized(c)) continue;
     const dC = hexDistance({q: c.q, r: c.r}, playerHex);
     // Same epistemic rule as terrain: lights touch it (adjacent), or it's
     // inside the passive-sonar envelope AND standing in water the player has
@@ -2731,6 +2734,21 @@ function render() {
     ct.setAttribute('filter', 'url(#softglow)');
     ct.textContent = angMask ? angMask.ch : c.type === 'angler' ? '✸' : c.type === 'chorus' ? '¤' : c.type === 'hulk' ? '◆' : c.type === 'drifter' ? '⊙' : c.type === 'eel' ? '~' : c.type === 'rival' ? '⊘' : c.type === 'shoal' ? '»' : c.type === 'silt' ? '▲' : c.type === 'baro' ? '●' : '⊗';
     g.appendChild(ct);
+  }
+
+  // Torpedoes in the water — a running fish is always visible; that is the one
+  // mercy in the duel. Drawn as a bright dart on its own bearing toward the aim.
+  for (const t of (state.threats || [])) {
+    if (Math.abs(t.depth - state.currentDepth) > DEPTH_GRID) continue;
+    const tp = hexToPixel(t.q, t.r);
+    if (Math.abs(tp.x - camX) > halfW || Math.abs(tp.y - camY) > halfH) continue;
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    el.setAttribute('x', tp.x); el.setAttribute('y', tp.y);
+    el.setAttribute('text-anchor', 'middle'); el.setAttribute('dominant-baseline', 'central');
+    el.setAttribute('font-family', 'JetBrains Mono, monospace'); el.setAttribute('font-size', '13');
+    el.setAttribute('fill', '#e8624a'); el.setAttribute('filter', 'url(#glow)');
+    el.textContent = '◄';
+    g.appendChild(el);
   }
 
   // Flush edge lines last so they always sit on top of all stone/water fills.
@@ -3127,25 +3145,34 @@ function hitCreature(c, power) {
 // for later). An action, and a loud one.
 function fireWeapon() {
   if (!state.alive || !gameStarted || ashore()) return;
-  const withD = state.creatures
-    .filter(c => c.type !== 'rival' && !c.gone && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID)
+  // A boat you cannot place is not a target — you can only fire on a rival that
+  // is lit (alongside, pinged, under power in earshot). The harpoon is a
+  // whaling gun: it takes beasts, never a hull.
+  const cands = state.creatures
+    .filter(c => !c.gone && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID)
+    .filter(c => c.type !== 'rival' || rivalLocalized(c))
     .map(c => ({ c, d: hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) }))
     .sort((a, b) => a.d - b.d);
-  const adj = withD.find(x => x.d === 1);
+  const adj = cands.find(x => x.d === 1 && x.c.type !== 'rival');
   let key = null, target = null;
   if (adj && state.armament === 'harpoon') { key = 'harpoon'; target = adj.c; }
   else if (state.torpedoes > 0) {
-    const inR = withD.find(x => x.d <= WEAPONS.torpedo.range);
+    const inR = cands.find(x => x.d <= WEAPONS.torpedo.range);
     if (inR) { key = 'torpedo'; target = inR.c; state.torpedoes--; }
   }
   if (!key) {
-    if (!state.armament && state.torpedoes <= 0) log('You carry no weapon. Buy an armament at the dock.', 'warn');
+    if (!state.armament && state.torpedoes <= 0) { log('You carry no weapon. Buy an armament at the dock.', 'warn'); return; }
+    // If a boat is out there but not yet placed, say so — that is the whole game.
+    const ghost = state.creatures.find(c => c.type === 'rival' && !c.gone && !c.crippled
+      && hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) <= passiveContactR() + 2 && !rivalLocalized(c));
+    if (ghost) log('You can hear a boat out there, but you cannot place it well enough to shoot. Ping to fix it — and hand it your own position — or wait for it to move under power.', 'warn', 'FIRE');
     else log('Nothing in your sights.', 'warn');
     return;
   }
   log(key === 'torpedo' ? 'A torpedo runs hot into the dark.' : 'The harpoon gun fires.', '', 'FIRE');
   sfx(key === 'torpedo' ? 'impact' : 'strike');
-  hitCreature(target, WEAPONS[key].power);
+  if (target.type === 'rival') hitRival(target, WEAPONS[key].power);
+  else hitCreature(target, WEAPONS[key].power);
   noiseMade(state.q, state.r, WEAPONS[key].loud); // a shot is a shout — the deep hears it
   creatureTick();
   updateHUD();
@@ -3185,6 +3212,13 @@ function ping() {
   // A ping is a shout in a dark house. Everything with ears now knows where you are.
   noiseMade(state.q, state.r, lvl.loudness);
   sfx('ping');
+  // But it also paints them: a boat inside the ping is lit up precisely for a
+  // few turns — the active-sonar bargain, a clean fix bought with your position.
+  for (const c of state.creatures) {
+    if (c.type === 'rival' && !c.gone && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= lvl.activeRange) {
+      c.revealTurns = 3;
+    }
+  }
 
   const radius = lvl.activeRange;
   let interesting = null;
@@ -4688,6 +4722,18 @@ function spawnCreature(type, q, r, depth) {
     const rng = mulberry32(hashStr(worldSeed + ':baro:' + q + ':' + r + ':' + depth));
     c.ceilingLimit = Math.max(1200, snapToGrid(depth - (480 + Math.floor(rng() * 600))));
   }
+  if (type === 'rival') { // another boat — a mind like yours, hunting by ear
+    const rng = mulberry32(hashStr(worldSeed + ':rival:' + q + ':' + r + ':' + depth));
+    c.hull = 20;              // fragile — a torpedo or two ends a boat
+    c.alert = 0;              // how well it has YOU: <30 unaware, 30-70 searching, 70+ locked
+    c.silent = false;         // rigged quiet — emits nothing, and cannot be heard
+    c.underPower = false;     // moved noisily this turn — the tell you hunt it by
+    c.torps = 3;              // its magazine
+    c.reload = 0;             // turns until it can fire again
+    c.fq = 0; c.fr = 0;       // last fix on you — where it heard you, where it hunts
+    c.nerve = rng();          // bolder boats close and fire; timid ones stalk and run
+    c.hostile = rng() < 0.6;  // some rival crews would rather run than fight
+  }
   state.creatures.push(c);
 }
 
@@ -4732,6 +4778,19 @@ function noiseMade(q, r, loudness) {
     if (bd <= reach + 4) {
       b.threat = (b.threat || 0) + loudness * 5 * (1 - bd / (reach + 5));
     }
+  }
+
+  // Another boat hunts you the way you hunt it — by the noise you make. A shout
+  // (a ping, a shot, blown ballast, a hull striking rock) hands a rival captain
+  // your bearing and firms up their fix. Silence is the only thing it can't hunt.
+  for (const c of state.creatures) {
+    if (c.type !== 'rival' || !c.hostile || c.gone || c.crippled) continue;
+    if (Math.abs(c.depth - state.currentDepth) > 3 * DEPTH_GRID) continue;
+    const d = hexDistance({ q: c.q, r: c.r }, { q, r });
+    if (d > reach + 2) continue;
+    const spike = Math.max(10, Math.round(loudness * 16 * (1 - d / (reach + 3))));
+    c.alert = Math.min(100, (c.alert || 0) + spike);
+    c.fq = q; c.fr = r;   // it marks where the sound came from and hunts there
   }
 
   for (const c of state.creatures) {
@@ -4823,7 +4882,175 @@ function tickEel(c, dPlayer) {
 // nearest unworked site, holds station three turns with divers down, and
 // strips it — the prize is gone before you arrive. It wants no trouble:
 // close on it and it stands off. Every encounter should feel like an event.
+//=============================================================================
+// SUBMARINE vs SUBMARINE — the hunt, not the slugfest.
+//
+// Another boat is a mind like yours: it cannot see you, only hear you. The
+// whole duel is detection. You find it by the noise it makes under power; it
+// finds you the same way. To place a shot precisely you ping — and a ping is a
+// shout that hands it your bearing. To hide you rig silent — and go deaf with
+// it. A torpedo that connects is very nearly the end of a boat, so nobody
+// trades blows; you manoeuvre in the dark for the one shot that lands unheard.
+//=============================================================================
+const RIVAL_TORP_RANGE = 3;   // how far a boat can place a torpedo
+const RIVAL_FIRE_ALERT = 70;  // it needs a firm fix before it will spend a fish
+const RIVAL_SEARCH_ALERT = 30;
+
+function rivalStepToward(c, target) {
+  const d0 = hexDistance({ q: c.q, r: c.r }, target);
+  let best = null, bd = d0;
+  for (const n of hexNeighbors(c.q, c.r)) {
+    if (!creatureCanEnter(c, n.q, n.r, c.depth)) continue;
+    const d = hexDistance({ q: n.q, r: n.r }, target);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+// A boat can change trim to bring its tubes level with yours — one slice a turn.
+function rivalAlignDepth(c) {
+  if (c.depth === state.currentDepth) return false;
+  const step = c.depth < state.currentDepth ? DEPTH_GRID : -DEPTH_GRID;
+  const nd = c.depth + step;
+  if (cells.get(cellKey(c.q, c.r, nd))) { c.depth = nd; return true; }
+  return false;
+}
+
+// It lets a fish go. The launch is the one thing you can always hear — so a
+// shot always warns you and always shows the shooter, however quiet it was.
+function rivalFires(c) {
+  c.torps--; c.reload = 3; c.silent = false; c.underPower = true; c.revealTurns = 3;
+  if (!state.threats) state.threats = [];
+  state.threats.push({ q: c.q, r: c.r, depth: c.depth, aimQ: state.q, aimR: state.r, aimDepth: state.currentDepth, fuse: 2, from: c.id });
+  const dir = bearing(state.q, state.r, c.q, c.r);
+  log(`TORPEDO IN THE WATER — ${dir}, running for you. Two turns to break the solution: open the range, change depth, or put a decoy between you and it.`, 'danger', 'TORPEDO');
+  sfx('impact');
+}
+
+// The hunter's turn. Everything keys off `alert` — how well it has you.
 function tickRival(c, dPlayer) {
+  c.underPower = false;
+  if (c.revealTurns > 0) c.revealTurns--;
+  const psilent = sonarSilent();
+  c.alert = Math.max(0, (c.alert || 0) - (psilent ? 7 : 3));   // it loses your thread when you go quiet
+  if (c.reload > 0) c.reload--;
+
+  if (!c.hostile) { c.silent = false; return tickSalvager(c, dPlayer); }
+  // Up close, your own machinery leaks — even at silent running a boat this near
+  // gets a sniff. It is how a hunt starts without a shot being fired.
+  if (!psilent && dPlayer <= 3) {
+    const gain = dPlayer <= 1 ? 30 : dPlayer <= 2 ? 14 : 6;
+    if ((c.alert || 0) < 100) { c.alert = Math.min(100, (c.alert || 0) + gain); c.fq = state.q; c.fr = state.r; }
+  }
+  if (c.crippled) {                       // hit hard — it runs silent and breaks contact
+    c.silent = true;
+    const away = { q: c.q + (c.q - state.q), r: c.r + (c.r - state.r) };
+    const step = rivalStepToward(c, away) || rivalStepToward(c, { q: c.q + 1, r: c.r });
+    if (step) { c.q = step.q; c.r = step.r; }
+    return;
+  }
+
+  const locked = c.alert >= RIVAL_FIRE_ALERT;
+  const searching = c.alert >= RIVAL_SEARCH_ALERT;
+
+  // Locked, level, and reloaded within reach — it shoots.
+  if (locked && c.torps > 0 && c.reload <= 0 && dPlayer <= RIVAL_TORP_RANGE
+      && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID) {
+    rivalFires(c);
+    return;
+  }
+  if (locked && Math.abs(c.depth - state.currentDepth) > DEPTH_GRID && rand() < 0.7) {
+    if (rivalAlignDepth(c)) { c.underPower = true; c.silent = false; return; }  // trimming to your depth is audible
+  }
+
+  if (searching) {
+    // It hunts its last fix. A timid or distant boat stalks SILENT to sneak into
+    // a firing position — a ghost you cannot hear. A bold, close one comes under
+    // power, and you'll get a contact off it. That choice is the whole tension.
+    const fix = locked ? { q: state.q, r: state.r } : { q: c.fq || state.q, r: c.fr || state.r };
+    const stalk = c.nerve < 0.5 || dPlayer > RIVAL_TORP_RANGE + 1;
+    c.silent = stalk && rand() < 0.65;
+    const step = rivalStepToward(c, fix);
+    if (step) { c.q = step.q; c.r = step.r; c.underPower = !c.silent; }
+  } else {
+    // Unaware: it patrols its water, quietly, and now and then salvages.
+    c.silent = false;
+    if (rand() < 0.35) {
+      const nbrs = hexNeighbors(c.q, c.r).filter(n => creatureCanEnter(c, n.q, n.r, c.depth));
+      if (nbrs.length) { const n = nbrs[Math.floor(rand() * nbrs.length)]; c.q = n.q; c.r = n.r; c.underPower = true; }
+    }
+  }
+}
+
+// A torpedo, and a wound that means it. Hull, not a bar — one good fish cripples
+// a boat, two ends it. A hit also lights the shooter up: they know your bearing
+// now, and so do you theirs.
+function hitRival(c, power) {
+  const dmg = Math.max(6, power - 2 + Math.floor(rand() * 6));
+  c.hull = (c.hull == null ? 20 : c.hull) - dmg;
+  c.alert = 100; c.revealTurns = 3; c.hostile = true;
+  if (c.hull <= 0) {
+    c.gone = true;
+    log('The torpedo finds the other boat square. A shudder through the water, a long groan of failing plate, and then nothing. It is gone, and everything aboard with it.', 'strange', 'FIRE');
+    sfx('impact');
+  } else if (c.hull <= 8 && !c.crippled) {
+    c.crippled = true;
+    log('You hole it. The other boat lists, blows what ballast it has left, and runs — trailing air, and no longer interested in the fight.', 'warn', 'FIRE');
+    sfx('strike');
+  } else {
+    log('The fish strikes home — plate buckles, and the boat reels. It has your bearing now, and it will answer.', 'warn', 'FIRE');
+    sfx('strike');
+  }
+}
+
+// A boat is only a target you can actually place: alongside, lit by a ping or a
+// launch, or loud enough under power to hear. A silent boat cannot be fired on —
+// you cannot shoot what you cannot find.
+function rivalLocalized(c) {
+  if (c.gone) return false;
+  const d = hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r });
+  if (d <= 1) return true;
+  if (c.revealTurns > 0) return true;
+  if (c.silent) return false;
+  return c.underPower && !sonarSilent() && d <= passiveContactR() && revealFade(c.q, c.r, c.depth) > 0;
+}
+
+// Torpedoes in the water run each turn. Break the solution and they run past;
+// leave a decoy nearer than yourself and they take it instead.
+function tickThreats() {
+  if (!state.threats || !state.threats.length) return;
+  const kept = [];
+  for (const t of state.threats) {
+    // A decoy shouts louder than a hull — the fish homes on the nearest buoy.
+    for (const b of (state.buoys || [])) {
+      if (hexDistance({ q: b.q, r: b.r }, { q: t.aimQ, r: t.aimR }) <= 2) { t.aimQ = b.q; t.aimR = b.r; t.aimDepth = b.depth; t.decoyed = true; }
+    }
+    // It closes on its aim point.
+    const step = rivalStepToward({ q: t.q, r: t.r, depth: t.depth, type: 'rival' }, { q: t.aimQ, r: t.aimR });
+    if (step) { t.q = step.q; t.r = step.r; }
+    t.fuse--;
+    if (t.fuse > 0) { kept.push(t); continue; }
+    // Resolution: it runs to the aim and detonates on what it finds there.
+    const onPlayer = hexDistance({ q: t.aimQ, r: t.aimR }, { q: state.q, r: state.r }) <= 1
+      && Math.abs(t.aimDepth - state.currentDepth) <= DEPTH_GRID;
+    if (t.decoyed) {
+      state.buoys = (state.buoys || []).filter(b => !(b.q === t.aimQ && b.r === t.aimR));
+      log('The torpedo takes the decoy. A hard concussion rolls through the water, off your beam and harmless.', '', 'TORPEDO');
+      sfx('impact');
+    } else if (onPlayer) {
+      const dmg = 34 + Math.floor(rand() * 20);
+      state.hull = Math.max(0, state.hull - dmg);
+      log(`The torpedo runs true. It strikes forward and the sea comes in — the whole boat rings with it. (-${dmg} hull)`, 'danger', 'TORPEDO');
+      sfx('impact');
+      checkDeath();
+    } else {
+      log('The torpedo runs past where you were and on into the dark. You broke the solution in time.', '', 'TORPEDO');
+      sfx('ping');
+    }
+  }
+  state.threats = kept;
+}
+
+function tickSalvager(c, dPlayer) {
   if (dPlayer <= 2) {
     // Wary of company — open the range.
     let best = null, bestD = dPlayer;
@@ -5168,6 +5395,8 @@ function creatureTick() {
   // Decoy buoys shout into the water, pulling the sound-hunters off the boat.
   for (const b of state.buoys) { noiseMade(b.q, b.r, 3); b.turns--; }
   if (state.buoys.length) state.buoys = state.buoys.filter(b => b.turns > 0);
+  tickThreats(); // torpedoes in the water run before the boats move
+  if (!state.alive) return;
   for (const c of state.creatures) {
     const d = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     if (d > CREATURE_SIM_RANGE) continue;
@@ -5185,7 +5414,10 @@ function creatureTick() {
     const depthOff = Math.abs(c.depth - state.currentDepth);
     // Silent running = deaf: no passive contacts while the sonar's off.
     const hunting = c.type === 'lurker' && (c.interest || 0) >= LURK_HUNT;
-    const hidden = c.type === 'angler' && !c.revealed; // it holds still — the ear can't hear it
+    // Silent things make no contact: an angler holding still, and a rival boat
+    // that has cut its engines. A rival is only heard when it is under power.
+    const hidden = (c.type === 'angler' && !c.revealed)
+                || (c.type === 'rival' && (c.silent || !c.underPower));
     if (!silent && !hidden && !(masked && rand() < 0.5) && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
         (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
       state._lastContactLog = now;
@@ -5196,7 +5428,9 @@ function creatureTick() {
                      : 'a slow shape, half-interested';
       const what = c.type === 'drifter' ? 'something vast, moving slow'
                  : c.type === 'eel' ? (c.carrying ? 'something small, fleeing fast' : 'something small and quick')
-                 : c.type === 'rival' ? 'engine noise — another boat under power'
+                 : c.type === 'rival' ? ((c.alert || 0) >= RIVAL_FIRE_ALERT ? 'another boat, bearing holding steady on you — it has a solution'
+                                       : (c.alert || 0) >= RIVAL_SEARCH_ALERT ? 'another boat under power, casting for you in the dark'
+                                       : 'engine noise — another boat, not yet onto you')
                  : c.type === 'shoal' ? 'a school, circling to surround you'
                  : c.type === 'hulk' ? 'a mountain moving, and the water going with it'
                  : c.type === 'chorus' ? 'a chorus of voices, none of them answering'
@@ -6412,6 +6646,7 @@ function restart() {
   spawnedChunks.clear();
   state.creatures = [];
   state.buoys = [];
+  state.threats = [];
   // Force-generate origin chunk and neighbors so the player can leave
   tileAt(0, 0);
   // Set initial depth to match origin tile's range (origin is shallow)
@@ -6669,6 +6904,7 @@ function doSave(force) {
       lastZone: state.lastZone, maxZoneReached: state.maxZoneReached,
       visited: [...visited], revealed: rev,
       creatures: state.creatures, spawnedChunks: [...spawnedChunks],
+      threats: state.threats,
       cargo: state.cargo, cargoBanked: state.cargoBanked,
       armament: state.armament, torpedoes: state.torpedoes,
       relics: state.relics, relicsBanked: state.relicsBanked,
@@ -6723,6 +6959,7 @@ function resumeGame(save) {
   spawnedChunks.clear();
   for (const ck of save.spawnedChunks || []) spawnedChunks.add(ck);
   state.creatures = save.creatures || [];
+  state.threats = save.threats || [];
   state.cargo = save.cargo || 0;
   state.cargoBanked = save.cargoBanked || 0;
   state.armament = save.armament || null;

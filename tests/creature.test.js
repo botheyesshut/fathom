@@ -327,6 +327,7 @@ st.creatures.length = 0;
 st.q = 0; st.r = -16; st.currentDepth = 0; // inside sim range (24), outside stand-off (2)
 sb.setTile(2, -9, 'ruin', true);
 sb.spawnCreature('rival', 5, -9, 0);
+st.creatures[0].hostile = false; // a salvager crew, not a hunter — this tests the racing behaviour
 const poisBefore = st.poisFound.length;
 let rivalStone = 0;
 for (let i = 0; i < 40 && st.poisFound.length === poisBefore; i++) {
@@ -356,6 +357,83 @@ check(rivalStone === 0 && st.creatures.length === 1, 'rival stays in open water 
   const sb3 = freshContext(store);
   sb3.startGame();
   check(sb3.__state().creatures.length === 0 && sb3.__seed === undefined ? sb3.__state().moves === raw.moves : sb3.__state().moves === raw.moves, 'v1 save still loads (creatures empty)', 'moves ' + sb3.__state().moves + ', creatures ' + sb3.__state().creatures.length);
+}
+
+// ---- 7. Submarine vs submarine: the hunt, not the slugfest ----
+{
+  st.creatures.length = 0; st.threats = []; st.buoys = [];
+  st.q = 0; st.r = 0; st.currentDepth = 0; st.hull = 100; st.alive = true;
+  sb.__ping.value = '2';
+  sb.spawnCreature('rival', 2, 0, 0);
+  const rv = st.creatures[0];
+  rv.hostile = true;
+
+  // Silence is invisibility. A rival with its engines cut cannot be placed.
+  rv.silent = true; rv.underPower = false; rv.revealTurns = 0;
+  check(!sb.rivalLocalized(rv), 'a silent rival is a ghost — you cannot place it', 'hidden');
+  // A ping paints it (revealTurns); so does being alongside.
+  rv.revealTurns = 3;
+  check(sb.rivalLocalized(rv), 'a pinged boat is lit for a few turns', 'localized');
+  rv.revealTurns = 0; rv.q = 1; rv.r = 0;
+  check(sb.rivalLocalized(rv), 'and a boat alongside cannot hide', 'adjacent');
+  rv.q = 2; rv.r = 0;
+
+  // Noise hands it your bearing.
+  rv.alert = 0; rv.silent = false;
+  sb.noiseMade(0, 0, 5);
+  check(rv.alert > 0 && rv.fq === 0 && rv.fr === 0, 'a shout hands the rival your bearing', 'alert=' + Math.round(rv.alert));
+
+  // Run silent and it loses your thread.
+  rv.alert = 50; sb.__ping.value = '0';
+  sb.tickRival(rv, 8);
+  check(rv.alert < 50, 'rig for silent running and it loses the thread', 'alert 50 -> ' + Math.round(rv.alert));
+  sb.__ping.value = '2';
+
+  // Locked, level, in range — it looses a fish, and warns you doing it.
+  st.threats = []; rv.alert = 100; rv.torps = 3; rv.reload = 0; rv.crippled = false; rv.q = 2; rv.r = 0; rv.depth = 0;
+  sb.tickRival(rv, 2);
+  check(st.threats.length === 1 && rv.torps === 2, 'a locked boat in range looses a torpedo', st.threats.length + ' in the water');
+
+  // The fish resolves: it hits if you hold, misses if you break the solution.
+  const shot = (setup) => { st.threats = [{ q: 2, r: 0, depth: 0, aimQ: 0, aimR: 0, aimDepth: 0, fuse: 1 }]; st.hull = 100; st.buoys = []; setup(); sb.tickThreats(); return st.hull; };
+  check(shot(() => { st.q = 0; st.r = 0; st.currentDepth = 0; }) < 100, 'hold still and it strikes home', 'hull ' + st.hull);
+  check(shot(() => { st.q = 3; st.r = 0; st.currentDepth = 0; }) === 100, 'open the range and it runs past', 'evaded by distance');
+  check(shot(() => { st.q = 0; st.r = 0; st.currentDepth = 120; }) === 100, 'change depth and it cannot follow', 'evaded by depth');
+  const decoyHull = shot(() => { st.q = 2; st.r = 0; st.currentDepth = 0; st.buoys = [{ q: 0, r: 0, depth: 0, turns: 5 }]; });
+  check(decoyHull === 100 && st.buoys.length === 0, 'a decoy takes the torpedo meant for you', 'buoy consumed, hull ' + decoyHull);
+
+  // Your torpedo, the other way: a placed boat is hulled, and a hit gives away
+  // your bearing to it. Enough, and it goes down.
+  rv.hull = 20; rv.alert = 0; rv.crippled = false; rv.gone = false;
+  sb.hitRival(rv, 16);
+  check(rv.hull < 20 && rv.alert === 100, 'a torpedo hulls it — and it has your bearing now', 'hull ' + rv.hull);
+  rv.hull = 13; rv.crippled = false; rv.gone = false;
+  sb.hitRival(rv, 2);   // power 2 => a fixed 6 damage: 13 -> 7, into the cripple band, not through it
+  check(rv.crippled && !rv.gone, 'holed low, it is crippled and runs — not sunk', 'hull ' + rv.hull);
+  rv.hull = 5; rv.gone = false;
+  sb.hitRival(rv, 16);
+  check(rv.gone, 'and one more finishes it', 'sunk');
+
+  // You cannot spend a torpedo on a boat you cannot place.
+  st.creatures.length = 0; sb.spawnCreature('rival', 2, 0, 0);
+  const ghost = st.creatures[0];
+  ghost.hostile = true; ghost.silent = true; ghost.underPower = false; ghost.revealTurns = 0; ghost.gone = false;
+  st.torpedoes = 2; st.armament = null; st.q = 0; st.r = 0; st.currentDepth = 0;
+  const torpsBefore = st.torpedoes;
+  sb.fireWeapon();
+  check(st.torpedoes === torpsBefore, 'no firing on a boat you cannot place', 'torps held at ' + st.torpedoes);
+
+  // A crippled boat runs silent and does not fight.
+  st.threats = []; ghost.crippled = true; ghost.silent = false; ghost.alert = 100; ghost.torps = 3; ghost.reload = 0; ghost.q = 2; ghost.r = 0;
+  sb.tickRival(ghost, 2);
+  check(st.threats.length === 0 && ghost.silent === true, 'a crippled boat runs silent, not guns', 'no shot');
+
+  // Threats survive a reload.
+  st.threats = [{ q: 2, r: 0, depth: 0, aimQ: 0, aimR: 0, aimDepth: 0, fuse: 2 }];
+  st.q = 0; st.r = -6; st.currentDepth = 0;
+  sb.doSave();
+  const raw2 = JSON.parse(store.getItem('fathom-save-v1'));
+  check(Array.isArray(raw2.threats) && raw2.threats.length === 1, 'torpedoes in the water survive a save', raw2.threats.length + ' saved');
 }
 
 console.log(failures === 0 ? '\nALL CREATURE CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
