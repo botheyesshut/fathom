@@ -733,6 +733,7 @@
     <button class="btn" id="btn-claim" style="display:none" title="Claim this deck as your station — seals the breach into a lock and pumps the water out. Inside your own station, stows or draws out your goods.">Claim Deck</button>
     <button class="btn" id="btn-fight" style="display:none" title="Board it — fight with whatever the crew's locker holds. Expensive, and it answers every round you do not finish it.">Board It</button>
     <button class="btn" id="btn-fortify" style="display:none" title="Spend what is struck below in the station on the next thing between it and the sea">Fortify</button>
+    <button class="btn" id="btn-dig" style="display:none" title="Cut the rock of your station outward into new rooms — a bigger warren is harder to take. Dig too near the hull and the sea comes in.">Dig</button>
     <button class="btn primary" id="btn-surface">Surface</button>
     <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
   </div>
@@ -2169,6 +2170,8 @@ function syncFootControls(inside) {
 
   const fort = document.getElementById('btn-fortify');
   if (fort) fort.style.display = (own && !state.base.breached) ? '' : 'none';
+  const dig = document.getElementById('btn-dig');
+  if (dig) dig.style.display = (own && !state.base.breached && !!digTargetNear()) ? '' : 'none';
 
   // Boarding only offers itself when the thing is actually within reach — a
   // dead control is worse than no control.
@@ -3943,9 +3946,21 @@ function footChunk() {
 }
 
 // null means solid — the same "absent = stone" reading the boat obeys.
+// What the player has dug into the rock of their own station — overlay, saved,
+// laid over the substrate deck. A carved tile reads as floor everywhere the
+// deck grid is read, which is the whole trick: one accessor, and the tunnels
+// you cut are real.
+function baseCarved() { return (state.base && state.base.carved) || []; }
+function onOwnDeck() { const f = state.foot; return !!f && isBaseDeck(f.q, f.r, f.d); }
+
 function footTile(x, y) {
   const ch = footChunk();
-  return ch ? (ch.tiles.get(x + ',' + y) || null) : null;
+  if (!ch) return null;
+  const k = x + ',' + y;
+  const t = ch.tiles.get(k);
+  if (t) return t;
+  if (onOwnDeck() && baseCarved().includes(k)) return { t: 'carved' };
+  return null;
 }
 
 // Loot lives in the substrate but TAKING is overlay, so the cache is never
@@ -4096,7 +4111,7 @@ function claimOrStore() {
   }
   state.cargo -= CLAIM_COST;
   state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0 },
-                 defence: 0, threat: 0, siege: null, breached: false, boarder: null };
+                 defence: 0, threat: 0, siege: null, breached: false, boarder: null, carved: [] };
   f.water = [];
   f.dweller = null;
   log('You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
@@ -4198,11 +4213,64 @@ function baseTick() {
     return;
   }
   const spec = baseDefence();
-  b.siege.breach += Math.max(0.5, (b.siege.power - spec.hold) * 0.8);
+  // A warren is harder to take than a single room: every deck you dig is more
+  // boat to fight through before anything reaches the core.
+  const warren = 1 + Math.min(2.5, (b.carved ? b.carved.length : 0) / 12);
+  b.siege.breach += Math.max(0.3, (b.siege.power - spec.hold) * 0.8 / warren);
   if (b.siege.breach >= 100) { breachStation(); return; }
   if (rand() < 0.35) {
     log(`The telegraph is still sounding. Something is ${Math.round(b.siege.breach)}% of the way through ${spec.name}.`, 'warn', 'SIEGE');
   }
+}
+
+const DIG_COST = 2;   // crates of tools and shoring per tile of rock taken
+
+// Is there solid rock next to you worth cutting into — inside the deck, not the
+// hull ring? (The ring is the sea wall; you do not dig that on purpose.)
+function digTargetNear() {
+  const f = state.foot;
+  if (!f) return null;
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const x = f.x + dx, y = f.y + dy;
+    if (x < 1 || y < 1 || x > INT_SIZE - 2 || y > INT_SIZE - 2) continue;   // 0/19 is the hull — off limits
+    if (!footTile(x, y)) return { x, y };   // solid, and safely inside the deck
+  }
+  return null;
+}
+
+// Dig your own fortress. You cut the rock of a station outward, tile by tile,
+// into new rooms and tunnels. The deeper band, right against the hull, is a
+// gamble — the sea is a hand's breadth beyond it, and a bad cut lets it in.
+function digAdjacent() {
+  const f = state.foot, b = state.base;
+  if (!f || !b || !stationSecure(f.q, f.r, f.d)) {
+    if (f) log(b && b.breached ? 'The station is flooded. Reseat the lock and pump it dry before you cut any more rock.' : 'You can only dig out a sealed station of your own.', 'warn', 'DIG');
+    return;
+  }
+  if (!b.carved) b.carved = [];
+  const target = digTargetNear();
+  if (!target) { log('Nothing but open deck within reach. Move up against a wall to cut into it.', 'warn', 'DIG'); return; }
+  if (b.stores.crates < DIG_COST) {
+    log(`Cutting rock takes ${plural(DIG_COST, 'crate')} of tools and shoring, struck below. The station holds ${b.stores.crates}.`, 'warn', 'DIG');
+    return;
+  }
+  b.stores.crates -= DIG_COST;
+  const k = target.x + ',' + target.y;
+  const risky = target.x === 1 || target.y === 1 || target.x === INT_SIZE - 2 || target.y === INT_SIZE - 2;
+  b.carved.push(k);
+  if (risky && rand() < 0.4) {
+    b.breached = true;
+    f.water = [k];
+    log('You drive the cut outward — and the last foot of rock gives all at once, into cold black water. The sea was right there, and now it is in your station. The pumps cannot touch it until you reseat the lock.', 'danger', 'DIG');
+    sfx('impact');
+  } else {
+    if (risky) log('You cut outward. The rock goes thin under the tools — beyond it, the sea, close enough to hear — but it holds. A new bay, won from the stone.', 'warn', 'DIG');
+    else log('You cut into the rock and shore it as you go. Slow work, and loud, but the station is a room larger for it.', '', 'DIG');
+    sfx('impact');
+  }
+  // Digging carries. The deep hears a fortress being built, and comes to look.
+  b.threat = (b.threat || 0) + 6;
+  updateHUD(); render(); scheduleSave();
 }
 
 // Spend what is stowed in the station on the next thing between it and the sea.
@@ -4284,12 +4352,14 @@ function floodAdvance() {
   if (!f || !ch) return 0;
   const wet = new Set(f.water);
   const added = [];
+  const carved = onOwnDeck() ? baseCarved() : [];
+  const open = (kk) => ch.tiles.has(kk) || carved.includes(kk);   // the sea takes dug tunnels too
   for (const k of f.water) {
     const c = k.indexOf(',');
     const x = +k.slice(0, c), y = +k.slice(c + 1);
     for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
       const nk = (x + dx) + ',' + (y + dy);
-      if (wet.has(nk) || !ch.tiles.has(nk)) continue;
+      if (wet.has(nk) || !open(nk)) continue;
       if (f.closed.includes(nk)) continue;
       wet.add(nk); added.push(nk);
     }
@@ -4575,15 +4645,19 @@ function renderInterior() {
     return el;
   };
 
+  const baseDeck = onOwnDeck();
+  const carvedHere = baseDeck ? baseCarved() : [];
   for (const k of f.seen) {
     const c = k.indexOf(',');
     const x = +k.slice(0, c), y = +k.slice(c + 1);
-    const t = ch.tiles.get(k);
+    const t = ch.tiles.get(k) || ((baseDeck && carvedHere.includes(k)) ? { t: 'carved' } : null);
     const lit = Math.hypot(x - f.x, y - f.y) <= LAMP_R;
     const dim = lit ? 1 : 0.4;                // memory is dimmer than lamplight
     // Walls sit just above the void so the shape of the room reads; lamplit
     // deck is markedly brighter, because that is the whole point of a lamp.
     if (!t) { box(x, y, '#1b1712', dim * 0.95); continue; }
+    if (t.t === 'carved') { box(x, y, '#2c2a20', dim); glyph(x, y, '·', '#5f6a4e', 12, dim * 0.8); }
+    else
     if (t.t === 'entry') {
       box(x, y, '#1b3f4a', dim);
       glyph(x, y, '≈', '#6ecfae', 13, dim);
@@ -6977,6 +7051,7 @@ function resumeGame(save) {
     if (b.siege === undefined) b.siege = null;
     if (b.breached == null) b.breached = false;
     if (b.boarder === undefined) b.boarder = null;
+    if (!b.carved) b.carved = [];
     if (!b.stores) b.stores = { crates: 0, relics: 0 };
   }
   state.clearedDecks = save.clearedDecks || [];
@@ -7055,6 +7130,7 @@ document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
 document.getElementById('btn-fortify').addEventListener('click', fortifyBase);
+document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 document.getElementById('btn-fire').addEventListener('click', fireWeapon);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);

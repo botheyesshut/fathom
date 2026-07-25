@@ -43,6 +43,18 @@ KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-sub
 - **Port**: surgeon+shore now clears conditions, restores nerve to 100, refills stores — **scars stay** (they are the record). 
 - **interior.test.js → 110 checks.** KNOBS NOT FELT: nerve start 70 / fray 8-per-hit, condition tiers & effects, `vigorMult` 0.6 span, `provisionTick` rates, station +40, worn chance 0.4, `crewDef·0.12` armour tilt (currently strong — a wardsuit deleted ALL tier-2 at sev 0.7 in test).
 
+## DIGGING — Stage 5, the last ladder rung (2026-07-24). The Dwarf-Fortress heart.
+**You cut your own fortress out of the rock of a station, tile by tile.** Station-only (you dig to expand what is yours). The trick is a CARVED OVERLAY on the substrate deck, honored by one accessor so the tunnels are real everywhere at once.
+- `state.base.carved: []` — tile keys the player has cut to floor. Overlay, saved, restored, reset. `baseCarved()` / `onOwnDeck()` helpers.
+- **One accessor does it**: `footTile()` returns a synthetic `{t:'carved'}` for carved keys on your own deck → carved tiles are walkable in movement, floodable in `floodAdvance` (uses an `open()` that includes carved), and drawn as floor in `renderInterior`. Copy this pattern for any future interior overlay.
+- **`digAdjacent()`** on `#btn-dig` (shown in a secure station when `digTargetNear()` finds solid rock beside you). Cuts the first solid neighbour in the diggable band. `DIG_COST=2` crates from the station's own stores. Raises `base.threat` +6 — **digging is loud, and the deep hears a fortress being built** (draws sieges).
+- **THE DWARF-FORTRESS FAILURE MODE Sean loved**: the grid's outer ring (0/19) is the hull and cannot be dug; the innermost diggable band (1 or 18) is a **telegraphed gamble** — `rand()<0.4` breaches into the sea (`base.breached=true`, floods the deck at the cut tile, reuses the siege-breach machinery). "The last foot of rock gives all at once, into cold black water."
+- **THE PAYOFF**: a bigger warren is harder to take — `baseTick` divides the siege breach rate by `warren = 1 + min(2.5, carved/12)`. Plus the emergent one: more dug room = farther for a boarder to walk, more places to seal and fight.
+- **interior.test.js → 123 checks.** Digging: carves & costs & is walkable, floods like anything, refused without crates, warren slows the siege (10.4→3.0/turn at 30 tiles), hull-band dig breaches + floods, survives reload. Verified in a live browser: dig 3 rooms, walk into a tile just cut, and breach the hull on the perimeter. No console errors.
+- **KNOBS NOT FELT**: `DIG_COST:2`, breach chance 0.4, dig threat +6, warren cap 2.5 / divisor 12.
+- **STILL OPEN ("Fitting")**: placing furniture/defences/bulkheads on carved tiles; player-authored chokepoints; multi-cell fortresses (dig through a cell edge into the next 60m cell — the substrate/overlay model already allows it).
+- **THE RESOLUTION LADDER IS NOW 7/7 BUILDABLE RUNGS DONE.** Rung 7 (rival PvP raids) awaits a multiplayer backend; the sub-vs-sub detection model (below) is its combat core.
+
 ## SUBMARINE vs SUBMARINE (2026-07-24) — Sean: "stealthy, hair-raising, cat and mouse, Red October, NOT a slugfest"
 **The whole duel is DETECTION, and it reuses the game's existing sound grammar.** No new HP-trading — one good torpedo cripples a boat, two ends it, so nobody trades blows; you manoeuvre in the dark for the one shot that lands unheard.
 - **Rivals gained a combat soul** (spawnCreature init): `hull:20`, `alert` (its fix on YOU: <30 unaware / 30-70 searching / 70+ locked), `silent`, `underPower`, `torps:3`, `reload`, `fq/fr` (last fix), `nerve` (bold vs timid), `hostile` (60% — the rest are the old salvager racers, now `tickSalvager`).
@@ -120,7 +132,7 @@ Carving a fine tile costs time, tools, and power, and **displaces water**. You d
 2. ~~**Dark and Wet**~~ **DONE 2026-07-24** — flooding from the breach, bulkheads, a tenant. See "STAGE 2 AS BUILT".
 3. ~~**Boarders**~~ **DONE 2026-07-24** — on-foot combat off the existing GEAR sheet. See "STAGE 3 AS BUILT". (Crew as bodies that can be LOST is still outstanding.)
 4. ~~**The Claim**~~ **DONE 2026-07-24** — a station is a ruin you sealed. See "STAGE 4 AS BUILT". (Level-1 DEFENCES still outstanding — that is Stage 6's business.)
-5. **Digging & Fitting** — carve, furnish, bulkheads, pumps, decks.
+5. ~~**Digging**~~ **DONE 2026-07-24** (carve; see below). "Fitting" (furniture) still open.
 6. ~~**Siege**~~ **DONE 2026-07-24** — MOB invasion of a station. See "STAGE 6 AS BUILT". (PLAYER raids are Stage 7 / multiplayer.)
 7. **Rivals** — player raids (multiplayer).
 

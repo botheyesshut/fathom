@@ -74,6 +74,9 @@ try { vm.runInContext(script +
   '\nfunction __crewAtk(m){ return crewAtk(m); }' +
   '\nfunction __provision(a){ provisionTick(a); }' +
   '\nfunction __condTier(k){ return CONDITIONS[k] ? CONDITIONS[k].tier : 0; }' +
+  '\nfunction __dig(){ digAdjacent(); }' +
+  '\nfunction __digTarget(){ return digTargetNear(); }' +
+  '\nfunction __footTile(x,y){ return footTile(x,y); }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -831,6 +834,88 @@ const rv = sandbox.__st().crew[0];
 check(rv && rv.nerve === 44 && rv.conditions.length === 2 && sandbox.__st().stores === 37 && sandbox.__st().lostCrew.length === 1,
   'conditions, nerve, stores and the lost all survive a reload',
   rv ? 'nerve ' + rv.nerve + ', ' + rv.conditions.length + ' conditions, stores ' + sandbox.__st().stores : 'crew lost');
+
+//--- 14. Digging: cut your own fortress out of the rock ----------------------
+// A fresh, uncontested station to dig in.
+sandbox.__st().foot = null; sandbox.__st().base = null; sandbox.__st().air = 200000;
+let dclean = null;
+for (let q = 0; q < 90 && !dclean; q++) { const c = sandbox.__int(q, 21, 780); if (!c.dweller) dclean = { q: q, ch: c }; }
+check(!!dclean, 'a clean deck to claim and dig', dclean ? 'at q=' + dclean.q : 'none');
+sandbox.__enter(dclean.q, 21, 780);
+sandbox.__st().cargo = 10; sandbox.__claim();
+const DB = sandbox.__base();
+DB.stores.crates = 40; DB.breached = false; DB.carved = [];
+const dch = sandbox.__int(dclean.q, 21, 780);
+const df = sandbox.__foot();
+
+// Stand where the first cut is SAFE (a target in the inner band, not the hull).
+let safeF = null;
+for (const k of dch.tiles.keys()) {
+  const c = k.indexOf(','); const x = +k.slice(0, c), y = +k.slice(c + 1);
+  df.x = x; df.y = y;
+  const tg = sandbox.__digTarget();
+  if (tg && tg.x > 1 && tg.y > 1 && tg.x < 18 && tg.y < 18) { safeF = { x, y, tg }; break; }
+}
+check(!!safeF, 'there is inner rock to cut safely', safeF ? 'from ' + safeF.x + ',' + safeF.y : 'none');
+df.x = safeF.x; df.y = safeF.y;
+const crBefore = DB.stores.crates, carvedBefore = DB.carved.length;
+sandbox.__dig();
+const tk = safeF.tg.x + ',' + safeF.tg.y;
+check(DB.carved.length === carvedBefore + 1 && DB.carved.includes(tk) && !DB.breached,
+  'digging carves solid rock into new floor', DB.carved.length + ' tiles cut');
+check(DB.stores.crates === crBefore - 2, 'and it is paid for out of the station stores', crBefore + ' -> ' + DB.stores.crates);
+check(!!sandbox.__footTile(safeF.tg.x, safeF.tg.y) && sandbox.__footTile(safeF.tg.x, safeF.tg.y).t === 'carved',
+  'the cut tile is walkable floor now', 'reads floor');
+check((DB.threat || 0) > 0, 'the sound of digging carries — it raises the station\'s threat', 'threat=' + Math.round(DB.threat));
+
+// A carved tunnel floods like anything else once the sea is in.
+df.water = [tk]; df.closed = [];
+const dugWetBefore = df.water.length;
+sandbox.__flood();
+check(df.water.length >= dugWetBefore, 'the sea runs into a dug tunnel too', df.water.length + ' wet');
+
+// It will not cut without the crates to pay for it.
+DB.stores.crates = 1; const carvedNow = DB.carved.length;
+sandbox.__dig();
+check(DB.carved.length === carvedNow, 'no cutting rock the station cannot pay for', 'held at ' + DB.carved.length + ' tiles');
+
+// A bigger warren is measurably harder to besiege.
+function breachStep(carvedN) {
+  DB.carved = []; for (let i = 0; i < carvedN; i++) DB.carved.push('c' + i);
+  DB.defence = 0; DB.siege = { power: 14, breach: 0 }; DB.breached = false;
+  sandbox.__st().creatures = [{ id: 'x', type: 'lurker', q: DB.q, r: DB.r, depth: DB.d, besieging: true }];
+  sandbox.__baseTick();
+  return DB.siege ? DB.siege.breach : 999;
+}
+const smallStep = breachStep(0), bigStep = breachStep(30);
+check(bigStep < smallStep, 'a dug-out warren is harder to take than a single room',
+  'breach/turn — one room ' + smallStep.toFixed(1) + ' vs warren ' + bigStep.toFixed(1));
+
+// Dig against the hull and, often enough, you let the ocean in.
+sandbox.__st().foot = null; sandbox.__enter(dclean.q, 21, 780);
+const df2 = sandbox.__foot(); const DB2 = sandbox.__base();
+let riskyF = null;
+for (const k of dch.tiles.keys()) {
+  const c = k.indexOf(','); const x = +k.slice(0, c), y = +k.slice(c + 1);
+  df2.x = x; df2.y = y;
+  const tg = sandbox.__digTarget();
+  if (tg && (tg.x === 1 || tg.y === 1 || tg.x === 18 || tg.y === 18)) { riskyF = { x, y }; break; }
+}
+check(!!riskyF, 'there is rock right against the hull to gamble on', riskyF ? 'at ' + riskyF.x + ',' + riskyF.y : 'none');
+let breached = false, tries = 0;
+for (; tries < 25 && !breached; tries++) {
+  DB2.breached = false; DB2.carved = []; DB2.stores.crates = 10; df2.x = riskyF.x; df2.y = riskyF.y; df2.water = [];
+  sandbox.__dig();
+  breached = DB2.breached;
+}
+check(breached, 'cut too near the hull and the sea breaks into your fortress', 'breached after ' + tries + ' cut(s)');
+check(df2.water.length > 0, 'and a hull breach floods the deck you were standing on', df2.water.length + ' wet');
+
+// The warren survives a reload.
+DB2.breached = false; DB2.carved = ['5,5', '5,6', '6,6']; sandbox.__st().foot = null;
+sandbox.__save(); sandbox.__st().base = null; sandbox.__resume();
+check(sandbox.__base() && sandbox.__base().carved.length === 3, 'the fortress you dug survives a reload',
+  sandbox.__base() ? sandbox.__base().carved.length + ' tiles held' : 'lost');
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
