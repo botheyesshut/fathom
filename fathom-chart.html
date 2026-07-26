@@ -186,6 +186,18 @@
     letter-spacing: 0.08em;
   }
 
+  /* The small print under a gauge: the number the gauge is measured against. */
+  .stat-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.5rem;
+    letter-spacing: 0.04em;
+    color: #5f6b60;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .stat-value.warn { color: var(--lantern); }
   .stat-value.danger { color: var(--blood); animation: pulse-danger 1s ease-in-out infinite; }
 
@@ -954,6 +966,13 @@
       <div class="stat-label">Depth</div>
       <div class="stat-value" id="depth-val">0</div>
       <div class="bar"><div class="bar-fill" id="depth-bar" style="width:0%; background: var(--strange);"></div></div>
+      <div class="stat-sub" id="depth-rating">safe</div>
+    </div>
+    <!-- E9: the game never showed you how much money you had. -->
+    <div class="stat">
+      <div class="stat-label">Hold</div>
+      <div class="stat-value" id="hold-val">0</div>
+      <div class="stat-sub" id="hold-sub">0 banked</div>
     </div>
   </div>
 </div>
@@ -1720,7 +1739,10 @@ function renderInventory() {
     if (it.kind === 'use' && !it.keep) return `<button class="act" data-k="${k}">Use</button>`;
     if (it.kind === 'chart') return `<button class="act" data-k="${k}">Read</button>`;
     if (it.kind === 'fit') return `<button class="act" data-k="${k}">Fit</button>`;
-    if (hasProp(k, 'cursed') || hasProp(k, 'volatile')) return `<button class="act warn" data-j="${k}">Cast Off</button>`;
+    // M1: this used to read "Cast Off" — the same two words as the button that
+    // merely closes a panel, except this one destroys a stack of cargo. It has
+    // its own name now, and it takes two taps.
+    if (hasProp(k, 'cursed') || hasProp(k, 'volatile')) return `<button class="act warn" data-j="${k}">Jettison</button>`;
     const passive = it.kind === 'key' ? 'a key' : hasProp(k, 'ward') ? 'a ward' : hasProp(k, 'soothing') ? 'a comfort'
       : hasProp(k, 'preserving') ? 'at work' : hasProp(k, 'living') ? 'carry it?' : hasProp(k, 'luminous') ? 'a light' : 'worth';
     return `<button class="act none">${passive}</button>`;
@@ -1735,7 +1757,16 @@ function renderInventory() {
     btn.addEventListener('click', () => { useItem(btn.getAttribute('data-k')); renderInventory(); });
   }
   for (const btn of list.querySelectorAll('.act[data-j]')) {
-    btn.addEventListener('click', () => { jettisonItem(btn.getAttribute('data-j')); renderInventory(); });
+    btn.addEventListener('click', () => {
+      const jk = btn.getAttribute('data-j');
+      if (btn.getAttribute('data-armed') !== '1') {   // arm, then confirm — never one tap
+        btn.setAttribute('data-armed', '1');
+        btn.textContent = 'Over the side?';
+        setTimeout(() => { btn.setAttribute('data-armed', '0'); btn.textContent = 'Jettison'; }, 4000);
+        return;
+      }
+      jettisonItem(jk); renderInventory();
+    });
   }
 }
 //=============================================================================
@@ -2650,7 +2681,13 @@ function leadTarget(seedStr, fromQ, fromR) {
   const dist = 8 + Math.floor(rng() * 9);          // 8-16 hexes off
   const dq = Math.round(Math.cos(ang) * dist);
   const dr = Math.round(Math.sin(ang) * dist);
-  const d = snapToGrid(600 + Math.floor(rng() * 3200));
+  // E5.1: this used to roll a flat 600-3800 m with no reference to the boat, so
+  // following the game's own signposting routinely killed a starter captain at
+  // her rated 1500 m. A mark is drawn by somebody who expected it to be
+  // followed. It now scales to what you can actually survive — reaching a
+  // little past comfortable, never past the hull.
+  const ceiling = Math.max(900, Math.min(crushDepthNow() - DEPTH_GRID, safeDepthNow() + 600));
+  const d = snapToGrid(300 + rng() * (ceiling - 300));
   return { q: fromQ + dq, r: fromR + dr, d: d };
 }
 
@@ -2709,9 +2746,19 @@ function checkLeads() {
   if (!state.leads || !state.leads.length) return;
   const remaining = [];
   for (const L of state.leads) {
-    if (hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r }) <= 1) resolveLead(L);
+    // E5.2: this used to resolve on horizontal distance ALONE, so a mark at
+    // 2520 m paid out while you sat on the surface above it. The depth was
+    // stored, printed on the chart, and then never checked once. You have to
+    // actually go down to the marked position now.
+    const near = hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r }) <= 1;
+    const atDepth = L.d == null || Math.abs(state.currentDepth - L.d) <= DEPTH_GRID * 2;
+    if (near && atDepth) resolveLead(L);
     else {
       remaining.push(L);
+      if (near && !atDepth) {
+        const dz = Math.round(L.d - state.currentDepth);
+        log(`You are over the marked position. Whatever is here is ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} you.`, 'warn', 'CHART');
+      }
       // A nudge as you close, so the thread never goes cold in the dark.
       const d = hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r });
       if (d <= 4 && rand() < 0.4) log(`The marked position is close now — ${bearing(state.q, state.r, L.q, L.r)}, ${(d * 60 / 1000).toFixed(1)} km.`, '', 'CHART');
@@ -3501,6 +3548,16 @@ function carveChamber(node) {
         const types = ['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage'];
         const type = types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr) % types.length];
         setTile(hq, hr, type, true);
+        // ANCHOR THE PRIZE TO THE CHAMBER THAT HOLDS IT. POIs were hex-level in
+        // a voxel world, so a prize placed by a chamber five kilometres down was
+        // claimable at whatever shallow sealed-run floor that column happened to
+        // offer. Measured: 979 chambers exist below 3200 m and NOT ONE prize had
+        // to be taken below it. That is why the deep read as empty — not for
+        // want of content, but because none of it was ever load-bearing — and it
+        // is why the depth-scaling already sitting in the haul and the item
+        // table never fired. Now the thing is where the chamber is.
+        const at = world.get(hexKey(hq, hr));
+        if (at) at.poiDepth = node.depth;
       }
     }
   }
@@ -8156,13 +8213,50 @@ function applyMoveCosts(tileCostMultiplier, favour) {
   state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
 }
 
+// O5: the hull-failure screen said "the pressure finds every seam at once"
+// whether you had been crushed at depth, rammed a wall, or been chewed open by
+// something with teeth. A death that names the wrong cause teaches the wrong
+// lesson, and this game asks you to learn from dying.
+function deathCause() {
+  if (state.currentDepth > crushDepthNow())
+    return 'You took her below what she was built for, and the sea did the arithmetic. Every seam at once.';
+  if (state.currentDepth > safeDepthNow())
+    return 'She had been groaning for a while. Past her rated depth the groaning stops meaning caution and starts meaning arithmetic.';
+  const biter = (state.creatures || []).find(c => !c.gone && !c.fleeing
+    && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1);
+  if (biter) return 'Whatever had been working at the hull finally got through it. You do not see what.';
+  return 'She opens along a seam that had been complaining for a long time, and the sea comes in all at once.';
+}
+function deathTitle() {
+  if (state.currentDepth > crushDepthNow()) return 'Crushed.';
+  const biter = (state.creatures || []).find(c => !c.gone && !c.fleeing
+    && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1);
+  return biter ? 'Something got in.' : 'The hull fails.';
+}
+// And it never told you what you had just lost — only what you had banked.
+// The whole weight of a death is in the things that were aboard.
+function lostWithHer() {
+  const bits = [];
+  if (state.cargo > 0) bits.push(state.cargo + ' crate' + (state.cargo > 1 ? 's' : '') + ' of salvage');
+  if (state.relics > 0) bits.push(state.relics + ' relic' + (state.relics > 1 ? 's' : ''));
+  const items = Object.keys(state.items || {}).filter(k => itemCount(k) > 0).length;
+  if (items) bits.push(items + ' thing' + (items > 1 ? 's' : '') + ' out of the hold');
+  const hands = (state.crew || []).filter(m => !m.lost).length;
+  if (hands) bits.push(hands === 1 ? 'one hand' : hands + ' hands');
+  if (!bits.length) return ' She goes down with nothing aboard, which is its own kind of failure.';
+  const last = bits.pop();
+  return ' Down with her: ' + (bits.length ? bits.join(', ') + ' and ' + last : last) + '.';
+}
+
 function checkDeath() {
   if (state.air <= 0 && state.alive) {
     state.alive = false;
-    setTimeout(() => endGame('The air is gone.', 'The scrubbers fail. The boat goes quiet.'), 700);
+    setTimeout(() => endGame('The air is gone.',
+      'The scrubbers fail and the boat goes quiet.' + lostWithHer()), 700);
   } else if (state.hull <= 0 && state.alive) {
     state.alive = false;
-    setTimeout(() => endGame('The hull fails.', 'The pressure finds every seam at once.'), 700);
+    const t = deathTitle(), c = deathCause();
+    setTimeout(() => endGame(t, c + lostWithHer()), 700);
   }
 }
 
@@ -8823,6 +8917,14 @@ function airCounsel() {
 // hex's deepest cell was in a chamber with no route down from the top.)
 function atReachableBottom(tile) {
   if (!tile) return false;
+  // A prize anchored to a chamber is taken AT that chamber — but only when the
+  // chamber is genuinely open water you can be in. Where it is not, the old
+  // rule stands, so nothing that used to be claimable stops being claimable.
+  // That fallback is deliberate: an earlier pass found 83% of wrecks stranded
+  // behind broken rock columns, and this must not undo it.
+  if (tile.poiDepth != null && cells.has(cellKey(tile.q, tile.r, tile.poiDepth))) {
+    return Math.abs(state.currentDepth - tile.poiDepth) <= DEPTH_GRID;
+  }
   // The rule is unchanged where the water is continuous: you must go to the
   // floor. It relaxes ONLY where the hex's true floor is sealed off behind
   // stone — there, the bottom of the water you can actually swim is the bottom.
@@ -9264,6 +9366,23 @@ function updateHUD() {
   const depthPct = Math.min(100, Math.log10(Math.max(1, d)) * 25);
   document.getElementById('depth-bar').style.width = depthPct + '%';
 
+  // O3: safe and crush depth were written down NOWHERE. The bar changed colour
+  // and the prose said the hull groaned, but a captain was never once told the
+  // number they were being measured against. Now the gauge names its own band
+  // and, when it matters, the depth that ends the boat.
+  const dr = document.getElementById('depth-rating');
+  if (dr) {
+    const safe = safeDepthNow(), crush = crushDepthNow();
+    if (d > crush) { dr.textContent = 'PAST CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; }
+    else if (d > safe) { dr.textContent = 'crush at ' + crush + 'm'; dr.style.color = '#e8a050'; }
+    else { dr.textContent = 'safe to ' + safe + 'm'; dr.style.color = ''; }
+  }
+  // E9: and it never showed you your own money.
+  const hv = document.getElementById('hold-val'), hs = document.getElementById('hold-sub');
+  if (hv) hv.textContent = state.cargo + (state.relics ? ' +' + state.relics + 'r' : '');
+  if (hs) hs.textContent = state.cargoBanked + ' banked'
+    + (state.relicsBanked ? ' · ' + state.relicsBanked + ' vault' : '');
+
   // Color states — thresholds are percentages of max so they scale with sub.
   const airPct = state.air / sub.air;
   const airEl = document.getElementById('air-val');
@@ -9407,6 +9526,12 @@ function restart() {
   state.maxZoneReached = 0;
   log(`A grey dock juts east into the chop. Behind you, the shore is rock and packed earth — the last solid ground for hundreds of miles. To the north and west, open water.`);
   log(`The ${sub.name} casts off. The hatch is open; the air is yours.`, '', 'CAST OFF');
+  // O2 / Sean's ruling D1: the game never once said what it was FOR. This is
+  // the premise, not a tutorial — it names the trade and the two things that
+  // kill you, and then it stops. Nobody is told how to play, only what the job
+  // is and what the sea charges for it.
+  log(`The trade is salvage. Take the boat down, find what the Fall left on the bottom, and bring it back to this dock — nothing counts until it is ashore. Two things end you down there: the air runs out, or the pressure finds a seam. Both are on the gauges. Nothing else is promised, and the sea keeps no ledger of what you meant to do.`,
+      '', 'THE TRADE');
   document.getElementById('gameover').classList.remove('show');
   // Cap ping power slider at sub's max
   const pp = document.getElementById('ping-power');
