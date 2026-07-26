@@ -17,7 +17,29 @@
 
 **CAVEAT, stated plainly:** the bot harness cannot read prose, so it cannot measure the thing these three features are actually for. Their value is unverified until Sean plays them.
 
-**Bugs these shipped past (both silent, both found only by verifying):** `currentFavour` compared a hex to itself because `state.q` was advanced before favour was computed — the prose said the water was setting and the water did nothing. And the chart framed all 13,217 *generated* hexes instead of the ~58 *known*, rendering a hard-won survey as a speck. Chart now frames `chartKnown` tiles + dock + player + enclaves + leads.
+## TYPED LEADS + KNACKS (2026-07-26) — both of Sean's banked rulings, built
+
+**TYPED LEADS.** Every lead used to resolve into the same cache of crates, so a session had exactly one correct shape. Marks now carry a `kind`, stated on the chart and in the log *before* you commit the air:
+- `cache` — crates, the old baseline.
+- `cavern` — a place, not a payout. **Snaps to a REAL ruin/sinkhole/sprung hull within 7 hexes** (`nearestWayIn`) and honestly downgrades to a cache when it can't find one. 45/60 hold. *A clue that lies is worse than no clue.*
+- `quarry` — an **offer**, never an ambush. Creature is named (so you can weigh it) and awake; the cache is visible; **arriving does not take it** (`state.quarryCache`, persisted). Come back with a torpedo, or braver.
+- `word` — **pays zero cargo.** Pays in chart: a stretch of somebody else's survey, water you've never been to, revealed. Word begets word, and the chain turns into cargo later. **This is Sean's "a charting session is a legitimate session" ruling made mechanical.**
+
+**KNACKS (`KNACKS`, `knackOrder`, `crewCan`, `checkKnackGain`).** Sean: crew-only, "I don't want to start a kind of scale problem." So: **A KNACK OPENS AN OPTION. IT NEVER MULTIPLIES A NUMBER.** Five, all wired to existing systems — cold nose (`layerKnown`), reader of water (`traceAt` reach), quiet feet (`noiseMade`), steady hands (`stressHold`), scrounger (on-foot rubble). Fixed seeded order per person, so keeping someone alive is finding out who they become; losing a veteran costs a *capability*. Gained at 4/10/18 voyages.
+- **The load-bearing test:** a hand with 40 voyages scores identically to one with 0 (2 atk / 1 def each). If that ever fails, the scale problem has started.
+- **THE MUSTER** panel (`btn-muster`) — built because none of this was visible; crew only ever reached the player through log lines.
+
+## HARNESS NOISE FLOOR — READ BEFORE CHASING A REGRESSION
+
+`tests/playtest.js` is **non-deterministic**. Same build, back to back: **54% / 58% survival, 29% / 23% hull failure.** So the floor is **±4–6 points at n=120**. A 4-point swing is nothing. Run the same build twice before believing any delta, and use `FATHOM_HTML=<path> node tests/playtest.js` with `git show <sha>:fathom-chart.html` to A/B against any prior commit.
+
+## THREE MISTAKES WORTH NOT REPEATING (2026-07-26)
+
+1. **The battery caught a real design error.** I had a hard layer latch `soundColumn`'s clear flags like stone, which broke "an opening reachable by rising IS reported". The test was right: that hides *the shape of the world*, not the things hunting in it. Structure returns are loud; radiated noise is faint. **The layer belongs in `passiveContactR`/`noiseMade` and nowhere near geometry.** Blinding navigation sonar makes the sea arbitrarily lethal and degrades the chart, which is the point of the game.
+2. **Two of my own new tests passed vacuously.** The stats check compared two *gearless* hands — `teamScore` skips the gearless, so it asserted `0 === 0`. Now has a liveness guard that fails if the comparison isn't measuring anything. **A test that cannot fail is worse than no test.**
+3. **A two-sample variety check isn't a variety check.** Two names honestly rolled the same first knack; it now samples the whole hiring pool.
+
+**Bugs the water-terrain commits shipped past (both silent, both found only by verifying):** `currentFavour` compared a hex to itself because `state.q` was advanced before favour was computed — the prose said the water was setting and the water did nothing. And the chart framed all 13,217 *generated* hexes instead of the ~58 *known*, rendering a hard-won survey as a speck. Chart now frames `chartKnown` tiles + dock + player + enclaves + leads.
 
 ---
 
