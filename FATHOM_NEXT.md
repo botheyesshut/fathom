@@ -55,6 +55,48 @@ KNOBS throughout are Fable-guessed until Sean plays. Prose tables are Sonnet-sub
 - **STILL OPEN ("Fitting")**: placing furniture/defences/bulkheads on carved tiles; player-authored chokepoints; multi-cell fortresses (dig through a cell edge into the next 60m cell — the substrate/overlay model already allows it).
 - **THE RESOLUTION LADDER IS NOW 7/7 BUILDABLE RUNGS DONE.** Rung 7 (rival PvP raids) awaits a multiplayer backend; the sub-vs-sub detection model (below) is its combat core.
 
+## SEAN'S DESIGN DIRECTION, 2026-07-25 — NOT YET BUILT. Read before tuning anything.
+Four rulings from Sean. The first one **overrides** the instinct to "fix" the economy.
+
+### RULING: progress must NOT be guaranteed
+"'Enough progress' in a 40 minute session should not be virtually guaranteed. If a person just
+wants to explore in the sub and see and hear interesting things, flesh out their map, they should
+be able to do that." **Do not buff the economy until progress is reliable.** A session that banks
+nothing but charts new water is a legitimate session. When the persona playtest reports "the
+economy does not compound", separate the genuine bug (cargo was near-unobtainable — since fixed)
+from this deliberate design. Exploration is its own reward; the job is to MAKE it rewarding, not
+to replace it with guaranteed income.
+
+### THE CHART (the strongest idea; do this one properly)
+A **nautical-chart map view**, separate from the tactical hex view (which stays as the periscope).
+Ink-on-wet-paper: soundings, hachured rock, a compass rose, the coastline you have charted.
+- **AT FIRST, THE SUB DOES NOT APPEAR ON IT.** You see the water you have charted but not where
+  you are in it — you dead-reckon. **Own-position is an UPGRADE to work toward** (an inertial log
+  / positioning array — a natural Confluence instrument, or a `fit`).
+- WHY THIS IS RIGHT: it is the epistemic law taken to its end — knowing where YOU are is knowledge
+  like any other, and the game has been quietly giving it away. It also gives the explorer
+  playstyle a PROGRESSION TRACK, which is what makes the "progress not guaranteed" ruling work:
+  fleshing out the chart IS the reward.
+
+### TYPED LEADS (breadcrumbs that promise different things)
+Today every lead resolves to the same generic cache (`resolveLead`), so they are interchangeable.
+Leads should carry a KIND, and the clue text should TELEGRAPH it so a player can decline one:
+- **quarry** — something worth fighting, with a reward for winning
+- **cavern** — a place worth exploring, by sub or on foot
+- **word** — information: eventual rewards (reveals other leads, names a people's location,
+  marks a region, opens a lock). Sean: "information they might glean (for eventual rewards)."
+A lead you can turn down because you are not in the mood for a fight is a real choice.
+
+### CREW SKILL TREE — crew ONLY, and that is the scale control
+Sean: "That would just be for the crew members because I don't want to start a kind of scale
+problem where players can become all-powerful. I don't want that eventuality."
+- **WHY CREW-ONLY BOUNDS THE CEILING**: crew are MORTAL and FEW. They break, they die, they walk
+  into the dark. Investment that can be lost does not accumulate into god-mode, and PARTY_MAX /
+  crewCap caps the width. The captain never gets stronger — the people do, and the people are at risk.
+- Build as **specialisation, not strength**: a hand good in the dark is not thereby good with a
+  speargun. Earned from what they SURVIVED (the data already accrues: `m.xp`, `m.scars`).
+- This is crew Push C (tenure), now with Sean's shape on it.
+
 ## THE HOLD & THE TRAIL — items with teeth, and exploration that leads somewhere (2026-07-25)
 **Sean: make exploring rewarding; items need PALPABLE gameplay value — worth using, keeping, storing, stealing.** Two systems, both battery-green (new `items.test.js`, 20 checks) and browser-verified.
 - **`ITEMS` data table** (beside GEAR — add a row, get a new thing worth diving for). Kinds: `use` (consumable), `fit` (permanent boat upgrade), `key`, `chart` (clue), `valuable` (pure worth). Each has glyph/col/flavor/`find` weight/`depth` gate. v1 roster: patchkit(hull), airflask(air), rations(stores/Vigor), dressing(clear a crew wound), salts(restore nerve), probe(SILENT scout + nearest-POI tell), sonararray(fit→passive range), pressurehull(fit→+450 m safe depth), hatchkey, seachart, idol/ingot(valuables).
