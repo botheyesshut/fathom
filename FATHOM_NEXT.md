@@ -43,6 +43,20 @@
 
 **Run `node tests/economy.js` and read the SOUNDER block, not just REACHABILITY.** Checking only reachability is how a 0%-precision instrument got shipped.
 
+## THE CLAIM RULE IS FINISHED (2026-07-26, `bfde5fe`) — the empty-deep saga is CLOSED
+
+**The law, which every future feature touching prizes must obey: the claim, the sounder, and the announcement share ONE definition of "reachable from here" — the contiguous water the boat is in (`cellRun`).** Any two disagreeing means one is lying. Every failed attempt at this fixed one leg and left the other two.
+
+- **Claim** (`atReachableBottom`): stack prizes are worked at their chamber, ±60 m, no fallback. Legacy seabed prizes (no stack — shelf wrecks) keep the sealed-run relaxation; that is what the 83%-stranded fix protected.
+- **Sounder** (`soundingBelow`): `p.d > run.floor → skip`. Reads through water, not rock. 100% precision/recall on the upgraded scorer (sounds from every water cell in the column, not just the top).
+- **Announce** (`prizeDepthHere`): quotes the prize's depth; **silent** when the prize is not in your water.
+
+**Corrections to the record above:** the 69.2% figure **replicates on the clean harness** — it was never pollution, it is real geography. And it is the *design*: every 0–1500 m entry is standable (47/47), so the starter game is intact; what dropped was only ever claimable by fraud. Claim-depth bands went 0/1/0 → **3/7/2** across 2200+/3200+/6000+; median claim depth 720 → **1080 m**. Erebus-safe fell 85 → 63% of claimable — **that is Nyx's reason to exist appearing, not a regression.**
+
+**The sealed third of the deep** (entry table: 3/7 · 7/19 · 2/20 standable in the three deep bands) is silent — no chirp, no announce — and is deliberate latent content: **dig targets** (the digging rig exists) and lateral approaches beyond the flood fill's 26-hex radius, which undercounts connectivity by construction. Do not "fix" it by restoring a fallback.
+
+**Known small caveats, none urgent:** traces still shed from `t.poi` (shallowest face), so a trace can point at a hex whose prize is sealed — acceptable under "progress not guaranteed", but worth a look if playtests complain of wild geese. `leaveInterior` still marks found-ness by hex key, so a multi-ruin column marks its shallowest face when any deck is walked. Bot cargo pickup reads 20% vs 27–32% — partly the removed fraud, partly that the bot cannot read the sounder or the announcement; a human can.
+
 **Also do not repeat this:** the "strict anchor vs fallback" trade-off I described was not real. `cellRun` already gives the water the boat occupies, so "is this chamber divable from here" needs no flood fill. That rule alone is still not sufficient — most deep chambers are separated from the surface run by rock and are reached laterally — so the honest test is connectivity, not vertical adjacency.
 
 **Instruments:** `node tests/economy.js` (add `FATHOM_HTML=<path>` to A/B any commit). Note it counts one prize per **hex**, so it cannot see stacking — count `t.pois` entries directly for that. Numbers to move: *prizes per 1000 cells* in the 3200-6000 and 6000+ bands, currently **0.06** and **0.00**.
