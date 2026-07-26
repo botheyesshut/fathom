@@ -60,7 +60,7 @@ function boot(seed) {
   vm.createContext(sandbox);
   const probe =
     '\nfunction __state(){ return state; }' +
-    '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear(); interiorCache.clear(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
+    '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
     '\nfunction __tile(q,r){ return tileAt(q,r); }' +
     '\nfunction __accepts(t,d){ return hexAcceptsDepth(t,d); }' +
     '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +

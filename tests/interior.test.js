@@ -82,7 +82,7 @@ try { vm.runInContext(script +
   '\nfunction __dwellerStep(){ dwellerStep(); }' +
   '\nfunction __hold(m){ toggleHold(m); }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
-  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear(); interiorCache.clear(); }',
+  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
 
 let failures = 0;

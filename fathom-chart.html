@@ -8962,6 +8962,31 @@ function airCounsel() {
 // Keyed by hex, holding the depth stack, and mirroring `cells`: substrate that
 // nothing else owns cannot be clobbered by something else's rebuild.
 const cellPois = new Map();
+
+// EVERY SEED-DERIVED CACHE, CLEARED IN ONE PLACE.
+//
+// This exists because the alternative cost a revert and most of a night. The
+// world caches used to be cleared by NAME at eight separate sites — two in the
+// game, six in hand-rolled `__seed` shims across the test harness. Adding
+// `cellPois` meant finding all eight. I missed the shims entirely, so prizes
+// pooled across seeds and the sounder scored 0% precision on a world that did
+// not exist; and the patch I did apply to one game site landed AFTER a `//`
+// comment, silently commenting itself out.
+//
+// ADD NEW SEED-DERIVED STATE HERE AND NOWHERE ELSE. Anything keyed off
+// worldSeed — a lattice memo, a carve registry, a substrate map — belongs in
+// this function. `flip.test.js` asserts that reseeding and regenerating
+// reproduces a world exactly, which is what catches a cache you forgot.
+function resetWorldCaches() {
+  world.clear();
+  cells.clear();
+  generatedChunks.clear();
+  nodeCache.clear();
+  edgeCache.clear();
+  carvedFeatures.clear();
+  cellPois.clear();
+  if (typeof interiorCache !== 'undefined') interiorCache.clear();
+}
 function poiStack(tile) {
   if (!tile) return [];
   const s = cellPois.get(hexKey(tile.q, tile.r));
@@ -9591,9 +9616,7 @@ function restart() {
   generatedChunks.clear();
   worldSeed = Date.now() & 0xffffffff;
   rng = mulberry32(worldSeed);
-  nodeCache.clear(); // lattice + edge memos and the carve registry are seed-dependent cellPois.clear();
-  edgeCache.clear();
-  carvedFeatures.clear();
+  resetWorldCaches();   // lattice, edge memos, carve registry, prizes — all seed-dependent
   interiorCache.clear();   // interiors are substrate — they belong to the old seed
   spawnedChunks.clear();
   state.creatures = [];
@@ -9811,9 +9834,8 @@ function resumeGame(save) {
   state.trail = []; state.failHex = null;
   state.ping = null; state.pingArrows = null;
   state.pingMemory = new Map();
-  world.clear(); cells.clear(); revealed.clear(); visited.clear();
-  generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear();
-  interiorCache.clear();
+  revealed.clear(); visited.clear();
+  resetWorldCaches();
   // Creatures + spawn history restore BEFORE generation, so already-rolled
   // chunks don't re-roll their inhabitants into duplicates.
   spawnedChunks.clear();

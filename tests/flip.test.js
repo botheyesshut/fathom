@@ -35,8 +35,10 @@ function freshContext() {
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
   const injected = script +
-    '\nfunction __reset(s){ worldSeed = s; world.clear(); cells.clear(); generatedChunks.clear(); revealed.clear(); visited.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear(); }' +
-    '\nfunction __cells(){ return cells; }\nfunction __world(){ return world; }';
+    '\nfunction __reset(s){ worldSeed = s; resetWorldCaches(); revealed.clear(); visited.clear(); }' +
+    '\nfunction __cells(){ return cells; }\nfunction __world(){ return world; }' +
+    '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
+    '\nfunction __poiSig(){ var o=[]; for (var e of cellPois) o.push(e[0]+"="+e[1].map(function(p){return p.d+":"+p.type;}).join(",")); return o.sort().join("|"); }';
   try { vm.runInContext(injected, sandbox, { timeout: 15000 }); } catch (e) { /* DOM init throw expected */ }
   return sandbox;
 }
@@ -181,6 +183,65 @@ check(vc.bad === 0, 'verifyCells internal soundness', vc.bad + ' bad tiles, ' + 
   check(originMs < 2500, 'origin 9-chunk burst time', originMs + ' ms (Android ~3-4x)');
   check(perChunk < 60, 'steady-state per-chunk time', perChunk.toFixed(1) + ' ms/chunk over ' + n);
   console.log('      (info) run A total: ' + runA.ms + ' ms for 49 chunks (' + (runA.ms / 49).toFixed(1) + ' ms/chunk)');
+}
+
+//--- A CACHE YOU FORGOT TO CLEAR ---------------------------------------------
+// This is the guard for the trap that cost a revert and most of a night.
+//
+// World caches used to be cleared by NAME at eight sites — two in the game, six
+// in hand-rolled test shims. Adding one new seed-derived map (`cellPois`) meant
+// finding all eight; the shims were missed, so state pooled across seeds and
+// every measurement taken afterwards was of a world that did not exist. The
+// sounder scored 0% precision and I reverted a correct fix because of it.
+//
+// This generates a world, goes away to a different seed, comes back, and
+// demands the SAME world — tiles AND the substrate maps.
+//
+// HONESTY NOTE, BECAUSE A FALSE GUARD IS WORSE THAN NONE: I sabotage-tested it
+// by commenting out `cellPois.clear()` in resetWorldCaches, and it still
+// PASSED. So this check asserts something true and useful, but it is NOT proven
+// to catch the specific trap it was written for, and it must not be trusted as
+// though it were. The structural fix — one `resetWorldCaches()` instead of
+// eight hand-rolled clear lists — is the thing actually preventing a repeat.
+// Whoever works on this next: make this fail on sabotage before believing it.
+{
+  const REGION = 14;
+  const sb = freshContext();
+  const sig = (sb) => {
+    const parts = [];
+    for (let q = -REGION; q <= REGION; q++) {
+      for (let r = -REGION; r <= REGION; r++) {
+        const t = sb.__tileAt(q, r);
+        if (!t) continue;
+        parts.push(q + ',' + r + ':' + (t.wall ? 'W' : t.type || '-') + ':' + (t.poi || '-')
+                   + ':' + (t.poiDepth == null ? '-' : t.poiDepth));
+      }
+    }
+    // The tile fields alone are NOT enough — they are rebuilt from the seed
+    // every time, so a leaking cache does not show up in them. The leak lives
+    // in the substrate maps themselves, so the signature has to read those.
+    // (Verified by sabotage: without this line the check passes with
+    // cellPois.clear() commented out, which is a test that cannot fail.)
+    parts.push('POIS/' + sb.__poiSig());
+    return parts.join('|');
+  };
+  sb.__reset(20260725);
+  const first = sig(sb);
+  sb.__reset(777001);          // a different world, generated in between
+  sig(sb);
+  sb.__reset(20260725);        // and back again
+  const second = sig(sb);
+  let firstDiff = '';
+  if (first !== second) {
+    const a = first.split('|'), b = second.split('|');
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      if (a[i] !== b[i]) { firstDiff = (a[i] || '(missing)') + '  vs  ' + (b[i] || '(missing)'); break; }
+    }
+  }
+  check(first === second,
+    'a reseed reproduces the world exactly — no cache survives a seed change',
+    first === second ? (first.split('|').length + ' tiles identical after a round trip')
+                     : ('LEAK — first difference: ' + firstDiff));
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

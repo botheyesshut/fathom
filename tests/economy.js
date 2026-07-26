@@ -56,7 +56,7 @@ const sandbox = { console, Math, JSON, Date, Array, Object, Map, Set, String, Nu
 sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
 vm.createContext(sandbox);
 try { vm.runInContext(script +
-  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear(); interiorCache.clear(); }' +
+  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); }' +
   '\nfunction __tile(q,r){ return tileAt(q,r); }' +
   '\nfunction __cellsSize(){ return cells.size; }' +
   '\nfunction __isWater(q,r,d){ return cells.has(cellKey(q,r,d)); }' +
