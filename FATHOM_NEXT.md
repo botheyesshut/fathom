@@ -26,7 +26,20 @@
 1. ~~`if (t && !t.poi)` — shallow chambers win the hex race~~ **False.** Measured after the fix: across a whole region, *no two chambers ever elect the same hex.* That guard fired almost never.
 2. ~~The election picks a hex with no water at chamber depth and gives up~~ **False.** Made it try six candidates off the same seeded stream. Prize entries before: **24**. After: **24**, byte-identical distribution.
 
-**What the numbers actually say:** `CAVE_POI_CHANCE` rolls roughly **sixty** times near the dock, not the ~2,700 inferred from `nodeCache`. *The node cache holds nodes; it is not a count of chambers carved in reachable range.* So the open question is **"why are so few chambers carved near the dock?"** — a generation-shape question, not a POI question. Start there, and start by counting actual carve calls rather than cache entries.
+3. ~~Too few chambers carved near the dock~~ **False.** Instrumenting `carveChamber` directly (the thing I should have done first) gave the real numbers:
+
+```
+473 chambers carved   (181 shallow / 121 mid / 83 deep / 88 abyss)
+208 POI rolls passed  (~40% of 473, exactly as designed)
+208 prizes PLACED     zero misses, at every depth
+ 24 surviving in the world
+```
+
+**THE ACTUAL CAUSE: 88% of prizes are generated correctly and then destroyed.** The stack hangs off the tile *object* (`t.pois`), and `world` tiles are rebuilt by later chunk generation, which bins the array with the old object.
+
+**The fix is `cellPois` — a sparse map keyed like `cells`, cleared with the other seed caches. I tried it in `effb422` and REVERTED it in `4015c8a`, because it silently destroyed the sounder: 100% precision → 0%, 44 false alerts per 1,949 hexes.** I shipped that without noticing because I only re-checked reachability, not the instrument I had built two hours earlier. **Whoever picks this up: run `node tests/economy.js` and read the SOUNDER block, not just REACHABILITY.** The cause of that regression was not diagnosed — that is the first job, before re-attempting the map.
+
+**Also do not repeat this:** the "strict anchor vs fallback" trade-off I described was not real. `cellRun` already gives the water the boat occupies, so "is this chamber divable from here" needs no flood fill. That rule alone is still not sufficient — most deep chambers are separated from the surface run by rock and are reached laterally — so the honest test is connectivity, not vertical adjacency.
 
 **Instruments:** `node tests/economy.js` (add `FATHOM_HTML=<path>` to A/B any commit). Note it counts one prize per **hex**, so it cannot see stacking — count `t.pois` entries directly for that. Numbers to move: *prizes per 1000 cells* in the 3200-6000 and 6000+ bands, currently **0.06** and **0.00**.
 
