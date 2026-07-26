@@ -3532,33 +3532,46 @@ function carveChamber(node) {
   // cannot matter. Sink hexes (incl. the pier entry) are reserved.
   const prng = mulberry32(hashStr('poi:' + worldSeed + ':' + node.id));
   if (prng() < CAVE_POI_CHANCE) {
-    const ang = prng() * Math.PI * 2;
-    // Elect within the CORE (≤ 0.5×radius): the noise-shaped rim can pinch to
-    // ~0.56×radius, so the core is always inside the blob this chamber just
-    // carved — the elected cell provably exists regardless of carve order.
-    const rad = prng() * Math.max(0.5, baseRadius * 0.5);
-    const pr = Math.round(Math.sin(ang) * rad / 1.5);
-    const pq = Math.round(Math.cos(ang) * rad / SQRT3 - pr / 2);
-    const hq = node.q + pq, hr = node.r + pr;
+    // ELECT A CELL THAT ACTUALLY EXISTS.
+    //
+    // This used to elect ONE candidate and give up silently if it was not open
+    // water at the chamber's own depth — and it usually was not, because the
+    // polar-to-axial conversion can land outside the carved blob. Measured:
+    // ~2,700 chambers rolling at 40% produced 24 prizes. That is the real
+    // reason the deep read as empty, and it was NOT the one-prize-per-hex guard
+    // I first blamed: across a whole region, no two chambers ever elected the
+    // same hex, so that guard was firing almost never. Six attempts now, off
+    // the same seeded stream, so the world stays a pure function of its seed.
+    //
+    // The prize is stored as a depth-keyed STACK. `t.poi` and `t.poiDepth`
+    // mirror the shallowest entry deliberately: fifty other places in this file
+    // read `t.poi` to draw a glyph, shed a trace or colour a marker, and every
+    // one of them keeps seeing what it saw before. Only the depth-aware paths —
+    // the claim rule, arrival, and the sounder — consult the stack.
     const sink = caveSinkholeForNode(node);
-    const reserved = (sink && sink.q === hq && sink.r === hr) || (hq === 3 && hr === -1);
-    if (!reserved && cells.has(cellKey(hq, hr, node.depth))) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const ang = prng() * Math.PI * 2;
+      // Within the CORE (<= 0.5x radius): the noise-shaped rim can pinch to
+      // ~0.56x radius, so the core is inside the blob this chamber just carved.
+      const rad = prng() * Math.max(0.5, baseRadius * 0.5);
+      const pr = Math.round(Math.sin(ang) * rad / 1.5);
+      const pq = Math.round(Math.cos(ang) * rad / SQRT3 - pr / 2);
+      const hq = node.q + pq, hr = node.r + pr;
+      if (sink && sink.q === hq && sink.r === hr) continue;   // reserved
+      if (hq === 3 && hr === -1) continue;                    // the pier entry
+      if (!cells.has(cellKey(hq, hr, node.depth))) continue;
       const t = world.get(hexKey(hq, hr));
-      if (t && !t.poi) {
-        const types = ['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage'];
-        const type = types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr) % types.length];
-        setTile(hq, hr, type, true);
-        // ANCHOR THE PRIZE TO THE CHAMBER THAT HOLDS IT. POIs were hex-level in
-        // a voxel world, so a prize placed by a chamber five kilometres down was
-        // claimable at whatever shallow sealed-run floor that column happened to
-        // offer. Measured: 979 chambers exist below 3200 m and NOT ONE prize had
-        // to be taken below it. That is why the deep read as empty — not for
-        // want of content, but because none of it was ever load-bearing — and it
-        // is why the depth-scaling already sitting in the haul and the item
-        // table never fired. Now the thing is where the chamber is.
-        const at = world.get(hexKey(hq, hr));
-        if (at) at.poiDepth = node.depth;
-      }
+      if (!t) continue;
+      if (!t.pois) t.pois = [];
+      if (t.pois.some(pp => pp.d === node.depth)) break;      // already ours
+      const types = ['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage'];
+      t.pois.push({ d: node.depth,
+                    type: types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr + ':' + node.depth) % types.length] });
+      t.pois.sort((a, b) => a.d - b.d);
+      setTile(hq, hr, t.pois[0].type, true);
+      const at = world.get(hexKey(hq, hr));
+      if (at) { at.poiDepth = t.pois[0].d; at.pois = t.pois; }
+      break;
     }
   }
 
@@ -8068,14 +8081,28 @@ function soundingBelow() {
   // A hard return: the bottom of THIS water holds something that is not silt.
   // Only where the prize is actually claimable from here — a sounder that
   // chirps about a wreck sealed behind stone is a liar with a dial.
-  let odd = false;
-  if (t.poi && SOUNDER_PRIZE.indexOf(t.poi) >= 0 && !state.poisFound.includes(hexKey(t.q, t.r))) {
+  // Every prize stacked in this column, not just the shallowest — the deep ones
+  // are the whole reason the stack exists, and a sounder that only reported the
+  // top of the column would leave them exactly as invisible as before.
+  let odd = false, oddAt = null;
+  for (const p of poiStack(t)) {
+    if (SOUNDER_PRIZE.indexOf(p.type) < 0) continue;
+    if (poiTaken(t, p)) continue;
+    if (!cells.has(cellKey(t.q, t.r, p.d))) continue;
+    if (p.d < state.currentDepth - DEPTH_GRID) continue;   // it is above you; the sounder looks down
+    if (oddAt === null || p.d < oddAt) { odd = true; oddAt = p.d; }
+  }
+  // Fall back to the old whole-column test for legacy tiles with no stack.
+  if (!odd && !poiStack(t).length && t.poi && SOUNDER_PRIZE.indexOf(t.poi) >= 0
+      && !state.poisFound.includes(hexKey(t.q, t.r))) {
     const was = state.currentDepth;
     state.currentDepth = run.floor;
     odd = atReachableBottom(t);
     state.currentDepth = was;
+    if (odd) oddAt = run.floor;
   }
-  return { floor: run.floor, under: under, odd: odd };
+  return { floor: run.floor, under: under, odd: odd,
+           oddUnder: oddAt == null ? under : Math.max(0, oddAt - state.currentDepth) };
 }
 
 // The open run containing this depth, or null. Shape matches the old volume.
@@ -8847,7 +8874,7 @@ function describeSpace(mode) {
         : ' You are on the bottom. Silt, and the sounder has nothing more to say.';
     } else {
       sndLine = ` The sounder reads ${snd.under} m under the keel.`;
-      if (snd.odd) sndLine += ' The return comes back wrong — too hard, too sharp for silt. Something is down there.';
+      if (snd.odd) sndLine += ` ${snd.oddUnder > 0 ? snd.oddUnder + ' m down, the' : 'The'} return comes back wrong — too hard, too sharp for silt. Something is there.`;
     }
   }
   return (lead + ' ' + exits + mood + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
@@ -8915,6 +8942,33 @@ function airCounsel() {
 // the water you are actually in — not on some absolute floor sealed off behind
 // stone. (The bot captain found 83% of wrecks were unreachable by diving: the
 // hex's deepest cell was in a chamber with no route down from the top.)
+// The prizes stacked in this hex, shallowest first. Legacy tiles that only ever
+// had the single hex-level poi are presented as a stack of one, so callers only
+// ever deal with one shape.
+function poiStack(tile) {
+  if (!tile) return [];
+  if (tile.pois && tile.pois.length) return tile.pois;
+  if (tile.poi && tile.poiDepth != null) return [{ d: tile.poiDepth, type: tile.poi }];
+  return [];
+}
+// Found-ness is per CELL now, because a hex can hold several prizes and taking
+// the shallow one must not silently consume the one four kilometres beneath it.
+// Old saves keyed found-ness by hex; that key is still honoured for the
+// shallowest entry so a campaign in progress does not re-grow prizes it has
+// already taken.
+function poiTaken(tile, p) {
+  const k = tile.q + ',' + tile.r;
+  if (state.poisFound.includes(k + ',' + p.d)) return true;
+  return poiStack(tile)[0] === p && state.poisFound.includes(k);
+}
+function poiAtDepth(tile, depth) {
+  for (const p of poiStack(tile)) {
+    if (!cells.has(cellKey(tile.q, tile.r, p.d))) continue;
+    if (Math.abs(depth - p.d) <= DEPTH_GRID) return p;
+  }
+  return null;
+}
+
 function atReachableBottom(tile) {
   if (!tile) return false;
   // A prize anchored to a chamber is taken AT that chamber — but only when the
@@ -8922,8 +8976,9 @@ function atReachableBottom(tile) {
   // rule stands, so nothing that used to be claimable stops being claimable.
   // That fallback is deliberate: an earlier pass found 83% of wrecks stranded
   // behind broken rock columns, and this must not undo it.
-  if (tile.poiDepth != null && cells.has(cellKey(tile.q, tile.r, tile.poiDepth))) {
-    return Math.abs(state.currentDepth - tile.poiDepth) <= DEPTH_GRID;
+  const stack = poiStack(tile).filter(p => cells.has(cellKey(tile.q, tile.r, p.d)));
+  if (stack.length) {
+    return stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID);
   }
   // The rule is unchanged where the water is continuous: you must go to the
   // floor. It relaxes ONLY where the hex's true floor is sealed off behind
@@ -8935,6 +8990,21 @@ function atReachableBottom(tile) {
 }
 
 function handleTile(tile) {
+  // A hex may hold several prizes, one per chamber, and everything below
+  // switches on `tile.poi` — the SHALLOWEST. Standing in a chamber four
+  // kilometres down would otherwise run the branch for whatever happens to sit
+  // near the surface of the same column. So resolve the prize at THIS depth and
+  // hand the rest of the function a view of the tile wearing that prize's face.
+  // Every existing branch then works unchanged, on the right thing.
+  const here = poiAtDepth(tile, state.currentDepth);
+  if (here && here.type !== tile.poi) {
+    tile = Object.assign(Object.create(Object.getPrototypeOf(tile) || Object.prototype),
+                         tile, { poi: here.type, type: here.type });
+  }
+  // The key found-ness is recorded under. Per CELL where the prize is anchored,
+  // so taking the shallow one does not silently consume the deep one.
+  const poiKey = here ? (tile.q + ',' + tile.r + ',' + here.d) : hexKey(tile.q, tile.r);
+
   // Your own station opens to you every time, at the depth you cut it — no
   // first-visit gate, because you are meant to keep coming back.
   if (!state.foot && isBaseDeck(tile.q, tile.r, state.currentDepth)) {
@@ -8945,6 +9015,8 @@ function handleTile(tile) {
 
   // A quarry cache sits where you left it until you decide. Coming back to it
   // — with a torpedo, or with the thing dead, or just braver — is the point.
+  // NOT poiKey — a quarry cache is written by resolveQuarry under the HEX key,
+  // and rekeying only the read side would have silently orphaned every one.
   const qc = state.quarryCache && state.quarryCache[hexKey(tile.q, tile.r)];
   if (qc && !qc.taken) {
     const guard = state.creatures.some(c => !c.gone && c.q === tile.q && c.r === tile.r
@@ -8959,13 +9031,13 @@ function handleTile(tile) {
   // It gets its own tag so it survives a crowded log.
   const snd = soundingBelow();
   if (snd && snd.odd && snd.under > 0) {
-    log(`The sounder will not settle. ${snd.under} m under the keel the bottom answers hard — not silt, not rock. Whatever it is, it is directly beneath you.`,
+    log(`The sounder will not settle. ${snd.oddUnder} m under the keel something answers hard — not silt, not rock. Whatever it is, it is directly beneath you.`,
         'good', 'SOUNDER');
     sfx('contact');
   }
 
   // First-time visits get a flavor log
-  const firstVisit = !state.poisFound.includes(hexKey(tile.q, tile.r));
+  const firstVisit = !state.poisFound.includes(poiKey);
   const atSurface = state.currentDepth <= 1;
   const inShallow = !atSurface && state.currentDepth < 200;
 
@@ -9036,11 +9108,11 @@ function handleTile(tile) {
       break;
     case 'kelp':
       if (firstVisit) log(pickFlavor(FLAVOR.kelp));
-      state.poisFound.push(hexKey(tile.q, tile.r));
+      state.poisFound.push(poiKey);
       break;
     case 'chasm':
       if (firstVisit) log(pickFlavor(FLAVOR.chasm), 'strange');
-      state.poisFound.push(hexKey(tile.q, tile.r));
+      state.poisFound.push(poiKey);
       break;
     case 'air':
       if (firstVisit) {
@@ -9054,7 +9126,7 @@ function handleTile(tile) {
         const gained = Math.min(fillAmount, subA.air - state.air);
         state.air = Math.min(subA.air, state.air + fillAmount);
         log(`A pocket of trapped gas. The boat vents its scrubbers and tops up the reserves. (+${gained} air)`, '', 'AIR');
-        state.poisFound.push(hexKey(tile.q, tile.r));
+        state.poisFound.push(poiKey);
         setTile(tile.q, tile.r, 'passage');
       }
       break;
@@ -9081,7 +9153,7 @@ function handleTile(tile) {
           const item = rollItem(state.currentDepth);
           if (item) { giveItem(item, 1); const it = ITEMS[item]; log(`And more than crating: ${it.name}. ${it.flavor}`, it.strange ? 'strange' : '', 'HOLD'); }
         }
-        state.poisFound.push(hexKey(tile.q, tile.r));
+        state.poisFound.push(poiKey);
         setTile(tile.q, tile.r, 'passage');
       }
       break;
@@ -9120,13 +9192,13 @@ function handleTile(tile) {
       if (hull) bits.push(`-${hull} hull`);
       if (air) bits.push(`-${air} air`);
       log(`${gk.msg}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`, 'strange', 'STRANGE');
-      if (firstVisit) state.poisFound.push(hexKey(tile.q, tile.r));
+      if (firstVisit) state.poisFound.push(poiKey);
       break;
     }
     case 'opening':
       if (firstVisit) {
         log('A sinkhole opens beneath you. The seafloor falls away into dark.', 'strange', 'OPENING');
-        state.poisFound.push(hexKey(tile.q, tile.r));
+        state.poisFound.push(poiKey);
       }
       break;
     case 'surface':
