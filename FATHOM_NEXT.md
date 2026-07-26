@@ -73,6 +73,12 @@ Ink-on-wet-paper: soundings, hachured rock, a compass rose, the coastline you ha
 - **AT FIRST, THE SUB DOES NOT APPEAR ON IT.** You see the water you have charted but not where
   you are in it — you dead-reckon. **Own-position is an UPGRADE to work toward** (an inertial log
   / positioning array — a natural Confluence instrument, or a `fit`).
+- **WHAT THE CHART SHOWS (Sean, ratified 2026-07-25):** the ENTIRE SURFACE (depth 0) is drawn, no
+  restriction — humanity charted the surface before the Fall. **The moment the sub descends at all,
+  the chart shows only hexes explored or otherwise revealed** (visited / ping-revealed / passive /
+  any future method). So: a complete surface map, and beneath it only what you have earned.
+- Sean confirmed the split: the tactical hex view STAYS as the periscope; this is a separate
+  zoomed-out chart you open.
 - WHY THIS IS RIGHT: it is the epistemic law taken to its end — knowing where YOU are is knowledge
   like any other, and the game has been quietly giving it away. It also gives the explorer
   playstyle a PROGRESSION TRACK, which is what makes the "progress not guaranteed" ruling work:

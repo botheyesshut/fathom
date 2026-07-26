@@ -436,6 +436,7 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+    cursor: pointer;          /* tap to open the full transcript */
   }
 
   .log-entry {
@@ -447,7 +448,9 @@
     margin-bottom: 0.3rem;
   }
 
-  .log-entry.old { color: var(--bone-dim); opacity: 0.55; font-size: 1rem; }
+  /* 0.55 measured 2.23:1 against the void — below the 4.5:1 legibility floor,
+     on exactly the line you most want to re-read. */
+  .log-entry.old { color: var(--bone-dim); opacity: 0.78; font-size: 1rem; }
 
   .log-entry .echo {
     font-family: 'JetBrains Mono', monospace;
@@ -556,22 +559,42 @@
 
   #controls-row {
     display: flex;
+    flex-wrap: wrap;          /* seven buttons must never run off a phone */
     gap: 0.5rem;
   }
 
   .btn {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;             /* without this, flex items refuse to shrink and clip off-screen */
     background: transparent;
     border: 1px solid var(--sonar-dim);
     color: var(--sonar);
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 0.9rem 0.5rem;
     cursor: pointer;
     transition: all 0.2s ease;
     border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  /* The row rule must not leak into the game-over panel, which is a COLUMN —
+     flex:1 there grew the restart button into a 462px-tall tap trap over the
+     text you are still reading. */
+  #gameover .btn { flex: 0 0 auto; }
+
+  /* A control the game has disabled must LOOK disabled. */
+  .btn:disabled, .btn[disabled] {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: rgba(94,184,154,0.15);
+  }
+
+  @media (max-width: 420px) {
+    .btn { font-size: 0.62rem; letter-spacing: 0.06em; padding: 0.8rem 0.35rem; }
+    #controls-row { gap: 0.35rem; }
   }
 
   .btn:active {
@@ -614,6 +637,16 @@
     font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; letter-spacing: 0.2em; text-transform: uppercase;
     color: #6d8a88; padding: 0.9rem 0.6rem 0.4rem;
   }
+
+  #transcript {
+    position: fixed; inset: 0; background: rgba(4, 8, 16, 0.9); display: none;
+    align-items: center; justify-content: center; z-index: 57; padding: 1.2rem; backdrop-filter: blur(6px);
+  }
+  #transcript.show { display: flex; }
+  #transcript-list {
+    overflow-y: auto; padding: 0.6rem 1.1rem 1rem; -webkit-overflow-scrolling: touch;
+  }
+  #transcript-list .log-entry { opacity: 1; font-size: 1.02rem; margin-bottom: 0.7rem; }
 
   #inventory {
     position: fixed;
@@ -727,6 +760,14 @@
     <span class="attr">— Logbook of the Vessel Erebus, recovered</span>
   </div>
   <button id="dive">Dive</button>
+</div>
+
+<!-- THE TRANSCRIPT (tap the log to read everything that has been said) -->
+<div id="transcript">
+  <div id="inv-panel">
+    <div id="inv-head"><span>The Log</span><button class="btn" id="transcript-close">Close</button></div>
+    <div id="transcript-list"></div>
+  </div>
 </div>
 
 <!-- THE HOLD (inventory) -->
@@ -2884,10 +2925,21 @@ function syncFootControls(inside) {
   if (seal) seal.style.display = inside ? '' : 'none';
   // Boat controls are dead weight while the captain is off the boat — they do
   // nothing but scold. Hide them rather than leave the row full of refusals.
-  for (const id of ['btn-ping', 'btn-fire', 'btn-launch']) {
+  // The rule applies to EVERY boat-scale control, not just the first three:
+  // the depth ladder, the sonar slider and Surface all answer "you are not
+  // aboard" from inside a ruin, while the controls you need are clipped.
+  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface']) {
     const el = document.getElementById(id);
     if (el) el.style.display = inside ? 'none' : '';
   }
+  for (const id of ['dive-controls', 'ping-power-row']) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = inside ? 'none' : '';
+  }
+  // And Fire is dead weight on an unarmed boat too — its only behaviour is to
+  // advise you to buy a weapon. It costs a button's width to say so, forever.
+  const fireBtn = document.getElementById('btn-fire');
+  if (fireBtn && !inside) fireBtn.style.display = (state.armament || state.torpedoes > 0) ? '' : 'none';
   const claim = document.getElementById('btn-claim');
   if (!claim) return;
   claim.style.display = inside ? '' : 'none';
@@ -7651,17 +7703,60 @@ function log(text, cls, echo) {
 
   logEl.appendChild(entry);
   logHistory.push({text, cls, echo});
+  if (logHistory.length > 400) logHistory.shift();
 
   // Keep only last 3 visible
   while (logEl.children.length > 3) logEl.removeChild(logEl.firstChild);
+  if (document.getElementById('transcript').classList.contains('show')) renderTranscript();
 }
+
+// THE TRANSCRIPT. The three-line letterbox throws away the two things this game
+// is best at — the prose, and the diegetic teaching that stands in for a
+// tutorial. A single arrival description can render entirely off-screen in the
+// turn it was written. logHistory was already being filled and never read;
+// this reads it. Costs zero permanent vertical pixels, so the chart keeps its
+// space and every line ever written stays recoverable.
+function renderTranscript() {
+  const box = document.getElementById('transcript-list');
+  if (!box) return;
+  box.innerHTML = logHistory.map(e =>
+    `<div class="log-entry${e.cls ? ' ' + e.cls : ''}">` +
+    (e.echo ? `<span class="echo ${e.cls || ''}">${e.echo}</span>` : '') +
+    String(e.text).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])) +
+    '</div>').join('');
+  box.scrollTop = box.scrollHeight;
+}
+function openTranscript() { renderTranscript(); document.getElementById('transcript').classList.add('show'); }
+function closeTranscript() { document.getElementById('transcript').classList.remove('show'); }
 
 //=============================================================================
 // HUD
 //=============================================================================
 
+// A control the game knows is impossible must not accept the tap. changeDepth
+// already computes that the boat cannot move before it bills 4-8 hull for the
+// attempt — two playtesters killed a boat on move zero, at the dock, hammering
+// the largest button on screen. The collision stays available by deliberate
+// ram (moving INTO rock horizontally); it just is not the default tap any more.
+function syncDiveControls() {
+  const ids = [['btn-ascend', -1], ['btn-ascend-fast', -1], ['btn-descend', 1], ['btn-descend-fast', 1]];
+  const tile = getTile(state.q, state.r);
+  const run = (tile && !tile.wall) ? cellRun(state.q, state.r, state.currentDepth) : null;
+  for (const [id, dir] of ids) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    let blocked = false;
+    if (!state.alive || state.foot) blocked = true;
+    else if (!run) blocked = false;                                   // unknown water — let them try
+    else if (dir > 0) blocked = state.currentDepth >= run.floor;      // seabed / chamber floor
+    else blocked = state.currentDepth <= 0 || state.currentDepth <= run.ceiling;  // surface / deckhead
+    el.disabled = blocked;
+  }
+}
+
 function updateHUD() {
   const sub = activeSub();
+  syncDiveControls();
   document.getElementById('air-val').textContent = state.air;
   document.getElementById('air-bar').style.width = (state.air / sub.air * 100) + '%';
   document.getElementById('hull-val').textContent = state.hull;
@@ -8218,6 +8313,8 @@ document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-hold').addEventListener('click', openInventory);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('trade-close').addEventListener('click', closeTrade);
+document.getElementById('log').addEventListener('click', openTranscript);
+document.getElementById('transcript-close').addEventListener('click', closeTranscript);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
 document.getElementById('btn-fortify').addEventListener('click', fortifyBase);
