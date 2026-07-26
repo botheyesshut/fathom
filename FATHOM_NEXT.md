@@ -17,13 +17,18 @@
 
 **CAVEAT, stated plainly:** the bot harness cannot read prose, so it cannot measure the thing these three features are actually for. Their value is unverified until Sean plays them.
 
-## THE NEXT REAL JOB: POIs MUST BECOME PER-CELL (2026-07-26)
+## THE EMPTY DEEP: PER-CELL POIs ARE DONE, THE CAUSE IS STILL OPEN (2026-07-26)
 
-**One line is burying a third of the world:** `if (t && !t.poi)` in the cave-POI placement. **A hex can hold only one prize.** Measured: 1,057 chambers above 1500 m race 979 chambers below 3200 m for the same hex columns, the shallow one always wins, and the deep one silently places nothing. That is why `tests/economy.js` reports **zero prizes below 3200 m across 34% of the world's water** — the deep is not short of content, it is short of *slots*.
+**DONE.** Prizes are a depth-keyed stack: `t.pois = [{d, type}]`, shallowest first. `t.poi`/`t.poiDepth` mirror the shallowest **deliberately** — ~50 sites read `t.poi` for glyphs, traces, lead targets and chart markers, and all of them keep working untouched. Depth-aware paths only: `poiStack` / `poiTaken` / `poiAtDepth`, `atReachableBottom` (claims at any stack depth), `handleTile` (resolves the prize at *your* depth and passes a tile-view wearing its face), per-cell found-ness, and the sounder.
+- **DO NOT remove the sealed-run fallback in `atReachableBottom`.** It is what keeps 83% of wrecks from re-stranding. Reachability sits at 92.3%.
 
-`t.poiDepth` now anchors a prize to the chamber that placed it (with the pre-existing rule kept as a fallback where the chamber is not open water — **do not remove that fallback**, an earlier pass found 83% of wrecks stranded behind broken rock and it is what keeps reachability at 91.6%). But anchoring only helps prizes that got placed at all.
+**STILL BROKEN, AND I WAS WRONG ABOUT IT TWICE.** Read this before forming a third theory:
+1. ~~`if (t && !t.poi)` — shallow chambers win the hex race~~ **False.** Measured after the fix: across a whole region, *no two chambers ever elect the same hex.* That guard fired almost never.
+2. ~~The election picks a hex with no water at chamber depth and gives up~~ **False.** Made it try six candidates off the same seeded stream. Prize entries before: **24**. After: **24**, byte-identical distribution.
 
-**The fix is a per-CELL POI model rather than per-hex** — `poi` belongs on the cell, like everything else in the voxel world. It is a substrate change, it will touch `setTile`, `handleTile`, `atReachableBottom`, the render glyph pass and the sounder, and it wants doing deliberately. Re-run `node tests/economy.js` before and after; the number to move is *prizes per 1000 cells* in the 3200-6000 and 6000+ bands, currently 0.00 and 0.00.
+**What the numbers actually say:** `CAVE_POI_CHANCE` rolls roughly **sixty** times near the dock, not the ~2,700 inferred from `nodeCache`. *The node cache holds nodes; it is not a count of chambers carved in reachable range.* So the open question is **"why are so few chambers carved near the dock?"** — a generation-shape question, not a POI question. Start there, and start by counting actual carve calls rather than cache entries.
+
+**Instruments:** `node tests/economy.js` (add `FATHOM_HTML=<path>` to A/B any commit). Note it counts one prize per **hex**, so it cannot see stacking — count `t.pois` entries directly for that. Numbers to move: *prizes per 1000 cells* in the 3200-6000 and 6000+ bands, currently **0.06** and **0.00**.
 
 ## THE SINGLE-FILE RULE IS DEAD — READ BEFORE "RESTORING" IT (2026-07-26)
 
