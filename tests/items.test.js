@@ -93,6 +93,14 @@ try { vm.runInContext(script +
   '\nfunction __creatureCount(){ return state.creatures.length; }' +
   '\nfunction __quarryCaches(){ return state.quarryCache || {}; }' +
   '\nfunction __kindOf(s,t){ return pickLeadKind(s,t); }' +
+  '\nfunction __knacks(m){ return crewKnacks(m); }' +
+  '\nfunction __knackOrder(m){ return knackOrder(m); }' +
+  '\nfunction __crewCan(k){ var m = crewCan(k); return m ? m.name : null; }' +
+  '\nfunction __setCrew(a){ state.crew = a.map(function(x){ return crewVitals(x); }); }' +
+  '\nfunction __teamScore(){ return teamScore(); }' +
+  '\nfunction __atk(m){ return crewAtk(m); }' +
+  '\nfunction __knackKeys(){ return KNACK_KEYS; }' +
+  '\nfunction __knackAt(){ return KNACK_AT; }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -727,6 +735,71 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   }
   check(sandbox.__leads().length < 200, 'typed chains still terminate — the tier cap holds',
     chain + ' resolutions, ' + sandbox.__leads().length + ' marks outstanding');
+}
+
+//--- 17. KNACKS: crew specialise, they never get STRONGER ---------------------
+{
+  console.log('\n--- 17. KNACKS (options, never multipliers) ---');
+
+  const mk = (name, xp) => ({ name: name, role: 'diver', xp: xp, wounded: false,
+                              gear: { weapon: null, armor: null, kit: null } });
+
+  // Tenure, not kills. A green hand knows nothing; an old hand knows three things.
+  sandbox.__setCrew([mk('Green', 0)]);
+  check(sandbox.__knacks(sandbox.__setCrew && { name: 'Green', role: 'diver', xp: 0 }).length === 0,
+    'a hand fresh aboard has learned nothing yet');
+  const steps = sandbox.__knackAt().map(t => sandbox.__knacks({ name: 'Ito', role: 'diver', xp: t }).length);
+  check(JSON.stringify(steps) === '[1,2,3]', 'knacks arrive at the tenure marks, one at a time',
+    'at ' + sandbox.__knackAt().join('/') + ' voyages -> ' + steps.join(','));
+  check(sandbox.__knacks({ name: 'Ito', role: 'diver', xp: 9999 }).length <= sandbox.__knackKeys().length,
+    'and they run out — nobody learns everything');
+
+  // Who somebody becomes is fixed from the day they sign on.
+  const o1 = sandbox.__knackOrder({ name: 'Reyes', role: 'diver' });
+  const o2 = sandbox.__knackOrder({ name: 'Reyes', role: 'diver' });
+  check(JSON.stringify(o1) === JSON.stringify(o2), 'who a hand was going to become never changes');
+  // Different people must become different things — and checking two names is
+  // not enough, because two names can honestly roll the same first knack. What
+  // matters is that the FIRST knack varies across the crew you might actually
+  // hire, or everyone converges on the same person.
+  const firsts = {};
+  for (const nm of ['Okafor','Reyes','Halvorsen','Ito','Marchetti','Osei','Lindqvist','Baptiste','Ferro','Ngata','Sorokin','Adeyemi']) {
+    const f = sandbox.__knackOrder({ name: nm, role: 'diver' })[0];
+    firsts[f] = (firsts[f] || 0) + 1;
+  }
+  check(Object.keys(firsts).length >= 3, 'different people become different things',
+    Object.keys(firsts).map(k => k + '×' + firsts[k]).join(' · '));
+
+  // THE RULING, ENFORCED: a knack must never move a combat number. If this
+  // check ever fails, the scale problem Sean specifically forbade has started.
+  // NOTE: both hands are GEARED identically on purpose — teamScore skips the
+  // gearless, so comparing two empty-handed crew would pass 0 === 0 and prove
+  // nothing at all. A test that cannot fail is worse than no test.
+  const arm = () => ({ weapon: 'speargun', armor: 'plates', kit: null });
+  const plain = mk('Plain', 0); plain.gear = arm();
+  const vet = mk('Vet', 40); vet.gear = arm();
+  sandbox.__setCrew([plain]);
+  const scoreGreen = sandbox.__teamScore();
+  sandbox.__setCrew([vet]);
+  const scoreVet = sandbox.__teamScore();
+  check(scoreGreen.atk > 0, 'the comparison is live — a geared hand actually scores',
+    'green atk ' + scoreGreen.atk + ', def ' + scoreGreen.def);
+  check(scoreVet.atk === scoreGreen.atk && scoreVet.def === scoreGreen.def,
+    'FORTY voyages of tenure buys ZERO attack and ZERO defence — knacks are not stats',
+    'green ' + scoreGreen.atk + '/' + scoreGreen.def + ' vs veteran ' + scoreVet.atk + '/' + scoreVet.def);
+
+  // A knack in a broken hand is not a knack you have.
+  const carrier = mk('Carrier', 40);
+  const key = sandbox.__knackOrder(carrier)[0];
+  sandbox.__setCrew([carrier]);
+  check(sandbox.__crewCan(key) === 'Carrier', 'an able veteran can do the thing they are good at');
+  carrier.wounded = true;
+  sandbox.__setCrew([carrier]);
+  check(sandbox.__crewCan(key) === null, 'a knack in a hand who cannot work is a knack you do not have');
+
+  // And it is a CREW capability, never a captain one — lose the person, lose it.
+  sandbox.__setCrew([]);
+  check(sandbox.__crewCan(key) === null, 'with nobody aboard, nobody can do anything');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
