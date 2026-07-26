@@ -1195,7 +1195,10 @@ const CULTURES = {
     name: 'the Children of Dagon', short: 'the Deep Ones', glyph: 'ᛝ', col: '#6fae72', depthBand: 'deep',
     creed: 'They breathe the black water and worship what sleeps under it, and they are wretched and conniving and eat men with a terrible relish. But bring them a relic of their god, or flesh brought fresh, and even they will trade.',
     buys: { sigs: ['dagon'], props: ['cursed'], relics: true, flesh: true, mult: 3.6 },
-    sells: ['gillhood', 'blackpearl', 'idol', 'saltiron', 'lens', 'ambergris', 'chime'],
+    // They do NOT sell their own sacred things — an idol of their god and a
+    // black pearl are what they are trying to GET BACK. They deal in gill-work,
+    // wards and strange-craft; the holy objects move one way only, toward them.
+    sells: ['gillhood', 'saltiron', 'lens', 'ambergris', 'chime'],
     markup: 2.6, danger: true,
   },
   confluence: {
@@ -1219,6 +1222,11 @@ const CULTURES = {
 function buyMult(cultureKey, itemKey) {
   const cu = CULTURES[cultureKey], it = ITEMS[itemKey];
   if (!cu || !it || !cu.buys) return 0;
+  // NOBODY BUYS BACK THEIR OWN STOCK. Without this, Dagon sold an idol at
+  // 2.6x and bought it back at 3.6x — a free crate faucet you could work with
+  // no turn, no air and no noise (20 cycles took 20 crates to 140). A trader
+  // who pays more than they charge is not a trader.
+  if (cu.sells && cu.sells.indexOf(itemKey) >= 0) return 0;
   const b = cu.buys; let m = 0;
   if (b.sigs && it.sig && b.sigs.indexOf(it.sig) >= 0) m = b.mult;
   if (b.keys && b.keys.indexOf(itemKey) >= 0) m = Math.max(m, b.mult);
@@ -1541,9 +1549,20 @@ function useItem(key) {
 
 // Bolt a fitting to the boat — permanent, and it survives death only if the
 // boat does. A better boat is one you built out of what you found.
+// A boat can only take so much. Uncapped, two plates of pressure-hull bought
+// in shelf water beat the Charon's safe depth before the boat ladder started,
+// and thirty took the Erebus to a 15,000m safe depth against a world floor of
+// 11,000. The hull has a limit; the fitting does not remove it.
+const FIT_CAP = { depth: 2, sonar: 2, quiet: 2, trim: 2 };
+
 function fitItem(key) {
   const it = ITEMS[key];
   if (!state.fits) state.fits = {};
+  const cap = FIT_CAP[it.fit] || 2;
+  if (fitLevel(it.fit) >= cap) {
+    log(`The boat will not take another. ${ucfirst(it.name)} has nowhere left to bolt to — she is as fitted as her frames allow.`, 'warn', 'FIT');
+    return;
+  }
   state.fits[it.fit] = fitLevel(it.fit) + 1;
   takeItem(key, 1);
   log(it.fitLog || `You fit ${it.name} to the boat.`, 'strange', 'FIT');
@@ -1639,10 +1658,15 @@ function checkLeads() {
   state.leads = remaining;
 }
 
+// A trail has to be able to END. Uncapped, the chain probability reached 1.0 at
+// tier 6.25 and every payout term scaled with tier, so 20% of trails became
+// perpetual motion — a tier-50 link paying 52 crates and 26 items, forever.
+const LEAD_TIER_CAP = 6;
+
 function resolveLead(L) {
-  const tier = L.tier || 1;
+  const tier = Math.min(LEAD_TIER_CAP, L.tier || 1);
   const crates = 2 + tier + randInt(3);
-  const relics = (rand() < 0.35 + tier * 0.15) ? 1 : 0;
+  const relics = (rand() < Math.min(0.8, 0.35 + tier * 0.15)) ? 1 : 0;
   state.cargo += crates; state.relics += relics;
   const got = [];
   const nItems = 1 + (rand() < 0.5 ? 1 : 0) + Math.floor(tier / 2);
@@ -1653,7 +1677,12 @@ function resolveLead(L) {
   log(`The marked position, and it was no lie: a cache, sunk and forgotten — ${hauls.join(', ')}. Somebody meant to come back for this, and never did.`, 'strange', 'CACHE');
   sfx('relic');
   // The thread continues: the richer the find, the likelier it hides the next mark.
-  if (rand() < 0.5 + tier * 0.08) makeLead(tier + 1, state.q, state.r, 'lead:' + L.q + ':' + L.r + ':' + tier);
+  // Never certain, and never past the cap — a trail must be able to run out.
+  if (tier < LEAD_TIER_CAP && rand() < Math.min(0.8, 0.5 + tier * 0.08)) {
+    makeLead(tier + 1, state.q, state.r, 'lead:' + L.q + ':' + L.r + ':' + tier);
+  } else if (tier >= LEAD_TIER_CAP) {
+    log('And that is the end of it. Whatever chain of hands passed these marks along, it stops here.', 'strange', 'CHART');
+  }
   updateHUD(); render(); scheduleSave();
 }
 
@@ -1899,6 +1928,16 @@ function activeSub() { return SUBS[activeSubKey]; }
 // Pressure-hull plating buys real depth: the safe band pushes down with every
 // sheet fitted, so the deep water that was killing you becomes merely dangerous.
 function safeDepthNow() { return activeSub().safeDepth + fitLevel('depth') * 450; }
+// Plating buys you a deeper SAFE band, but it does not repeal the crush depth —
+// it moves with the boat, and past it the sea wins whatever you have bolted on.
+// Without this the advertised two-band model was one band that money moved: a
+// plated Erebus took exactly zero damage 550 m past its own stated crush depth.
+function crushDepthNow() { return activeSub().crushDepth + fitLevel('depth') * 450; }
+function crushPenalty() {
+  const over = state.currentDepth - crushDepthNow();
+  if (over <= 0) return 0;
+  return Math.max(3, Math.round(over * 0.05)); // unmitigated by any fitting
+}
 
 // Dock economy prices — every future service the port sells lives here.
 const DOCK_PRICES = {
@@ -6752,12 +6791,13 @@ function applyMoveCosts(tileCostMultiplier) {
   const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor) - fitLevel('trim')) + countHeldWith('heavy');
   state.air = Math.max(0, state.air - airCost);
 
-  if (state.currentDepth > safeDepthNow()) {
-    const over = state.currentDepth - safeDepthNow();
-    const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter));
+  const crush = crushPenalty();
+  if (state.currentDepth > safeDepthNow() || crush) {
+    const over = Math.max(0, state.currentDepth - safeDepthNow());
+    const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter)) + crush;
     state.hull = Math.max(0, state.hull - dmg);
-    if (state.currentDepth > sub.crushDepth) {
-      log(`Past crush depth. The hull screams.`, 'danger', 'PRESSURE');
+    if (crush) {
+      log(`Past crush depth. The hull screams — no plating you can bolt on answers this.`, 'danger', 'PRESSURE');
     } else if (over > 50) {
       log(`The hull groans under the pressure.`, 'warn', 'PRESSURE');
     }
@@ -6859,9 +6899,9 @@ function changeDepth(deltaMeters) {
     if (rand() < 0.25) log('The ballast tanks roar. The sound carries.', 'warn');
   }
 
-  if (state.currentDepth > safeDepthNow()) {
-    const over = state.currentDepth - safeDepthNow();
-    const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter * 0.5));
+  if (state.currentDepth > safeDepthNow() || crushPenalty()) {
+    const over = Math.max(0, state.currentDepth - safeDepthNow());
+    const dmg = Math.max(1, Math.round(over * sub.pressurePerMeter * 0.5)) + crushPenalty();
     state.hull = Math.max(0, state.hull - dmg);
     sfx('groan'); // the pressure sings against the plates
     stressHold('the pressure found it', Math.min(1, 0.35 + over / 1400)); // carrying a warhead deep is a wager

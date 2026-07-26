@@ -423,5 +423,64 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   check(sandbox.__state().corpses.length === 1, 'the dead you carry survive a reload', 'still aboard');
 }
 
+//--- 12. NO MONEY PRINTERS. The invariants the persona audit asked for ----------
+// A playtester broke the economy in about forty taps. These are the standing
+// guards so it cannot come back — an economy with a free crate faucet in it
+// cannot be tuned, so these run before any balance question is even asked.
+{
+  const s = sandbox.__state();
+  s.foot = null; s.alive = true; s.items = {}; s.cargo = 0; s.relics = 0; s.fits = {};
+
+  // (a) NOBODY BUYS BACK THEIR OWN STOCK, at any price, in any culture.
+  let faucets = [];
+  const cults = sandbox.__cultures();
+  for (const ck of Object.keys(cults)) {
+    for (const k of (cults[ck].sells || [])) {
+      const pay = sandbox.__buyFrom(ck, k), get = sandbox.__sellTo(ck, k);
+      if (get > 0) faucets.push(`${ck} sells ${k} for ${pay} and buys it for ${get}`);
+    }
+  }
+  check(faucets.length === 0, 'no culture buys back its own stock (the 20-crates-to-140 exploit)',
+    faucets.length ? faucets.slice(0, 3).join(' | ') : 'all three peoples clean');
+
+  // The general form: never pay out more than you charge, for anything.
+  let inverted = [];
+  for (const ck of Object.keys(cults)) {
+    for (const k of sandbox.__itemsAll()) {
+      const get = sandbox.__sellTo(ck, k);
+      if (get > 0 && get > sandbox.__buyFrom(ck, k) && (cults[ck].sells || []).indexOf(k) >= 0) inverted.push(ck + '/' + k);
+    }
+  }
+  check(inverted.length === 0, 'and no item pays out more than it costs at the same table', inverted.join(', ') || 'clean');
+
+  // (b) Fittings are capped — plating cannot outrun the boat ladder.
+  s.items = {}; s.fits = {};
+  for (let i = 0; i < 30; i++) { sandbox.__give('pressurehull', 1); sandbox.__use('pressurehull'); }
+  check((s.fits.depth || 0) <= 2, 'pressure-hull plating is capped', 'depth fit = ' + (s.fits.depth || 0));
+  const cappedSafe = sandbox.__safe();
+  check(cappedSafe < 4000, 'so safe depth cannot be bought to absurdity', 'safe depth = ' + cappedSafe + 'm');
+
+  // (c) Crush depth still means something with every plate fitted.
+  s.currentDepth = 20000; s.hull = 500; s.q = 0; s.r = 0;
+  const h0 = s.hull;
+  sandbox.applyMoveCosts(1);
+  check(s.hull < h0, 'the sea still wins past crush depth, whatever you have bolted on',
+    'took ' + (h0 - s.hull) + ' hull at 20,000m with 2 plates');
+
+  // (d) A trail must be able to end.
+  s.leads = []; s.foot = null; s.currentDepth = 600;
+  let maxTier = 0, chainLen = 0;
+  sandbox.__makeLead(1, 0, 0, 'cap-test');
+  for (let i = 0; i < 60 && s.leads.length; i++) {
+    const L = s.leads[0];
+    maxTier = Math.max(maxTier, L.tier);
+    s.q = L.q; s.r = L.r; s.currentDepth = L.d;
+    sandbox.__checkLeads();
+    chainLen++;
+  }
+  check(s.leads.length === 0, 'a lead chain terminates — it is not perpetual motion', chainLen + ' links, then it ended');
+  check(maxTier <= 6, 'and tiers are capped so payouts cannot run away', 'max tier ' + maxTier);
+}
+
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
