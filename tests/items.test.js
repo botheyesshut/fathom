@@ -35,7 +35,7 @@ sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
 vm.createContext(sandbox);
 try { vm.runInContext(script +
   '\nfunction __state(){ return state; }' +
-  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); interiorCache.clear(); }' +
+  '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); world.clear(); cells.clear(); generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear(); interiorCache.clear(); }' +
   '\nfunction __roll(d){ return rollItem(d); }' +
   '\nfunction __give(k,n){ giveItem(k,n); }' +
   '\nfunction __use(k){ useItem(k); }' +

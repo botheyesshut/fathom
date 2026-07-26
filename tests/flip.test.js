@@ -35,7 +35,7 @@ function freshContext() {
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
   const injected = script +
-    '\nfunction __reset(s){ worldSeed = s; world.clear(); cells.clear(); generatedChunks.clear(); revealed.clear(); visited.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); }' +
+    '\nfunction __reset(s){ worldSeed = s; world.clear(); cells.clear(); generatedChunks.clear(); revealed.clear(); visited.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear(); }' +
     '\nfunction __cells(){ return cells; }\nfunction __world(){ return world; }';
   try { vm.runInContext(injected, sandbox, { timeout: 15000 }); } catch (e) { /* DOM init throw expected */ }
   return sandbox;
