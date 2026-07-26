@@ -3982,6 +3982,7 @@ function render() {
   // The viewport reads STATE, never the log text, so the picture can never
   // disagree with the prose — a wrong illustration is worse than none.
   if (typeof syncScene === 'function') syncScene();
+  if (typeof musicSync === 'function') musicSync();
   // One rung down the resolution ladder the chart is a different world: square
   // tiles, lamplight, a body instead of a boat.
   if (state.foot) { syncFootControls(true); renderInterior(); return; }
@@ -5532,6 +5533,102 @@ const SFX = {
   contact() { tone(220, 210, 0.15, 'sine', 0.12); },                                 // passive pip
 };
 function sfx(name) { try { if (SFX[name]) SFX[name](); } catch (e) {} }
+
+//=============================================================================
+// MUSIC — the one thing in Fathom that is not synthesized.
+//
+// Written in 2012 for Sean's unfinished gamebook *The Dark Way Down* and never
+// used. Whoever mastered it was thinking about games: three of the four are
+// already loop-fixed at 48 kbps, which is exactly the prep this needs.
+//
+// EVERY TRACK IS OPTIONAL. If the files are missing — an offline copy of the
+// single HTML file, a stalled connection, a 404 — the game runs exactly as it
+// did before, silently, and never retries a dead track. Assets enhance, they
+// never gate. That is the rule that makes it safe to have assets at all.
+//
+// It is scored to state the game already tracks, so the music always agrees
+// with the situation: nothing to keep in sync, nothing to get wrong.
+const MUSIC = {
+  theme:   { src: 'assets/music/theme.mp3',   vol: 0.50 },  // the dock, and before you sail
+  shallow: { src: 'assets/music/shallow.mp3', vol: 0.34 },  // the shelf
+  deep:    { src: 'assets/music/deep.mp3',    vol: 0.34 },  // below 1200 m
+  hunted:  { src: 'assets/music/hunted.mp3',  vol: 0.44 },  // something has a fix on you
+};
+const musicEls = {};
+let musicNow = null, musicFade = null, musicUnlocked = false;
+
+function musicEl(key) {
+  const M = MUSIC[key];
+  if (!M || M.dead) return null;
+  if (musicEls[key]) return musicEls[key];
+  let a;
+  try { a = new Audio(); } catch (e) { M.dead = true; return null; }
+  a.loop = true; a.preload = 'none'; a.volume = 0;
+  // A missing file kills that track for the session and nothing else.
+  a.addEventListener('error', () => { M.dead = true; delete musicEls[key]; });
+  a.src = M.src;
+  musicEls[key] = a;
+  return a;
+}
+
+// What the boat should sound like right now, read off state — same discipline
+// as the viewport: the music can never disagree with what is happening.
+function trackForNow() {
+  if (typeof gameStarted !== 'undefined' && !gameStarted) return 'theme';
+  if (!state || !state.alive) return 'theme';
+  if (typeof ashore === 'function' && ashore() && !state.foot) return 'theme';
+  const hunted = (state.creatures || []).some(c => {
+    if (c.gone || c.fleeing || c.crippled) return false;
+    const keen = c.type === 'rival' ? (c.hostile && (c.alert || 0) > 45) : (c.interest || 0) > 45;
+    return keen && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 6;
+  });
+  if (hunted) return 'hunted';
+  return (state.currentDepth || 0) >= 1200 ? 'deep' : 'shallow';
+}
+
+function musicTo(key) {
+  if (musicNow === key) return;
+  musicNow = key;
+  if (!audioMuted && musicUnlocked) {
+    const el = musicEl(key);
+    if (el) { try { const p = el.play(); if (p && p.catch) p.catch(() => { musicUnlocked = false; }); } catch (e) {} }
+  }
+  if (musicFade) return;              // a fade already in flight will pick up the new target
+  musicFade = setInterval(() => {
+    let moving = false;
+    for (const k of Object.keys(MUSIC)) {
+      const el = musicEls[k];
+      if (!el) continue;
+      const target = (k === musicNow && !audioMuted) ? MUSIC[k].vol : 0;
+      const d = target - el.volume;
+      if (Math.abs(d) <= 0.02) {
+        el.volume = Math.max(0, Math.min(1, target));
+        if (target === 0 && !el.paused) { try { el.pause(); } catch (e) {} }
+      } else {
+        el.volume = Math.max(0, Math.min(1, el.volume + (d > 0 ? 0.02 : -0.02)));
+        moving = true;
+      }
+    }
+    if (!moving) { clearInterval(musicFade); musicFade = null; }
+  }, 70);
+}
+
+function musicSync() { try { musicTo(trackForNow()); } catch (e) {} }
+
+// Browsers refuse to start audio before the player has touched something, and
+// they are right to. We take the first gesture of any kind and start there.
+function musicUnlock() {
+  if (musicUnlocked) return;
+  musicUnlocked = true;
+  musicNow = null;
+  musicSync();
+}
+function musicStopAll() {
+  for (const k of Object.keys(musicEls)) {
+    const el = musicEls[k];
+    if (el) { try { el.pause(); } catch (e) {} el.volume = 0; }
+  }
+}
 
 //=============================================================================
 // EXPEDITIONS — the crew goes over the side.
@@ -9462,6 +9559,14 @@ document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('trade-close').addEventListener('click', closeTrade);
 document.getElementById('btn-chart').addEventListener('click', openSeaChart);
 vpBoot();
+// The first touch or key anywhere is the gesture browsers require before audio
+// may start. Once only — after that the music follows state on its own.
+['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
+  document.addEventListener(ev, function once() {
+    ['pointerdown', 'keydown', 'touchstart'].forEach(function (e2) { document.removeEventListener(e2, once); });
+    if (!audioMuted) musicUnlock();
+  }, { once: false });
+});
 var __mb = document.getElementById('btn-muster'); if (__mb) __mb.addEventListener('click', openMuster);
 var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListener('click', closeMuster);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
@@ -9484,6 +9589,7 @@ if (soundBtn) {
     audioMuted = !audioMuted;
     try { localStorage.setItem('fathom-audio', audioMuted ? '0' : '1'); } catch (e) {}
     if (!audioMuted) { audioEnsure(); sfx('contact'); } // confirm with a pip
+    if (audioMuted) musicStopAll(); else { musicUnlock(); musicNow = null; musicSync(); }
     syncSoundBtn();
   });
   syncSoundBtn();
