@@ -37,7 +37,11 @@
 
 **THE ACTUAL CAUSE: 88% of prizes are generated correctly and then destroyed.** The stack hangs off the tile *object* (`t.pois`), and `world` tiles are rebuilt by later chunk generation, which bins the array with the old object.
 
-**The fix is `cellPois` — a sparse map keyed like `cells`, cleared with the other seed caches. I tried it in `effb422` and REVERTED it in `4015c8a`, because it silently destroyed the sounder: 100% precision → 0%, 44 false alerts per 1,949 hexes.** I shipped that without noticing because I only re-checked reachability, not the instrument I had built two hours earlier. **Whoever picks this up: run `node tests/economy.js` and read the SOUNDER block, not just REACHABILITY.** The cause of that regression was not diagnosed — that is the first job, before re-attempting the map.
+**FIXED (`47a87f2`).** Prizes live in `cellPois`, a sparse map keyed like `cells`. **208 placed → 208 surviving**, against 24 before. The deep now genuinely holds content: **41 prizes in 3200-6000 and 33 below 6000**, proportional to where chambers are.
+
+**THE TRAP THAT COST A REVERT — read before adding any new world cache.** Six test files (`economy`, `items`, `interior`, `flip`, `creature`, `playtest`) each hand-roll a `__seed` shim that clears world caches **by name**. A new cache is invisible to all of them, so state leaks across seeds and every measurement silently lies. That is exactly what happened: `economy.js` runs five seeds then re-seeds for the sounder block, prizes from all five worlds pooled, and the sounder scored 0% precision / 44 false alerts. **The game was never broken — the harness setup was.** All six clear `cellPois` now. **Any future substrate map must be added to all six.**
+
+**Run `node tests/economy.js` and read the SOUNDER block, not just REACHABILITY.** Checking only reachability is how a 0%-precision instrument got shipped.
 
 **Also do not repeat this:** the "strict anchor vs fallback" trade-off I described was not real. `cellRun` already gives the water the boat occupies, so "is this chamber divable from here" needs no flood fill. That rule alone is still not sufficient — most deep chambers are separated from the surface run by rock and are reached laterally — so the honest test is connectivity, not vertical adjacency.
 
