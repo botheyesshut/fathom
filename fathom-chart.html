@@ -7792,6 +7792,42 @@ function cellRun(q, r, d) {
   return { ceiling, floor, kind: cells.get(cellKey(q, r, d)).kind };
 }
 
+//--- THE SOUNDER ------------------------------------------------------------
+// The oldest instrument on any vessel, and the one this game is named after.
+//
+// It exists because of a measurement, not a hunch. tests/economy.js found that
+// 89% of prizes are claimable within the STARTER boat's safe depth, median 840
+// metres down — reachable, survivable, present — and yet only ~32% of runs pick
+// up any cargo at all. The prizes were never out of reach. They were INVISIBLE:
+// you must be at the bottom of the right column to take one, and nothing ever
+// told a captain there was a bottom, let alone anything on it. That is why
+// buffing yield did nothing, and it is why the answer is an instrument rather
+// than a multiplier.
+//
+// It does not break the epistemic law. A sounder reads straight down, only
+// where you are, and it tells you the DEPTH of the return and how it came back
+// — never what the thing is. You still have to go down and look.
+const SOUNDER_PRIZE = ['salvage', 'ruin', 'signal', 'growth', 'air'];
+function soundingBelow() {
+  if (state.foot || ashore()) return null;
+  const t = getTile(state.q, state.r);
+  if (!t || t.wall) return null;
+  const run = cellRun(state.q, state.r, state.currentDepth);
+  if (!run) return null;
+  const under = run.floor - state.currentDepth;
+  // A hard return: the bottom of THIS water holds something that is not silt.
+  // Only where the prize is actually claimable from here — a sounder that
+  // chirps about a wreck sealed behind stone is a liar with a dial.
+  let odd = false;
+  if (t.poi && SOUNDER_PRIZE.indexOf(t.poi) >= 0 && !state.poisFound.includes(hexKey(t.q, t.r))) {
+    const was = state.currentDepth;
+    state.currentDepth = run.floor;
+    odd = atReachableBottom(t);
+    state.currentDepth = was;
+  }
+  return { floor: run.floor, under: under, odd: odd };
+}
+
 // The open run containing this depth, or null. Shape matches the old volume.
 function volumeContaining(tile, depth) {
   if (!tile || tile.wall) return null;
@@ -8513,7 +8549,21 @@ function describeSpace(mode) {
   const trLine = tr
     ? ` There is ${tr.what}. The set here runs ${tr.setName}, so whatever is shedding it lies ${tr.toward} of you.`
     : '';
-  return (lead + ' ' + exits + mood + setLine + layLine + trLine).replace(/\s+/g, ' ').trim();
+  // The sounder speaks every time the boat describes a room, because a floor
+  // you are never told about is a floor you never dive to.
+  const snd = soundingBelow();
+  let sndLine = '';
+  if (snd) {
+    if (snd.under <= 0) {
+      sndLine = snd.odd
+        ? ' You are on the bottom, and you are on top of whatever the sounder has been complaining about.'
+        : ' You are on the bottom. Silt, and the sounder has nothing more to say.';
+    } else {
+      sndLine = ` The sounder reads ${snd.under} m under the keel.`;
+      if (snd.odd) sndLine += ' The return comes back wrong — too hard, too sharp for silt. Something is down there.';
+    }
+  }
+  return (lead + ' ' + exits + mood + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
 }
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight
@@ -8606,6 +8656,17 @@ function handleTile(tile) {
       && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID);
     if (guard) log(`The cache is still there, and so is what is lying on it. ${qc.crates} crates. Your call.`, 'warn', 'QUARRY');
     else claimQuarryCache();
+  }
+
+  // THE SOUNDER'S OWN LINE. The room description already carries the reading,
+  // but a room description is long and this is the single most actionable fact
+  // the boat has: there is something under you and you are not on it yet.
+  // It gets its own tag so it survives a crowded log.
+  const snd = soundingBelow();
+  if (snd && snd.odd && snd.under > 0) {
+    log(`The sounder will not settle. ${snd.under} m under the keel the bottom answers hard — not silt, not rock. Whatever it is, it is directly beneath you.`,
+        'good', 'SOUNDER');
+    sfx('contact');
   }
 
   // First-time visits get a flavor log

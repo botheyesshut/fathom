@@ -66,7 +66,8 @@ try { vm.runInContext(script +
   '\nfunction __reachBottom(t){ return atReachableBottom(t); }' +
   '\nfunction __grid(){ return DEPTH_GRID; }' +
   '\nfunction __world(){ return world; }' +
-  '\nfunction __start(){ gameStarted = true; }',
+  '\nfunction __start(){ gameStarted = true; }' +
+  '\nfunction __sound(q,r,d){ state.q=q; state.r=r; state.currentDepth=d; state.foot=null; return soundingBelow(); }',
   sandbox, { timeout: 30000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
 const D = sandbox.__grid();
@@ -171,6 +172,38 @@ for (const seed of SEEDS) {
   }
 }
 
+// THE SOUNDER, SCORED. Its whole job is to convert an invisible prize into a
+// decision, so the questions are precision (does it ever cry wolf?) and recall
+// (does it stay silent over something a captain could have taken?).
+let sTrue = 0, sFalse = 0, sMissed = 0, sHexes = 0;
+{
+  sandbox.__seed(SEEDS[0]); sandbox.__start();
+  for (let dq = -RADIUS; dq <= RADIUS; dq++) for (let dr = -RADIUS; dr <= RADIUS; dr++) {
+    const q = 1 + dq, r = 1 + dr;
+    if ((Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2 > RADIUS) continue;
+    const t = sandbox.__tile(q, r);
+    if (!t || t.wall) continue;
+    sHexes++;
+    // sound from the shallowest water in the column — where a captain arrives
+    let top = null;
+    for (let d = 0; d <= MAXD; d += D) if (sandbox.__isWater(q, r, d)) { top = d; break; }
+    if (top === null) continue;
+    const rd = sandbox.__sound(q, r, top);
+    const chirped = !!(rd && rd.odd);
+    const isPrize = !!(t.poi && PRIZE.indexOf(t.poi) >= 0);
+    // is it genuinely claimable from this column?
+    let claimable = false;
+    if (isPrize) for (let d = 0; d <= MAXD; d += D) {
+      if (!sandbox.__isWater(q, r, d)) continue;
+      sandbox.__setDepth(d);
+      if (sandbox.__reachBottom(t)) { claimable = true; break; }
+    }
+    if (chirped && claimable) sTrue++;
+    else if (chirped && !claimable) sFalse++;
+    else if (!chirped && claimable) sMissed++;
+  }
+}
+
 const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : 'n/a';
 console.log('THE ECONOMY, MEASURED — ' + SEEDS.length + ' seeds, radius ' + RADIUS + ' around the dock\n');
 console.log('=== DENSITY ===');
@@ -203,6 +236,15 @@ for (const [lo, hi, label] of bands) {
 const ds = totals.depths.slice().sort((a, b) => a - b);
 const qd = f => ds.length ? ds[Math.floor((ds.length - 1) * f)] : 0;
 console.log('  depth you must SURVIVE to claim   min ' + qd(0) + '  p25 ' + qd(0.25) + '  median ' + qd(0.5) + '  p75 ' + qd(0.75) + '  max ' + qd(1));
+console.log('\n=== THE SOUNDER (signposting, seed ' + SEEDS[0] + ') ===');
+console.log('  hexes surveyed                ' + sHexes);
+console.log('  correct alerts                ' + sTrue);
+console.log('  FALSE alerts (cried wolf)     ' + sFalse);
+console.log('  MISSED (claimable, silent)    ' + sMissed);
+console.log('  precision                     ' + pct(sTrue, sTrue + sFalse));
+console.log('  recall                        ' + pct(sTrue, sTrue + sMissed));
+console.log('  alerts per 100 hexes          ' + (sHexes ? (sTrue / sHexes * 100).toFixed(1) : 'n/a'));
+
 console.log('\nDefinition: reachable = 3D flood fill from the surface through connected');
 console.log('water (down, up, and sideways at equal depth), then the real');
 console.log('atReachableBottom() rule applied at each reachable depth in the column.');
