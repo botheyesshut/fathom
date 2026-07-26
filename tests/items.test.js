@@ -101,6 +101,10 @@ try { vm.runInContext(script +
   '\nfunction __atk(m){ return crewAtk(m); }' +
   '\nfunction __knackKeys(){ return KNACK_KEYS; }' +
   '\nfunction __knackAt(){ return KNACK_AT; }' +
+  '\nfunction __scenes(){ return VP_SCENES; }' +
+  '\nfunction __vpDims(){ return [VP_W, VP_H]; }' +
+  '\nfunction __sceneNow(){ return sceneForNow(); }' +
+  '\nfunction __palette(){ return ANSI16; }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -800,6 +804,62 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // And it is a CREW capability, never a captain one — lose the person, lose it.
   sandbox.__setCrew([]);
   check(sandbox.__crewCan(key) === null, 'with nobody aboard, nobody can do anything');
+}
+
+//--- 18. THE VIEWPORT: ANSI art that cannot be quietly malformed -------------
+{
+  console.log('\n--- 18. THE VIEWPORT (ANSI illustration) ---');
+  const S = sandbox.__scenes();
+  const [W, H] = sandbox.__vpDims();
+  const names = Object.keys(S);
+  check(names.length >= 5, 'there are scenes to show', names.join(', '));
+
+  // Hand-counted ANSI art is exactly as reliable as it sounds — the first cut
+  // of every one of these was ragged. This is the check that makes a bad
+  // drawing a build failure instead of a black stripe nobody notices.
+  let bad = [];
+  for (const [k, s] of Object.entries(S)) {
+    if (!s.art || s.art.length !== H) bad.push(k + ' artRows=' + (s.art || []).length);
+    if (!s.col || s.col.length !== H) bad.push(k + ' colRows=' + (s.col || []).length);
+    (s.art || []).forEach((r, y) => { if (r.length !== W) bad.push(k + ' a' + y + '=' + r.length); });
+    (s.col || []).forEach((r, y) => { if (r.length !== W) bad.push(k + ' c' + y + '=' + r.length); });
+  }
+  check(bad.length === 0, 'every scene is exactly ' + W + 'x' + H, bad.slice(0, 6).join(' · ') || 'clean');
+
+  // A colour digit outside the palette renders black, i.e. invisibly — which
+  // reads as "the artist left a hole" rather than as an error.
+  const pal = sandbox.__palette();
+  let strays = 0, litCells = 0;
+  for (const s of Object.values(S)) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const c = s.col[y][x], g = s.art[y][x];
+      if (c === ' ') { if (g !== ' ') strays++; continue; }
+      if (!/[0-9a-f]/.test(c) || parseInt(c, 16) >= pal.length) strays++;
+      else litCells++;
+    }
+  }
+  check(strays === 0, 'no drawn cell is left without a colour, and no colour is off-palette',
+    strays + ' stray cells');
+  check(litCells > 400, 'and there is actually something drawn', litCells + ' coloured cells');
+
+  // Pulse keys must name colours that are present, or the animation is a no-op.
+  let deadPulse = [];
+  for (const [k, s] of Object.entries(S)) {
+    for (const pk of (s.pulse || [])) {
+      if (!s.col.some(r => r.indexOf(pk) >= 0)) deadPulse.push(k + ':' + pk);
+    }
+  }
+  check(deadPulse.length === 0, 'every pulse key names a colour the scene actually uses',
+    deadPulse.join(', ') || 'all live');
+
+  // Every scene needs a caption — it is the line that ties picture to prose.
+  const noCap = names.filter(k => !S[k].cap || S[k].cap.length < 8);
+  check(noCap.length === 0, 'every scene says what it is', noCap.join(', ') || 'all captioned');
+
+  // And the selector must always land on a scene that exists, whatever the
+  // state — an unknown key would leave the panel frozen on the last picture.
+  const picked = sandbox.__sceneNow();
+  check(!!S[picked], 'the scene chosen for the current state is one that exists', picked);
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

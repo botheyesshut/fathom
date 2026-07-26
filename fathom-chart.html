@@ -423,6 +423,68 @@
   }
   #sound-btn.muted { opacity: 0.35; }
 
+  /* THE VIEWPORT. Sized in ch units off the art's own column count so it scales
+     with the font instead of fighting it — 36 columns is the widest thing that
+     stays legible on a 360 px phone, which is what Sean actually plays on. */
+  #viewport {
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    background: #05070c;
+    border-top: 1px solid rgba(90, 120, 150, 0.18);
+    border-bottom: 1px solid rgba(90, 120, 150, 0.18);
+    padding: 0.3rem 0 0.15rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    min-height: 0;
+  }
+  /* Collapse with HEIGHT, not max-height. As a flex item in the body's column
+     container this element ignores max-height entirely — verified in the
+     browser: even an inline max-height:0 left it 221 px tall. height:0 is
+     obeyed. No slide transition, because auto<->0 cannot animate anyway and a
+     transition that never fires is just a lie in the stylesheet. */
+  #viewport.hidden { height: 0; padding: 0; border-top-width: 0; border-bottom-width: 0; }
+  #vp-art {
+    margin: 0;
+    font-family: 'Courier New', Consolas, monospace;
+    /* 35 columns of Courier at 0.6em each must fill the phone, not float in
+       the middle of it: 35 * 0.6 * 15.5px ~= 325px inside a 360px screen. */
+    font-size: min(4.3vw, 17px);
+    line-height: 1.06;
+    letter-spacing: 0;
+    white-space: pre;
+    text-shadow: 0 0 4px rgba(80, 160, 200, 0.16);
+    user-select: none;
+  }
+  #vp-cap {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.72rem;
+    color: #6f8496;
+    padding: 0.15rem 0.6rem 0;
+    text-align: center;
+  }
+  #vp-toggle {
+    position: absolute; top: 2px; right: 6px;
+    width: 20px; height: 20px; line-height: 1;
+    border: none; background: transparent;
+    color: rgba(140, 170, 195, 0.45);
+    font-size: 0.7rem; cursor: pointer; padding: 0;
+  }
+  /* When collapsed the button has to escape the clipped box or it vanishes. */
+  #viewport.hidden #vp-toggle { display: none; }
+  #vp-show {
+    position: absolute; top: 6px; left: 10px; z-index: 20;
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1px solid var(--sonar-dim);
+    background: rgba(4, 8, 16, 0.7);
+    color: var(--sonar); font-size: 0.85rem; line-height: 1;
+    display: none;
+  }
+  #vp-show.on { display: block; }
+
   /* ====== LOG / MESSAGES ====== */
   #log {
     position: relative;
@@ -899,6 +961,17 @@
   <button id="recenter-btn" title="Center on sub">⊕</button>
   <!-- Sound toggle overlay -->
   <button id="sound-btn" title="Sound on/off">♪</button>
+  <button id="vp-show" title="Show the viewport">▣</button>
+</div>
+
+<!-- THE VIEWPORT — an ANSI-art illustration of whatever the log is talking
+     about. Sean's brother's idea; the brief was "without much ado", animated
+     like the TW2002 ANSI sequences. Collapsible, because Sean was against it
+     at first and anyone who agrees with him should be able to shut it. -->
+<div id="viewport">
+  <pre id="vp-art" aria-hidden="true"></pre>
+  <span id="vp-cap"></span>
+  <button id="vp-toggle" title="Show or hide the viewport">▾</button>
 </div>
 
 <!-- LOG -->
@@ -1842,6 +1915,312 @@ function drawSeaChart() {
   g.moveTo(rx - rr - 4, ry); g.lineTo(rx + rr + 4, ry); g.stroke();
   g.fillStyle = '#3a2f1c'; g.font = '9px "JetBrains Mono", monospace';
   g.fillText('N', rx, ry - rr - 10);
+}
+
+//=============================================================================
+// THE VIEWPORT — ANSI illustration of whatever the log just said.
+//
+// Sean's brother's idea. The brief was "without much ado", animated the way the
+// TW2002 ANSI sequences were. The cost of ANSI art is never the renderer, it is
+// the DRAWING — twelve frames per scene times thirty scenes is a month of work
+// nobody asked for. So the trick here is that a scene is ONE authored frame and
+// the engine supplies the motion: marine snow drifting down, a shimmer sweeping
+// across, and colour-keyed cells that pulse. Every scene animates for free, and
+// adding a thirtieth scene costs one static drawing.
+//
+// Foreground-only, classic 16-colour DOS palette, shading carried by the block
+// characters ░▒▓█ the way real ANSI art carried it. 36 columns because that is
+// the widest thing that stays legible on the 360 px phone Sean plays on.
+const VP_W = 35, VP_H = 12;
+const ANSI16 = ['#0a0a12','#1a3a7a','#1a7a3a','#1a7a8a','#8a2a20','#6a2a7a','#8a5a1a','#9aa0a8',
+                '#3a4048','#4a7ad8','#5ad87a','#6ad8e0','#e05a4a','#c05ad0','#e8d060','#eef0f4'];
+const VP_DIM = { e:'6', f:'7', c:'4', b:'3', a:'2', 9:'1', d:'5', 7:'8' };
+const VP_LIT = { 6:'e', 7:'f', 4:'c', 3:'b', 2:'a', 1:'9', 5:'d', 8:'7' };
+const SNOW_CH = ['.', '·', '˙', ','];
+
+// art: what is drawn.  col: one hex palette digit per cell.  pulse: colour keys
+// that breathe.  Both grids are VP_W x VP_H and the battery enforces it.
+const VP_SCENES = {
+
+  deep: { cap: 'the passage, and the weight of the water in it',
+    art: ['████▓▓▒░░              ░░▒▓▓███████',
+          '███▓▓▒░                    ░▒▓▓████',
+          '██▓▒░                        ░▒▓███',
+          '█▓▒                            ░▒▓█',
+          '▓▒                               ▒▓',
+          '▒                                 ▒',
+          '                                   ',
+          '                                   ',
+          '▒                                 ░',
+          '▓▒░                             ░▒▓',
+          '██▓▒░░                       ░░▒▓██',
+          '████▓▓▒▒░░░░░░░░░░░░░░░░░░░░▒▒▓████'],
+    col: ['888877111              117788888888',
+          '8887771                    17788888',
+          '888711                       117888',
+          '88711                          1788',
+          '871                              78',
+          '81                                1',
+          '                                   ',
+          '                                   ',
+          '81                                1',
+          '8871                            178',
+          '888711                       117888',
+          '88888771111111111111111111117788888'] },
+
+  angler: { cap: 'a light that is not a light, and the mouth under it',
+    pulse: ['e', 'c'],
+    art: ['                                   ',
+          '                 ¤                 ',
+          '                 │                 ',
+          '                 │                 ',
+          '        ▄▄▄▄▄▄▄▄▄▀▄▄▄▄▄▄▄▄▄        ',
+          '     ▄▓█████████████████████▄      ',
+          '    ▄████▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█████▄     ',
+          '     ▐███  ╲╱╲╱╲╱╲╱╲╱╲╱  ███▌      ',
+          '    ▀████▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█████▀     ',
+          '     ▀▓█████████████████████▀      ',
+          '        ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀        ',
+          '                                   '],
+    col: ['                                   ',
+          '                 e                 ',
+          '                 6                 ',
+          '                 6                 ',
+          '        444444444e444444444        ',
+          '     4444444444444444444444cc      ',
+          '    4444cccccccccccccccc444444     ',
+          '     4444  ffffffffffff  4444      ',
+          '    444444444444444444444444cc     ',
+          '     4444444444444444444444cc      ',
+          '        4444444444444444444        ',
+          '                                   '] },
+
+  ruin: { cap: 'squared off by hands, and the hands long gone',
+    art: ['                                   ',
+          '        ▄▄▄▄▄▄▄▄▄▄▄▄▄              ',
+          '      ▄███████████████▄            ',
+          '     ███▀▀███▀▀▀███▀▀███           ',
+          '     ███  ███   ███  ███▄▄         ',
+          '     ███▄▄███▄▄▄███▄▄███████▄      ',
+          '     ███████████████████████▓▄     ',
+          '     ███ ▀▀ ███ ▀▀ ██████████▓     ',
+          '     ███    ███    ██████████▓     ',
+          '   ▄▄███▄▄▄▄███▄▄▄▄██████████▓▄    ',
+          ' ▒▓████████████████████████████▓▒  ',
+          '▒▓▓████████████████████████████▓▓▒ '],
+    col: ['                                   ',
+          '        6666666666666              ',
+          '      68888888888888866            ',
+          '     8888888888888888888           ',
+          '     888  888   888  88866         ',
+          '     888668886668886688888888      ',
+          '     8888888888888888888888888     ',
+          '     888 66 888 66 88888888888     ',
+          '     888    888    88888888888     ',
+          '   6688866668886666888888888888    ',
+          ' 18888888888888888888888888888811  ',
+          '1188888888888888888888888888881111 '] },
+
+  open: { cap: 'open water, and nothing in it that will say so',
+    art: ['                                   ',
+          '                                   ',
+          '            ░                      ',
+          '                        ░          ',
+          '                                   ',
+          '     ░                             ',
+          '                                   ',
+          '                   ░               ',
+          '                                   ',
+          '                                   ',
+          '          ░              ░         ',
+          '                                   '],
+    col: ['                                   ',
+          '                                   ',
+          '            1                      ',
+          '                        1          ',
+          '                                   ',
+          '     1                             ',
+          '                                   ',
+          '                   1               ',
+          '                                   ',
+          '                                   ',
+          '          1              1         ',
+          '                                   '] },
+
+  layer: { cap: 'the thermometer drops away, and the sea above goes quiet',
+    pulse: ['b'],
+    art: ['                                   ',
+          '   ░      ░           ░       ░    ',
+          '        ░        ░         ░       ',
+          '   ░        ░          ░       ░   ',
+          '░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░',
+          '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+          '░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░',
+          '                                   ',
+          '                                   ',
+          '             ▄▄▄▄▄▄▄▄▄             ',
+          '           ▐  EREBUS  ▌            ',
+          '             ▀▀▀▀▀▀▀▀▀             '],
+    col: ['                                   ',
+          '   9      9           9       9    ',
+          '        9        9         9       ',
+          '   9        9          9       9   ',
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          '33333333333333333333333333333333333',
+          '11111111111111111111111111111111111',
+          '                                   ',
+          '                                   ',
+          '             888888888             ',
+          '           7  333333  7            ',
+          '             888888888             '] },
+
+  surface: { cap: 'air, and a sky that has not been kind in a long time',
+    snowFrom: 9,
+    pulse: ['7'],
+    art: ['                                   ',
+          '        ░░              ░░░        ',
+          '   ░░░░░░░       ░░░░░░░░░░░░      ',
+          '                                   ',
+          '                                   ',
+          '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+          '                ▄█▄                ',
+          '              ▄█████▄              ',
+          '~~~~~~~~~~~▄█████████▄~~~~~~~~~~~~~',
+          '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+          '                                   ',
+          '                                   '],
+    col: ['                                   ',
+          '        88              888        ',
+          '   8888888       888888888888      ',
+          '                                   ',
+          '                                   ',
+          '33333333333333333333333333333333333',
+          '                787                ',
+          '              7888887              ',
+          '33333333333788888888873333333333333',
+          '11111111111111111111111111111111111',
+          '                                   ',
+          '                                   '] },
+};
+
+let vpScene = 'deep', vpTick = 0, vpSnow = [], vpOn = true, vpTimer = null;
+
+function vpInitSnow() {
+  vpSnow = [];
+  const rng = mulberry32(hashStr('snow:' + worldSeed));
+  for (let i = 0; i < 14; i++) {
+    vpSnow.push({ x: Math.floor(rng() * VP_W), y: rng() * VP_H,
+                  sp: 0.10 + rng() * 0.34, ch: SNOW_CH[Math.floor(rng() * SNOW_CH.length)] });
+  }
+}
+
+// One frame. Rows are emitted as merged colour runs so a redraw is ~100 spans,
+// not 432 — which is what keeps this cheap enough to run on a phone.
+function vpDraw() {
+  const el = document.getElementById('vp-art');
+  if (!el || !vpOn) return;
+  const S = VP_SCENES[vpScene] || VP_SCENES.deep;
+  const pulseOn = (vpTick % 4) < 2;
+  const pulses = S.pulse || [];
+  const shimmer = (vpTick * 2) % (VP_W + VP_H + 12) - 6;   // a diagonal sweep
+
+  // Lay the authored frame into a mutable grid.
+  const ch = [], co = [];
+  for (let y = 0; y < VP_H; y++) {
+    const ar = (S.art[y] || '').padEnd(VP_W, ' ').slice(0, VP_W);
+    const cr = (S.col[y] || '').padEnd(VP_W, ' ').slice(0, VP_W);
+    ch.push(ar.split('')); co.push(cr.split(''));
+  }
+  // Snow falls only through water — never over the art, which would read as
+  // noise, and never above a waterline, because marine snow does not fall
+  // through air. Scenes with sky declare where their water starts.
+  const snowTop = S.snowFrom || 0;
+  for (const p of vpSnow) {
+    const y = Math.floor(p.y) % VP_H, x = p.x;
+    if (y < snowTop) continue;
+    if (ch[y][x] === ' ') { ch[y][x] = p.ch; co[y][x] = '8'; }
+  }
+  for (let y = 0; y < VP_H; y++) for (let x = 0; x < VP_W; x++) {
+    let c = co[y][x];
+    if (c === ' ') continue;
+    if (pulses.indexOf(c) >= 0 && !pulseOn) c = VP_DIM[c] || c;
+    // The sweep lifts whatever it passes over one step brighter. Cheap caustics.
+    const d = Math.abs((x + y) - shimmer);
+    if (d < 2 && VP_LIT[c]) c = VP_LIT[c];
+    co[y][x] = c;
+  }
+
+  let html = '';
+  for (let y = 0; y < VP_H; y++) {
+    let run = '', runCol = null;
+    for (let x = 0; x < VP_W; x++) {
+      const c = co[y][x] === ' ' ? '0' : co[y][x];
+      if (c !== runCol) {
+        if (run) html += '<span style="color:' + (ANSI16[parseInt(runCol, 16)] || '#0a0a12') + '">' + run + '</span>';
+        run = ''; runCol = c;
+      }
+      const g = ch[y][x];
+      run += g === '<' ? '&lt;' : g === '>' ? '&gt;' : g === '&' ? '&amp;' : g;
+    }
+    if (run) html += '<span style="color:' + (ANSI16[parseInt(runCol, 16)] || '#0a0a12') + '">' + run + '</span>';
+    html += '\n';
+  }
+  el.innerHTML = html;
+  const cap = document.getElementById('vp-cap');
+  if (cap) cap.textContent = S.cap || '';
+}
+
+function vpStep() {
+  vpTick++;
+  for (const p of vpSnow) { p.y += p.sp; if (p.y >= VP_H) { p.y -= VP_H; p.x = Math.floor(rand() * VP_W); } }
+  vpDraw();
+}
+
+// Say what to show. Silently ignores an unknown key so a caller can name a
+// scene that has not been drawn yet without breaking the game.
+function showScene(key) {
+  if (!VP_SCENES[key] || key === vpScene) return;
+  vpScene = key; vpDraw();
+}
+
+// What the boat is looking at right now, from state alone — so the viewport can
+// never disagree with the prose, which would be worse than having no viewport.
+function sceneForNow() {
+  if (state.foot) return 'ruin';
+  if (state.currentDepth <= 1) return 'surface';
+  const near = (state.creatures || []).find(c => !c.gone && c.awake
+    && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
+    && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID);
+  if (near && near.type === 'angler') return 'angler';
+  const t = getTile(state.q, state.r);
+  if (t && (t.poi === 'ruin' || t.poi === 'salvage')) return 'ruin';
+  const L = layerAt(state.q, state.r);
+  if (L && layerKnown(state.q, state.r, state.currentDepth)
+      && Math.abs(state.currentDepth - L.depth) <= DEPTH_GRID) return 'layer';
+  const nbrs = hexNeighbors(state.q, state.r).filter(n => { const nt = getTile(n.q, n.r); return nt && !nt.wall; });
+  return nbrs.length >= 4 ? 'open' : 'deep';
+}
+function syncScene() { showScene(sceneForNow()); }
+
+function vpSetOn(on) {
+  vpOn = on;
+  const vp = document.getElementById('viewport'), sh = document.getElementById('vp-show');
+  if (vp) vp.classList.toggle('hidden', !on);
+  if (sh) sh.classList.toggle('on', !on);
+  try { localStorage.setItem('fathom-viewport', on ? '1' : '0'); } catch (e) {}
+  if (on) { vpDraw(); if (!vpTimer) vpTimer = setInterval(vpStep, 200); }
+  else if (vpTimer) { clearInterval(vpTimer); vpTimer = null; }
+}
+
+function vpBoot() {
+  vpInitSnow();
+  let want = true;
+  try { want = localStorage.getItem('fathom-viewport') !== '0'; } catch (e) {}
+  const tog = document.getElementById('vp-toggle');
+  if (tog) tog.addEventListener('click', () => vpSetOn(false));
+  const sh = document.getElementById('vp-show');
+  if (sh) sh.addEventListener('click', () => vpSetOn(true));
+  vpSetOn(want);
 }
 
 function openSeaChart() { document.getElementById('seachart').classList.add('show'); drawSeaChart(); }
@@ -3673,6 +4052,9 @@ function syncFootControls(inside) {
 }
 
 function render() {
+  // The viewport reads STATE, never the log text, so the picture can never
+  // disagree with the prose — a wrong illustration is worse than none.
+  if (typeof syncScene === 'function') syncScene();
   // One rung down the resolution ladder the chart is a different world: square
   // tiles, lamplight, a body instead of a boat.
   if (state.foot) { syncFootControls(true); renderInterior(); return; }
@@ -9152,6 +9534,7 @@ document.getElementById('btn-hold').addEventListener('click', openInventory);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('trade-close').addEventListener('click', closeTrade);
 document.getElementById('btn-chart').addEventListener('click', openSeaChart);
+vpBoot();
 var __mb = document.getElementById('btn-muster'); if (__mb) __mb.addEventListener('click', openMuster);
 var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListener('click', closeMuster);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
