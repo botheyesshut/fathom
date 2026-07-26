@@ -3562,19 +3562,15 @@ function carveChamber(node) {
       if (!cells.has(cellKey(hq, hr, node.depth))) continue;
       const t = world.get(hexKey(hq, hr));
       if (!t) continue;
-      // Into the sparse map, NOT onto the tile — the tile object gets rebuilt
-      // by later chunk generation and takes anything hung off it with it.
-      const hk = hexKey(hq, hr);
-      let stack = cellPois.get(hk);
-      if (!stack) { stack = []; cellPois.set(hk, stack); }
-      if (stack.some(pp => pp.d === node.depth)) break;       // already ours
+      if (!t.pois) t.pois = [];
+      if (t.pois.some(pp => pp.d === node.depth)) break;      // already ours
       const types = ['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage'];
-      stack.push({ d: node.depth,
-                   type: types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr + ':' + node.depth) % types.length] });
-      stack.sort((a, b) => a.d - b.d);
-      setTile(hq, hr, stack[0].type, true);
+      t.pois.push({ d: node.depth,
+                    type: types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr + ':' + node.depth) % types.length] });
+      t.pois.sort((a, b) => a.d - b.d);
+      setTile(hq, hr, t.pois[0].type, true);
       const at = world.get(hexKey(hq, hr));
-      if (at) at.poiDepth = stack[0].d;
+      if (at) { at.poiDepth = t.pois[0].d; at.pois = t.pois; }
       break;
     }
   }
@@ -8949,23 +8945,9 @@ function airCounsel() {
 // The prizes stacked in this hex, shallowest first. Legacy tiles that only ever
 // had the single hex-level poi are presented as a stack of one, so callers only
 // ever deal with one shape.
-// PRIZES LIVE IN THEIR OWN SPARSE MAP, not on the tile.
-//
-// They used to hang off the tile object as `t.pois`, and that was a bug I wrote
-// this session: `world` tiles are rebuilt by later chunk generation, and the
-// array went into the bin with the old object. Instrumenting carveChamber
-// directly — rather than inferring from any proxy, which is how I got this
-// wrong three times — showed 473 chambers carved, 208 prize rolls passed, 208
-// prizes PLACED with zero misses at every depth... and 24 surviving. 88% were
-// generated correctly and then thrown away.
-//
-// Keyed by hex, holding the depth stack, and mirroring `cells`: substrate that
-// nothing else owns cannot be clobbered by something else's rebuild.
-const cellPois = new Map();
 function poiStack(tile) {
   if (!tile) return [];
-  const s = cellPois.get(hexKey(tile.q, tile.r));
-  if (s && s.length) return s;
+  if (tile.pois && tile.pois.length) return tile.pois;
   if (tile.poi && tile.poiDepth != null) return [{ d: tile.poiDepth, type: tile.poi }];
   return [];
 }
@@ -8995,12 +8977,9 @@ function atReachableBottom(tile) {
   // That fallback is deliberate: an earlier pass found 83% of wrecks stranded
   // behind broken rock columns, and this must not undo it.
   const stack = poiStack(tile).filter(p => cells.has(cellKey(tile.q, tile.r, p.d)));
-  if (stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID)) return true;
-  // FALL THROUGH rather than fail. Anchoring prizes to their chamber is right —
-  // it is what makes the deep worth going to — but on its own it stranded 30%
-  // of them behind sealed rock, which is worse than the vagueness it replaced.
-  // A chamber you can stand in is where you take the prize; a chamber you
-  // cannot is worked from the nearest bottom you can reach, exactly as before.
+  if (stack.length) {
+    return stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID);
+  }
   // The rule is unchanged where the water is continuous: you must go to the
   // floor. It relaxes ONLY where the hex's true floor is sealed off behind
   // stone — there, the bottom of the water you can actually swim is the bottom.
@@ -9591,7 +9570,7 @@ function restart() {
   generatedChunks.clear();
   worldSeed = Date.now() & 0xffffffff;
   rng = mulberry32(worldSeed);
-  nodeCache.clear(); // lattice + edge memos and the carve registry are seed-dependent cellPois.clear();
+  nodeCache.clear(); // lattice + edge memos and the carve registry are seed-dependent
   edgeCache.clear();
   carvedFeatures.clear();
   interiorCache.clear();   // interiors are substrate — they belong to the old seed
@@ -9812,7 +9791,7 @@ function resumeGame(save) {
   state.ping = null; state.pingArrows = null;
   state.pingMemory = new Map();
   world.clear(); cells.clear(); revealed.clear(); visited.clear();
-  generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear(); cellPois.clear();
+  generatedChunks.clear(); nodeCache.clear(); edgeCache.clear(); carvedFeatures.clear();
   interiorCache.clear();
   // Creatures + spawn history restore BEFORE generation, so already-rolled
   // chunks don't re-roll their inhabitants into duplicates.
