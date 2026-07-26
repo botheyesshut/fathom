@@ -71,6 +71,10 @@ try { vm.runInContext(script +
   '\nfunction __sellBody(e,i){ tradeSellBody(e,i); }' +
   '\nfunction __lose(m,how){ loseCrew(m,how); }' +
   '\nfunction __footTile(x,y){ return footTile(x,y); }' +
+  '\nfunction __cur(q,r,d){ return currentAt(q,r,d); }' +
+  '\nfunction __favour(a,b,c,e,f){ return currentFavour(a,b,c,e,f); }' +
+  '\nfunction __applyMove(m,f){ applyMoveCosts(m,f); }' +
+  '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
@@ -480,6 +484,58 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   }
   check(s.leads.length === 0, 'a lead chain terminates — it is not perpetual motion', chainLen + ' links, then it ended');
   check(maxTier <= 6, 'and tiers are capped so payouts cannot run away', 'max tier ' + maxTier);
+}
+
+//--- 13. CURRENTS: the water has a grain, and it is the same grain every time ---
+{
+  const s = sandbox.__state();
+  s.foot = null; s.alive = true; s.items = {}; s.fits = {};
+
+  // Substrate: the same water must set the same way every time you return, or
+  // the chart is a liar and no route can ever be planned.
+  const a = sandbox.__cur(14, -6, 600), b = sandbox.__cur(14, -6, 600);
+  check(JSON.stringify(a) === JSON.stringify(b), 'a current is deterministic — the sea does not reshuffle', JSON.stringify(a));
+
+  // The sea is not uniformly flowing, and not uniformly slack.
+  let set = 0, slack = 0, strong = 0;
+  for (let q = -40; q <= 40; q += 3) for (let r = -40; r <= 40; r += 3) {
+    const c = sandbox.__cur(q, r, 600);
+    if (c) { set++; if (c.strong) strong++; } else slack++;
+  }
+  check(set > 0 && slack > 0, 'some water runs and some is slack', set + ' setting, ' + slack + ' slack');
+  check(strong > 0, 'and some of it runs hard', strong + ' strong');
+
+  // Broad gyres, not per-hex noise: neighbours mostly agree, so a captain can
+  // LEARN the water instead of being surprised by every single hex.
+  let same = 0, tot = 0;
+  for (let q = -30; q <= 30; q += 2) for (let r = -30; r <= 30; r += 2) {
+    const c = sandbox.__cur(q, r, 600); if (!c) continue;
+    for (const n of sandbox.__nbrs(q, r)) {
+      const c2 = sandbox.__cur(n.q, n.r, 600); if (!c2) continue;
+      tot++; if (c2.dir === c.dir) same++;
+    }
+  }
+  check(tot > 0 && same / tot > 0.6, 'currents form broad gyres you can read, not per-hex chop',
+    Math.round(same / tot * 100) + '% of neighbours share a set');
+
+  // Favour is symmetric: what helps you out must hinder you home.
+  let checkedPair = false, symmetric = true;
+  for (let q = -20; q <= 20 && !checkedPair; q++) for (let r = -20; r <= 20 && !checkedPair; r++) {
+    const c = sandbox.__cur(q, r, 600); if (!c) continue;
+    const fwd = { q: q + [1,1,0,-1,-1,0][c.dir], r: r + [0,-1,-1,0,1,1][c.dir] };
+    const out = sandbox.__favour(q, r, fwd.q, fwd.r, 600);
+    const back = sandbox.__favour(fwd.q, fwd.r, q, r, 600);
+    if (out > 0) { checkedPair = true; symmetric = back < 0; }
+  }
+  check(checkedPair && symmetric, 'riding it out means fighting it home', 'the return leg is a real problem');
+
+  // And it must actually cost differently, or it is only prose.
+  s.currentDepth = 900; s.q = 0; s.r = 0; s.fits = {}; s.items = {};
+  s.air = 1000; sandbox.__applyMove(1, 2);   const withIt = 1000 - s.air;
+  s.air = 1000; sandbox.__applyMove(1, 0);   const across = 1000 - s.air;
+  s.air = 1000; sandbox.__applyMove(1, -2);  const against = 1000 - s.air;
+  check(withIt < across && across < against, 'the set changes what a hex costs to cross',
+    `with ${withIt} · across ${across} · against ${against} air`);
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

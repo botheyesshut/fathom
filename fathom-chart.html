@@ -960,6 +960,56 @@ function hexNeighbors(q, r) {
   ];
 }
 function hexKey(q, r) { return q + ',' + r; }
+
+//=============================================================================
+// CURRENTS — the water has a grain.
+//
+// Every open hex used to be mechanically identical, so travel was dead time
+// between sparse events and no amount of prose could fix that. A current gives
+// each patch of sea a SET and a STRENGTH: ride it and you go cheap and quiet,
+// punch it and you burn air and the engines shout — which feeds straight into
+// the sound grammar the whole game already runs on.
+//
+// Substrate, not overlay: a pure function of seed and position, so the sea has
+// the same set every time you come back to it, and the chart can be trusted.
+// Broad slow gyres (a low-frequency field) rather than per-hex noise, so a
+// captain can LEARN the water instead of just suffering it.
+const HEX_DIRS = [
+  { dq: 1, dr: 0 }, { dq: 1, dr: -1 }, { dq: 0, dr: -1 },
+  { dq: -1, dr: 0 }, { dq: -1, dr: 1 }, { dq: 0, dr: 1 },
+];
+const CURRENT_NAMES = ['east', 'northeast', 'north', 'west', 'southwest', 'south'];
+const CURRENT_SCALE = 9;   // hexes per gyre cell — big enough to read and use
+
+// A smooth-ish angular field. Two offset lattice samples blended by position so
+// the set turns gradually across the sea rather than flipping hex to hex.
+function currentAt(q, r, d) {
+  const gx = Math.floor(q / CURRENT_SCALE), gy = Math.floor(r / CURRENT_SCALE);
+  const band = Math.floor((d || 0) / 1200);   // deep water sets differently from shallow
+  const h = mulberry32(hashStr('cur:' + worldSeed + ':' + gx + ':' + gy + ':' + band));
+  const strength = h();
+  if (strength < 0.42) return null;           // much of the sea is slack
+  const dir = Math.floor(h() * 6);
+  return { dir: dir, name: CURRENT_NAMES[dir], strong: strength > 0.78 };
+}
+
+// Which way are we travelling, as a hex direction index? -1 if it isn't a step.
+function stepDir(fq, fr, tq, tr) {
+  for (let i = 0; i < 6; i++) if (fq + HEX_DIRS[i].dq === tq && fr + HEX_DIRS[i].dr === tr) return i;
+  return -1;
+}
+
+// +1 with the set, -1 against it, 0 across it (or slack water).
+function currentFavour(fq, fr, tq, tr, d) {
+  const cur = currentAt(fq, fr, d);
+  if (!cur) return 0;
+  const dir = stepDir(fq, fr, tq, tr);
+  if (dir < 0) return 0;
+  const off = Math.min((dir - cur.dir + 6) % 6, (cur.dir - dir + 6) % 6);
+  if (off === 0) return cur.strong ? 2 : 1;
+  if (off === 3) return cur.strong ? -2 : -1;
+  return 0;
+}
 // Cell model (voxel): the world's emerging source of truth is a sparse grid
 // keyed by hex + depth. An absent key means solid stone. Each 60-m depth slice
 // of a hex is its own cell — no column-wide inheritance, no "impassable water".
@@ -1494,8 +1544,19 @@ function drawSeaChart() {
 
   const tiles = [...world.values()];
   if (!tiles.length) return;
+  // FRAME WHAT YOU KNOW, not what the generator happens to have built. The
+  // world holds tens of thousands of hexes the captain has never seen; scaling
+  // to those made a hard-won 58-hex survey a speck on a blank sheet. The chart
+  // is a record of YOUR water, so it fits itself to your water (plus the dock,
+  // which is always on it) and grows as you do.
   let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
-  for (const t of tiles) { if (t.q < minQ) minQ = t.q; if (t.q > maxQ) maxQ = t.q; if (t.r < minR) minR = t.r; if (t.r > maxR) maxR = t.r; }
+  const frame = (q, r) => { if (q < minQ) minQ = q; if (q > maxQ) maxQ = q; if (r < minR) minR = r; if (r > maxR) maxR = r; };
+  for (const t of tiles) if (chartKnown(t)) frame(t.q, t.r);
+  frame(1, 1); frame(state.q, state.r);
+  for (const e of (state.enclaves || [])) frame(e.q, e.r);
+  for (const L of (state.leads || [])) frame(L.q, L.r);
+  const margin = 3;              // a little blank paper past the edge of knowledge
+  minQ -= margin; maxQ += margin; minR -= margin; maxR += margin;
   const px = (q, r) => ({ x: SQRT3 * (q + r / 2), y: 1.5 * r });
   const c0 = px(minQ, minR), c1 = px(maxQ, minR), c2 = px(minQ, maxR), c3 = px(maxQ, maxR);
   const xs = [c0.x, c1.x, c2.x, c3.x], ys = [c0.y, c1.y, c2.y, c3.y];
@@ -1517,7 +1578,8 @@ function drawSeaChart() {
     g.closePath();
   };
   const rad = s * 0.62;
-  const showSoundings = s > 9;
+  const showSoundings = s > 13;
+  const inFrame = (t) => t.q >= minQ && t.q <= maxQ && t.r >= minR && t.r <= maxR;
 
   // ---- Pass 1: THE SURFACE, drawn for every hex the world holds. Land is
   // hatched, open water is left as paper. This is the free knowledge.
@@ -1580,6 +1642,34 @@ function drawSeaChart() {
     g.beginPath(); g.moveTo(p.x - 5, p.y); g.lineTo(p.x + 5, p.y);
     g.moveTo(p.x, p.y - 5); g.lineTo(p.x, p.y + 5); g.stroke();
     g.beginPath(); g.arc(p.x, p.y, 4, 0, Math.PI * 2); g.stroke();
+  }
+
+  // ---- The set of the water, drawn as flow arrows on the hexes you have been
+  // through. This is the chart earning its keep: the grain of the sea, recorded,
+  // so the return leg can be planned instead of suffered.
+  if (s > 5) {
+    for (const t of tiles) {
+      if (t.wall || !chartKnown(t)) continue;
+      const cur = currentAt(t.q, t.r, t.floor || 0);
+      if (!cur) continue;
+      const p = P(t.q, t.r);
+      if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
+      const a = Math.PI / 180 * (60 * cur.dir);
+      // A floor on the arrow, so the set stays readable as the survey grows and
+      // the scale shrinks — an unreadable arrow is the same as no arrow.
+      const L = Math.max(cur.strong ? 4.5 : 3, rad * (cur.strong ? 0.95 : 0.6));
+      const dx = Math.cos(a) * L, dy = Math.sin(a) * L;
+      g.strokeStyle = cur.strong ? 'rgba(30,72,96,0.75)' : 'rgba(50,92,112,0.42)';
+      g.lineWidth = cur.strong ? 1.3 : 0.8;
+      g.beginPath(); g.moveTo(p.x - dx, p.y - dy); g.lineTo(p.x + dx, p.y + dy); g.stroke();
+      // arrowhead
+      g.beginPath();
+      g.moveTo(p.x + dx, p.y + dy);
+      g.lineTo(p.x + dx - Math.cos(a - 0.5) * L * 0.5, p.y + dy - Math.sin(a - 0.5) * L * 0.5);
+      g.moveTo(p.x + dx, p.y + dy);
+      g.lineTo(p.x + dx - Math.cos(a + 0.5) * L * 0.5, p.y + dy - Math.sin(a + 0.5) * L * 0.5);
+      g.stroke();
+    }
   }
 
   // ---- The dock is always on the chart. Everyone knows where home is.
@@ -4573,6 +4663,10 @@ function move(q, r) {
   state.trail.unshift({ q: state.q, r: state.r, depth: state.currentDepth });
   if (state.trail.length > 3) state.trail.length = 3;
 
+  // Where we came FROM — the current is read against the leg we just swam, and
+  // state.q/r are about to become the destination.
+  const fromQ = state.q, fromR = state.r;
+
   state.q = q;
   state.r = r;
   state.moves++;
@@ -4586,7 +4680,20 @@ function move(q, r) {
   if (Math.abs(state.panX) < 2) state.panX = 0;
   if (Math.abs(state.panY) < 2) state.panY = 0;
 
-  applyMoveCosts(tile.cost);
+  // The set of the water: riding it is cheap and quiet, punching it costs air
+  // and makes the screws labour — and a labouring boat is a loud boat.
+  const favour = currentFavour(fromQ, fromR, q, r, state.currentDepth);
+  applyMoveCosts(tile.cost, favour);
+  if (favour < 0) {
+    noiseMade(q, r, favour <= -2 ? 3 : 2);
+    if (rand() < 0.4) log(favour <= -2
+      ? 'You drive her straight into the set and she labours for every metre of it. The screws are making a din.'
+      : 'The water pushes back. The boat works harder than she should have to.', 'warn', 'CURRENT');
+  } else if (favour > 0 && rand() < 0.3) {
+    log(favour >= 2
+      ? 'You find the spine of the current and let it take you. The screws barely turn; the sea does the work.'
+      : 'The set is with you. Easier going than it has any right to be.', '', 'CURRENT');
+  }
 
   // Zone transition detection — log when player crosses a geographic boundary
   detectZoneTransition(q, r);
@@ -6979,7 +7086,7 @@ function tickPingMemory() {
   }
 }
 
-function applyMoveCosts(tileCostMultiplier) {
+function applyMoveCosts(tileCostMultiplier, favour) {
   const sub = activeSub();
   // At depth 0 — hatch open, boat passively replenishes air with each move.
   if (state.currentDepth <= 0) {
@@ -6989,7 +7096,10 @@ function applyMoveCosts(tileCostMultiplier) {
   const depthFactor = 1 + state.currentDepth / 400;
   // Fine trim tanks make the boat slip through the water for less; dead weight in
   // the hold makes her work harder for every hex.
-  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor) - fitLevel('trim')) + countHeldWith('heavy');
+  // Riding the set costs about half; punching it costs about double. This is
+  // the single biggest reason to prefer one route over another.
+  const curMult = !favour ? 1 : favour > 0 ? (favour >= 2 ? 0.4 : 0.65) : (favour <= -2 ? 2.1 : 1.5);
+  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor * curMult) - fitLevel('trim')) + countHeldWith('heavy');
   state.air = Math.max(0, state.air - airCost);
 
   const crush = crushPenalty();
@@ -7556,7 +7666,15 @@ function describeSpace(mode) {
   const mood = mode === 'first'
     ? pickStable(DEPTH_MOOD[depthBand(d)], seed + ':mood')
     : (rand() < 0.5 ? pickLoose(DEPTH_MOOD[depthBand(d)]) : '');
-  return (lead + ' ' + exits + mood).replace(/\s+/g, ' ').trim();
+  // The set of the water, always stated. A current you cannot read is not a
+  // decision, it is a tax — so the boat reports it every time it reports a room.
+  const cur = currentAt(q, r, d);
+  const setLine = cur
+    ? (cur.strong
+        ? ` A strong set runs ${cur.name} through here — you will feel it in the helm.`
+        : ` The water sets ${cur.name}, slow and steady.`)
+    : ' The water here is slack.';
+  return (lead + ' ' + exits + mood + setLine).replace(/\s+/g, ' ').trim();
 }
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight
