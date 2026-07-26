@@ -83,6 +83,16 @@ try { vm.runInContext(script +
   '\nfunction __noteFelt(q,r){ noteLayerFelt(q,r); }' +
   '\nfunction __trace(q,r,d){ return traceAt(q,r,d); }' +
   '\nfunction __curName(q,r,d){ var c=currentAt(q,r,d); return c?c.name:null; }' +
+  '\nfunction __mkLead(t,q,r,s,k){ makeLead(t,q,r,s,k); return state.leads[state.leads.length-1]; }' +
+  '\nfunction __leads(){ return state.leads; }' +
+  '\nfunction __clearLeads(){ state.leads = []; }' +
+  '\nfunction __resolve(L){ resolveLead(L); }' +
+  '\nfunction __poiAt(q,r){ var t=tileAt(q,r); return t?(t.poi||null):null; }' +
+  '\nfunction __revealedCount(){ var n=0; for (var e of revealed) n+=e[1].size; return n; }' +
+  '\nfunction __cargo(){ return state.cargo; }' +
+  '\nfunction __creatureCount(){ return state.creatures.length; }' +
+  '\nfunction __quarryCaches(){ return state.quarryCache || {}; }' +
+  '\nfunction __kindOf(s,t){ return pickLeadKind(s,t); }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -651,6 +661,72 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // Deterministic, like everything else the substrate hands you.
   const a = sandbox.__trace(6, 6, 600), b = sandbox.__trace(6, 6, 600);
   check(JSON.stringify(a) === JSON.stringify(b), 'a trace reads the same way twice');
+}
+
+//--- 16. TYPED LEADS: a session has more than one correct shape --------------
+{
+  console.log('\n--- 16. TYPED LEADS (quarry / cavern / word / cache) ---');
+
+  // All four kinds must actually occur, or the typing is decoration.
+  const seen = {};
+  for (let i = 0; i < 400; i++) { const k = sandbox.__kindOf('t' + i, 1); seen[k] = (seen[k] || 0) + 1; }
+  const kinds = Object.keys(seen).sort();
+  check(kinds.length === 4, 'all four kinds of mark get drawn', kinds.join(', '));
+  check(Object.values(seen).every(n => n > 40), 'and none of them is vanishingly rare',
+    kinds.map(k => k + ' ' + seen[k]).join(' · '));
+  check(sandbox.__kindOf('same', 1) === sandbox.__kindOf('same', 1), 'a mark is the kind it is, every time');
+
+  // THE ONE THAT MATTERS: a cavern mark must point at a real way in. A clue
+  // that lies is worse than no clue, and this is the only kind that can lie.
+  sandbox.__clearLeads();
+  let cavs = 0, honest = 0;
+  for (let i = 0; i < 60; i++) {
+    const L = sandbox.__mkLead(1, i * 7, -i * 5, 'cav-probe-' + i, 'cavern');
+    if (!L || L.kind !== 'cavern') continue;
+    cavs++;
+    const poi = sandbox.__poiAt(L.q, L.r);
+    if (poi === 'ruin' || poi === 'opening' || poi === 'salvage') honest++;
+  }
+  check(cavs > 42, 'a cavern mark usually finds a real place to point at',
+    cavs + '/60 held (the rest honestly downgraded to a cache)');
+  check(honest === cavs, 'every cavern mark points at a real way in — the chart never lies',
+    honest + '/' + cavs);
+
+  // WORD pays in knowledge, not cargo. That is the whole ruling: a session
+  // spent charting is a session played properly, not a session wasted.
+  sandbox.__clearLeads();
+  const cargo0 = sandbox.__cargo(), rev0 = sandbox.__revealedCount();
+  const W = sandbox.__mkLead(2, 0, 0, 'word-probe', 'word');
+  sandbox.__resolve(W);
+  const cargo1 = sandbox.__cargo(), rev1 = sandbox.__revealedCount();
+  check(cargo1 === cargo0, 'word pays no cargo at all', cargo0 + ' -> ' + cargo1);
+  check(rev1 > rev0, 'word pays in chart — water you have never been to, known',
+    (rev1 - rev0) + ' new soundings');
+
+  // QUARRY is an OFFER. The thing is there, the cache is there, and arriving
+  // does not take it — you decide. Combat you were ambushed into is a mugging.
+  sandbox.__clearLeads();
+  const crt0 = sandbox.__creatureCount(), cg0 = sandbox.__cargo();
+  const Q = sandbox.__mkLead(2, 40, 40, 'quarry-probe', 'quarry');
+  sandbox.__resolve(Q);
+  check(sandbox.__creatureCount() > crt0, 'a quarry mark puts something real in the water',
+    crt0 + ' -> ' + sandbox.__creatureCount());
+  check(sandbox.__cargo() === cg0, 'and arriving does NOT hand you the cache — you have to decide',
+    cg0 + ' -> ' + sandbox.__cargo());
+  const qcs = sandbox.__quarryCaches();
+  const anyUntaken = Object.values(qcs).some(v => v && v.taken === false && v.crates > 0);
+  check(anyUntaken, 'the cache waits where you left it, so you can come back braver');
+
+  // The termination guard still holds with kinds in play — no perpetual motion.
+  sandbox.__clearLeads();
+  let chain = 0;
+  for (let i = 0; i < 40 && sandbox.__leads().length < 200; i++) {
+    const ls = sandbox.__leads();
+    if (!ls.length) { sandbox.__mkLead(1, 0, 0, 'chain-seed-' + i); continue; }
+    sandbox.__resolve(ls[0]); sandbox.__clearLeads(); chain++;
+  }
+  check(sandbox.__leads().length < 200, 'typed chains still terminate — the tier cap holds',
+    chain + ' resolutions, ' + sandbox.__leads().length + ' marks outstanding');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

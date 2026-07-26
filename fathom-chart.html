@@ -1690,12 +1690,16 @@ function drawSeaChart() {
     g.font = `${Math.max(8, Math.round(s * 1.0))}px "JetBrains Mono", monospace`;
     g.fillText(cu ? cu.glyph : '?', p.x, p.y);
   }
+  // Marks are typed on the paper as well as in the log — you plan a session off
+  // the chart, so the chart has to say what kind of day each mark would be.
   for (const L of (state.leads || [])) {
     const p = P(L.q, L.r);
-    g.strokeStyle = '#9a6a10'; g.lineWidth = 1.1;
-    g.beginPath(); g.moveTo(p.x - 5, p.y); g.lineTo(p.x + 5, p.y);
-    g.moveTo(p.x, p.y - 5); g.lineTo(p.x, p.y + 5); g.stroke();
-    g.beginPath(); g.arc(p.x, p.y, 4, 0, Math.PI * 2); g.stroke();
+    const K = LEAD_KINDS[L.kind] || LEAD_KINDS.cache;
+    g.strokeStyle = K.colour; g.lineWidth = 1.1;
+    g.beginPath(); g.arc(p.x, p.y, 4.5, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = K.colour;
+    g.font = '7px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(K.mark, p.x, p.y + 0.5);
   }
 
   // ---- The set of the water, drawn as flow arrows on the hexes you have been
@@ -2001,6 +2005,24 @@ function traceAt(q, r, d) {
 // it and you find what somebody meant to come back for — and a rich cache holds
 // the next mark. Deterministic from the source, escalating with each step, so a
 // trail is a thread you pull, not noise. This is the reward exploration lacked.
+// A lead has a KIND, and the kind is stated when you write it down. Sean's
+// ruling: a forty-minute session must not have one correct shape. Somebody who
+// wants a fight, somebody who wants a place to walk around in, and somebody who
+// only wants to fill in their chart are all playing the game properly — so the
+// mark on the paper has to say which of those it is BEFORE you commit the air
+// to reach it. An untyped lead is a coin toss dressed as a decision.
+const LEAD_KINDS = {
+  cache: { mark: '✚', colour: '#8a6a12',
+    tell: 'a cache. Somebody stowed something and meant to come back for it' },
+  quarry: { mark: '⚔', colour: '#9a3b26',
+    tell: 'a killing ground. Something was hunted here, and the hunt may not be over' },
+  cavern: { mark: '◘', colour: '#2c6e7a',
+    tell: 'a way in. Open plates, or a mouth in the rock, and rooms behind it' },
+  word: { mark: '✧', colour: '#5c3a86',
+    tell: 'no cargo at all. Only a position somebody thought worth the ink' },
+};
+const LEAD_KEYS = ['cache', 'quarry', 'cavern', 'word'];
+
 function leadTarget(seedStr, fromQ, fromR) {
   const rng = mulberry32(hashStr(seedStr + ':' + worldSeed));
   const ang = rng() * Math.PI * 2;
@@ -2011,12 +2033,47 @@ function leadTarget(seedStr, fromQ, fromR) {
   return { q: fromQ + dq, r: fromR + dr, d: d };
 }
 
-function makeLead(tier, fromQ, fromR, seedStr) {
+// A cavern lead must point at a REAL way in, or it is a lie — and a clue that
+// lies is worse than no clue. So it snaps to an actual POI near the drawn
+// position rather than inventing one, which also means the person who drew the
+// mark was telling the truth about a place that was already there.
+function nearestWayIn(q, r, R) {
+  let best = null, bd = 99;
+  for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
+    const t = tileAt(q + dq, r + dr);
+    if (!t || t.wall) continue;
+    if (t.poi !== 'ruin' && t.poi !== 'opening' && t.poi !== 'salvage') continue;
+    const d = hexDistance({ q: q + dq, r: r + dr }, { q, r });
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+
+function pickLeadKind(seedStr, tier) {
+  const rng = mulberry32(hashStr('kind:' + seedStr + ':' + worldSeed));
+  const v = rng();
+  // Word is common early — a chain that starts in information and turns into
+  // cargo reads like a real trail, and it lets a charting session pay off in
+  // the only currency a charting session should pay off in.
+  if (v < 0.30) return 'word';
+  if (v < 0.55) return 'cache';
+  if (v < 0.80) return 'cavern';
+  return 'quarry';
+}
+
+function makeLead(tier, fromQ, fromR, seedStr, forceKind) {
   const t = leadTarget(seedStr, fromQ, fromR);
+  const kind = forceKind || pickLeadKind(seedStr, tier);
+  if (kind === 'cavern') {
+    const w = nearestWayIn(t.q, t.r, 7);
+    if (w) { t.q = w.q; t.r = w.r; }
+    else return makeLead(tier, fromQ, fromR, seedStr + ':x', 'cache'); // no lie told
+  }
   if (!state.leads) state.leads = [];
-  state.leads.push({ q: t.q, r: t.r, d: t.d, tier: tier });
+  state.leads.push({ q: t.q, r: t.r, d: t.d, tier: tier, kind: kind });
   const km = (hexDistance({ q: fromQ, r: fromR }, { q: t.q, r: t.r }) * 60 / 1000).toFixed(1);
-  log(`You lay the marks onto your own chart: a position ${bearing(fromQ, fromR, t.q, t.r)}, ${km} km off, ${Math.round(t.d)} m down. Someone pressed the pen through the paper marking it. It is yours to follow now.`, 'strange', 'CHART');
+  const K = LEAD_KINDS[kind];
+  log(`You lay the marks onto your own chart: a position ${bearing(fromQ, fromR, t.q, t.r)}, ${km} km off, ${Math.round(t.d)} m down. The hand that drew it noted what is there — ${K.tell}. It is yours to follow, or to leave.`, 'strange', 'CHART');
   sfx('bell');
 }
 
@@ -2049,6 +2106,10 @@ const LEAD_TIER_CAP = 6;
 
 function resolveLead(L) {
   const tier = Math.min(LEAD_TIER_CAP, L.tier || 1);
+  const kind = L.kind || 'cache';
+  if (kind === 'word') return resolveWord(L, tier);
+  if (kind === 'quarry') return resolveQuarry(L, tier);
+  if (kind === 'cavern') return resolveCavern(L, tier);
   const crates = 2 + tier + randInt(3);
   const relics = (rand() < Math.min(0.8, 0.35 + tier * 0.15)) ? 1 : 0;
   state.cargo += crates; state.relics += relics;
@@ -2066,6 +2127,104 @@ function resolveLead(L) {
     makeLead(tier + 1, state.q, state.r, 'lead:' + L.q + ':' + L.r + ':' + tier);
   } else if (tier >= LEAD_TIER_CAP) {
     log('And that is the end of it. Whatever chain of hands passed these marks along, it stops here.', 'strange', 'CHART');
+  }
+  updateHUD(); render(); scheduleSave();
+}
+
+// WORD — information, and nothing you can put in the hold. It pays in the only
+// currency a charting session should pay in: knowing where things are. Sean's
+// ruling made explicit — "if a person just wants to explore in the sub and see
+// and hear interesting things, flesh out their map, they should be able to do
+// that." This is the lead that makes that a way to play and not a way to lose.
+function resolveWord(L, tier) {
+  const rng = mulberry32(hashStr('word:' + L.q + ':' + L.r + ':' + worldSeed));
+  // Reveal a patch of water somewhere out there — a stretch of somebody else's
+  // survey, copied onto your chart. You have not been there. You know it anyway.
+  const ang = rng() * Math.PI * 2, far = 10 + Math.floor(rng() * 14);
+  const cq = L.q + Math.round(Math.cos(ang) * far), cr = L.r + Math.round(Math.sin(ang) * far);
+  const R = 2 + Math.floor(tier / 2);
+  let n = 0;
+  for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
+    if (hexDistance({ q: cq + dq, r: cr + dr }, { q: cq, r: cr }) > R) continue;
+    const t = tileAt(cq + dq, cr + dr);
+    if (!t || t.wall) continue;
+    revealAt(t.q, t.r, t.floor != null ? t.floor : L.d); n++;
+  }
+  const km = (hexDistance({ q: state.q, r: state.r }, { q: cq, r: cr }) * 60 / 1000).toFixed(1);
+  log(`No cache. A slate, wedged where the current would not take it, and a survey scratched into it in a hand that gave out partway. ${n} hex${n === 1 ? '' : 'es'} of water you have never seen, ${bearing(state.q, state.r, cq, cr)}, ${km} km off — on your chart now, and paid for with nothing but the going.`,
+      'strange', 'WORD');
+  sfx('bell');
+  // Word begets word. Information is the thing that most reliably leads to more
+  // information — and the chain can turn into cargo, which is how a charting
+  // run eventually becomes a paying run without ever having to be one.
+  if (tier < LEAD_TIER_CAP && rand() < Math.min(0.85, 0.6 + tier * 0.06)) {
+    makeLead(tier + 1, state.q, state.r, 'word:' + L.q + ':' + L.r + ':' + tier);
+  } else if (tier >= LEAD_TIER_CAP) {
+    log('The hand that wrote these stops here. Whoever it was did not get to finish.', 'strange', 'CHART');
+  }
+  updateHUD(); render(); scheduleSave();
+}
+
+// QUARRY — a fight you may take or leave. The rule is that you get to SEE what
+// you are deciding about: the thing is named and awake before you are asked,
+// and leaving is always a live option. Combat you were ambushed into is not a
+// reward, it is a mugging.
+// Named, because you cannot weigh a fight you cannot identify. The tough score
+// is already in CREATURE_TOUGH; this is the part the captain actually reads.
+const QUARRY_STOCK = [
+  { type: 'lurker', name: 'a hunter, long and unhurried' },
+  { type: 'angler', name: 'a light that is not a light, and the mouth under it' },
+  { type: 'silt',   name: 'a ridge of silt that is not silt' },
+  { type: 'baro',   name: 'a pressure-thing, vast and slow and very hard to hurt' },
+  { type: 'chorus', name: 'a chorus, many voices and one appetite' },
+];
+function resolveQuarry(L, tier) {
+  const rng = mulberry32(hashStr('quarry:' + L.q + ':' + L.r + ':' + worldSeed));
+  const pick = QUARRY_STOCK[Math.floor(rng() * QUARRY_STOCK.length)];
+  spawnCreature(pick.type, L.q, L.r, snapToGrid(state.currentDepth));
+  const c = state.creatures[state.creatures.length - 1];
+  if (c && c.type === pick.type) { c.awake = true; c.interest = 40 + tier * 8; }
+  // The cache is real and it is right there. That is the whole offer.
+  const crates = 3 + tier * 2 + randInt(4);
+  state.threats = state.threats || {};
+  state.quarryCache = state.quarryCache || {};
+  state.quarryCache[hexKey(L.q, L.r)] = { crates: crates, tier: tier, taken: false };
+  log(`The marked position, and the mark was honest: a cache, plain in the silt — and ${pick.name} lying over it, which has not moved in a long while and is moving now. ${crates} crates' worth, if you want it that badly. Nobody is making you.`,
+      'danger', 'QUARRY');
+  sfx('warn');
+  updateHUD(); render(); scheduleSave();
+}
+// Taking the cache is a separate act from arriving. You may simply leave.
+function claimQuarryCache() {
+  const k = hexKey(state.q, state.r);
+  const qc = state.quarryCache && state.quarryCache[k];
+  if (!qc || qc.taken) return false;
+  qc.taken = true;
+  state.cargo += qc.crates;
+  const it = rollItem(state.currentDepth + qc.tier * 300);
+  if (it) giveItem(it, 1);
+  noiseMade(state.q, state.r, 4);   // you do not take it quietly
+  log(`You work the cache free — ${qc.crates} crates${it ? ', and ' + ITEMS[it].name : ''}. The noise of it goes a long way.`, 'good', 'CACHE');
+  if (qc.tier < LEAD_TIER_CAP && rand() < 0.5) {
+    makeLead(qc.tier + 1, state.q, state.r, 'quarry:' + k + ':' + qc.tier);
+  }
+  updateHUD(); render(); scheduleSave();
+  return true;
+}
+
+// CAVERN — a place, not a payout. The reward is that there is somewhere to go,
+// and the lead snapped to a real one when it was drawn, so the mark never lied.
+function resolveCavern(L, tier) {
+  const t = tileAt(L.q, L.r);
+  const what = t && t.poi === 'salvage' ? 'a hull with its plates sprung'
+             : t && t.poi === 'opening' ? 'a sinkhole going down into the dark'
+             : 'a ruin, squared off by hands';
+  log(`The marked position: ${what}, exactly where the hand said it would be. Whoever drew this had been inside. Take the boat down and go and look, if you have the air for it.`,
+      'strange', 'CHART');
+  sfx('bell');
+  // Somebody who had been inside is worth listening to twice.
+  if (tier < LEAD_TIER_CAP && rand() < Math.min(0.7, 0.4 + tier * 0.08)) {
+    makeLead(tier + 1, state.q, state.r, 'cav:' + L.q + ':' + L.r + ':' + tier);
   }
   updateHUD(); render(); scheduleSave();
 }
@@ -7899,6 +8058,16 @@ function handleTile(tile) {
     return;
   }
 
+  // A quarry cache sits where you left it until you decide. Coming back to it
+  // — with a torpedo, or with the thing dead, or just braver — is the point.
+  const qc = state.quarryCache && state.quarryCache[hexKey(tile.q, tile.r)];
+  if (qc && !qc.taken) {
+    const guard = state.creatures.some(c => !c.gone && c.q === tile.q && c.r === tile.r
+      && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID);
+    if (guard) log(`The cache is still there, and so is what is lying on it. ${qc.crates} crates. Your call.`, 'warn', 'QUARRY');
+    else claimQuarryCache();
+  }
+
   // First-time visits get a flavor log
   const firstVisit = !state.poisFound.includes(hexKey(tile.q, tile.r));
   const atSurface = state.currentDepth <= 1;
@@ -8697,6 +8866,7 @@ function doSave(force) {
       enclaves: state.enclaves,
       corpses: state.corpses,
       layersFelt: state.layersFelt,
+      quarryCache: state.quarryCache,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -8753,6 +8923,7 @@ function resumeGame(save) {
   state.expedition = save.expedition || null;
   state.base = save.base || null;
   state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
+  state.quarryCache = save.quarryCache || {};  // a cache you walked away from is still there
   if (state.base) {
     // Stations saved before the siege existed still have to load.
     const b = state.base;
