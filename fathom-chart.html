@@ -1957,6 +1957,45 @@ function silentScout() {
   log('The probe slips away on the current, silent, and comes back with a picture of the water around you.' + tell, 'strange', 'PROBE');
 }
 
+//--- TRACES: the water carries where it has been -----------------------------
+// The set was built to make travel a decision. This makes it a NAVIGATIONAL
+// INSTRUMENT as well. Anything worth finding sheds into the water — silt, oil,
+// spores, bubbles — and the current carries that shed downstream. So a trace is
+// not a marker saying "something is near". It is evidence with a DIRECTION in
+// it: read the set, turn into it, and the source is somewhere up that line.
+//
+// The nice consequence is that following a trace means punching the current,
+// which is the expensive way to travel. The game asks you to pay for the lead
+// in exactly the currency the lead is worth. And slack water tells you nothing,
+// so the dead patches of sea are genuinely dead — which makes the running ones
+// feel like somewhere.
+const TRACE_REACH = 3;   // hexes a shed will carry before the sea eats it
+const TRACE_SHED = {
+  ruin:    'a haze of silt, too fine to be the seabed and too steady to be chance',
+  salvage: 'an oil sheen crawling along the hull, decades old and still rising',
+  signal:  'a hum that is not the boat — it comes and goes with the water',
+  growth:  'a sweetness in the water that the crew do not like at all',
+  air:     'a thread of small bubbles going up past the glass',
+  wreck:   'an oil sheen crawling along the hull, decades old and still rising',
+};
+// Walk UPSTREAM hop by hop — each hex is asked about its own set, so a trace
+// can bend around a gyre the way a real plume does.
+function traceAt(q, r, d) {
+  let cq = q, cr = r;
+  for (let n = 1; n <= TRACE_REACH; n++) {
+    const cur = currentAt(cq, cr, d);
+    if (!cur) return null;                       // slack water carries nothing
+    const v = HEX_DIRS[cur.dir];
+    cq -= v.dq; cr -= v.dr;                      // against the flow = toward the source
+    const t = tileAt(cq, cr);
+    if (!t || t.wall) return null;               // the shed cannot come through rock
+    const what = t.poi && TRACE_SHED[t.poi];
+    if (what) return { what, poi: t.poi, dist: n, q: cq, r: cr,
+                       toward: CURRENT_NAMES[(cur.dir + 3) % 6], setName: cur.name };
+  }
+  return null;
+}
+
 //--- THE TRAIL: clues, marks, and caches worth the swim ----------------------
 // Exploring should LEAD somewhere. A sea chart marks a distant position; reach
 // it and you find what somebody meant to come back for — and a rich cache holds
@@ -7769,7 +7808,13 @@ function describeSpace(mode) {
       ? ` You are under the layer — it closed over you at ${L.depth} m, ${hard}, and the sea above it can barely hear you.`
       : ` The thermometer is unsteady: a ${hard} layer at ${L.depth} m. Below it, you would be hard to find.`;
   }
-  return (lead + ' ' + exits + mood + setLine + layLine).replace(/\s+/g, ' ').trim();
+  // Evidence, and the one inference the boat is willing to make for you: the
+  // water came from somewhere, and it did not come from nowhere.
+  const tr = traceAt(q, r, d);
+  const trLine = tr
+    ? ` There is ${tr.what}. The set here runs ${tr.setName}, so whatever is shedding it lies ${tr.toward} of you.`
+    : '';
+  return (lead + ' ' + exits + mood + setLine + layLine + trLine).replace(/\s+/g, ' ').trim();
 }
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight

@@ -81,6 +81,8 @@ try { vm.runInContext(script +
   '\nfunction __setPos(q,r,d){ state.q=q; state.r=r; state.currentDepth=d; }' +
   '\nfunction __layerKnown(q,r,d){ return layerKnown(q,r,d); }' +
   '\nfunction __noteFelt(q,r){ noteLayerFelt(q,r); }' +
+  '\nfunction __trace(q,r,d){ return traceAt(q,r,d); }' +
+  '\nfunction __curName(q,r,d){ var c=currentAt(q,r,d); return c?c.name:null; }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -611,6 +613,44 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     check(sandbox.__layerKnown(hq, hr, 0) === true,
       'a layer you have crossed is remembered from anywhere in that water');
   }
+}
+
+//--- 15. TRACES: the current turned into a navigational instrument -----------
+{
+  console.log('\n--- 15. TRACES (evidence with a direction in it) ---');
+
+  // Sweep for traces and prove the geometry: the source must lie UPSTREAM.
+  let found = 0, sane = 0, bent = 0;
+  const kinds = new Set();
+  for (let q = -60; q < 60; q += 3) for (let r = -60; r < 60; r += 3) {
+    const tr = sandbox.__trace(q, r, 600);
+    if (!tr) continue;
+    found++; kinds.add(tr.poi);
+    if (tr.dist >= 1 && tr.dist <= 3) sane++;
+    // The named bearing must be the reverse of the set that carried it here.
+    const opposite = { east: 'west', west: 'east', north: 'south', south: 'north',
+                       northeast: 'southwest', southwest: 'northeast' };
+    if (opposite[tr.setName] === tr.toward) bent++;
+  }
+  check(found > 0, 'the sea carries traces of what is in it', found + ' plumes in the sample');
+  check(sane === found, 'every trace comes from within the reach the sea will carry it');
+  check(bent === found, 'the source always lies against the set — the inference is never wrong',
+    bent + '/' + found + ' bearings correct');
+  check(kinds.size >= 2, 'different things shed differently', [...kinds].join(', '));
+
+  // Slack water is genuinely dead water. That is what makes running water mean something.
+  let slackTraces = 0, slackHexes = 0;
+  for (let q = -60; q < 60; q += 3) for (let r = -60; r < 60; r += 3) {
+    if (sandbox.__curName(q, r, 600)) continue;
+    slackHexes++;
+    if (sandbox.__trace(q, r, 600)) slackTraces++;
+  }
+  check(slackHexes > 0 && slackTraces === 0, 'slack water carries nothing — no set, no evidence',
+    slackHexes + ' slack hexes, ' + slackTraces + ' traces');
+
+  // Deterministic, like everything else the substrate hands you.
+  const a = sandbox.__trace(6, 6, 600), b = sandbox.__trace(6, 6, 600);
+  check(JSON.stringify(a) === JSON.stringify(b), 'a trace reads the same way twice');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
