@@ -1,4 +1,26 @@
-# FATHOM — START HERE (last updated 2026-07-20)
+# FATHOM — START HERE (last updated 2026-07-26)
+
+## THE WATER HAS TERRAIN NOW (2026-07-26) — answer to Sean's "how do we make sub exploration more interesting?"
+
+**The diagnosis, which was not "add more content":** every open hex was mechanically identical, so moving was one undifferentiated verb and travel was dead time between sparse events. Prose cannot fix dead time. Exploration gets interesting when there is a small decision every single turn. Three commits, each one making the next better:
+
+**1. CURRENTS (`currentAt` / `stepDir` / `currentFavour`, `CURRENT_SCALE=9`).** Deterministic gyres; 92% of neighbours share a set, so the water is *learnable*, not random. Favour ∈ {+2,+1,0,−1,−2} → cost mult 0.4 / 0.65 / 1 / 1.5 / 2.1. Punching it is LOUD (`noiseMade` 2–3), which wires it into the existing sound grammar. At depth: 1 air with, 7 against. **The outbound route is not the return route.**
+
+**2. THE LAYER (`layerAt` / `layerDamp` / `crossedLayer` / `layerKnown`, `LAYER_SCALE=11`).** Thermocline at 240–1320 m, snapped to `DEPTH_GRID`. Depth was an *expense*; now it is a *hiding place*. A hard layer latches `soundColumn`'s up/down clear flags exactly the way stone does, and `passiveContactR(depth,q,r)` collapses 3 hexes → 0 across it. **Symmetric always** — it hides you from it as much as it hides it from you, so going under is blind as well as safe. `rivalAlignDepth` already trims rivals toward you one slice a turn, so the layer buys a head start, never immunity.
+  - **Epistemic gate:** a hull thermometer reads its own water. You learn a layer by crossing it or coming within 240 m (`state.layersFelt`, persisted). This is not a restriction bolted on — it is what turns a readout into something worth going to look for.
+
+**3. TRACES (`traceAt`, `TRACE_REACH=3`, `TRACE_SHED`).** POIs shed into the water; the current carries the shed downstream. A trace is **evidence with a direction in it** — read the set, turn into it, source is up that line. Walks upstream hop-by-hop so it bends around a gyre. Following a lead therefore means punching the current: the game charges for the lead in the currency the lead is worth. **Slack water carries nothing**, which is what makes running water feel like somewhere.
+
+**What a captain reads on arrival now:** *"The water sets west, slow and steady. The thermometer is unsteady: a hard layer at 720 m. Below it, you would be hard to find. There is a sweetness in the water that the crew do not like at all. The set here runs west, so whatever is shedding it lies east of you."* — three facts, three decisions, no tutorial.
+
+**Measured against a pre-currents baseline** (harness now takes `FATHOM_HTML=<path>`): survival 60%→58% (noise at n=120), cargo pickup 28%→32%, **softlocks 10→2**. Bots were idling at depth in a loop; varied move costs break the loop. That was an accident and a good one.
+
+**CAVEAT, stated plainly:** the bot harness cannot read prose, so it cannot measure the thing these three features are actually for. Their value is unverified until Sean plays them.
+
+**Bugs these shipped past (both silent, both found only by verifying):** `currentFavour` compared a hex to itself because `state.q` was advanced before favour was computed — the prose said the water was setting and the water did nothing. And the chart framed all 13,217 *generated* hexes instead of the ~58 *known*, rendering a hard-won survey as a speck. Chart now frames `chartKnown` tiles + dock + player + enclaves + leads.
+
+---
+
 
 **Read this file first, then `memory/roadmap_vision.md` + `memory/project_fathom.md`. That is the whole handoff — no chat history required.**
 

@@ -17,7 +17,7 @@
 // Read this output as "what is reachable and what is broken", never as "this is
 // correctly tuned". Tuning needs a human who can feel it.
 const fs = require('fs'); const vm = require('vm');
-const html = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
+const html = fs.readFileSync(process.env.FATHOM_HTML || (__dirname + '/../fathom-chart.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 const RUNS = parseInt(process.argv[2] || '120', 10);
