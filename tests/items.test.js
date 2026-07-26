@@ -105,6 +105,7 @@ try { vm.runInContext(script +
   '\nfunction __vpDims(){ return [VP_W, VP_H]; }' +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
   '\nfunction __palette(){ return ANSI16; }' +
+  '\nfunction __vpKey(){ return VP_KEY; }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -815,44 +816,43 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   check(names.length >= 5, 'there are scenes to show', names.join(', '));
 
   // Hand-counted ANSI art is exactly as reliable as it sounds — the first cut
-  // of every one of these was ragged. This is the check that makes a bad
-  // drawing a build failure instead of a black stripe nobody notices.
+  // of every one of these was ragged. Colour now comes from a CHARACTER KEY
+  // rather than a parallel grid, which removes the ragged-row failure mode
+  // entirely; what is left to check is that the art is square and that every
+  // glyph drawn actually has a colour somewhere.
   let bad = [];
   for (const [k, s] of Object.entries(S)) {
-    if (!s.art || s.art.length !== H) bad.push(k + ' artRows=' + (s.art || []).length);
-    if (!s.col || s.col.length !== H) bad.push(k + ' colRows=' + (s.col || []).length);
-    (s.art || []).forEach((r, y) => { if (r.length !== W) bad.push(k + ' a' + y + '=' + r.length); });
-    (s.col || []).forEach((r, y) => { if (r.length !== W) bad.push(k + ' c' + y + '=' + r.length); });
+    if (!s.art || s.art.length !== H) bad.push(k + ' rows=' + (s.art || []).length);
+    (s.art || []).forEach((r, y) => { if (r.length !== W) bad.push(k + ' y' + y + '=' + r.length); });
+    if (s.col) bad.push(k + ' still carries a parallel colour grid');
   }
   check(bad.length === 0, 'every scene is exactly ' + W + 'x' + H, bad.slice(0, 6).join(' · ') || 'clean');
 
-  // A colour digit outside the palette renders black, i.e. invisibly — which
-  // reads as "the artist left a hole" rather than as an error.
-  const pal = sandbox.__palette();
-  let strays = 0, litCells = 0;
+  const pal = sandbox.__palette(), baseKey = sandbox.__vpKey();
+  let unkeyed = new Set(), drawn = 0;
   for (const s of Object.values(S)) {
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const c = s.col[y][x], g = s.art[y][x];
-      if (c === ' ') { if (g !== ' ') strays++; continue; }
-      if (!/[0-9a-f]/.test(c) || parseInt(c, 16) >= pal.length) strays++;
-      else litCells++;
+    const key = Object.assign({}, baseKey, s.key || {});
+    for (const row of s.art) for (const g of row) {
+      if (g === ' ') continue;
+      drawn++;
+      const c = key[g];
+      if (!c || !/[0-9a-f]/.test(c) || parseInt(c, 16) >= pal.length) unkeyed.add(g);
     }
   }
-  check(strays === 0, 'no drawn cell is left without a colour, and no colour is off-palette',
-    strays + ' stray cells');
-  check(litCells > 400, 'and there is actually something drawn', litCells + ' coloured cells');
+  check(unkeyed.size === 0, 'every glyph drawn has a colour in the key',
+    [...unkeyed].join(' ') || 'all keyed');
+  check(drawn > 300, 'and there is actually something drawn', drawn + ' glyphs');
 
-  // Pulse keys must name colours that are present, or the animation is a no-op.
+  // A pulse key must name a colour the scene actually puts on screen.
   let deadPulse = [];
   for (const [k, s] of Object.entries(S)) {
-    for (const pk of (s.pulse || [])) {
-      if (!s.col.some(r => r.indexOf(pk) >= 0)) deadPulse.push(k + ':' + pk);
-    }
+    const key = Object.assign({}, baseKey, s.key || {});
+    const used = new Set([].concat(...s.art.map(r => r.split('').map(g => key[g]))));
+    for (const pk of (s.pulse || [])) if (!used.has(pk)) deadPulse.push(k + ':' + pk);
   }
-  check(deadPulse.length === 0, 'every pulse key names a colour the scene actually uses',
+  check(deadPulse.length === 0, 'every pulse key names a colour the scene uses',
     deadPulse.join(', ') || 'all live');
 
-  // Every scene needs a caption — it is the line that ties picture to prose.
   const noCap = names.filter(k => !S[k].cap || S[k].cap.length < 8);
   check(noCap.length === 0, 'every scene says what it is', noCap.join(', ') || 'all captioned');
 
