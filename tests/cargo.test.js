@@ -61,7 +61,10 @@ sb.handleTile(fakeTile);
 check(st.cargo === 0, 'wreck out of reach when hovering above the floor', 'cargo=' + st.cargo);
 st.currentDepth = 360; // at the floor
 sb.handleTile(fakeTile);
-check(st.cargo === 1, 'salvage yields a crate at the floor', 'cargo=' + st.cargo);
+// A worked wreck pays a real haul now (3-5, more with depth), not the single
+// crate that left the whole economy above it unable to turn over.
+const haul = st.cargo;
+check(haul >= 3, 'a worked wreck pays a haul worth the trip', 'cargo=' + haul);
 check(st.hull > 50, 'salvage still patches hull', 'hull=' + st.hull);
 check(st.poisFound.includes('0,-8'), 'pickup recorded in poisFound (render-gate + no re-pickup)');
 
@@ -78,10 +81,11 @@ check(st.air > 100, 'venting at the ceiling refills air', 'air=' + st.air);
 // 2. Make port → banked (hull full so the yard stays quiet for this check)
 st.q = 0; st.r = 0; st.currentDepth = 0; st.air = 100; st.hull = 100;
 sb.surface();
-check(st.cargo === 0 && st.cargoBanked === 1, 'making port banks the cargo', 'banked=' + st.cargoBanked);
+check(st.cargo === 0 && st.cargoBanked === haul, 'making port banks the cargo', 'banked=' + st.cargoBanked);
 
 // 2b. The yard: damaged hull + banked crate → repair bought at DOCK_PRICES
 st.hull = 40; st.air = 350;
+st.cargoBanked = 1;   // exact-change: the yard buys hull one crate at a time
 sb.surface();
 check(st.hull === 65 && st.cargoBanked === 0, 'yard spends a crate for +25 hull', 'hull=' + st.hull + ' banked=' + st.cargoBanked);
 

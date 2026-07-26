@@ -638,6 +638,34 @@
     color: #6d8a88; padding: 0.9rem 0.6rem 0.4rem;
   }
 
+  /* The sea chart. Ink on wet paper — deliberately NOT the phosphor palette of
+     the periscope view, because it is a different object: a thing you keep. */
+  #seachart {
+    position: fixed; inset: 0; background: rgba(4, 8, 16, 0.93); display: none;
+    align-items: center; justify-content: center; z-index: 58; padding: 0.8rem; backdrop-filter: blur(6px);
+  }
+  #seachart.show { display: flex; }
+  #chart-panel {
+    width: 100%; max-width: 760px; max-height: 92vh; display: flex; flex-direction: column;
+    background: #e8dcc0; border: 1px solid #6b5a3e; border-radius: 3px; overflow: hidden;
+    box-shadow: 0 0 60px rgba(0,0,0,0.7);
+  }
+  #chart-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+    padding: 0.6rem 0.9rem; border-bottom: 1px solid #b9a67f; background: #ddcfae;
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.35rem; color: #3a2f1c;
+  }
+  #chart-head > div { display: flex; align-items: center; gap: 0.6rem; }
+  #chart-head .btn {
+    flex: none; padding: 0.45rem 0.8rem; font-size: 0.6rem;
+    border-color: #8a7550; color: #4a3c22;
+  }
+  #chart-note {
+    font-family: 'JetBrains Mono', monospace; font-style: normal; font-size: 0.58rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: #7a6440; text-align: right;
+  }
+  #chart-canvas { display: block; width: 100%; height: auto; background: #e8dcc0; }
+
   #transcript {
     position: fixed; inset: 0; background: rgba(4, 8, 16, 0.9); display: none;
     align-items: center; justify-content: center; z-index: 57; padding: 1.2rem; backdrop-filter: blur(6px);
@@ -762,6 +790,17 @@
   <button id="dive">Dive</button>
 </div>
 
+<!-- THE SEA CHART -->
+<div id="seachart">
+  <div id="chart-panel">
+    <div id="chart-head">
+      <span>The Sea Chart</span>
+      <div><span id="chart-note"></span><button class="btn" id="chart-close">Close</button></div>
+    </div>
+    <canvas id="chart-canvas"></canvas>
+  </div>
+</div>
+
 <!-- THE TRANSCRIPT (tap the log to read everything that has been said) -->
 <div id="transcript">
   <div id="inv-panel">
@@ -867,6 +906,7 @@
     <button class="btn" id="btn-ping">Ping</button>
     <button class="btn" id="btn-look" title="Look about you — describes the water, or the deck you are standing on. Costs nothing.">Look</button>
     <button class="btn" id="btn-hold" title="Open the hold — everything you have found. Use a consumable, bolt on a fitting, read a chart.">Hold</button>
+    <button class="btn" id="btn-chart" title="The sea chart — the surface entire, and beneath it only the water you have sounded">Chart</button>
     <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
@@ -1157,6 +1197,9 @@ const ITEMS = {
                 flavor: 'The last dozen entries are the same bearing, written over and over, pressed harder each time.' },
   bonekey:    { name: 'a great bone key',         kind: 'key', glyph: '⚷', col: '#d4c060', val: 2, strange: true, find: 3, depth: 1200,
                 flavor: 'Yellowed, and far too large for any lock a human hand ever turned. It fits something, somewhere, that was built to be kept shut.' },
+  inertiallog: { name: 'an inertial positioning log', kind: 'fit', fit: 'fix', glyph: '⌖', col: '#e0c060', val: 6, find: 2, depth: 900,
+                fitLog: 'You mount the log and let it settle. It counts every turn of the screw and every degree of the helm, and for the first time the chart can say where you are standing on it.',
+                flavor: 'Brass and glass and a mechanism nobody has been able to copy since. Fit it and your own boat appears on your own chart — which, until now, it never has.' },
   gillhood:   { name: 'a gill-hood of Dagon make', kind: 'use', glyph: '❈', col: '#6fae72', keep: true, val: 5, strange: true, find: 0, depth: 2400, props: ['gills', 'sig'], sig: 'dagon',
                 flavor: 'Wet leather and something that is not leather, and it breathes for you. Wear it and a drowned passage is only a passage. The Children of Dagon make these, and part with them rarely, and never cheaply.' },
 };
@@ -1205,7 +1248,7 @@ const CULTURES = {
     name: 'the Confluence', short: 'the federated mariners', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
     buys: { sigs: ['confluence'], keys: ['ingot', 'weldkit', 'oxygen', 'hydrophone', 'pressurehull', 'ambergris'], kinds: ['fit'], mult: 2.1 },
-    sells: ['patchkit', 'weldkit', 'oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still', 'pressurehull', 'hydrophone'],
+    sells: ['patchkit', 'weldkit', 'oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still', 'pressurehull', 'hydrophone', 'inertiallog'],
     markup: 1.8, danger: false,
   },
   libertines: {
@@ -1246,6 +1289,9 @@ function luminousBonus() { return countHeldWith('luminous'); }
 // Can the party cross drowned water? Only with Dagon work — which is the whole
 // point of dealing with them: they sell you the freedom of their own element.
 function canBreatheWater() { return countHeldWith('gills') > 0; }
+// Can the boat say where it IS? Not without an instrument. Until you fit one,
+// the sea chart records what you have seen and refuses to place you in it.
+function canFixPosition() { return fitLevel('fix') > 0; }
 
 // A stress event — pressure, fire, or violence. Volatile things may go off;
 // fragile things may shatter. Both are LOUD, and both are gone.
@@ -1413,6 +1459,161 @@ function renderInventory() {
     btn.addEventListener('click', () => { jettisonItem(btn.getAttribute('data-j')); renderInventory(); });
   }
 }
+//=============================================================================
+// THE SEA CHART — the record of what you have learned, drawn as a chart.
+//
+// THE LAW OF THIS VIEW (Sean, ratified): the ENTIRE SURFACE is drawn, freely —
+// humanity charted the surface long before the Fall, and that knowledge did not
+// drown with everything else. The moment you go below it, the chart shows only
+// what YOU have explored or sounded. A complete coastline, and beneath it the
+// dark, filling in one dive at a time.
+//
+// AND YOUR OWN BOAT IS NOT ON IT. Knowing where you are is knowledge like any
+// other; the game has been giving it away for free. You dead-reckon until you
+// find an instrument that fixes your position. That is what makes the chart a
+// progression track for a captain who only wants to explore.
+//=============================================================================
+function chartKnown(t) {
+  const k = hexKey(t.q, t.r);
+  return visited.has(k) || revealed.has(k);
+}
+
+function drawSeaChart() {
+  const cv = document.getElementById('chart-canvas');
+  if (!cv) return;
+  const wrapW = Math.min(760, (document.getElementById('chart-panel') || {}).clientWidth || 720) - 2;
+  const W = Math.max(280, wrapW), H = Math.round(Math.min(W * 0.92, window.innerHeight * 0.66));
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.height = H + 'px';
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Paper.
+  g.fillStyle = '#e8dcc0'; g.fillRect(0, 0, W, H);
+
+  const tiles = [...world.values()];
+  if (!tiles.length) return;
+  let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+  for (const t of tiles) { if (t.q < minQ) minQ = t.q; if (t.q > maxQ) maxQ = t.q; if (t.r < minR) minR = t.r; if (t.r > maxR) maxR = t.r; }
+  const px = (q, r) => ({ x: SQRT3 * (q + r / 2), y: 1.5 * r });
+  const c0 = px(minQ, minR), c1 = px(maxQ, minR), c2 = px(minQ, maxR), c3 = px(maxQ, maxR);
+  const xs = [c0.x, c1.x, c2.x, c3.x], ys = [c0.y, c1.y, c2.y, c3.y];
+  const bx0 = Math.min(...xs) - 1.2, bx1 = Math.max(...xs) + 1.2;
+  const by0 = Math.min(...ys) - 1.2, by1 = Math.max(...ys) + 1.2;
+  const pad = 26;
+  const s = Math.max(2.2, Math.min((W - pad * 2) / (bx1 - bx0), (H - pad * 2) / (by1 - by0)));
+  const ox = pad - bx0 * s + (W - pad * 2 - (bx1 - bx0) * s) / 2;
+  const oy = pad - by0 * s + (H - pad * 2 - (by1 - by0) * s) / 2;
+  const P = (q, r) => { const p = px(q, r); return { x: ox + p.x * s, y: oy + p.y * s }; };
+
+  const hexPath = (cx, cy, rad) => {
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 180 * (60 * i - 30);
+      const X = cx + rad * Math.cos(a), Y = cy + rad * Math.sin(a);
+      if (i === 0) g.moveTo(X, Y); else g.lineTo(X, Y);
+    }
+    g.closePath();
+  };
+  const rad = s * 0.62;
+  const showSoundings = s > 9;
+
+  // ---- Pass 1: THE SURFACE, drawn for every hex the world holds. Land is
+  // hatched, open water is left as paper. This is the free knowledge.
+  for (const t of tiles) {
+    const p = P(t.q, t.r);
+    if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
+    const land = t.wall && (t.type === 'shore' || t.type === 'dock' || t.land);
+    if (land) {
+      hexPath(p.x, p.y, rad);
+      g.fillStyle = '#cdbb94'; g.fill();
+      g.strokeStyle = '#a08a5e'; g.lineWidth = 0.5; g.stroke();
+    } else if (!t.wall) {
+      hexPath(p.x, p.y, rad);
+      g.fillStyle = '#dfeae4'; g.fill();     // open water: pale, uncharted below
+    }
+  }
+
+  // ---- Pass 2: WHAT YOU HAVE LEARNED. Only explored or sounded hexes give up
+  // their depth and what is in them.
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const t of tiles) {
+    if (t.wall || !chartKnown(t)) continue;
+    const p = P(t.q, t.r);
+    if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
+    const deep = Math.min(1, (t.floor || 0) / 4000);
+    hexPath(p.x, p.y, rad);
+    g.fillStyle = `rgba(74,116,140,${0.10 + deep * 0.38})`;   // deeper water, darker ink wash
+    g.fill();
+    g.strokeStyle = 'rgba(58,80,96,0.35)'; g.lineWidth = 0.4; g.stroke();
+    if (showSoundings && t.floor != null && t.floor > 0) {
+      g.fillStyle = 'rgba(40,58,70,0.75)';
+      g.font = `${Math.max(5, Math.round(s * 0.42))}px "JetBrains Mono", monospace`;
+      g.fillText(Math.round(t.floor / 10) / 10 + '', p.x, p.y + rad * 0.05);
+    }
+  }
+
+  // ---- Pass 3: marks. Your station, the peoples, the prizes you know of.
+  for (const t of tiles) {
+    if (!chartKnown(t) || !t.poi) continue;
+    const p = P(t.q, t.r);
+    const mk = t.poi === 'base' ? ['⌂', '#1d6b4f'] : t.poi === 'ruin' ? ['◙', '#8a5a1e']
+             : t.poi === 'salvage' ? ['✕', '#9a3b26'] : t.poi === 'air' ? ['○', '#2c6e7a']
+             : t.poi === 'opening' ? ['O', '#7a5a10'] : t.poi === 'signal' ? ['◉', '#5c3a86']
+             : t.poi === 'surface' ? ['☼', '#8a6a12'] : null;
+    if (!mk) continue;
+    g.fillStyle = mk[1];
+    g.font = `${Math.max(7, Math.round(s * 0.85))}px "JetBrains Mono", monospace`;
+    g.fillText(mk[0], p.x, p.y);
+  }
+  for (const e of (state.enclaves || [])) {
+    if (!visited.has(hexKey(e.q, e.r)) && !revealed.has(hexKey(e.q, e.r))) continue;
+    const p = P(e.q, e.r), cu = CULTURES[e.culture];
+    g.fillStyle = '#2f2a1a';
+    g.font = `${Math.max(8, Math.round(s * 1.0))}px "JetBrains Mono", monospace`;
+    g.fillText(cu ? cu.glyph : '?', p.x, p.y);
+  }
+  for (const L of (state.leads || [])) {
+    const p = P(L.q, L.r);
+    g.strokeStyle = '#9a6a10'; g.lineWidth = 1.1;
+    g.beginPath(); g.moveTo(p.x - 5, p.y); g.lineTo(p.x + 5, p.y);
+    g.moveTo(p.x, p.y - 5); g.lineTo(p.x, p.y + 5); g.stroke();
+    g.beginPath(); g.arc(p.x, p.y, 4, 0, Math.PI * 2); g.stroke();
+  }
+
+  // ---- The dock is always on the chart. Everyone knows where home is.
+  const dockP = P(1, 1);
+  g.fillStyle = '#3a2f1c';
+  g.font = `${Math.max(8, Math.round(s * 0.9))}px "JetBrains Mono", monospace`;
+  g.fillText('╪', dockP.x, dockP.y);
+
+  // ---- YOUR POSITION — only if you have the instrument for it.
+  const note = document.getElementById('chart-note');
+  if (canFixPosition()) {
+    const me = P(state.q, state.r);
+    g.strokeStyle = '#8c1f14'; g.lineWidth = 1.6;
+    g.beginPath(); g.arc(me.x, me.y, Math.max(5, rad * 0.8), 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.moveTo(me.x, me.y - rad * 1.5); g.lineTo(me.x, me.y + rad * 1.5);
+    g.moveTo(me.x - rad * 1.5, me.y); g.lineTo(me.x + rad * 1.5, me.y); g.stroke();
+    if (note) note.textContent = `fix: ${state.q}, ${state.r} · ${Math.round(state.currentDepth)} m`;
+  } else if (note) {
+    note.textContent = 'no position fix — dead reckoning';
+  }
+
+  // ---- Compass rose.
+  const rx = W - 34, ry = 34, rr = 15;
+  g.strokeStyle = 'rgba(58,47,28,0.55)'; g.lineWidth = 0.9;
+  g.beginPath(); g.arc(rx, ry, rr, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.moveTo(rx, ry - rr - 4); g.lineTo(rx, ry + rr + 4);
+  g.moveTo(rx - rr - 4, ry); g.lineTo(rx + rr + 4, ry); g.stroke();
+  g.fillStyle = '#3a2f1c'; g.font = '9px "JetBrains Mono", monospace';
+  g.fillText('N', rx, ry - rr - 10);
+}
+
+function openSeaChart() { document.getElementById('seachart').classList.add('show'); drawSeaChart(); }
+function closeSeaChart() { document.getElementById('seachart').classList.remove('show'); }
+
 function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
 function closeInventory() { document.getElementById('inventory').classList.remove('show'); }
 
@@ -7445,11 +7646,37 @@ function handleTile(tile) {
   const atSurface = state.currentDepth <= 1;
   const inShallow = !atSurface && state.currentDepth < 200;
 
+  // A PRIZE ALWAYS ANNOUNCES ITSELF. The two depth-flavour early returns below
+  // used to sit above the tile switch, so in the top 200 m — the shelf, where
+  // the starter boat lives — swimming onto a wreck printed marine snow and the
+  // salvage case was never reached at all. Combined with the glyph being hidden
+  // until you have charted near the seabed, a shelf wreck was invisible: no
+  // marker, no message, nothing. That is a large part of why most captains
+  // never picked up a single crate.
+  //
+  // RANDOMISE FLAVOUR; NEVER RANDOMISE INSTRUCTION.
+  if (firstVisit && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'air')) {
+    const noun = tile.poi === 'air' ? 'A pocket of trapped gas' : tile.poi === 'ruin' ? 'A sunken ruin' : 'Wreckage';
+    if (tile.poi === 'air') {
+      if (Math.abs(state.currentDepth - tile.ceiling) > DEPTH_GRID) {
+        log(`${noun}, caught against the roof ${Math.max(1, Math.round(state.currentDepth - tile.ceiling))} m above. Rise to it and the boat can vent its scrubbers.`, 'warn', 'AIR');
+        return;
+      }
+    } else if (!atReachableBottom(tile)) {
+      const drop = Math.max(1, Math.round((tile.floor || 0) - state.currentDepth));
+      log(`${noun} on the bottom, ${drop} m below the keel. Descend to work it.`, 'warn', tile.poi === 'ruin' ? 'FOUND' : 'SALVAGE');
+      return;
+    }
+  }
+
   // Ambient depth-aware flavor takes priority over tile-type flavor.
   // At the surface, surface vocabulary. In open water below the surface but
   // above 200 meters, openWater vocabulary. Only at >= 200 meters do we use
   // the cave/passage/chamber vocabulary, regardless of tile type.
-  if (atSurface && (firstVisit || rand() < 0.18)) {
+  // ...and if there IS something workable here and now, the switch below must
+  // get its turn — ambient flavour never outranks a prize under the keel.
+  const workableHere = tile.poi && ['salvage', 'ruin', 'air', 'signal', 'growth', 'opening'].includes(tile.poi);
+  if (atSurface && !workableHere && (firstVisit || rand() < 0.18)) {
     log(pickFlavor(FLAVOR.surface));
     // Adjacent-dock prose: fires when neighboring a dock from the surface
     maybeLogDockAdjacent();
@@ -7457,7 +7684,7 @@ function handleTile(tile) {
     maybePorthole();
     return;
   }
-  if (inShallow && (firstVisit || rand() < 0.14)) {
+  if (inShallow && !workableHere && (firstVisit || rand() < 0.14)) {
     log(pickFlavor(FLAVOR.openWater));
     maybePorthole();
     return;
@@ -7512,14 +7739,20 @@ function handleTile(tile) {
       if (firstVisit) {
         // Wreckage rests on the bottom — you dive to it, not over it.
         if (!atReachableBottom(tile)) {
-          if (rand() < 0.5) log(`The wreck lies on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to work it.`, 'warn', 'SALVAGE');
+          log(`The wreck lies on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to work it.`, 'warn', 'SALVAGE');
           break;
         }
         const subS = activeSub();
         const repair = 20 + randInt(15);
         state.hull = Math.min(subS.hull, state.hull + repair);
-        state.cargo++;
-        log(`Wreckage. You patch the hull with what fits and winch a crate aboard. (+${repair} hull, +1 cargo)`, '', 'SALVAGE');
+        // YIELD, not density. A wreck used to pay exactly one crate, so a
+        // forty-tap round trip bought a fifth of a boarding axe and the whole
+        // economy above it never turned over. Sean's ruling stands — finding a
+        // wreck must stay RARE — so the fix is to make each find matter rather
+        // than to litter the sea. Deeper water pays better; that is the bargain.
+        const haul = 3 + randInt(2) + Math.floor(Math.min(4, state.currentDepth / 900));
+        state.cargo += haul;
+        log(`Wreckage. You patch the hull with what fits and work her over for what she still holds. (+${repair} hull, +${haul} cargo)`, '', 'SALVAGE');
         // A wreck sometimes gives up a real thing, not just crating.
         if (rand() < 0.30) {
           const item = rollItem(state.currentDepth);
@@ -7534,7 +7767,7 @@ function handleTile(tile) {
         // Ruins rest on the floor like wrecks — put the boat on the bottom
         // before the divers go over. (Site is spent by the expedition.)
         if (!atReachableBottom(tile)) {
-          if (rand() < 0.5) log(`The ruin lies broken on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to put divers on it.`, 'warn', 'FOUND');
+          log(`The ruin lies broken on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to put divers on it.`, 'warn', 'FOUND');
           break;
         }
         // Ruins are no longer worked by dice: you go down there yourself.
@@ -8353,6 +8586,8 @@ document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('btn-hold').addEventListener('click', openInventory);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('trade-close').addEventListener('click', closeTrade);
+document.getElementById('btn-chart').addEventListener('click', openSeaChart);
+document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('log').addEventListener('click', openTranscript);
 document.getElementById('transcript-close').addEventListener('click', closeTranscript);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
