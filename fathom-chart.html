@@ -723,7 +723,7 @@
   }
   #transcript-list .log-entry { opacity: 1; font-size: 1.02rem; margin-bottom: 0.7rem; }
 
-  #inventory, #muster {
+  #inventory, #muster, #port {
     position: fixed;
     inset: 0;
     background: rgba(4, 8, 16, 0.82);
@@ -734,7 +734,29 @@
     padding: 1.2rem;
     backdrop-filter: blur(6px);
   }
-  #inventory.show, #muster.show { display: flex; }
+  #inventory.show, #muster.show, #port.show { display: flex; }
+  #port-ledger {
+    padding: 0.4rem 0.7rem; border-bottom: 1px solid rgba(160,140,100,0.2);
+    font-size: 0.7rem; color: #9a8a62; letter-spacing: 0.04em;
+  }
+  #port-list { overflow-y: auto; padding: 0.2rem 0.6rem 0.5rem; -webkit-overflow-scrolling: touch; }
+  .pshop-h {
+    font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; color: #c8b88e;
+    margin: 0.7rem 0 0.1rem; border-bottom: 1px solid rgba(160,140,100,0.15); padding-bottom: 0.15rem;
+  }
+  .pshop-n { font-size: 0.68rem; color: #6f6247; font-style: italic; margin-bottom: 0.35rem; }
+  .prow { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.1rem;
+          border-bottom: 1px solid rgba(160,140,100,0.1); }
+  .prow:last-child { border-bottom: none; }
+  .prow-t { flex: 1; min-width: 0; }
+  .prow-n { font-size: 0.82rem; color: #d8c9a4; }
+  .prow-d { font-size: 0.66rem; color: #7a6d50; }
+  .prow-b {
+    flex: none; padding: 0.42rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.06em;
+    text-transform: uppercase; border: 1px solid #6b5a3e; border-radius: 2px;
+    background: rgba(40,52,40,0.5); color: #cfe0c8; cursor: pointer; min-height: 34px;
+  }
+  .prow-b.no { border-color: #4a4436; background: transparent; color: #6a6250; cursor: default; }
   #muster-list { overflow-y: auto; padding: 0.4rem 0.6rem; -webkit-overflow-scrolling: touch; }
   .mus { padding: 0.55rem 0.2rem; border-bottom: 1px solid rgba(160,140,100,0.18); }
   .mus:last-child { border-bottom: none; }
@@ -879,6 +901,16 @@
   <div id="inv-panel">
     <div id="inv-head"><span>The Muster</span><button class="btn" id="muster-close">Close</button></div>
     <div id="muster-list"></div>
+  </div>
+</div>
+
+<!-- THE PORT. Everything the dock sells, visible at once, priced, and bought
+     only when you say so. Replaces four irreversible outcomes on one button. -->
+<div id="port">
+  <div id="inv-panel">
+    <div id="inv-head"><span>The Port</span><button class="btn" id="port-close">Cast Off</button></div>
+    <div id="port-ledger"></div>
+    <div id="port-list"></div>
   </div>
 </div>
 
@@ -2188,6 +2220,167 @@ function renderMuster() {
 }
 function openMuster() { renderMuster(); document.getElementById('muster').classList.add('show'); }
 function closeMuster() { document.getElementById('muster').classList.remove('show'); }
+
+//--- THE PORT ----------------------------------------------------------------
+// Everything the dock sells, on one sheet, priced. Nothing expires. Nothing is
+// gated behind anything else. Nothing spends a crate without a tap. Items you
+// cannot afford are still SHOWN, with the shortfall stated — a shop that hides
+// what you cannot yet buy teaches you nothing about what to aim for, and the
+// audit found silent refusals were a top complaint.
+function portRows() {
+  const sub = activeSub();
+  const rows = [];
+  const canPay = (cr, rl) => state.cargoBanked >= (cr || 0) && state.relicsBanked >= (rl || 0);
+  const shortfall = (cr, rl) => {
+    const dc = (cr || 0) - state.cargoBanked, dr = (rl || 0) - state.relicsBanked;
+    const bits = [];
+    if (dc > 0) bits.push(dc + ' more crate' + (dc > 1 ? 's' : ''));
+    if (dr > 0) bits.push(dr + ' more relic' + (dr > 1 ? 's' : ''));
+    return bits.join(' and ');
+  };
+
+  // ---- THE YARD
+  rows.push({ head: 'The Yard', note: 'Hulls and hull work.' });
+  if (state.hull < sub.hull) {
+    const missing = sub.hull - state.hull;
+    const need = Math.ceil(missing / DOCK_PRICES.hullPerCrate);
+    rows.push({ name: 'Patch the hull', desc: '+' + missing + ' hull · ' + need + ' crate' + (need > 1 ? 's' : ''),
+      ok: canPay(need, 0), why: shortfall(need, 0), act: 'repair' });
+  } else {
+    rows.push({ name: 'The hull is sound', desc: 'Nothing for the yard to do.', ok: false, why: '', act: null });
+  }
+  const next = Object.keys(SUBS).filter(k => SUBS[k].tier === sub.tier + 1)[0];
+  if (next) {
+    const b = SUBS[next];
+    rows.push({ name: b.name, desc: b.description + ' · ' + b.price + ' crates',
+      ok: canPay(b.price, 0), why: shortfall(b.price, 0), act: 'boat:' + next });
+  }
+
+  // ---- THE HIRING HALL. The candidate is STABLE — it used to re-roll name and
+  // role on every press, which made the hall a slot machine you could spin free.
+  const cap = sub.crewCap || 2;
+  rows.push({ head: 'The Hiring Hall', note: 'Crew ' + state.crew.length + '/' + cap + '.' });
+  if (state.crew.length >= cap) {
+    rows.push({ name: 'No berth free', desc: 'A bigger boat carries more hands.', ok: false, why: '', act: null });
+  } else {
+    if (!state.portHire) state.portHire = { name: pick(CREW_NAMES), role: pick(CREW_ROLES) };
+    const h = state.portHire;
+    const an = /^[aeiou]/i.test(h.role) ? 'an ' : 'a ';
+    rows.push({ name: h.name, desc: an + h.role + ' looking for a berth · ' + CREW_HIRE_COST + ' crates',
+      ok: canPay(CREW_HIRE_COST, 0), why: shortfall(CREW_HIRE_COST, 0), act: 'hire' });
+  }
+
+  // ---- THE OUTFITTER: gear, per hand, per empty slot.
+  rows.push({ head: 'The Outfitter', note: 'Weapons, armour and kit for the hands.' });
+  let any = false;
+  state.crew.forEach((m, i) => {
+    if (m.lost) return;
+    const gr = m.gear || {};
+    for (const k in GEAR) {
+      const g = GEAR[k];
+      const empty = g.slot === 'kit' ? !(gr.kit && gr.kit.charges > 0) : !gr[g.slot];
+      if (!empty) continue;
+      any = true;
+      const price = (g.cost.relics ? g.cost.relics + ' relic' + (g.cost.relics > 1 ? 's' : '') : g.cost.crates + ' crates');
+      rows.push({ name: g.name + ' — ' + m.name, desc: m.role + "'s " + g.slot + ' · ' + price,
+        ok: canPay(g.cost.crates, g.cost.relics), why: shortfall(g.cost.crates, g.cost.relics),
+        act: 'gear:' + i + ':' + k });
+    }
+  });
+  if (!any) rows.push({ name: state.crew.length ? 'Every hand is kitted' : 'No crew to outfit',
+    desc: state.crew.length ? 'Nothing left to fill.' : 'Sign someone on first.', ok: false, why: '', act: null });
+
+  // ---- THE ARMOURER: the boat's own teeth.
+  rows.push({ head: 'The Armourer', note: "The boat's own armament." });
+  if (!state.armament) {
+    rows.push({ name: 'Harpoon gun', desc: 'Bolted to the bow. Adjacent targets. · 8 crates',
+      ok: canPay(8, 0), why: shortfall(8, 0), act: 'harpoon' });
+  } else {
+    rows.push({ name: 'Torpedoes ×3', desc: 'Relic-work, and the only thing that reaches. · 2 relics',
+      ok: canPay(0, 2), why: shortfall(0, 2), act: 'torps' });
+  }
+  return rows;
+}
+
+function renderPort() {
+  const led = document.getElementById('port-ledger'), el = document.getElementById('port-list');
+  if (!el) return;
+  const sub = activeSub();
+  if (led) led.textContent = 'BANK ' + state.cargoBanked + ' crates  ·  VAULT ' + state.relicsBanked
+    + ' relics  ·  HULL ' + Math.round(state.hull) + '/' + sub.hull;
+  el.innerHTML = portRows().map(r => {
+    if (r.head) return '<div class="pshop-h">' + r.head + '</div><div class="pshop-n">' + (r.note || '') + '</div>';
+    const btn = r.act && r.ok
+      ? '<button class="prow-b" data-port="' + r.act + '">Buy</button>'
+      : '<span class="prow-b no">' + (r.why || '—') + '</span>';
+    return '<div class="prow"><div class="prow-t"><div class="prow-n">' + r.name
+      + '</div><div class="prow-d">' + r.desc + '</div></div>' + btn + '</div>';
+  }).join('');
+  el.querySelectorAll('.prow-b[data-port]').forEach(b => {
+    b.addEventListener('click', () => portBuy(b.getAttribute('data-port')));
+  });
+}
+
+function portBuy(act) {
+  const sub = activeSub();
+  if (act === 'repair') {
+    const missing = sub.hull - state.hull;
+    const need = Math.ceil(missing / DOCK_PRICES.hullPerCrate);
+    if (state.cargoBanked < need) return;
+    state.cargoBanked -= need;
+    state.hull = sub.hull;
+    log(`The yard works the hull whole again — ${need} crate${need > 1 ? 's' : ''}. ${state.cargoBanked} banked.`, '', 'YARD');
+    sfx('bell');
+  } else if (act.startsWith('boat:')) {
+    const key = act.slice(5), b = SUBS[key];
+    if (!b || state.cargoBanked < b.price) return;
+    state.cargoBanked -= b.price;
+    activeSubKey = key;
+    state.hull = b.hull; state.air = b.air;
+    const pp = document.getElementById('ping-power');
+    if (pp) pp.max = b.sonarMaxPower;
+    log(`The ${b.name} takes the water. ${b.description} (${b.price} crates; ${state.cargoBanked} banked.)`, '', 'OUTFIT');
+    sfx('bell');
+  } else if (act === 'hire') {
+    const cap = sub.crewCap || 2;
+    if (state.crew.length >= cap || state.cargoBanked < CREW_HIRE_COST || !state.portHire) return;
+    const h = state.portHire;
+    state.cargoBanked -= CREW_HIRE_COST;
+    state.crew.push(crewVitals({ name: h.name, role: h.role, xp: 0, wounded: false,
+                                 gear: { weapon: null, armor: null, kit: null } }));
+    state.portHire = null;   // the next hand is a different person, not a re-roll
+    log(`${h.name} signs aboard as ${h.role}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.)`, '', 'CREW');
+    sfx('bell');
+  } else if (act.startsWith('gear:')) {
+    const [, iS, key] = act.split(':');
+    const m = state.crew[+iS], g = GEAR[key];
+    if (!m || !g) return;
+    if (state.cargoBanked < (g.cost.crates || 0) || state.relicsBanked < (g.cost.relics || 0)) return;
+    state.cargoBanked -= (g.cost.crates || 0);
+    state.relicsBanked -= (g.cost.relics || 0);
+    if (!m.gear) m.gear = { weapon: null, armor: null, kit: null };
+    m.gear[g.slot] = g.slot === 'kit' ? { key: key, charges: g.charges } : key;
+    log(`${m.name} takes the ${g.name}${g.strange ? ' — it hums against their palm' : ''}. (bank ${state.cargoBanked}, vault ${state.relicsBanked}.)`,
+        g.strange ? 'strange' : '', 'ARMOURY');
+    sfx('bell');
+  } else if (act === 'harpoon') {
+    if (state.cargoBanked < 8) return;
+    state.cargoBanked -= 8;
+    state.armament = 'harpoon';
+    log(`The dockworks bolt a harpoon gun to the bow. (8 crates; ${state.cargoBanked} banked.)`, '', 'ARMOURY');
+    sfx('bell');
+  } else if (act === 'torps') {
+    if (state.relicsBanked < 2) return;
+    state.relicsBanked -= 2;
+    state.torpedoes = (state.torpedoes || 0) + 3;
+    log(`Three torpedoes go into the racks, paid in relic-work. (${state.relicsBanked} in the vault.)`, 'strange', 'ARMOURY');
+    sfx('bell');
+  }
+  updateHUD(); render(); renderPort(); scheduleSave();
+}
+
+function openPort() { renderPort(); document.getElementById('port').classList.add('show'); }
+function closePort() { document.getElementById('port').classList.remove('show'); }
 
 function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
 function closeInventory() { document.getElementById('inventory').classList.remove('show'); }
@@ -9271,128 +9464,22 @@ function surface() {
       state.relics = 0;
       sfx('relic');
     }
-    // The yard: banked crates buy hull patching (prices in DOCK_PRICES).
-    // Spends only what the damage needs, never more.
-    if (atPort && state.hull < sub.hull && state.cargoBanked > 0) {
-      const need = Math.ceil((sub.hull - state.hull) / DOCK_PRICES.hullPerCrate);
-      const spend = Math.min(need, state.cargoBanked);
-      const gained = Math.min(sub.hull - state.hull, Math.round(spend * DOCK_PRICES.hullPerCrate * (1 + 0.25 * crewLvl('engineer'))));
-      state.cargoBanked -= spend;
-      state.hull += gained;
-      log(`The yard works the hull: ${spend} crate${spend > 1 ? 's' : ''} buys +${gained} hull. ${state.cargoBanked} banked.`, '', 'YARD');
-    }
-    // The outfitter: the next boat up the ladder, offered when affordable.
-    // One-button commerce — the port makes the offer; a second hatch-press
-    // within the window accepts. Moving away lets the offer lapse.
-    if (atPort) {
-      const next = Object.keys(SUBS).map(k => SUBS[k].tier === sub.tier + 1 ? k : null).filter(Boolean)[0];
-      const offer = state._outfitOffer;
-      if (offer && offer.key && SUBS[offer.key]
-          && offer.q === state.q && offer.r === state.r
-          && performance.now() < offer.until
-          && state.cargoBanked >= SUBS[offer.key].price) {
-        const bought = SUBS[offer.key];
-        state.cargoBanked -= bought.price;
-        activeSubKey = offer.key;
-        state.hull = bought.hull;
-        state.air = bought.air;
-        state._outfitOffer = null;
-        const pp2 = document.getElementById('ping-power');
-        if (pp2) pp2.max = bought.sonarMaxPower;
-        log(`The ${bought.name} takes the water. ${bought.description} (${bought.price} crates; ${state.cargoBanked} banked.)`, '', 'OUTFIT');
-        sfx('bell');
-        updateHUD();
-        render();
-        return;
-      }
-      if (next && state.cargoBanked >= SUBS[next].price) {
-        state._outfitOffer = { key: next, q: state.q, r: state.r, until: performance.now() + 45000 };
-        log(`The outfitter's shed is open: the ${SUBS[next].name} lies ready — ${SUBS[next].price} crates. Press Surface again to take her.`, 'warn', 'OUTFIT');
-      }
-      // The hiring hall: a hand waits on the dock when there's a berth and
-      // the ledger covers a sign-on. Outfit offers take precedence.
-      const cap = sub.crewCap || 2;
-      const ho = state._hireOffer;
-      if (!state._outfitOffer && ho && ho.q === state.q && ho.r === state.r
-          && performance.now() < ho.until
-          && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
-        state.cargoBanked -= CREW_HIRE_COST;
-        state.crew.push(crewVitals({ name: ho.name, role: ho.role, xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } }));
-        state._hireOffer = null;
-        log(`${ho.name} signs aboard as ${ho.role}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.) Crew ${state.crew.length}/${cap}.`, '', 'CREW');
-        sfx('bell');
-        updateHUD();
-        render();
-        return;
-      }
-      if (!state._outfitOffer && state.crew.length < cap && state.cargoBanked >= CREW_HIRE_COST) {
-        state._hireOffer = { name: pick(CREW_NAMES), role: pick(CREW_ROLES), q: state.q, r: state.r, until: performance.now() + 45000 };
-        log(`On the dock: ${state._hireOffer.name}, a ${state._hireOffer.role} looking for a berth — ${CREW_HIRE_COST} crates for the sign-on. Press Surface again to take them on.`, 'warn', 'CREW');
-      }
-      // The armory: one piece at a time, for a hand with an empty slot.
-      // Offers defer to the outfitter and the hiring hall.
-      const affordable = (g) => (g.cost.crates || 0) <= state.cargoBanked && (g.cost.relics || 0) <= state.relicsBanked;
-      const ao = state._armoryOffer;
-      if (!state._outfitOffer && !state._hireOffer && ao && ao.q === state.q && ao.r === state.r
-          && performance.now() < ao.until && state.crew[ao.mIdx] && GEAR[ao.key] && affordable(GEAR[ao.key])) {
-        const g = GEAR[ao.key];
-        const m = state.crew[ao.mIdx];
-        if (!m.gear) m.gear = { weapon: null, armor: null, kit: null };
-        state.cargoBanked -= (g.cost.crates || 0);
-        state.relicsBanked -= (g.cost.relics || 0);
-        m.gear[g.slot] = g.slot === 'kit' ? { key: ao.key, charges: g.charges } : ao.key;
-        state._armoryOffer = null;
-        const price = g.cost.relics ? `${g.cost.relics} relic${g.cost.relics > 1 ? 's' : ''}` : `${g.cost.crates} crates`;
-        log(`${m.name} takes the ${g.name}${g.strange ? ' — it hums against their palm' : ''}. (${price} spent; bank ${state.cargoBanked}, vault ${state.relicsBanked}.)`, g.strange ? 'strange' : '', 'ARMORY');
-        sfx('bell');
-        updateHUD();
-        render();
-        return;
-      }
-      if (!state._outfitOffer && !state._hireOffer && state.crew.length > 0) {
-        const cands = [];
-        state.crew.forEach((m, i) => {
-          const gr = m.gear || {};
-          for (const k in GEAR) {
-            const g = GEAR[k];
-            const empty = g.slot === 'kit' ? !(gr.kit && gr.kit.charges > 0) : !gr[g.slot];
-            if (empty && affordable(g)) cands.push({ mIdx: i, key: k });
-          }
-        });
-        if (cands.length) {
-          const c = pick(cands);
-          const g = GEAR[c.key];
-          const price = g.cost.relics ? `${g.cost.relics} relic${g.cost.relics > 1 ? 's' : ''}` : `${g.cost.crates} crates`;
-          state._armoryOffer = { mIdx: c.mIdx, key: c.key, q: state.q, r: state.r, until: performance.now() + 45000 };
-          log(`The armory: a ${g.name} would fit ${state.crew[c.mIdx].name}'s hands — ${price}. Press Surface again to arm them.`, 'warn', 'ARMORY');
-        }
-      }
-      // Boat armaments: a harpoon gun (crates, once) or torpedoes (relics).
-      const so = state._armsOffer;
-      if (!state._outfitOffer && !state._hireOffer && !state._armoryOffer && so && so.q === state.q && so.r === state.r && performance.now() < so.until) {
-        if (so.kind === 'harpoon' && state.armament !== 'harpoon' && state.cargoBanked >= 8) {
-          state.cargoBanked -= 8; state.armament = 'harpoon'; state._armsOffer = null;
-          log(`A harpoon gun is bolted to the bow. (8 crates; bank ${state.cargoBanked}.) It won't kill much, but it buys you a breath.`, '', 'ARMORY');
-          sfx('bell'); updateHUD(); render(); return;
-        }
-        if (so.kind === 'torpedo' && state.relicsBanked >= 2) {
-          state.relicsBanked -= 2; state.torpedoes += 3; state._armsOffer = null;
-          log(`Three torpedoes, traded for relic-work. (2 relics; ${state.torpedoes} aboard.) Spend them on what you cannot outrun.`, 'strange', 'ARMORY');
-          sfx('bell'); updateHUD(); render(); return;
-        }
-      }
-      if (!state._outfitOffer && !state._hireOffer && !state._armoryOffer && !state._armsOffer) {
-        const arms = [];
-        if (state.armament !== 'harpoon' && state.cargoBanked >= 8) arms.push('harpoon');
-        if (state.relicsBanked >= 2) arms.push('torpedo');
-        if (arms.length) {
-          state._armsOffer = { kind: pick(arms), q: state.q, r: state.r, until: performance.now() + 45000 };
-          log(state._armsOffer.kind === 'harpoon'
-            ? 'The dockworks will bolt a harpoon gun to your bow — 8 crates. Press Surface again to take it.'
-            : 'The armorer has torpedoes, if you pay in relic-work — 2 relics for three. Press Surface again to load them.', 'warn', 'ARMORY');
-        }
-      }
-    }
+    // THE PORT IS A PLACE NOW, NOT A BUTTON.
+    //
+    // What stood here was four irreversible outcomes bound to one control, each
+    // gated behind the last: `if (!state._outfitOffer && !state._hireOffer &&
+    // ...)`. The consequence was perverse — affording a BOAT permanently
+    // suppressed the hiring hall, the armory and the arms dealer, so the richer
+    // you got the less the port would sell you. Offers also expired on a 45
+    // second wall clock and were never written to the save, so a reload voided
+    // a purchase in progress. And the yard spent your savings on hull patching
+    // before it offered you anything, without asking.
+    //
+    // All of that is gone. Everything the port sells is now visible at once,
+    // priced, and bought when you say so. Nothing expires, nothing is hidden
+    // behind anything else, and nothing spends your crates without a tap.
+    if (atPort) openPort();
+
     if (state.air >= sub.air) {
       log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
       return;
@@ -9467,6 +9554,7 @@ function doSave(force) {
       enclaves: state.enclaves,
       corpses: state.corpses,
       layersFelt: state.layersFelt,
+      portHire: state.portHire,
       quarryCache: state.quarryCache,
       crew: state.crew,
       subKey: activeSubKey,
@@ -9524,6 +9612,7 @@ function resumeGame(save) {
   state.expedition = save.expedition || null;
   state.base = save.base || null;
   state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
+  state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
   state.quarryCache = save.quarryCache || {};  // a cache you walked away from is still there
   if (state.base) {
     // Stations saved before the siege existed still have to load.
@@ -9630,6 +9719,7 @@ vpBoot();
 });
 var __mb = document.getElementById('btn-muster'); if (__mb) __mb.addEventListener('click', openMuster);
 var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListener('click', closeMuster);
+var __pc = document.getElementById('port-close'); if (__pc) __pc.addEventListener('click', closePort);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('log').addEventListener('click', openTranscript);
 document.getElementById('transcript-close').addEventListener('click', closeTranscript);

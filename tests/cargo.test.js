@@ -36,7 +36,7 @@ function freshContext(storage) {
   };
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
-  try { vm.runInContext(script + '\nfunction __state(){ return state; }\nfunction __tile(q,r){ return world.get(hexKey(q,r)); }\nfunction __subKey(){ return activeSubKey; }\nfunction __setCell(q,r,d,k2){ cells.set(cellKey(q,r,d), {type:k2, kind:k2}); }', sandbox, { timeout: 15000 }); } catch (e) {}
+  try { vm.runInContext(script + '\nfunction __state(){ return state; }\nfunction __tile(q,r){ return world.get(hexKey(q,r)); }\nfunction __subKey(){ return activeSubKey; }\nfunction __setCell(q,r,d,k2){ cells.set(cellKey(q,r,d), {type:k2, kind:k2}); }\nfunction __portActs(){ return portRows().map(function(r){ return r.act; }).filter(Boolean); }', sandbox, { timeout: 15000 }); } catch (e) {}
   return sandbox;
 }
 let failures = 0;
@@ -83,27 +83,59 @@ st.q = 0; st.r = 0; st.currentDepth = 0; st.air = 100; st.hull = 100;
 sb.surface();
 check(st.cargo === 0 && st.cargoBanked === haul, 'making port banks the cargo', 'banked=' + st.cargoBanked);
 
-// 2b. The yard: damaged hull + banked crate → repair bought at DOCK_PRICES
-st.hull = 40; st.air = 350;
-st.cargoBanked = 1;   // exact-change: the yard buys hull one crate at a time
+// 2b. THE PORT IS A SHOP NOW. Surfacing at the dock no longer spends anything:
+// it opens a panel. Everything below buys through portBuy(), one tap, no timer,
+// nothing gated behind anything else.
+st.hull = 40; st.air = 350; st.cargoBanked = 4;
 sb.surface();
-check(st.hull === 65 && st.cargoBanked === 0, 'yard spends a crate for +25 hull', 'hull=' + st.hull + ' banked=' + st.cargoBanked);
+check(st.hull === 40 && st.cargoBanked === 4,
+  'making port SPENDS NOTHING — the yard no longer raids the bank unasked',
+  'hull=' + st.hull + ' banked=' + st.cargoBanked);
+sb.portBuy('repair');
+check(st.hull === 100 && st.cargoBanked < 4, 'the yard patches the hull when you ask',
+  'hull=' + st.hull + ' banked=' + st.cargoBanked);
 
-// 3. Round trip
-// 2c. The outfitter: enough banked → the port offers; a second press buys.
-st.hull = 100; st.air = 350; st.cargoBanked = 25;
-sb.surface(); // arms the offer
-check(sb.__subKey() === 'erebus' && st.cargoBanked === 25, 'outfitter offer arms without spending', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked);
-sb.surface(); // accepts
-check(sb.__subKey() === 'charon' && st.cargoBanked === 5 && st.hull === 130 && st.air === 450,
-  'second press buys the Charon', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked + ' hull=' + st.hull + ' air=' + st.air);
+// 2c. THE GATING BUG THE AUDIT FOUND: affording a boat used to suppress the
+// hiring hall, the armoury and the arms dealer, so getting richer bought you
+// LESS. Everything must be on offer at the same time.
+st.hull = 100; st.air = 350; st.cargoBanked = 40; st.relicsBanked = 3;
+st.crew = []; st.armament = null; st.portHire = null;
+const acts = sb.__portActs();
+check(acts.some(a => a && a.indexOf('boat:') === 0), 'the yard offers the next boat', acts.join(' '));
+check(acts.indexOf('hire') >= 0, 'AND the hiring hall is open at the same time');
+check(acts.indexOf('harpoon') >= 0, 'AND the armourer is open at the same time');
 
-// 2c2. Crew: a hand waits on the dock; a second press signs them on
-st.hull = 130; st.air = 450; // full — yard and air stay quiet
-sb.surface(); // arms the hire offer (banked 5 = exactly one sign-on)
-check(!!st._hireOffer && st.crew.length === 0, 'a hand waits on the dock', st._hireOffer && st._hireOffer.role);
-sb.surface();
-check(st.crew.length === 1 && st.cargoBanked === 0, 'second press signs them aboard', st.crew[0] && (st.crew[0].name + ' the ' + st.crew[0].role));
+// The hand on the dock is a PERSON, not a slot machine — it used to re-roll
+// name and role on every press, so you could spin for the role you wanted.
+const h1 = JSON.stringify(st.portHire);
+sb.__portActs(); sb.__portActs();
+check(JSON.stringify(st.portHire) === h1, 'the hand waiting on the dock does not re-roll', h1);
+
+sb.portBuy('hire');
+check(st.crew.length === 1 && st.cargoBanked === 35, 'hiring signs them aboard for the stated price',
+  st.crew[0] && (st.crew[0].name + ' the ' + st.crew[0].role) + ' bank=' + st.cargoBanked);
+
+sb.portBuy('boat:charon');
+check(sb.__subKey() === 'charon' && st.cargoBanked === 15 && st.hull === 130 && st.air === 450,
+  'and the boat is still buyable afterwards', 'sub=' + sb.__subKey() + ' banked=' + st.cargoBanked);
+
+sb.portBuy('harpoon');
+check(st.armament === 'harpoon' && st.cargoBanked === 7, 'the dock bolts on a harpoon',
+  'arm=' + st.armament + ' bank=' + st.cargoBanked);
+sb.portBuy('torps');
+check(st.torpedoes === 3 && st.relicsBanked === 1, 'and the armourer trades torpedoes for relic-work',
+  'torps=' + st.torpedoes + ' vault=' + st.relicsBanked);
+
+// You cannot buy what you cannot pay for, and it fails quietly rather than
+// going negative.
+const bankPre = st.cargoBanked, hullPre = st.hull;
+st.cargoBanked = 0;
+sb.portBuy('harpoon'); sb.portBuy('boat:nyx');
+check(st.cargoBanked === 0 && sb.__subKey() === 'charon', 'an empty bank buys nothing and goes nowhere near negative',
+  'bank=' + st.cargoBanked + ' sub=' + sb.__subKey());
+// Leave the ledger as the later checks expect to find it — a test that leaks
+// state into the next test is measuring the previous test.
+st.cargoBanked = bankPre; st.relicsBanked = 0; st.torpedoes = 0; st.armament = null;
 
 // 2d. The resolution ladder: a ruin no longer rolls dice for divers — the
 // captain goes down there in person. Full on-foot mechanics are interior.test's
@@ -175,26 +207,25 @@ check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.cre
   st.crew.push({ name: 'C', role: 'engineer', xp: 0, wounded: false, gear: { weapon: null, armor: null, kit: null } });
   st.cargoBanked = 10; st.relicsBanked = 0; st.air = 450; st.hull = 130;
   sb.surface();
-  check(!!st._armoryOffer, 'the armory lays out a piece', st._armoryOffer && st._armoryOffer.key);
-  sb.surface();
+  const gearActs = sb.__portActs().filter(a2 => a2.indexOf('gear:') === 0);
+  check(gearActs.length > 0, 'the outfitter lays out gear for an empty slot', gearActs.slice(0, 3).join(' '));
+  sb.portBuy(gearActs[0]);
   const armed = st.crew.some(m => m.gear && (m.gear.weapon || m.gear.armor || (m.gear.kit && m.gear.kit.charges > 0)));
-  check(armed && st.cargoBanked < 10, 'a second press arms a hand', 'bank=' + st.cargoBanked);
+  check(armed && st.cargoBanked < 10, 'and buying it arms that hand', 'bank=' + st.cargoBanked);
 
-  // Boat armaments. Isolate the arms offer from the rest of the dock chain:
-  // crew full AND fully geared (no hire, no crew-armory offer), hull topped
-  // (no yard), cargo/relics empty aboard, and only ONE arm affordable at a
-  // time so the offer is deterministic.
+  // Boat armaments. No isolation needed any more — that whole ritual of
+  // emptying the bank and filling every crew slot existed only to stop the
+  // OTHER offers in the chain from stealing the press. Nothing is chained now,
+  // so you simply buy the thing you want.
   st.crew = [];
-  for (let i = 0; i < 4; i++) st.crew.push({ name: 'x' + i, role: 'diver', xp: 0, wounded: false, gear: { weapon: 'axe', armor: 'plates', kit: { key: 'firstaid', charges: 1 } } });
   st.armament = null; st.torpedoes = 0; st.hull = 9999; st.air = 450;
   st.cargo = 0; st.relics = 0;
-  st._outfitOffer = null; st._hireOffer = null; st._armoryOffer = null; st._armsOffer = null;
-  st.cargoBanked = 20; st.relicsBanked = 0; // only the harpoon is affordable
-  sb.surface(); sb.surface(); // offer, then buy
+  st.cargoBanked = 20; st.relicsBanked = 5;
+  sb.surface();
+  sb.portBuy('harpoon');
   check(st.armament === 'harpoon' && st.cargoBanked === 12, 'the dock bolts on a harpoon for crates', 'arm=' + st.armament + ' bank=' + st.cargoBanked);
-  st.relicsBanked = 5; st._armsOffer = null; // now only torpedoes (harpoon owned)
-  sb.surface(); sb.surface();
-  check(st.torpedoes === 3 && st.relicsBanked === 3, 'the armorer trades torpedoes for relics', 'torps=' + st.torpedoes + ' vault=' + st.relicsBanked);
+  sb.portBuy('torps');
+  check(st.torpedoes === 3 && st.relicsBanked === 3, 'the armourer trades torpedoes for relic-work', 'torps=' + st.torpedoes + ' vault=' + st.relicsBanked);
 }
 
 // 6. Unnatural growth: a living, varied hazard that bites every pass (not once)
