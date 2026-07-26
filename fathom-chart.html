@@ -8094,6 +8094,12 @@ function soundingBelow() {
     if (poiTaken(t, p)) continue;
     if (!cells.has(cellKey(t.q, t.r, p.d))) continue;
     if (p.d < state.currentDepth - DEPTH_GRID) continue;   // it is above you; the sounder looks down
+    // A sounder reads through WATER. A prize below the floor of YOUR run has
+    // stone between you and it, and an instrument that chirps through rock is
+    // a liar — the same law as the claim rule, because the claim rule and the
+    // instruments must share one definition of "reachable from here" or one of
+    // them is always lying.
+    if (p.d > run.floor) continue;
     if (oddAt === null || p.d < oddAt) { odd = true; oddAt = p.d; }
   }
   // Fall back to the old whole-column test for legacy tiles with no stack.
@@ -9014,25 +9020,52 @@ function poiAtDepth(tile, depth) {
 
 function atReachableBottom(tile) {
   if (!tile) return false;
-  // A prize anchored to a chamber is taken AT that chamber — but only when the
-  // chamber is genuinely open water you can be in. Where it is not, the old
-  // rule stands, so nothing that used to be claimable stops being claimable.
-  // That fallback is deliberate: an earlier pass found 83% of wrecks stranded
-  // behind broken rock columns, and this must not undo it.
+  // THE DIVE IS THE PRICE. A chamber prize is worked AT its chamber, full
+  // stop — that is the entire reason the deep is worth going to, and the
+  // depth-scaling already in the haul and item tables only means something if
+  // the depth is actually paid.
+  //
+  // The sealed-run fallback that used to sit here let a prize at 4,200 m be
+  // "worked" from a run floor at 600, which quietly refunded the price of
+  // every deep chamber in the game. It is gone FOR STACK PRIZES ONLY. The
+  // fallback's original job — the 83% of seabed wrecks stranded behind broken
+  // columns — was always about LEGACY hex-level prizes with no real depth of
+  // their own, and they keep it, below.
+  //
+  // A stack prize whose chamber is not in your current water is not claimable
+  // from here. That is not stranding, it is geography: the approach is down a
+  // connected shaft or laterally through the cave system at depth — or, one
+  // day, through a wall, with the digging rig this game already has.
   const stack = poiStack(tile).filter(p => cells.has(cellKey(tile.q, tile.r, p.d)));
-  if (stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID)) return true;
-  // FALL THROUGH rather than fail. Anchoring prizes to their chamber is right —
-  // it is what makes the deep worth going to — but on its own it stranded 30%
-  // of them behind sealed rock, which is worse than the vagueness it replaced.
-  // A chamber you can stand in is where you take the prize; a chamber you
-  // cannot is worked from the nearest bottom you can reach, exactly as before.
-  // The rule is unchanged where the water is continuous: you must go to the
-  // floor. It relaxes ONLY where the hex's true floor is sealed off behind
-  // stone — there, the bottom of the water you can actually swim is the bottom.
+  if (stack.length) {
+    return stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID);
+  }
+  // LEGACY seabed prizes (shelf wrecks and kin — tile.poi with no stack):
+  // unchanged. You must reach the floor; the rule relaxes only where the hex's
+  // true floor is sealed off behind stone — there, the bottom of the water you
+  // can actually swim is the bottom.
   if (Math.abs(state.currentDepth - tile.floor) <= DEPTH_GRID) return true;
   const run = cellRun(tile.q, tile.r, state.currentDepth);
   if (!run || run.floor >= tile.floor) return false;   // continuous column: strict
   return Math.abs(state.currentDepth - run.floor) <= DEPTH_GRID;
+}
+
+// Where you would actually have to go to work this tile's prize, from where
+// you are now: the nearest untaken stack prize inside YOUR run, or the legacy
+// floor for seabed prizes. Null when a stack exists but none of it lies in
+// your water — sealed behind stone, and nothing may announce or chirp it.
+function prizeDepthHere(tile) {
+  const stack = poiStack(tile).filter(p => cells.has(cellKey(tile.q, tile.r, p.d)));
+  if (!stack.length) return tile.floor == null ? null : tile.floor;   // legacy seabed
+  const run = cellRun(tile.q, tile.r, state.currentDepth);
+  if (!run) return null;
+  let best = null;
+  for (const p of stack) {
+    if (poiTaken(tile, p)) continue;
+    if (p.d < run.ceiling || p.d > run.floor) continue;   // not in my water
+    if (best === null || Math.abs(p.d - state.currentDepth) < Math.abs(best - state.currentDepth)) best = p.d;
+  }
+  return best;
 }
 
 function handleTile(tile) {
@@ -9104,8 +9137,17 @@ function handleTile(tile) {
         return;
       }
     } else if (!atReachableBottom(tile)) {
-      const drop = Math.max(1, Math.round((tile.floor || 0) - state.currentDepth));
-      log(`${noun} on the bottom, ${drop} m below the keel. Descend to work it.`, 'warn', tile.poi === 'ruin' ? 'FOUND' : 'SALVAGE');
+      // The announced depth is the PRIZE's depth, not the seabed's — and if the
+      // prize is not in your water at all, nothing is announced. An instruction
+      // you cannot follow ("descend to work it", through stone) is worse than
+      // silence: silence at least tells the truth about what you know.
+      const target = prizeDepthHere(tile);
+      if (target == null) return;
+      const dz = Math.round(target - state.currentDepth);
+      log(dz >= 0
+        ? `${noun}, ${Math.max(1, dz)} m below the keel. Descend to work it.`
+        : `${noun}, ${-dz} m above the keel. Rise to it.`,
+        'warn', tile.poi === 'ruin' ? 'FOUND' : 'SALVAGE');
       return;
     }
   }

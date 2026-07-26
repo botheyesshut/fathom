@@ -67,7 +67,8 @@ try { vm.runInContext(script +
   '\nfunction __grid(){ return DEPTH_GRID; }' +
   '\nfunction __world(){ return world; }' +
   '\nfunction __start(){ gameStarted = true; }' +
-  '\nfunction __sound(q,r,d){ state.q=q; state.r=r; state.currentDepth=d; state.foot=null; return soundingBelow(); }',
+  '\nfunction __sound(q,r,d){ state.q=q; state.r=r; state.currentDepth=d; state.foot=null; return soundingBelow(); }' +
+  '\nfunction __pois(){ var o=[]; for (var e of cellPois) o.push({k:e[0], stack:e[1]}); return o; }',
   sandbox, { timeout: 30000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
 
 const D = sandbox.__grid();
@@ -87,7 +88,8 @@ const BOATS = [
   { name: 'Nyx (deep)',       safe: 6000, crush: 8000 },
 ];
 let totals = { water: 0, prize: 0, reach: 0, claim: 0, byKind: {}, unreachByKind: {},
-               depths: [], safeFor: {}, crushFor: {}, waterBand: {}, prizeBand: {} };
+               depths: [], safeFor: {}, crushFor: {}, waterBand: {}, prizeBand: {},
+               entryBand: {}, entryClaim: {} };
 const BANDS = [[0,1500,'0-1500 starter safe'], [1500,2200,'1500-2200 starter risk'],
                [2200,3200,'2200-3200 mid'], [3200,6000,'3200-6000 deep'], [6000,99999,'6000+ abyss']];
 const bandOf = d => (BANDS.find(b => d >= b[0] && d < b[1]) || BANDS[BANDS.length-1])[2];
@@ -170,6 +172,22 @@ for (const seed of SEEDS) {
       for (const b of BOATS) if (f <= b.crush) totals.crushFor[b.name]++;
     }
   }
+
+  // STACK ENTRIES — the real "is the deep worth diving" metric. The hex-based
+  // count above cannot see stacking (one prize per hex, shallowest face), and
+  // with strict anchoring the question that matters is: how many chamber
+  // prizes, at their own depth, can a boat from the surface actually stand
+  // next to? Harvested per-seed, before the reseed wipes cellPois.
+  for (const e of sandbox.__pois()) {
+    const [eq, er] = e.k.split(',').map(Number);
+    if (!inRegion.has(eq + ',' + er)) continue;
+    for (const p of e.stack) {
+      if (PRIZE.indexOf(p.type) < 0) continue;   // chasm etc. are not payouts
+      const bb = bandOf(p.d);
+      totals.entryBand[bb] = (totals.entryBand[bb] || 0) + 1;
+      if (seen.has(eq + ',' + er + ',' + p.d)) totals.entryClaim[bb] = (totals.entryClaim[bb] || 0) + 1;
+    }
+  }
 }
 
 // THE SOUNDER, SCORED. Its whole job is to convert an invisible prize into a
@@ -185,11 +203,19 @@ let sTrue = 0, sFalse = 0, sMissed = 0, sHexes = 0;
     if (!t || t.wall) continue;
     sHexes++;
     // sound from the shallowest water in the column — where a captain arrives
-    let top = null;
-    for (let d = 0; d <= MAXD; d += D) if (sandbox.__isWater(q, r, d)) { top = d; break; }
-    if (top === null) continue;
-    const rd = sandbox.__sound(q, r, top);
-    const chirped = !!(rd && rd.odd);
+    // Sound from EVERY water cell in the column, not just the top. The sounder
+    // reads through water only — a run-gated instrument sounded solely from the
+    // surface run would report every deep in-run prize as "missed" when a
+    // captain actually in that water would be told plainly. The scorer must ask
+    // the question the way the game does: from wherever the boat can be.
+    let anyWater = false, chirped = false;
+    for (let d = 0; d <= MAXD; d += D) {
+      if (!sandbox.__isWater(q, r, d)) continue;
+      anyWater = true;
+      const rd = sandbox.__sound(q, r, d);
+      if (rd && rd.odd) { chirped = true; break; }
+    }
+    if (!anyWater) continue;
     const isPrize = !!(t.poi && PRIZE.indexOf(t.poi) >= 0);
     // is it genuinely claimable from this column?
     let claimable = false;
@@ -236,6 +262,13 @@ for (const [lo, hi, label] of bands) {
 const ds = totals.depths.slice().sort((a, b) => a - b);
 const qd = f => ds.length ? ds[Math.floor((ds.length - 1) * f)] : 0;
 console.log('  depth you must SURVIVE to claim   min ' + qd(0) + '  p25 ' + qd(0.25) + '  median ' + qd(0.5) + '  p75 ' + qd(0.75) + '  max ' + qd(1));
+console.log('\n=== STACK ENTRIES (every chamber prize, at its own depth, all seeds) ===');
+for (const [lo, hi, label] of bands) {
+  const e = totals.entryBand[label] || 0, c = totals.entryClaim[label] || 0;
+  console.log('  ' + label.padEnd(24) + ' entries ' + String(e).padStart(3)
+    + '   standable-from-surface ' + String(c).padStart(3) + ' (' + pct(c, e) + ')');
+}
+
 console.log('\n=== THE SOUNDER (signposting, seed ' + SEEDS[0] + ') ===');
 console.log('  hexes surveyed                ' + sHexes);
 console.log('  correct alerts                ' + sTrue);
