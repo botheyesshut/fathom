@@ -6817,6 +6817,14 @@ function changeDepth(deltaMeters) {
   }
   state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
 
+  // THE PRIZE IS AT A DEPTH, AND YOU JUST CHANGED DEPTH. The game tells you to
+  // "descend to work it" — so descending has to actually work it. Without this
+  // you must leave the hex and come back, which nothing in the game says, and
+  // which strands the entire salvage economy. (Found by the bot captain: only
+  // 3% of runs ever picked up any cargo at all.)
+  const tileHere = getTile(state.q, state.r);
+  if (tileHere && tileHere.poi && !state.foot) handleTile(tileHere);
+
   // The same hex is a different room at a different depth — the boat says so.
   if (rand() < 0.55) log(describeSpace('again'), '', 'WATER');
   airCounsel();
@@ -7316,6 +7324,21 @@ function airCounsel() {
   }
 }
 
+// You have dived as far as THIS water goes. The prize rests on the bottom of
+// the water you are actually in — not on some absolute floor sealed off behind
+// stone. (The bot captain found 83% of wrecks were unreachable by diving: the
+// hex's deepest cell was in a chamber with no route down from the top.)
+function atReachableBottom(tile) {
+  if (!tile) return false;
+  // The rule is unchanged where the water is continuous: you must go to the
+  // floor. It relaxes ONLY where the hex's true floor is sealed off behind
+  // stone — there, the bottom of the water you can actually swim is the bottom.
+  if (Math.abs(state.currentDepth - tile.floor) <= DEPTH_GRID) return true;
+  const run = cellRun(tile.q, tile.r, state.currentDepth);
+  if (!run || run.floor >= tile.floor) return false;   // continuous column: strict
+  return Math.abs(state.currentDepth - run.floor) <= DEPTH_GRID;
+}
+
 function handleTile(tile) {
   // Your own station opens to you every time, at the depth you cut it — no
   // first-visit gate, because you are meant to keep coming back.
@@ -7396,7 +7419,7 @@ function handleTile(tile) {
     case 'salvage':
       if (firstVisit) {
         // Wreckage rests on the bottom — you dive to it, not over it.
-        if (Math.abs(state.currentDepth - tile.floor) > DEPTH_GRID) {
+        if (!atReachableBottom(tile)) {
           if (rand() < 0.5) log(`The wreck lies on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to work it.`, 'warn', 'SALVAGE');
           break;
         }
@@ -7418,7 +7441,7 @@ function handleTile(tile) {
       if (firstVisit) {
         // Ruins rest on the floor like wrecks — put the boat on the bottom
         // before the divers go over. (Site is spent by the expedition.)
-        if (Math.abs(state.currentDepth - tile.floor) > DEPTH_GRID) {
+        if (!atReachableBottom(tile)) {
           if (rand() < 0.5) log(`The ruin lies broken on the floor, ${Math.round(tile.floor - state.currentDepth)} m below. Descend to put divers on it.`, 'warn', 'FOUND');
           break;
         }

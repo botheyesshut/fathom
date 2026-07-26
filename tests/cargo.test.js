@@ -50,6 +50,11 @@ const st = sb.__state();
 // 1. Salvage pickup — dive-to-the-prize ruling: wreckage rests on the floor;
 // hovering high above it yields nothing, working it at the floor yields a crate.
 st.hull = 50;
+// The column must be CONTINUOUS for the strict ruling to apply: the wreck is
+// reachable by diving, so hovering above it is a choice, not a wall. (Where a
+// hex's true floor is sealed off behind stone, atReachableBottom deliberately
+// relaxes — the bot captain found 83% of wrecks were otherwise unreachable.)
+for (let d = 0; d <= 360; d += 60) sb.__setCell(0, -8, d, 'passage');
 const fakeTile = { type: 'salvage', q: 0, r: -8, poi: 'salvage', ceiling: 0, floor: 360 };
 st.currentDepth = 240; // 120 m above the floor — out of reach
 sb.handleTile(fakeTile);
