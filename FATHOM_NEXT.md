@@ -17,6 +17,14 @@
 
 **CAVEAT, stated plainly:** the bot harness cannot read prose, so it cannot measure the thing these three features are actually for. Their value is unverified until Sean plays them.
 
+## THE NEXT REAL JOB: POIs MUST BECOME PER-CELL (2026-07-26)
+
+**One line is burying a third of the world:** `if (t && !t.poi)` in the cave-POI placement. **A hex can hold only one prize.** Measured: 1,057 chambers above 1500 m race 979 chambers below 3200 m for the same hex columns, the shallow one always wins, and the deep one silently places nothing. That is why `tests/economy.js` reports **zero prizes below 3200 m across 34% of the world's water** — the deep is not short of content, it is short of *slots*.
+
+`t.poiDepth` now anchors a prize to the chamber that placed it (with the pre-existing rule kept as a fallback where the chamber is not open water — **do not remove that fallback**, an earlier pass found 83% of wrecks stranded behind broken rock and it is what keeps reachability at 91.6%). But anchoring only helps prizes that got placed at all.
+
+**The fix is a per-CELL POI model rather than per-hex** — `poi` belongs on the cell, like everything else in the voxel world. It is a substrate change, it will touch `setTile`, `handleTile`, `atReachableBottom`, the render glyph pass and the sounder, and it wants doing deliberately. Re-run `node tests/economy.js` before and after; the number to move is *prizes per 1000 cells* in the 3200-6000 and 6000+ bands, currently 0.00 and 0.00.
+
 ## THE SINGLE-FILE RULE IS DEAD — READ BEFORE "RESTORING" IT (2026-07-26)
 
 Sean asked why it existed. **Nobody had decided it.** It arrived with the first commit as a *description* of an imported prototype and hardened into a law; no rationale was ever written down. Two rules had been fused:
