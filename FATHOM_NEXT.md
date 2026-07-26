@@ -17,6 +17,22 @@
 
 **CAVEAT, stated plainly:** the bot harness cannot read prose, so it cannot measure the thing these three features are actually for. Their value is unverified until Sean plays them.
 
+## THE SINGLE-FILE RULE IS DEAD — READ BEFORE "RESTORING" IT (2026-07-26)
+
+Sean asked why it existed. **Nobody had decided it.** It arrived with the first commit as a *description* of an imported prototype and hardened into a law; no rationale was ever written down. Two rules had been fused:
+
+- **"No build step" — KEEP FOREVER.** No toolchain to rot, edit-to-live in two minutes, opens in five years.
+- **"One file" — RETIRED.** It only ever bought offline single-file delivery, and it was silently blocking audio, images, and a PWA — the last of which is the best available answer to Sean's stated number-one priority (*"a game I can play mobile that doesn't suck"*), since a PWA needs `manifest.json` + a service worker as separate files.
+
+**THE REPLACEMENT RULE, which is not optional: EVERY ASSET IS OPTIONAL.** The game must run *identically* when assets are missing. Proven, not asserted — a bare copy of the HTML served from a directory with no `assets/` marks its tracks dead, throws nothing, and keeps drawing the viewport, HUD and synthesized sfx. A build handed to Sean as one file still works; it is just silent.
+
+**MUSIC (`MUSIC`, `musicEl`, `trackForNow`, `musicTo`, `musicSync`, `musicUnlock`).** Sean's own, written 2012 for *The Dark Way Down*, never used. `assets/music/`, 1.3 MB, four tracks. **Scored to STATE, not events** — same discipline as the viewport, so it cannot disagree with the situation: `theme` (dock/pre-sail) · `shallow` (shelf) · `deep` (≥1200 m) · `hunted` (something within 6 hexes with a fix on you). The ♪ button governs music as well as sfx. Playback waits for the first real gesture.
+- **Levels are unverified guesses:** theme 0.50, shallow/deep 0.34, hunted 0.44, against sfx master 0.22.
+- **Six more tracks exist** in the source archive, unused — `in the dark` (5 MB), `Haunted 2`, `Time`, `Desert Rain`, and two opening-theme variants.
+- **Two images in that archive are NOT Sean's** (`cthulhu-mythos-04.jpg`, `hplart.jpg`). Never copy them into the repo.
+
+**TESTING LESSON FROM THIS WORK, worth more than the feature:** my missing-file check passed for the wrong reason — `preload='none'` meant the browser never requested the file, so nothing *could* have failed. **An absent request is not a successful degradation.** A second attempt was contaminated by a stale element an earlier probe had cached, so it was measuring the previous test.
+
 ## TYPED LEADS + KNACKS (2026-07-26) — both of Sean's banked rulings, built
 
 **TYPED LEADS.** Every lead used to resolve into the same cache of crates, so a session had exactly one correct shape. Marks now carry a `kind`, stated on the chart and in the log *before* you commit the air:
