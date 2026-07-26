@@ -74,6 +74,13 @@ try { vm.runInContext(script +
   '\nfunction __cur(q,r,d){ return currentAt(q,r,d); }' +
   '\nfunction __favour(a,b,c,e,f){ return currentFavour(a,b,c,e,f); }' +
   '\nfunction __applyMove(m,f){ applyMoveCosts(m,f); }' +
+  '\nfunction __layer(q,r){ return layerAt(q,r); }' +
+  '\nfunction __damp(a,b,q,r){ return layerDamp(a,b,q,r); }' +
+  '\nfunction __crossed(a,b,q,r){ return crossedLayer(a,b,q,r); }' +
+  '\nfunction __pcr(d,q,r){ return passiveContactR(d,q,r); }' +
+  '\nfunction __setPos(q,r,d){ state.q=q; state.r=r; state.currentDepth=d; }' +
+  '\nfunction __layerKnown(q,r,d){ return layerKnown(q,r,d); }' +
+  '\nfunction __noteFelt(q,r){ noteLayerFelt(q,r); }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -536,6 +543,74 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   s.air = 1000; sandbox.__applyMove(1, -2);  const against = 1000 - s.air;
   check(withIt < across && across < against, 'the set changes what a hex costs to cross',
     `with ${withIt} · across ${across} · against ${against} air`);
+}
+
+//--- 14. THE LAYER: depth as a hiding place, not merely an expense ------------
+{
+  console.log('\n--- 14. THE LAYER (thermocline) ---');
+
+  // Deterministic, like every other piece of substrate.
+  const a = sandbox.__layer(4, 4), b = sandbox.__layer(4, 4);
+  check(JSON.stringify(a) === JSON.stringify(b), 'the layer is the same layer every time you come back');
+
+  // Some water has one, some does not — otherwise it is wallpaper, not terrain.
+  let has = 0, hard = 0; const depths = new Set();
+  for (let q = -220; q < 220; q += 11) for (let r = -220; r < 220; r += 11) {
+    const L = sandbox.__layer(q, r);
+    if (L) { has++; if (L.strong) hard++; depths.add(L.depth); }
+  }
+  const tot = 40 * 40;
+  check(has > tot * 0.5 && has < tot * 0.85, 'most water has a layer, but not all of it',
+    has + '/' + tot + ' with a layer, ' + hard + ' of them hard');
+  check(depths.size > 8, 'layers sit at many different depths', depths.size + ' distinct');
+  let offGrid = 0;
+  for (const d of depths) if (d % 60 !== 0) offGrid++;
+  check(offGrid === 0, 'every layer snaps to the cell grid', offGrid + ' off-grid');
+
+  // Find a hard layer and prove the trick works — and works BOTH ways.
+  let hq = null, hr = null, HL = null;
+  for (let q = 0; q < 400 && !HL; q += 11) for (let r = 0; r < 400 && !HL; r += 11) {
+    const L = sandbox.__layer(q, r);
+    if (L && L.strong && L.depth >= 600) { HL = L; hq = q; hr = r; }
+  }
+  check(!!HL, 'a hard layer exists somewhere to test against',
+    HL ? HL.depth + ' m at ' + hq + ',' + hr : 'none found');
+  if (HL) {
+    const above = HL.depth - 120, below = HL.depth + 120;
+    const dAcross = sandbox.__damp(above, below, hq, hr);
+    check(dAcross < 0.25, 'a hard layer nearly stops sound crossing it', 'damp ' + dAcross);
+    check(dAcross === sandbox.__damp(below, above, hq, hr),
+      'the layer hides you from it exactly as much as it hides it from you');
+    check(sandbox.__damp(below, below + 300, hq, hr) === 1, 'same side of the layer, sound travels normally');
+    check(sandbox.__damp(above, above - 180, hq, hr) === 1, 'same side above it too');
+
+    // Crossing is announced, and knows which way you went.
+    const down = sandbox.__crossed(above, below, hq, hr);
+    const up = sandbox.__crossed(below, above, hq, hr);
+    check(!!down && down.below === true, 'diving through the layer reports that you went under it');
+    check(!!up && up.below === false, 'rising through it reports that you came out from under');
+    check(sandbox.__crossed(below, below + 60, hq, hr) === null, 'moving within one side reports no crossing');
+
+    // The payoff: the contact envelope actually collapses across the layer.
+    sandbox.__setPos(hq, hr, below);
+    const flat = sandbox.__pcr();
+    const acrossR = sandbox.__pcr(above, hq, hr);
+    const sameR = sandbox.__pcr(below + 60, hq, hr);
+    check(sameR === flat, 'a boat on your own side of the layer is heard at the usual range',
+      sameR + ' vs ' + flat);
+    check(acrossR < flat / 2, 'a boat on the far side of the layer is very nearly inaudible',
+      acrossR + ' hexes across vs ' + flat + ' normally');
+
+    // The epistemic law holds here too: a hull thermometer reads its own water.
+    check(sandbox.__layerKnown(hq, hr, 0) === false,
+      'you cannot read a layer a kilometre under the keel from the surface');
+    check(sandbox.__layerKnown(hq, hr, HL.depth - 120) === true,
+      'but you feel the gradient once you are near it');
+    check(sandbox.__layerKnown(hq, hr, below) === true, 'and you know it once you are under it');
+    sandbox.__noteFelt(hq, hr);
+    check(sandbox.__layerKnown(hq, hr, 0) === true,
+      'a layer you have crossed is remembered from anywhere in that water');
+  }
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

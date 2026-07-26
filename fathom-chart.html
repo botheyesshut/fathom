@@ -1010,6 +1010,60 @@ function currentFavour(fq, fr, tq, tr, d) {
   if (off === 3) return cur.strong ? -2 : -1;
   return 0;
 }
+// ---- THE LAYER (thermocline) ------------------------------------------------
+// Cold water lying under warm bends sound away from the boundary. A boat on the
+// far side of the layer is very nearly deaf and very nearly invisible — and so
+// are you. This is the oldest trick in submarine warfare and the entire reason
+// depth is a TACTICAL axis in this game and not merely an expense: when you are
+// hunted, "down" stops being where the pressure is and becomes where the quiet
+// is. The layer is symmetric, always. It hides you from it and it from you.
+const LAYER_SCALE = 11;  // hexes per layer region — coarser than the gyres, so
+                         // the layer holds steady over a long run
+function layerAt(q, r) {
+  const gx = Math.floor(q / LAYER_SCALE), gy = Math.floor(r / LAYER_SCALE);
+  const h = mulberry32(hashStr('lay:' + worldSeed + ':' + gx + ':' + gy));
+  if (h() < 0.32) return null;                       // not every water has one
+  // Layers sit in the upper-middle water, snapped to the cell grid so that
+  // "above" and "below" are never ambiguous to a captain reading a gauge.
+  const depth = 240 + Math.floor(h() * 19) * DEPTH_GRID;   // 240 m … 1320 m
+  return { depth, strong: h() > 0.5 };
+}
+// 1 = nothing in the way. Less = sound has to cross the boundary and mostly
+// doesn't. Takes the two depths and the water they are arguing across.
+function layerDamp(dA, dB, q, r) {
+  const L = layerAt(q, r);
+  if (!L) return 1;
+  if ((dA >= L.depth) === (dB >= L.depth)) return 1;   // same side of it
+  return L.strong ? 0.18 : 0.45;
+}
+// A hull thermometer reads the water it is sitting in — not the water a
+// kilometre under the keel. So the boat only KNOWS a layer once it has felt
+// it: crossed it, or come near enough to read the gradient off the needle.
+// Same law as the chart. You are told what the boat could know, and no more.
+function layerRegionKey(q, r) {
+  return Math.floor(q / LAYER_SCALE) + ':' + Math.floor(r / LAYER_SCALE);
+}
+function layerKnown(q, r, d) {
+  const L = layerAt(q, r);
+  if (!L) return false;
+  if (Math.abs((d || 0) - L.depth) <= 240) return true;   // the needle drifts
+  return (state.layersFelt || []).indexOf(layerRegionKey(q, r)) >= 0;
+}
+function noteLayerFelt(q, r) {
+  if (!state.layersFelt) state.layersFelt = [];
+  const k = layerRegionKey(q, r);
+  if (state.layersFelt.indexOf(k) < 0) state.layersFelt.push(k);
+}
+
+// Did this dive or rise punch through? Used for the report — a captain must be
+// told the layer exists, or it is not a decision, it is a coin toss.
+function crossedLayer(fromD, toD, q, r) {
+  const L = layerAt(q, r);
+  if (!L) return null;
+  if ((fromD >= L.depth) === (toD >= L.depth)) return null;
+  return { depth: L.depth, strong: L.strong, below: toD >= L.depth };
+}
+
 // Cell model (voxel): the world's emerging source of truth is a sparse grid
 // keyed by hex + depth. An absent key means solid stone. Each 60-m depth slice
 // of a hex is its own cell — no column-wide inheritance, no "impassable water".
@@ -3838,7 +3892,7 @@ function render() {
     // Same epistemic rule as terrain: lights touch it (adjacent), or it's
     // inside the passive-sonar envelope AND standing in water the player has
     // actually revealed. No glyphs floating in unexplored void, none through rock.
-    if (dC > 1 && (dC > passiveContactR() || revealFade(c.q, c.r, state.currentDepth) <= 0)) continue;
+    if (dC > 1 && (dC > passiveContactR(c.depth, c.q, c.r) || revealFade(c.q, c.r, state.currentDepth) <= 0)) continue;
     const cpx = hexToPixel(c.q, c.r);
     if (Math.abs(cpx.x - camX) > halfW || Math.abs(cpx.y - camY) > halfH) continue;
     const ct = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -4246,8 +4300,15 @@ function animatePing() {
 // or null. Pure — the ping loop and the test battery both call this.
 function soundColumn(sq, sr, cd, nq, nr, depthRange) {
   let above = null, below = null, upClear = true, downClear = true;
+  // A strong layer stops a ping as surely as stone does — same latch, same
+  // reason. The sound reaches the boundary, bends along it, and never comes
+  // home. A weak layer lets a survey ping through and muddies it.
+  const L = layerAt(sq, sr);
+  const layerStops = L && L.strong;
   for (let dist = DEPTH_GRID; dist <= depthRange; dist += DEPTH_GRID) {
     const up = cd - dist, dn = cd + dist;
+    if (layerStops && upClear && up < L.depth && cd >= L.depth) upClear = false;
+    if (layerStops && downClear && dn >= L.depth && cd < L.depth) downClear = false;
     if (upClear && (up < 0 || !cells.has(cellKey(sq, sr, up)))) upClear = false;
     if (downClear && !cells.has(cellKey(sq, sr, dn))) downClear = false;
     if (above === null && upClear && cells.has(cellKey(nq, nr, up))) above = dist;
@@ -4316,7 +4377,7 @@ function fireWeapon() {
     if (!state.armament && state.torpedoes <= 0) { log('You carry no weapon. Buy an armament at the dock.', 'warn'); return; }
     // If a boat is out there but not yet placed, say so — that is the whole game.
     const ghost = state.creatures.find(c => c.type === 'rival' && !c.gone && !c.crippled
-      && hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) <= passiveContactR() + 2 && !rivalLocalized(c));
+      && hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) <= passiveContactR(c.depth, c.q, c.r) + 2 && !rivalLocalized(c));
     if (ghost) log('You can hear a boat out there, but you cannot place it well enough to shoot. Ping to fix it — and hand it your own position — or wait for it to move under power.', 'warn', 'FIRE');
     else log('Nothing in your sights.', 'warn');
     return;
@@ -6185,7 +6246,15 @@ const CONTACT_LOG_MS = 7000;   // min ms between passive-contact log lines
 // Sound envelopes: coarser information carries farther. The passive ear
 // LOCALIZES (bearing + range) to passiveContactR; a woken hunter's first stir
 // is merely NOTICED (one unlocalized bit) out to wakeNoticeR.
-function passiveContactR() { return passiveRange() + 2 + (crewLvl('sonarman') > 0 ? 1 : 0); }
+// Passed a depth, this narrows to what you can actually hear across the layer.
+// Called bare it is the old flat envelope — every existing site keeps working,
+// and the sites that know WHOSE depth they are asking about get the trick.
+function passiveContactR(otherDepth, oq, or_) {
+  const base = passiveRange() + 2 + (crewLvl('sonarman') > 0 ? 1 : 0);
+  if (otherDepth == null) return base;
+  return Math.floor(base * layerDamp(state.currentDepth, otherDepth,
+                                     oq == null ? state.q : oq, or_ == null ? state.r : or_));
+}
 function wakeNoticeR() { return passiveRange() + 6; }
 
 // Lurker interest bands (0-100). Interest is the whole cat-and-mouse: it grows
@@ -6298,7 +6367,9 @@ function noiseMade(q, r, loudness) {
     if (Math.abs(c.depth - state.currentDepth) > 3 * DEPTH_GRID) continue;
     const d = hexDistance({ q: c.q, r: c.r }, { q, r });
     if (d > reach + 2) continue;
-    const spike = Math.max(2, Math.round(loudness * 16 * (1 - d / (reach + 3)) * damp));
+    // Shout all you like on the far side of the layer — it arrives as a rumour.
+    const spike = Math.max(1, Math.round(loudness * 16 * (1 - d / (reach + 3)) * damp
+                                         * layerDamp(state.currentDepth, c.depth, q, r)));
     c.alert = Math.min(100, (c.alert || 0) + spike);
     c.fq = q; c.fr = r;   // it marks where the sound came from and hunts there
   }
@@ -6310,7 +6381,8 @@ function noiseMade(q, r, loudness) {
     if (d > reach) continue;
     // Noise stokes interest — louder and closer bites deeper, and an eager
     // (aggressive) beast is stoked more. It turns toward where the sound came from.
-    const spike = Math.max(1, Math.round(loudness * 14 * (1 - d / (reach + 1)) * (0.6 + c.aggression * 0.8) * damp));
+    const spike = Math.max(1, Math.round(loudness * 14 * (1 - d / (reach + 1)) * (0.6 + c.aggression * 0.8) * damp
+                                         * layerDamp(state.currentDepth, c.depth, q, r)));
     const was = c.interest || 0;
     c.interest = Math.min(100, was + spike);
     c.tq = q; c.tr = r;
@@ -6521,7 +6593,7 @@ function rivalLocalized(c) {
   if (d <= 1) return true;
   if (c.revealTurns > 0) return true;
   if (c.silent) return false;
-  return c.underPower && !sonarSilent() && d <= passiveContactR() && revealFade(c.q, c.r, c.depth) > 0;
+  return c.underPower && !sonarSilent() && d <= passiveContactR(c.depth, c.q, c.r) && revealFade(c.q, c.r, c.depth) > 0;
 }
 
 // Torpedoes in the water run each turn. Break the solution and they run past;
@@ -6579,7 +6651,7 @@ function tickSalvager(c, dPlayer) {
       c.working = 0;
       if (c.tk && !state.poisFound.includes(c.tk)) state.poisFound.push(c.tk);
       c.tk = null;
-      if (dPlayer <= passiveContactR() + 4) {
+      if (dPlayer <= passiveContactR(c.depth, c.q, c.r) + 4) {
         log("Across the water: another boat's divers surface. They got there first.", 'warn', 'RIVAL');
       }
     }
@@ -6853,7 +6925,7 @@ function tickLurker(c, dPlayer, silent) {
   let dec = 6 - Math.round(c.tenacity * 4);                 // 2..6 baseline fade
   if (silent && dPlayer > 1) dec += 8;                       // gone dark: it loses you
   let gain = 0;
-  if (!silent && dPlayer <= passiveContactR() + 1 && Math.abs(c.depth - state.currentDepth) <= 2 * DEPTH_GRID)
+  if (!silent && dPlayer <= passiveContactR(c.depth, c.q, c.r) + 1 && Math.abs(c.depth - state.currentDepth) <= 2 * DEPTH_GRID)
     gain += 3 + Math.round(c.aggression * 5);                // your live sonar betrays you
   if (dPlayer <= 2 && sameSlice) gain += 6 + Math.round(c.aggression * 6); // it's right on you
   const before = c.interest;
@@ -6929,7 +7001,7 @@ function creatureTick() {
     // that has cut its engines. A rival is only heard when it is under power.
     const hidden = (c.type === 'angler' && !c.revealed)
                 || (c.type === 'rival' && (c.silent || !c.underPower));
-    if (!silent && !hidden && !(masked && rand() < 0.5) && d2 <= passiveContactR() && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
+    if (!silent && !hidden && !(masked && rand() < 0.5) && d2 <= passiveContactR(c.depth, c.q, c.r) && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
         (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
       state._lastContactLog = now;
       const dir = bearing(state.q, state.r, c.q, c.r);
@@ -7181,6 +7253,18 @@ function changeDepth(deltaMeters) {
     return;
   }
   const prevDepth = state.currentDepth;
+  // Crossing the layer is the loudest quiet thing that happens in this game.
+  // It must be announced, and it must be announced in the language of a gauge
+  // and a thermometer, because that is all the boat actually has.
+  const xL = crossedLayer(prevDepth, actual, state.q, state.r);
+  if (xL) {
+    noteLayerFelt(state.q, state.r);   // felt once is known thereafter
+    const cold = xL.below
+      ? 'The thermometer drops away under you. Cold water, and the sea above goes quiet — too quiet.'
+      : 'The water warms. Sound comes back all at once, and the sea is louder than you left it.';
+    log(`${cold} ${xL.strong ? 'A hard layer' : 'A soft layer'} at ${xL.depth} m.`,
+        xL.strong ? 'good' : 'sys', 'LAYER');
+  }
   state.currentDepth = actual;
   state.moves++;
   state.lastMoveTime = performance.now();
@@ -7674,7 +7758,18 @@ function describeSpace(mode) {
         ? ` A strong set runs ${cur.name} through here — you will feel it in the helm.`
         : ` The water sets ${cur.name}, slow and steady.`)
     : ' The water here is slack.';
-  return (lead + ' ' + exits + mood + setLine).replace(/\s+/g, ' ').trim();
+
+  // Where the layer sits, and which side of it you are on. Same principle as
+  // the set: a hiding place you cannot see is not a tactic, it is an accident.
+  const L = layerAt(q, r);
+  let layLine = '';
+  if (L && layerKnown(q, r, d)) {
+    const hard = L.strong ? 'hard' : 'soft';
+    layLine = d >= L.depth
+      ? ` You are under the layer — it closed over you at ${L.depth} m, ${hard}, and the sea above it can barely hear you.`
+      : ` The thermometer is unsteady: a ${hard} layer at ${L.depth} m. Below it, you would be hard to find.`;
+  }
+  return (lead + ' ' + exits + mood + setLine + layLine).replace(/\s+/g, ' ').trim();
 }
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight
@@ -8556,6 +8651,7 @@ function doSave(force) {
       leads: state.leads,
       enclaves: state.enclaves,
       corpses: state.corpses,
+      layersFelt: state.layersFelt,
       crew: state.crew,
       subKey: activeSubKey,
     }));
@@ -8611,6 +8707,7 @@ function resumeGame(save) {
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
   state.base = save.base || null;
+  state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
   if (state.base) {
     // Stations saved before the siege existed still have to load.
     const b = state.base;
