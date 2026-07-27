@@ -487,7 +487,12 @@ ft.dweller.hurt = 0;
 sandbox.__fight();
 check(sandbox.__foot().dweller.hurt === 0, 'you cannot board something out of reach', 'refused');
 
-// Bare hands: twenty rounds should barely scratch it.
+// S2: NOBODY IS BARE-HANDED ANY MORE — the boat carries a boarding axe, because
+// every campaign starts crewless and the game used to require a weapon while
+// refusing to sell one. So the invariant is no longer "bare hands barely
+// scratch it"; it is that THE AXE IS A FLOOR, NOT A SOLUTION. Twenty rounds of
+// axe-work must not settle a heavy tenant — you still need relic-work, or a
+// crew, or to walk away.
 ft.dweller.x = openNbr.x; ft.dweller.y = openNbr.y;
 ft.dweller.tough = 40; ft.dweller.hurt = 0;
 for (let i = 0; i < 20; i++) {
@@ -496,8 +501,10 @@ for (let i = 0; i < 20; i++) {
   cur.dweller.x = openNbr.x; cur.dweller.y = openNbr.y;   // hold it in reach
   sandbox.__fight();
 }
-const barehanded = sandbox.__foot() && sandbox.__foot().dweller ? sandbox.__foot().dweller.hurt : 999;
-check(barehanded < 12, 'bare hands against it is not a plan', barehanded + ' damage in 20 rounds');
+const axeOnly = sandbox.__foot() && sandbox.__foot().dweller ? sandbox.__foot().dweller.hurt : 999;
+check(sandbox.__foot() && sandbox.__foot().dweller && axeOnly < 40,
+  'the locker axe alone does not settle a heavy tenant',
+  axeOnly + ' damage in 20 rounds against tough 40 — still standing');
 
 // Armed with relic-work: the same twenty rounds settle it.
 sandbox.__st().crew = [{ name: 'Test', role: 'diver', xp: 0, gear: { weapon: 'lance', armor: 'wardsuit' } }];

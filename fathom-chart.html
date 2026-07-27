@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- D7: this carried maximum-scale=1.0 and user-scalable=no, which blocks
+     pinch-zoom for everyone including anyone who needs it to read 0.55rem
+     labels. The chart's own drag is governed by touch-action, not by this, so
+     the lock bought nothing it was protecting. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#040810">
@@ -185,7 +189,9 @@
 
   .stat-label {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.55rem;
+    /* M4: was 0.55rem (~8.8px). Air and Hull are the two numbers a captain
+       dies by; they should not be the smallest type in the game. */
+    font-size: 0.62rem;
     letter-spacing: 0.25em;
     text-transform: uppercase;
     color: var(--bone-dim);
@@ -193,7 +199,7 @@
 
   .stat-value {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 0.98rem;
     color: var(--bone);
     letter-spacing: 0.08em;
   }
@@ -493,6 +499,20 @@
     display: none;
   }
   #vp-show.on { display: block; }
+
+  /* O4: the long-press explanation. Sits above everything, ignores pointers so
+     it can never eat the tap it is explaining, and reads as the boat talking
+     rather than as a browser tooltip. */
+  #longpress-tip {
+    position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%) translateY(6px);
+    z-index: 300; max-width: 84vw; pointer-events: none;
+    padding: 0.55rem 0.85rem; border-radius: 3px;
+    background: rgba(6, 12, 20, 0.94); border: 1px solid rgba(110, 207, 174, 0.35);
+    font-family: 'Cormorant Garamond', serif; font-size: 0.92rem; line-height: 1.35;
+    color: #d8e4dc; text-align: center;
+    opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  #longpress-tip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   /* ====== LOG / MESSAGES ====== */
   #log {
@@ -802,7 +822,10 @@
   .prow-b {
     flex: none; padding: 0.42rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.06em;
     text-transform: uppercase; border: 1px solid #6b5a3e; border-radius: 2px;
-    background: rgba(40,52,40,0.5); color: #cfe0c8; cursor: pointer; min-height: 34px;
+    background: rgba(40,52,40,0.5); color: #cfe0c8; cursor: pointer;
+    /* M9: the Port's own buttons are .prow-b, not .inv-row .act — raising one
+       class and assuming the other followed is how a fix half-lands. */
+    min-height: 40px; min-width: 44px;
   }
   .prow-b.no { border-color: #4a4436; background: transparent; color: #6a6250; cursor: default; }
   #muster-list { overflow-y: auto; padding: 0.4rem 0.6rem; -webkit-overflow-scrolling: touch; }
@@ -846,6 +869,9 @@
     flex: none; background: transparent; border: 1px solid var(--sonar-dim); color: var(--sonar);
     font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
     padding: 0.5rem 0.7rem; border-radius: 2px; cursor: pointer; white-space: nowrap;
+    /* M9: these resolved to ~28px tall — below every touch-target floor, on the
+       buttons that spend your crates and throw cargo over the side. */
+    min-height: 40px; min-width: 44px;
   }
   .inv-row .act:active { background: rgba(94,184,154,0.14); }
   .inv-row .act.none { border-color: rgba(94,184,154,0.12); color: #4a5c5a; cursor: default; }
@@ -3147,7 +3173,16 @@ function crewDef(m) { return Math.max(0, (m.gear && m.gear.armor && GEAR[m.gear.
 // fairness is the whole brief. Only losing the weapon-carrier (lost, not merely
 // hurt) takes the weapon out of the fight.
 function bestWeaponAtk() {
-  let best = 0;
+  // S2: THE BOAT HAS A LOCKER, AND THERE IS AN AXE IN IT.
+  //
+  // This used to count crew gear only, so a captain sailing alone — which is
+  // how every campaign begins — went over the side bare-handed and swung for
+  // 0 or 1. The armoury was also gated behind the old offer chain, so the game
+  // simultaneously required a weapon and refused to sell one. The Port fixed
+  // the selling; this fixes the requiring. A boarding axe belongs to the boat,
+  // not to a hand, and it is the floor everyone improves on rather than a
+  // bonus that stacks.
+  let best = state.lockerWeapon && GEAR[state.lockerWeapon] ? GEAR[state.lockerWeapon].atk : 0;
   for (const m of party()) if (m.gear && m.gear.weapon && GEAR[m.gear.weapon]) best = Math.max(best, GEAR[m.gear.weapon].atk);
   return best;
 }
@@ -4263,6 +4298,10 @@ const state = {
   // like the bank and the vault, what you have read survives the boat — pages
   // are campaign knowledge, and the sea cannot take back what you know.
   pagesFound: [],
+  // The boat's own boarding axe. Reissued with every hull — a new boat comes
+  // with one in the locker, which is why this is set on death and on restart
+  // rather than saved as a possession you could lose.
+  lockerWeapon: 'axe',
   alive: true,
   cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
   panX: 0, panY: 0,         // user-applied pan offset (drag)
@@ -9783,6 +9822,7 @@ function endGame(title, summary) {
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
   state.armament = null; state.torpedoes = 0;
+  state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.items = {}; state.fits = {};   // the hold and every fitting go down with the boat
   state.crew = [];
   state.expedition = null;
@@ -9820,6 +9860,7 @@ function restart() {
   state.cargo = 0; state.cargoBanked = 0;
   state.relics = 0; state.relicsBanked = 0;
   state.armament = null; state.torpedoes = 0;
+  state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
@@ -10031,6 +10072,7 @@ function doSave(force) {
       layersFelt: state.layersFelt,
       portHire: state.portHire,
       pagesFound: state.pagesFound,
+      lockerWeapon: state.lockerWeapon,
       quarryCache: state.quarryCache,
       crew: state.crew,
       subKey: activeSubKey,
@@ -10089,6 +10131,7 @@ function resumeGame(save) {
   state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
   state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
   state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
+  state.lockerWeapon = save.lockerWeapon || 'axe';
   const __pgBtn = document.getElementById('btn-pages');
   if (__pgBtn) __pgBtn.style.display = state.pagesFound.length ? '' : 'none';
   state.quarryCache = save.quarryCache || {};  // a cache you walked away from is still there
@@ -10195,6 +10238,86 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+//--- M3: THE ANDROID BACK BUTTON CLOSES THE PANEL ----------------------------
+// Installed as a PWA there is no browser chrome and no other way back, so the
+// system back gesture was leaving the game outright with a panel open. Every
+// panel pushes a history entry on open; back pops it and closes the topmost.
+// Closing by button consumes the entry so the two can never drift apart.
+const PANELS = [
+  ['pages', closePages], ['port', closePort], ['muster', closeMuster],
+  ['trade', () => { const t = document.getElementById('trade'); if (t) t.classList.remove('show'); }],
+  ['inventory', closeInventory], ['seachart', closeSeaChart],
+  ['transcript', () => { const t = document.getElementById('transcript'); if (t) t.classList.remove('show'); }],
+];
+let panelDepth = 0;
+function topPanel() {
+  for (const [id, close] of PANELS) {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('show')) return [id, close];
+  }
+  return null;
+}
+// Wrap each opener so history tracks what is actually on screen.
+(function wirePanelHistory() {
+  const openers = { pages: openPages, port: openPort, muster: openMuster,
+                    inventory: openInventory, seachart: openSeaChart };
+  for (const key of Object.keys(openers)) {
+    const orig = openers[key];
+    if (typeof orig !== 'function') continue;
+    window[key === 'seachart' ? 'openSeaChart' : 'open' + key.charAt(0).toUpperCase() + key.slice(1)] = function () {
+      orig.apply(this, arguments);
+      try { history.pushState({ fathomPanel: key }, ''); panelDepth++; } catch (e) {}
+    };
+  }
+  window.addEventListener('popstate', () => {
+    const t = topPanel();
+    if (t) { t[1](); if (panelDepth > 0) panelDepth--; }
+  });
+  // A panel closed by its own button must give the history entry back, or the
+  // next back press swallows a state nobody is looking at.
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest && e.target.closest('button');
+    if (!b) return;
+    if (!/-close$/.test(b.id || '') && b.id !== 'port-close') return;
+    if (panelDepth > 0) { panelDepth--; try { history.back(); } catch (err) {} }
+  }, true);
+})();
+
+//--- O4: LONG-PRESS EXPLAINS A CONTROL ---------------------------------------
+// Every explanation in this game lived in a `title=` attribute, which on a
+// touchscreen is no explanation at all — 18 of them, invisible to the only
+// player this game has. Hold any control for half a second and it tells you
+// what it does, in a toast that does not steal the tap.
+(function wireLongPress() {
+  const tip = document.createElement('div');
+  tip.id = 'longpress-tip';
+  document.body.appendChild(tip);
+  let timer = null, fired = false;
+  const show = (text) => {
+    tip.textContent = text;
+    tip.classList.add('show');
+    setTimeout(() => tip.classList.remove('show'), 2600);
+  };
+  const start = (e) => {
+    const el = e.target && e.target.closest && e.target.closest('[title]');
+    if (!el) return;
+    const text = el.getAttribute('title');
+    if (!text) return;
+    fired = false;
+    timer = setTimeout(() => { fired = true; show(text); }, 500);
+  };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  document.addEventListener('pointerdown', start, true);
+  document.addEventListener('pointerup', cancel, true);
+  document.addEventListener('pointercancel', cancel, true);
+  document.addEventListener('pointermove', cancel, true);
+  // Swallow the click that follows a long press, so explaining a control never
+  // also fires it — a player asking "what is this?" has not decided to use it.
+  document.addEventListener('click', (e) => {
+    if (fired) { fired = false; e.preventDefault(); e.stopPropagation(); }
+  }, true);
+})();
 
 vpBoot();
 // The first touch or key anywhere is the gesture browsers require before audio
