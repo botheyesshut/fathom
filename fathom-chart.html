@@ -4476,7 +4476,7 @@ const TILES = {
   beach:    { name: 'a cavern beach',      char: '',   cost: 1,  color: '#0e1c2c' },
   current:  { name: 'a swift current',     char: '≈',  cost: 2,  color: '#0e2840', strange: true },
   kelp:     { name: 'a forest of kelp',    char: 'Ψ',  cost: 2,  color: '#0e2018' },
-  chasm:    { name: 'a chasm',             char: '▼',  cost: 1,  color: '#000408' },
+  chasm:    { name: 'a chasm',             char: '▼',  cost: 1,  color: '#000408', poi: 'chasm' },
   opening:  { name: 'a sinkhole',          char: 'O',  cost: 1,  color: '#0a1622', poi: 'opening' },
   ruin:     { name: 'a sunken ruin',       char: '◙',  cost: 2,  color: '#1a1410', poi: 'ruin' },
   signal:   { name: 'something signaling', char: '◉',  cost: 1,  color: '#0a1622', poi: 'signal' },
@@ -5575,22 +5575,15 @@ function syncFootControls(inside) {
   fight.style.display = (capReach || crewReach) ? '' : 'none';
 }
 
-function render() {
-  // The viewport reads STATE, never the log text, so the picture can never
-  // disagree with the prose — a wrong illustration is worse than none.
-  if (typeof syncScene === 'function') syncScene();
-  if (typeof musicSync === 'function') musicSync();
-  // One rung down the resolution ladder the chart is a different world: square
-  // tiles, lamplight, a body instead of a boat.
-  if (state.foot) { syncFootControls(true); renderInterior(); return; }
-  syncFootControls(false);
-
-  // Clear
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-  // Defs for filters & gradients
-  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-  defs.innerHTML = `
+// The static half of the chart's SVG: a vignette gradient and two blur
+// filters. Nothing here is state-dependent, so it is built once and survives
+// every redraw. `render()` used to rebuild it from an innerHTML string on
+// every player action.
+let svgDefs = null;
+function ensureDefs() {
+  if (svgDefs && svgDefs.parentNode === svg) return;
+  svgDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  svgDefs.innerHTML = `
     <radialGradient id="vignette" cx="50%" cy="50%" r="60%">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
       <stop offset="55%" stop-color="#000000" stop-opacity="0.4"/>
@@ -5605,7 +5598,29 @@ function render() {
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   `;
-  svg.appendChild(defs);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  svg.appendChild(svgDefs);
+}
+
+function render() {
+  // The viewport reads STATE, never the log text, so the picture can never
+  // disagree with the prose — a wrong illustration is worse than none.
+  if (typeof syncScene === 'function') syncScene();
+  if (typeof musicSync === 'function') musicSync();
+  // One rung down the resolution ladder the chart is a different world: square
+  // tiles, lamplight, a body instead of a boat.
+  if (state.foot) { syncFootControls(true); renderInterior(); return; }
+  syncFootControls(false);
+
+  // Clear — but keep the defs. They are two Gaussian-blur filters and a
+  // gradient, none of which ever change, and they were being re-parsed from
+  // innerHTML on EVERY TURN. An innerHTML assignment is a full XML parse, and
+  // SVG filter re-creation is one of the few things that can still make a
+  // phone GPU sulk. Built once, then left alone.
+  ensureDefs();
+  for (const n of Array.prototype.slice.call(svg.childNodes)) {
+    if (n !== svgDefs) svg.removeChild(n);
+  }
 
   // Camera target follows player smoothly. User-applied pan is layered on top.
   const playerPx = hexToPixel(state.q, state.r);

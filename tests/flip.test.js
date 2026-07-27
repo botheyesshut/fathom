@@ -38,6 +38,8 @@ function freshContext() {
     '\nfunction __reset(s){ worldSeed = s; resetWorldCaches(); revealed.clear(); visited.clear(); }' +
     '\nfunction __cells(){ return cells; }\nfunction __world(){ return world; }' +
     '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
+    '\nfunction __tileSpec(t){ return TILES[t]; }' +
+    '\nfunction __prizeTypes(){ return ["ruin","signal","growth","chasm","air","salvage","opening"]; }' +
     '\nfunction __poiSig(){ var o=[]; for (var e of cellPois) o.push(e[0]+"="+e[1].map(function(p){return p.d+":"+p.type;}).join(",")); return o.sort().join("|"); }';
   try { vm.runInContext(injected, sandbox, { timeout: 15000 }); } catch (e) { /* DOM init throw expected */ }
   return sandbox;
@@ -108,6 +110,37 @@ check(detMM === 0, 'determinism (same seed, fresh loads)', runA.cells.size + ' c
   }
   check(extentMM === 0, 'tile extent/wall order-independence', extentMM + ' mismatches');
   check(typeMM === 0 && poiMM === 0, 'FULL substrate order-independence incl. POIs', typeMM + ' type / ' + poiMM + ' poi mismatches across ' + poiCount + ' POI tiles');
+}
+
+// ---------- 5b. THE ROUTE-ORDER CHECK THAT USED TO LIVE HERE ----------
+//
+// A probe that read scattered hexes lazily, wiped every cache, and re-read them
+// in reverse order found a real determinism break: `chasm` was the one prize
+// type with no `poi` field, so the carve's "keep an existing POI's symbol"
+// guard did not protect it and a later carve replaced 'chasm' with the carved
+// kind. The same coordinate read `chamber` or `chasm` depending on the route
+// taken to it, which also silently disabled its `case 'chasm'` prose.
+//
+// That probe is NOT here, because when the bug was reintroduced on purpose to
+// prove the check bit, IT WENT GREEN. The divergence needs a hex where a prize
+// lands and a later carve reaches it, and whether the sample contains one
+// depends on the seed and on how much world already exists. It was green by
+// luck. A check that does not bite is worse than no check, because it is
+// believed — this project has shipped two vacuous assertions already.
+//
+// What guards the fault now is the invariant below. It catches the CLASS
+// rather than one instance, and it was verified in both directions: green with
+// the fix, and "MISSING: chasm" with the bug put back.
+
+// ---------- 5c. EVERY PRIZE TYPE DECLARES ITSELF ----------
+// The carve keeps a hex's symbol only when `TILES[type].poi` is set. A prize
+// type missing that field gets silently overwritten, which is exactly how the
+// chasm break happened — so assert the invariant rather than the instance.
+{
+  const sb = runA.sb;
+  const missing = sb.__prizeTypes().filter(t => !sb.__tileSpec(t) || !sb.__tileSpec(t).poi);
+  check(missing.length === 0, 'every prize type carries a poi field (or the carve overwrites it)',
+    missing.length ? 'MISSING: ' + missing.join(', ') : sb.__prizeTypes().join(', '));
 }
 
 // ---------- 6. verifyCells ----------
