@@ -106,6 +106,7 @@ try { vm.runInContext(script +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
   '\nfunction __palette(){ return ANSI16; }' +
   '\nfunction __vpKey(){ return VP_KEY; }' +
+  '\nfunction __vpSafe(){ return VP_SAFE; }' +
   '\nfunction __pages(){ return PAGES; }' +
   '\nfunction __recover(){ return recoverPage(); }' +
   '\nfunction __pagesFound(){ return state.pagesFound || []; }' +
@@ -890,6 +891,22 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     return f.every(x => x.join('|') === f[0].join('|'));
   });
   check(still.length === 0, 'every animated scene actually moves', still.join(', ') || 'all move');
+
+  // THE GRID ONLY HOLDS IF EVERY GLYPH ADVANCES THE SAME WIDTH, and several
+  // obvious-looking block characters do not — they are absent from the
+  // monospace face and the browser substitutes a proportional one, silently.
+  // Sean caught this as a visibly broken porthole frame on his phone: the
+  // quadrant corners measured 28% wide and the silt ridge measured 67% wide.
+  // Code review cannot see it. This can.
+  const safe = new Set(sandbox.__vpSafe().split(''));
+  const strays = new Set();
+  for (const s of Object.values(S)) {
+    for (const row of [].concat(...framesOf(s))) {
+      for (const g of row) if (!safe.has(g)) strays.add(g);
+    }
+  }
+  check(strays.size === 0, 'every drawn glyph is on the measured-uniform whitelist',
+    strays.size ? [...strays].join(' ') + '  <- these break the grid' : 'all uniform');
   const animated = names.filter(k => S[k].frames && S[k].frames.length > 1);
   check(animated.length >= 8, 'and there are real animations, not one showpiece', animated.length + ' animated');
 
