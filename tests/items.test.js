@@ -55,6 +55,8 @@ try { vm.runInContext(script +
   '\nfunction __noise(q,r,l){ noiseMade(q,r,l); }' +
   '\nfunction __see(){ seeAround(); }' +
   '\nfunction __itemsAll(){ return Object.keys(ITEMS); }' +
+  '\nfunction __itemFind(k){ return ITEMS[k] && ITEMS[k].find; }' +
+  '\nfunction __itemKind(k){ return ITEMS[k] && ITEMS[k].kind; }' +
   '\nfunction __buyMult(c,k){ return buyMult(c,k); }' +
   '\nfunction __sellTo(c,k){ return sellPriceTo(c,k); }' +
   '\nfunction __buyFrom(c,k){ return buyPriceFrom(c,k); }' +
@@ -1004,6 +1006,69 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const raw = JSON.parse(sandbox.localStorage.getItem('fathom-save-v1') || '{}');
   check(raw.bestiary && raw.bestiary.lurker > 0, 'the bestiary is in the save',
     JSON.stringify(raw.bestiary || {}).slice(0, 60));
+}
+
+//--- 21. CROSS-TABLE ARBITRAGE: trade routes, not money printers -------------
+{
+  console.log('\n--- 21. CROSS-CULTURE TRADE ---');
+  const C = sandbox.__cultures();
+  const keys = Object.keys(C);
+  const items = sandbox.__itemsAll();
+
+  // THE PRINTER GUARD, which this suite has never had. The existing checks only
+  // ever looked at ONE table at a time — no buyback, no same-table profit — and
+  // both of those passed on the day cultures were printing money across tables.
+  // The rule: nobody may PAY more for a thing than anyone else SELLS it for.
+  // Only where the seller ACTUALLY STOCKS the item — buyPriceFrom() will quote
+  // a notional price for anything you ask about, so asking it about goods a
+  // people does not carry invents trades that cannot happen.
+  const printers = [];
+  for (const seller of keys) {
+    for (const it of (C[seller].sells || [])) {
+      const sp = sandbox.__buyFrom(seller, it);        // what it costs you to buy
+      if (!sp || sp <= 0) continue;
+      for (const buyer of keys) {
+        const bp = sandbox.__sellTo(buyer, it);        // what you are paid for it
+        if (!bp || bp <= 0) continue;
+        if (bp > sp) printers.push(it + ': buy from ' + seller + ' @' + sp + ', sell to ' + buyer + ' @' + bp + ' = +' + (bp - sp));
+      }
+    }
+  }
+  check(printers.length === 0, 'no item can be bought from one people and sold to another at a profit',
+    printers.slice(0, 4).join(' | ') || 'no printers');
+
+  // AND THE OPPOSITE FAILURE. Three peoples with differential valuation are
+  // pointless if a hold of salvage is worth the same everywhere — the handoff
+  // recorded that cross-culture arbitrage did not exist AT ALL, which made the
+  // cultures flavour rather than economy.
+  let differentiated = 0, unsellable = [];
+  for (const it of items) {
+    const prices = keys.map(k => sandbox.__sellTo(k, it) || 0);
+    const hi = Math.max(...prices), lo = Math.min(...prices.filter(x => x > 0).concat([Infinity]));
+    if (hi <= 0) { unsellable.push(it); continue; }
+    if (lo !== Infinity && hi >= lo * 1.5) differentiated++;
+  }
+  // Proportional, not a magic number. I first wrote `>= 8` before knowing how
+  // many saleable finds there even are — there are twelve, so eight was a
+  // threshold picked in ignorance. What matters is that MOST of what you can
+  // sell is worth carrying to a particular table.
+  const saleable = items.filter(k => sandbox.__itemFind(k)
+    && ['valuable', 'key', 'chart'].indexOf(sandbox.__itemKind(k)) >= 0).length;
+  check(differentiated >= Math.ceil(saleable / 2),
+    'most saleable finds are worth markedly more at one table than another',
+    differentiated + ' of ' + saleable + ' pay 50%+ more at the best table than the worst');
+
+  // Every findable thing should have SOMEBODY who wants it, or it is drop-table
+  // dilution — the audit flagged hatchkey and bonekey as exactly this.
+  // Only goods whose PURPOSE is to be sold. A patchkit or a flask of air is
+  // meant to be used up, and wanting a buyer for one is a category error — but
+  // a valuable or a key with no market anywhere is pure drop-table dilution,
+  // which is exactly what the audit flagged for hatchkey and bonekey.
+  const forSale = items.filter(k => sandbox.__itemFind(k)
+    && ['valuable', 'key', 'chart'].indexOf(sandbox.__itemKind(k)) >= 0);
+  const orphans = forSale.filter(k => keys.every(c => !(sandbox.__sellTo(c, k) > 0)));
+  check(orphans.length === 0, 'every findable VALUABLE, key and chart has a buyer somewhere',
+    orphans.join(', ') || forSale.length + ' saleable finds, all with a market');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

@@ -549,6 +549,7 @@
   .log-entry.old { color: var(--bone-dim); opacity: 0.78; font-size: 1rem; }
   /* A tip is the game talking ABOUT itself, so it does not get the boat's
      voice: upright rather than italic, and set apart by a rule. */
+  .btn.armed { border-color: #e05a4a; color: #e05a4a; }
   .log-entry.tip {
     font-style: normal; color: #8fb8a4;
     border-left: 2px solid rgba(110,207,174,0.45);
@@ -1665,7 +1666,12 @@ const CULTURES = {
   dagon: {
     name: 'the Children of Dagon', short: 'the Deep Ones', glyph: 'ᛝ', col: '#6fae72', depthBand: 'deep',
     creed: 'They breathe the black water and worship what sleeps under it, and they are wretched and conniving and eat men with a terrible relish. But bring them a relic of their god, or flesh brought fresh, and even they will trade.',
-    buys: { sigs: ['dagon'], props: ['cursed'], relics: true, flesh: true, mult: 3.6 },
+    buys: { sigs: ['dagon'], props: ['cursed', 'living'], relics: true, flesh: true,
+            // NOT ingot: worked pre-Fall metal is the mariners' business, and
+            // the Deep Ones' whole character is that they want what the sea and
+            // their god touched. I added it here to hit a differentiation count
+            // and the battery caught me changing canon for arithmetic.
+            keys: ['specimenjar', 'bonekey', 'effigy', 'ambergris', 'scrimshaw'], mult: 3.6 },
     // They do NOT sell their own sacred things — an idol of their god and a
     // black pearl are what they are trying to GET BACK. They deal in gill-work,
     // wards and strange-craft; the holy objects move one way only, toward them.
@@ -1675,14 +1681,16 @@ const CULTURES = {
   confluence: {
     name: 'the Confluence', short: 'the federated mariners', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
-    buys: { sigs: ['confluence'], keys: ['ingot', 'weldkit', 'oxygen', 'hydrophone', 'pressurehull', 'ambergris'], kinds: ['fit'], mult: 2.1 },
+    buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
+            kinds: ['fit', 'chart'], mult: 2.1 },
     sells: ['patchkit', 'weldkit', 'oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still', 'pressurehull', 'hydrophone', 'inertiallog'],
     markup: 1.8, danger: false,
   },
   libertines: {
     name: 'the Libertines', short: 'the free yards', glyph: '⚙', col: '#e0a05a', depthBand: 'mid',
     creed: 'Every hand for itself and proud of it — patriots of nothing but their own deck, and no love at all for outsiders. But nobody alive makes a better weapon or a better boat-part, and they will sell to anyone whose crates ring true.',
-    buys: { sigs: ['libertines'], keys: ['ingot', 'warhead'], relics: true, mult: 1.8 },
+    buys: { sigs: ['libertines'], keys: ['ingot', 'scrimshaw', 'idol', 'blackpearl', 'effigy', 'specimenjar'],
+            kinds: ['valuable'], relics: true, mult: 1.8 },
     sells: ['torpedo', 'warhead', 'sonararray', 'bafflegear', 'trimtanks', 'flare', 'lumen'],
     markup: 2.2, danger: false,
   },
@@ -3165,7 +3173,12 @@ function portRows() {
   rows.push({ head: 'The Yard', note: 'Hulls and hull work.' });
   if (state.hull < sub.hull) {
     const missing = sub.hull - state.hull;
-    const need = Math.ceil(missing / DOCK_PRICES.hullPerCrate);
+    // E8: THE ENGINEER NOW ACTUALLY DOES SOMETHING. The multiplier was computed
+    // and then discarded — `need` ignored it and `gained` was clipped to the
+    // deficit, so a yard bill came to the same crates at every engineer level.
+    // Crew you had paid a sign-on for, doing nothing you could measure.
+    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * crewLvl('engineer'));
+    const need = Math.max(1, Math.ceil(missing / perCrate));
     rows.push({ name: 'Patch the hull', desc: '+' + missing + ' hull · ' + need + ' crate' + (need > 1 ? 's' : ''),
       ok: canPay(need, 0), why: shortfall(need, 0), act: 'repair' });
   } else {
@@ -3247,7 +3260,12 @@ function portBuy(act) {
   const sub = activeSub();
   if (act === 'repair') {
     const missing = sub.hull - state.hull;
-    const need = Math.ceil(missing / DOCK_PRICES.hullPerCrate);
+    // E8: THE ENGINEER NOW ACTUALLY DOES SOMETHING. The multiplier was computed
+    // and then discarded — `need` ignored it and `gained` was clipped to the
+    // deficit, so a yard bill came to the same crates at every engineer level.
+    // Crew you had paid a sign-on for, doing nothing you could measure.
+    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * crewLvl('engineer'));
+    const need = Math.max(1, Math.ceil(missing / perCrate));
     if (state.cargoBanked < need) return;
     state.cargoBanked -= need;
     state.hull = sub.hull;
@@ -5275,6 +5293,7 @@ const state = {
   // Tips fire once EVER — across boats, across new worlds. Being taught the
   // same thing twice is worse than not being taught it.
   tipsSeen: [],
+  decoys: 3,          // buoys in the racks; restocked at the dock
   alive: true,
   cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
   panX: 0, panY: 0,         // user-applied pan offset (drag)
@@ -6290,10 +6309,27 @@ function pingPower() {
 }
 
 function passiveRange() {
-  // Silent running: dropping the sonar slider to 0 kills passive sonar too —
-  // you go deaf, but you also go quiet, and the deep loses your thread faster.
-  // A salvaged sonar array widens the passive envelope, permanently and silently.
-  return pingPower() === 0 ? 0 : PASSIVE_RANGE + fitLevel('sonar');
+  // S3: THE SLIDER IS A DIAL, NOT A SWITCH.
+  //
+  // This used to return the same envelope at every non-zero setting, so the
+  // only positions that meant anything were 0 (silent) and whatever you were
+  // about to pay for a ping. Settings 1 to 4 existed and did nothing — five
+  // notches on a control with two states.
+  //
+  // The set draws power and runs warm at every setting, so it now buys you
+  // HEARING and costs you QUIET on a continuous curve: high and you hear
+  // further while the deep hears you sooner; low and you are hard to find and
+  // nearly blind. That is the cat-and-mouse dial this game has always wanted
+  // and never had — see runNoise() for the other half of the trade.
+  const p = pingPower();
+  if (p === 0) return 0;   // silent running: deaf, and very hard to find
+  return PASSIVE_RANGE + Math.floor(p / 2) + fitLevel('sonar');
+}
+// What the boat gives away just by having the set running. Silent and the
+// lowest notch cost nothing; a hot set is a thing the dark can steer by.
+function runNoise() {
+  const p = pingPower();
+  return p <= 1 ? 0 : Math.floor(p / 2);
 }
 function sonarSilent() { return pingPower() === 0; }
 
@@ -6307,7 +6343,10 @@ function updatePingDisplay() {
     if (rangeEl) rangeEl.textContent = 'running silent';
   } else {
     if (costEl) costEl.textContent = lvl.activeCost + ' air';
-    if (rangeEl) rangeEl.textContent = (lvl.activeRange * 60) + ' m';
+    // Say what the DIAL buys, not just what a ping costs: how far you hear
+    // without pinging at all, and whether the set is giving you away.
+    if (rangeEl) rangeEl.textContent = (lvl.activeRange * 60) + ' m · hears '
+      + (passiveRange() * 60) + ' m' + (runNoise() ? ' · loud' : '');
   }
   // Disable the Ping button when sonar is set to silent
   const pingBtn = document.getElementById('btn-ping');
@@ -6546,7 +6585,17 @@ function fireWeapon() {
 // no guns: make a louder target, and slip away in the confusion.
 function launchDecoy() {
   if (!state.alive || !gameStarted || ashore()) return;
+  // S4: DECOYS ARE A THING YOU CARRY, not a thing you conjure. This checked air
+  // and nothing else, so a captain with air could shriek into the dark every
+  // single turn forever — the one hard counter to being hunted, available in
+  // unlimited quantity. They are stores now: three aboard, restocked at the
+  // dock with everything else.
+  if ((state.decoys || 0) <= 0) {
+    log('The buoy racks are empty. They restock at the dock.', 'warn', 'DECOY');
+    return;
+  }
   if (state.air < 6) { log('Not enough air to charge a decoy.', 'warn'); return; }
+  state.decoys--;
   state.air -= 6;
   state.buoys.push({ q: state.q, r: state.r, depth: state.currentDepth, turns: 10 });
   log('A decoy buoy kicks free and begins to shriek into the dark. Move — let it have their attention.', '', 'DECOY');
@@ -6891,6 +6940,10 @@ function move(q, r) {
   // and makes the screws labour — and a labouring boat is a loud boat.
   const favour = currentFavour(fromQ, fromR, q, r, state.currentDepth);
   applyMoveCosts(tile.cost, favour);
+  // The other half of the sonar dial: a set running hot is heard. This is a
+  // small continuous leak rather than an event, so a captain who leaves the
+  // slider up is findable in a way one running quiet is not.
+  if (runNoise()) noiseMade(q, r, runNoise());
   if (favour < 0) {
     noiseMade(q, r, favour <= -2 ? 3 : 2);
     if (rand() < 0.4) log(favour <= -2
@@ -10911,6 +10964,7 @@ function endGame(title, summary) {
   state.cargo = 0; state.relics = 0;
   state.armament = null; state.torpedoes = 0;
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
+  state.decoys = 3;
   state.items = {}; state.fits = {};   // the hold and every fitting go down with the boat
   state.crew = [];
   state.expedition = null;
@@ -10949,6 +11003,7 @@ function restart() {
   state.relics = 0; state.relicsBanked = 0;
   state.armament = null; state.torpedoes = 0;
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
+  state.decoys = 3;
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
@@ -11061,6 +11116,7 @@ function surface() {
     }
     if (atPort && state.stores < 100) {
       state.stores = 100;
+      state.decoys = 3;
       log('The boat re-provisions at the dock — water, salt meat, lamp oil, and dry berths.', '', 'PORT');
     }
     if (atPort && state.relics > 0) {
@@ -11163,6 +11219,7 @@ function doSave(force) {
       pagesFound: state.pagesFound,
       bestiary: state.bestiary,
       tipsSeen: state.tipsSeen,
+      decoys: state.decoys,
       lockerWeapon: state.lockerWeapon,
       quarryCache: state.quarryCache,
       crew: state.crew,
@@ -11224,6 +11281,7 @@ function resumeGame(save) {
   state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
   state.bestiary = save.bestiary || {};      // what you have learned about what lives here
   state.tipsSeen = save.tipsSeen || [];
+  state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
   state.lockerWeapon = save.lockerWeapon || 'axe';
@@ -11439,7 +11497,28 @@ document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
 document.getElementById('btn-fortify').addEventListener('click', fortifyBase);
 document.getElementById('btn-dig').addEventListener('click', digAdjacent);
-document.getElementById('btn-fire').addEventListener('click', fireWeapon);
+// S1: FIRING IS ARMED, because it is the loudest thing the boat can do and it
+// spends a torpedo you may not be able to replace. This game's whole posture is
+// that violence is usually the wrong answer; a control that answers on the
+// first tap argues the opposite. Same arm-then-confirm as Jettison and the
+// breach — the button becomes the question.
+(function wireFire() {
+  const fb = document.getElementById('btn-fire');
+  if (!fb) return;
+  let armedAt = 0, label = fb.textContent;
+  fb.addEventListener('click', () => {
+    if (Date.now() - armedAt < 4000) {
+      armedAt = 0; fb.textContent = label; fb.classList.remove('armed');
+      fireWeapon();
+      return;
+    }
+    armedAt = Date.now();
+    fb.textContent = 'Fire?';
+    fb.classList.add('armed');
+    log('Weapons ready. Tap again to shoot — and the whole dark will hear it.', 'warn', 'ARMED');
+    setTimeout(() => { if (Date.now() - armedAt >= 4000) { fb.textContent = label; fb.classList.remove('armed'); } }, 4100);
+  });
+})();
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
