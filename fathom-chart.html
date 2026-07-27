@@ -487,23 +487,53 @@
   #longpress-tip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   /* ====== LOG / MESSAGES ====== */
-  #log {
+  /* THE DIALOG WINDOW — a framed, scrollable reading surface.
+     It is the instrument the player spends most of their attention on, so it
+     is dressed as one: a brass-ish double rule with corner marks, matching the
+     chart's paper rather than the hull's steel. */
+  #log-frame {
     position: relative;
     z-index: 10;
-    padding: 0.75rem 1rem 1rem;
-    background: linear-gradient(0deg, var(--void) 0%, rgba(4,8,16,0.85) 80%, transparent 100%);
+    flex: none;
+    margin: 0 0.5rem 0.4rem;
+    border: 1px solid rgba(150, 126, 84, 0.42);
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgba(10,16,24,0.92), rgba(4,8,16,0.98));
+    box-shadow: inset 0 0 0 1px rgba(150,126,84,0.14), 0 0 18px rgba(0,0,0,0.5);
+  }
+  /* Corner marks, drawn with the frame rather than added to the DOM. */
+  #log-frame::before, #log-frame::after {
+    content: ''; position: absolute; width: 9px; height: 9px; pointer-events: none;
+    border-color: rgba(190, 162, 110, 0.75); border-style: solid;
+  }
+  #log-frame::before { top: 3px; left: 3px; border-width: 1px 0 0 1px; }
+  #log-frame::after  { bottom: 3px; right: 3px; border-width: 0 1px 1px 0; }
+  #log {
+    position: relative;
+    padding: 0.7rem 0.9rem;
     /* Was 6rem — two lines — for a game whose voice IS its prose. A room
        description carrying the set, the layer and the sounder runs to four, so
        most of the writing scrolled past before it could be read. */
-    min-height: 10rem;
-    max-height: 10rem;
-    flex-shrink: 0;
-    overflow: hidden;
+    height: 9.5rem;
+    /* SCROLLABLE, by finger or wheel. It used to be overflow:hidden with the
+       content pinned to the bottom, so anything that had gone past was simply
+       unreachable without opening the full transcript. */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;   /* don't drag the page when it hits the end */
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    cursor: pointer;          /* tap to open the full transcript */
+    cursor: pointer;                /* tap still opens the full transcript */
   }
+  /* Bottom-anchor WITHOUT justify-content:flex-end, which silently eats the
+     overflow: with it, scrollHeight equals clientHeight and everything above
+     the fold is unreachable by any amount of scrolling. Measured that exact
+     failure here before fixing it — 27 entries, nothing to scroll. A margin on
+     the first child anchors short logs to the bottom and lets long ones grow
+     upward into scrollable space. */
+  #log > .log-entry:first-child { margin-top: auto; }
+  #log::-webkit-scrollbar { width: 4px; }
+  #log::-webkit-scrollbar-thumb { background: rgba(150,126,84,0.35); border-radius: 2px; }
 
   .log-entry {
     font-size: 1.15rem;
@@ -517,6 +547,13 @@
   /* 0.55 measured 2.23:1 against the void — below the 4.5:1 legibility floor,
      on exactly the line you most want to re-read. */
   .log-entry.old { color: var(--bone-dim); opacity: 0.78; font-size: 1rem; }
+  /* A tip is the game talking ABOUT itself, so it does not get the boat's
+     voice: upright rather than italic, and set apart by a rule. */
+  .log-entry.tip {
+    font-style: normal; color: #8fb8a4;
+    border-left: 2px solid rgba(110,207,174,0.45);
+    padding-left: 0.6rem; margin: 0.25rem 0;
+  }
 
   .log-entry .echo {
     font-family: 'JetBrains Mono', monospace;
@@ -538,12 +575,6 @@
   }
 
   /* ====== CONTROLS ====== */
-  #log-more {
-    flex: none; text-align: center; padding: 0 1rem 0.5rem;
-    font-family: 'Cormorant Garamond', serif; font-style: italic;
-    font-size: 0.72rem; color: #4e5c66; cursor: pointer;
-    background: var(--void);
-  }
   #controls {
     position: relative;
     z-index: 10;
@@ -1108,10 +1139,7 @@
 
 
 <!-- LOG -->
-<div id="log"></div>
-<!-- The full transcript has existed all along and nothing said so. Tap-to-open
-     with no affordance is a secret, not a feature. -->
-<div id="log-more">tap the log to read everything that has been said</div>
+<div id="log-frame"><div id="log"></div></div>
 
 <!-- CONTROLS -->
 <div id="controls">
@@ -3331,6 +3359,39 @@ function renderBestiary() {
 // The music volume is here because the mix levels are MY GUESSES. I cannot hear
 // the game, so rather than keep asking Sean to describe a loudness in words, he
 // gets the fader.
+//--- TIPS --------------------------------------------------------------------
+// A tutorial that is not a tutorial. Sean's standing ruling is that nothing
+// interrupts and nothing scripts the opening — so a tip fires ONCE, EVER, at
+// the moment the thing it explains is actually happening to you. You are never
+// told about the sounder before you have heard one, or about silent running
+// before something is hunting you.
+//
+// Each is campaign-level: seen once, gone for good, across boats and across new
+// worlds. Being taught a thing twice is worse than not being taught it, because
+// the second time you know the game is not paying attention.
+const TIPS = {
+  log:     'Everything said to you is kept. Tap the log to read the whole of it.',
+  sounder: 'The sounder only answers straight down. A hard return means something is on the bottom BENEATH you — you have to take the boat down to it, not across to it.',
+  silent:  'It hunts by sound. Drop the sonar slider to silent and you go deaf, but it loses your thread — which is usually the better trade.',
+  layer:   'That is a thermocline. Sound will not cross it. On the far side of a hard layer you are very nearly invisible, and very nearly blind.',
+  current: 'The water has a set. Going with it costs a fraction of the air; punching into it costs double and makes a din. The way out is rarely the way home.',
+  crush:   'You are past the depth this hull was built for. The pressure is finding the seams now, and it does not stop finding them.',
+  port:    'Cargo only counts once it is ashore. Surface within sight of the dock and it goes on the ledger — the Port sells hull work, hands, gear and the next boat.',
+  pages:   'Somebody went down before you and wrote it down. The marks that pay in knowledge rather than cargo are how you recover the rest of it.',
+  jettison:'Anything you are carrying can go over the side. Some of it will insist, eventually.',
+};
+let tipsOn = true;
+try { tipsOn = localStorage.getItem('fathom-tips') !== '0'; } catch (e) {}
+
+function tip(key) {
+  if (!tipsOn || !TIPS[key]) return;
+  if (!state.tipsSeen) state.tipsSeen = [];
+  if (state.tipsSeen.indexOf(key) >= 0) return;
+  state.tipsSeen.push(key);
+  log(TIPS[key], 'tip', 'TIP');
+  scheduleSave();
+}
+
 let musicGain = 1;
 try { const g = parseFloat(localStorage.getItem('fathom-musicvol')); if (!isNaN(g)) musicGain = g; } catch (e) {}
 
@@ -3353,6 +3414,11 @@ function renderOptions() {
     + '<button class="opt-b' + (vpOn ? '' : ' off') + '" data-opt="porthole">'
     + (vpOn ? 'On' : 'Off') + '</button></div>'
     + '<div class="opt-d">The illustration window in the corner of the chart.</div></div>'
+
+    + '<div class="opt"><div class="opt-h"><div class="opt-n">Tutorial tips</div>'
+    + '<button class="opt-b' + (tipsOn ? '' : ' off') + '" data-opt="tips">'
+    + (tipsOn ? 'On' : 'Off') + '</button></div>'
+    + '<div class="opt-d">A line of explanation the first time something happens to you — the sounder, a thermocline, a hunter fixing on your noise. Each fires once, ever. Nothing interrupts and nothing repeats.</div></div>'
 
     + '<div class="opt"><div class="opt-h"><div class="opt-n">New world</div>'
     + '<button class="opt-b danger" data-opt="newworld">Abandon</button></div>'
@@ -3381,6 +3447,9 @@ function renderOptions() {
         else { audioEnsure(); sfx('contact'); musicUnlock(); musicNow = null; musicSync(); }
       } else if (kind === 'porthole') {
         vpSetOn(!vpOn);
+      } else if (kind === 'tips') {
+        tipsOn = !tipsOn;
+        try { localStorage.setItem('fathom-tips', tipsOn ? '1' : '0'); } catch (e) {}
       } else if (kind === 'newworld') {
         // Armed in place: the button becomes the confirmation, so the question
         // and the answer are the same control and neither can be mistaken for
@@ -3854,6 +3923,7 @@ function recoverPage() {
     log(`Folded into the packet, sealed in oilskin: another page of the account, numbered ${ROMAN[idx]} in the same small, hard hand.`, 'strange', 'PAGE');
   }
   log(`"${PAGES[idx]}"`, '', 'PAGE');
+  tip('pages');
   if (idx === 0) {
     log('It is written as though it happened to whoever reads it.', 'strange', 'PAGE');
   }
@@ -5202,6 +5272,9 @@ const state = {
   // it survives losing the boat, because drowning does not un-teach you what
   // a hunter listens for.
   bestiary: {},
+  // Tips fire once EVER — across boats, across new worlds. Being taught the
+  // same thing twice is worse than not being taught it.
+  tipsSeen: [],
   alive: true,
   cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
   panX: 0, panY: 0,         // user-applied pan offset (drag)
@@ -6823,6 +6896,7 @@ function move(q, r) {
     if (rand() < 0.4) log(favour <= -2
       ? 'You drive her straight into the set and she labours for every metre of it. The screws are making a din.'
       : 'The water pushes back. The boat works harder than she should have to.', 'warn', 'CURRENT');
+    tip('current');
   } else if (favour > 0 && rand() < 0.3) {
     log(favour >= 2
       ? 'You find the spine of the current and let it take you. The screws barely turn; the sea does the work.'
@@ -8587,6 +8661,7 @@ function noiseMade(q, r, loudness) {
     c.interest = Math.min(100, was + spike);
     c.tq = q; c.tr = r;
     if (was < LURK_STALK && c.interest >= LURK_STALK && d <= wakeNoticeR()) {
+      tip('silent');
       log('Passive sonar: something out there turns toward the noise.', 'danger', 'CONTACT');
       sfx('contact');
     }
@@ -9563,6 +9638,7 @@ function changeDepth(deltaMeters) {
   const xL = crossedLayer(prevDepth, actual, state.q, state.r);
   if (xL) {
     noteLayerFelt(state.q, state.r);   // felt once is known thereafter
+    tip('layer');
     const cold = xL.below
       ? 'The thermometer drops away under you. Cold water, and the sea above goes quiet — too quiet.'
       : 'The water warms. Sound comes back all at once, and the sea is louder than you left it.';
@@ -10330,6 +10406,7 @@ function handleTile(tile) {
   // It gets its own tag so it survives a crowded log.
   const snd = soundingBelow();
   if (snd && snd.odd && snd.under > 0) {
+    tip('sounder');
     log(`The sounder will not settle. ${snd.oddUnder} m under the keel something answers hard — not silt, not rock. Whatever it is, it is directly beneath you.`,
         'good', 'SOUNDER');
     sfx('contact');
@@ -10661,9 +10738,27 @@ function maybePorthole() {
 const logEl = document.getElementById('log');
 const logHistory = [];
 
+function logAtBottom() {
+  const el = document.getElementById('log');
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+}
+function logScrollDown() {
+  const el = document.getElementById('log');
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
 function log(text, cls, echo) {
+  // Once there is genuinely a history worth opening, say so — once.
+  if (typeof logHistory !== 'undefined' && logHistory.length === 14) setTimeout(() => tip('log'), 50);
+  const wasAtBottom = logAtBottom();
   const entry = document.createElement('div');
-  entry.className = 'log-entry';
+  // `cls` was being applied to the ECHO span and never to the entry, so every
+  // danger, warn and strange line has been rendering in the plain voice inline
+  // while the transcript styled them correctly. Long-standing, invisible, and
+  // exactly the sort of thing that only shows up when you add a class that is
+  // supposed to look different.
+  entry.className = 'log-entry' + (cls ? ' ' + cls : '');
   if (echo) {
     const e = document.createElement('span');
     e.className = 'echo ' + (cls || '');
@@ -10681,8 +10776,12 @@ function log(text, cls, echo) {
   logHistory.push({text, cls, echo});
   if (logHistory.length > 400) logHistory.shift();
 
-  // Keep only last 3 visible
-  while (logEl.children.length > 3) logEl.removeChild(logEl.firstChild);
+  // Keep a scroll-back worth having. Three was right for a letterbox that could
+  // not scroll; the window scrolls now, so there has to be something behind it.
+  while (logEl.children.length > 40) logEl.removeChild(logEl.firstChild);
+  // Follow the tail — unless the player has scrolled up to read something, in
+  // which case yanking them back down is the rudest thing the window could do.
+  if (wasAtBottom) logScrollDown();
   if (document.getElementById('transcript').classList.contains('show')) renderTranscript();
 }
 
@@ -10753,7 +10852,7 @@ function updateHUD() {
   const dr = document.getElementById('depth-rating');
   if (dr) {
     const safe = safeDepthNow(), crush = crushDepthNow();
-    if (d > crush) { dr.textContent = 'PAST CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; }
+    if (d > crush) { dr.textContent = 'PAST CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; tip('crush'); }
     else if (d > safe) { dr.textContent = 'crush at ' + crush + 'm'; dr.style.color = '#e8a050'; }
     else { dr.textContent = 'safe to ' + safe + 'm'; dr.style.color = ''; }
   }
@@ -10947,6 +11046,7 @@ function surface() {
       const n = state.cargo;
       state.cargoBanked += n;
       state.cargo = 0;
+      tip('port');
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
       sfx('bell');
     }
@@ -11062,6 +11162,7 @@ function doSave(force) {
       portHire: state.portHire,
       pagesFound: state.pagesFound,
       bestiary: state.bestiary,
+      tipsSeen: state.tipsSeen,
       lockerWeapon: state.lockerWeapon,
       quarryCache: state.quarryCache,
       crew: state.crew,
@@ -11122,6 +11223,7 @@ function resumeGame(save) {
   state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
   state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
   state.bestiary = save.bestiary || {};      // what you have learned about what lives here
+  state.tipsSeen = save.tipsSeen || [];
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
   state.lockerWeapon = save.lockerWeapon || 'axe';
@@ -11332,7 +11434,6 @@ var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEvent
 var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('log').addEventListener('click', openTranscript);
-var __lm = document.getElementById('log-more'); if (__lm) __lm.addEventListener('click', openTranscript);
 document.getElementById('transcript-close').addEventListener('click', closeTranscript);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
