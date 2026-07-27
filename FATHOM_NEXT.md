@@ -1,5 +1,29 @@
 # FATHOM — START HERE (last updated 2026-07-26)
 
+## OPUS WORK QUEUE (2026-07-26, ordered — Sean-approved split; Fable took the found-text system)
+
+**Guardrails first, they are why tonight went long:** read the traps sections below before touching substrate. New seed-derived caches go in `resetWorldCaches()` and nowhere else. After ANY substrate change run `node tests/economy.js` and read the SOUNDER block, not just reachability. Do not restore the deep-claim fallback. The playtest harness noise floor is ±4–6 points — run the same build twice before believing a delta. When a diagnosis depends on a number, instrument the thing itself, not a proxy.
+
+**T2 — real bugs, cheap, verified open (do these first):**
+1. **E7**: `checkEnclave()` has one call site (in `move()`), so descending onto an enclave never opens trade. Mirror the existing fix pattern: `handleTile` is already called after a successful `changeDepth` — add `checkEnclave()` the same way. Verify by descending onto a spawned enclave in the browser.
+2. **S6**: inside a ruin, the exit tile (`t:'entry'`) is styled nearly identically to floor and one mis-tap calls `leaveInterior`, spending the site. Give it a distinct glyph/colour AND an arm-then-confirm on tap, same pattern as Jettison ("Leave? tap again").
+3. **O8**: sonar readout prints "OFF air · silent m" — the units are hardcoded around the spans (index ~line 970 region, `updatePingDisplay`). Suppress units when the value is a word.
+4. **O7**: "wait" is an invisible `waitHit` polygon (fill 0.001 opacity). Give it a visible affordance — a faint ring or a Hold Station button.
+5. **M2**: the enclave trade panel still refuses silently (`class="act none"` with no reason). Copy the Port's shortfall pattern ("2 more crates").
+6. **S2**: no starting weapon — the Port now *displays* the axe (2 crates) so this is softened; **ask Sean** whether a free starting axe is wanted before adding one.
+
+**T-PWA — Sean's #1 priority ("mobile that doesn't suck"):**
+7. `manifest.json` + service worker + icon (generate from the ANSI angler), installable, offline-capable, full-screen. EVERY ASSET IS OPTIONAL still applies — the bare HTML must keep working. Test offline explicitly, and test that the sw caches `assets/music/` lazily, never as an install blocker.
+8. **M10**: the Google Fonts `@import` (line ~11) breaks offline. Self-host as `assets/fonts/` with `@font-face` + system-font fallback so the bare file still renders.
+
+**T4 — mobile polish batch:** M3 Android back-button closes panels (pushState/popstate per panel); M9 `.inv-row .act` min-height 34px+; M4 raise `.stat-label`/`.stat-value` sizes; O4 long-press = show the `title=` text in a toast. **D7 (dropping `user-scalable=no`) is a Sean call — ask.**
+9. **Music**: levels are unverified guesses (theme .50 / ambient .34 / hunted .44 vs sfx .22) — adjust to Sean's playtest verdicts. Six unused tracks in the source archive; candidates: on-foot ruins, enclaves, past-crush. Placement is a Sean call.
+10. **Bestiary ANSI tranche** (if Sean approves after seeing the six): drifter, silt-ambusher, rival boat, shoal at 24×10 — silhouettes, key-based colour, battery check already enforces well-formedness.
+
+**T6 — harness debt:** teach the bot captain to follow the sounder (dive when `snd.odd` — cargo-pickup numbers currently under-read the new signposting); add the S5 generator softlock assertion; note economy.js counts prizes per-hex (stack entries have their own table now).
+
+**WAITING ON SEAN'S PLAYTEST — do not tune blind:** sonar power ladder (S3, settings 1–4 dominated), cross-culture arbitrage (E6), engineer multiplier (E8), corpse prices (E10), Fire two-tap (S1), decoy tracking (S4). Also pending Sean: viewport delight-vs-distraction, sounder frequency, music levels, D7 zoom, bestiary go/no-go.
+
 ## THE WATER HAS TERRAIN NOW (2026-07-26) — answer to Sean's "how do we make sub exploration more interesting?"
 
 **The diagnosis, which was not "add more content":** every open hex was mechanically identical, so moving was one undifferentiated verb and travel was dead time between sparse events. Prose cannot fix dead time. Exploration gets interesting when there is a small decision every single turn. Three commits, each one making the next better:
