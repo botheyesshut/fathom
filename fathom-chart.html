@@ -499,6 +499,11 @@
     display: none;
   }
   #vp-show.on { display: block; }
+  #vp-x {
+    position: absolute; top: 1px; right: 3px;
+    font-size: 9px; line-height: 1; color: rgba(150, 180, 200, 0.45);
+    pointer-events: none;   /* the whole tile is the target; this only marks it */
+  }
 
   /* O4: the long-press explanation. Sits above everything, ignores pointers so
      it can never eat the tap it is explaining, and reads as the boat talking
@@ -1079,6 +1084,10 @@
   <div id="viewport">
     <pre id="vp-art" aria-hidden="true"></pre>
     <span id="vp-cap"></span>
+    <!-- Tapping the tile has always dismissed it, but an invisible affordance
+         is not an affordance. Sean asked for "a way to turn it off" for a
+         feature that already had one, which is the answer. -->
+    <span id="vp-x" title="Hide the illustration window">✕</span>
   </div>
   <button id="vp-show" title="Show the viewport">▣</button>
   <!-- Vertical depth strip overlay -->
@@ -2173,6 +2182,434 @@ const VP_SCENES = {
            '                        ',
            '                        '] },
 
+
+  // ---- THE BESTIARY, DRAWN. One scene per creature, each a few frames with
+  // only a few cells changing between them: eyes sliding, a jaw working, a
+  // running light blinking, a big thing breathing. TW2002 did exactly this,
+  // and it is why those sequences had so much life for so few bytes.
+
+  lurker: { cap: 'it never hurries, and it does not need to', hold: 3,
+    pulse: ['c'],
+    key: { '█': '4', '▄': '4', '▀': '4', '◉': 'c' },
+    frames: [
+      ['                        ',
+       '      ▄▄▄▄▄▄▄▄▄▄▄▄      ',
+       '     ▄████████████▄     ',
+       '     ███◉  ████████     ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '      ▄▄▄▄▄▄▄▄▄▄▄▄      ',
+       '     ▄████████████▄     ',
+       '     ███ ◉ ████████     ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '      ▄▄▄▄▄▄▄▄▄▄▄▄      ',
+       '     ▄████████████▄     ',
+       '     ███  ◉████████     ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '      ▄▄▄▄▄▄▄▄▄▄▄▄      ',
+       '     ▄████████████▄     ',
+       '     ███ ◉ ████████     ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
+
+  angler: { cap: 'a light that is not a light, and the mouth under it', hold: 2,
+    pulse: ['e', 'c'],
+    key: { '█': '4', '▄': '4', '▀': 'c', '╲': 'f', '╱': 'f', '¤': 'e', '│': '6', '·': '6' },
+    frames: [
+      ['           ¤            ',
+       '           │            ',
+       '   ▄▄▄▄▄▄▄▄▀▄▄▄▄▄▄▄▄    ',
+       '   ▄████████████████▄   ',
+       '   ████▀▀▀▀▀▀▀▀▀▀████   ',
+       '    ███ ╲╱╲╱╲╱╲╱ ███    ',
+       '   ▀████▄▄▄▄▄▄▄▄████▀   ',
+       '    ▀██████████████▀    ',
+       '      ▀▀▀▀▀▀▀▀▀▀▀▀      ',
+       '                        '],
+      ['           ¤            ',
+       '           │            ',
+       '   ▄▄▄▄▄▄▄▄▀▄▄▄▄▄▄▄▄    ',
+       '   ▄████████████████▄   ',
+       '   ████▀▀▀▀▀▀▀▀▀▀████   ',
+       '   ███ ╲ ╱╲ ╱╲ ╱ ███    ',
+       '   ▀████▄▄▄▄▄▄▄▄████▀   ',
+       '    ▀██████████████▀    ',
+       '      ▀▀▀▀▀▀▀▀▀▀▀▀      ',
+       '                        '],
+      ['           ·            ',
+       '           │            ',
+       '   ▄▄▄▄▄▄▄▄▀▄▄▄▄▄▄▄▄    ',
+       '   ▄████████████████▄   ',
+       '   ████▀▀▀▀▀▀▀▀▀▀████   ',
+       '    ███ ╲╱╲╱╲╱╲╱ ███    ',
+       '   ▀████▄▄▄▄▄▄▄▄████▀   ',
+       '    ▀██████████████▀    ',
+       '      ▀▀▀▀▀▀▀▀▀▀▀▀      ',
+       '                        '],
+      ['           ¤            ',
+       '           │            ',
+       '   ▄▄▄▄▄▄▄▄▀▄▄▄▄▄▄▄▄    ',
+       '   ▄████████████████▄   ',
+       '   ████▀▀▀▀▀▀▀▀▀▀████   ',
+       '   ███ ╲ ╱╲ ╱╲ ╱ ███    ',
+       '   ▀████▄▄▄▄▄▄▄▄████▀   ',
+       '    ▀██████████████▀    ',
+       '      ▀▀▀▀▀▀▀▀▀▀▀▀      ',
+       '                        '],
+    ] },
+
+  rival: { cap: 'screws — someone else is down here, running dark', hold: 3,
+    pulse: ['c'],
+    key: { '█': '8', '▄': '8', '▀': '8', '◘': 'c', '·': '4' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '       ▄▄▄▄▄▄▄▄▄▄       ',
+       '     ▄████████████▄     ',
+       '     ███◘█████████      ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '       ▄▄▄▄▄▄▄▄▄▄       ',
+       '     ▄████████████▄     ',
+       '     ███·█████████      ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '       ▄▄▄▄▄▄▄▄▄▄       ',
+       '     ▄████████████▄     ',
+       '     ███·█████████      ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '       ▄▄▄▄▄▄▄▄▄▄       ',
+       '     ▄████████████▄     ',
+       '     ███·█████████      ',
+       '     ▀████████████▀     ',
+       '        ▀▀▀▀▀▀▀▀        ',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
+
+  shoal: { cap: 'small, fast, and more of them than you would like', hold: 2,
+    key: { '»': 'a', '«': 'a', '█': '8', '▄': '8', '▀': '8' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '   »               «    ',
+       '          ▄▄▄▄          ',
+       '          ████          ',
+       '          ▀▀▀▀          ',
+       '           »            ',
+       '   »               «    ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '     »           «      ',
+       '          ▄▄▄▄          ',
+       '          ████          ',
+       '          ▀▀▀▀          ',
+       '           »            ',
+       '     »           «      ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '       »       «        ',
+       '          ▄▄▄▄          ',
+       '          ████          ',
+       '          ▀▀▀▀          ',
+       '           »            ',
+       '       »       «        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '     »           «      ',
+       '          ▄▄▄▄          ',
+       '          ████          ',
+       '          ▀▀▀▀          ',
+       '           »            ',
+       '     »           «      ',
+       '                        ',
+       '                        '],
+    ] },
+
+  silt: { cap: 'a ridge of silt, and it is not silt', hold: 3,
+    key: { '▁': '6', '▂': '6', '▃': '6', '▄': '6', '▅': '6', '▆': '6', '▓': '6', '◦': 'c', '◉': 'c' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '     ▁▁▁▁▁▁▁▁▁▁▁▁▁▁     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '     ▁▁▁▁▁▁▁▁▁▁▁▁▁▁     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '         ◦      ◦       ',
+       '     ▁▁▂▃▄▄▄▄▃▂▁▁▁▁     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '         ◉      ◉       ',
+       '     ▂▃▄▅▆▆▆▆▅▄▃▂▁▁     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '         ◦      ◦       ',
+       '     ▁▁▂▃▄▄▄▄▃▂▁▁▁▁     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓     ',
+       '                        '],
+    ] },
+
+  baro: { cap: 'a vastness, pacing you in the deep', hold: 4,
+    key: { '█': '5' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '       ██████████       ',
+       '     ██████████████     ',
+       '    ████████████████    ',
+       '     ██████████████     ',
+       '       ██████████       ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '      ████████████      ',
+       '    ████████████████    ',
+       '   ██████████████████   ',
+       '    ████████████████    ',
+       '      ████████████      ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '     ██████████████     ',
+       '   ██████████████████   ',
+       '  ████████████████████  ',
+       '   ██████████████████   ',
+       '     ██████████████     ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '      ████████████      ',
+       '    ████████████████    ',
+       '   ██████████████████   ',
+       '    ████████████████    ',
+       '      ████████████      ',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
+
+  chorus: { cap: 'voices in the water, none of them answering', hold: 3,
+    key: { '¤': 'b' },
+    frames: [
+      ['                        ',
+       '  ¤         ¤      ¤    ',
+       '        ¤      ¤        ',
+       '    ¤      ¤      ¤     ',
+       '       ¤      ¤         ',
+       '   ¤      ¤         ¤   ',
+       '      ¤         ¤       ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '        ¤      ¤        ',
+       '    ¤      ¤      ¤     ',
+       '       ¤      ¤         ',
+       '   ¤      ¤         ¤   ',
+       '      ¤         ¤       ',
+       '  ¤         ¤      ¤    ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '    ¤      ¤      ¤     ',
+       '       ¤      ¤         ',
+       '   ¤      ¤         ¤   ',
+       '      ¤         ¤       ',
+       '  ¤         ¤      ¤    ',
+       '        ¤      ¤        ',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
+
+  eel: { cap: 'something narrow, working along the hull', hold: 2,
+    key: { '~': 'e' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '                        ',
+       '      ~~    ~~    ~~    ',
+       '     ~~    ~~    ~~     ',
+       '    ~~    ~~    ~~      ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '                        ',
+       '    ~~    ~~    ~~      ',
+       '   ~~    ~~    ~~    ~  ',
+       '  ~~    ~~    ~~    ~~  ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '                        ',
+       '  ~~    ~~    ~~    ~~  ',
+       '  ~    ~~    ~~    ~~   ',
+       '      ~~    ~~    ~~    ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
+
+  hulk: { cap: 'a mountain moving, and the water going with it', hold: 4,
+    key: { '█': '8', '▄': '8' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    ',
+       '████████████████████████',
+       '████████████████████████',
+       '████████████████████████',
+       '████████████████████████',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄  ',
+       '████████████████████████',
+       '████████████████████████',
+       '████████████████████████',
+       '████████████████████████',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
+
+  drifter: { cap: 'it drifts, and it is not hunting anything', hold: 5,
+    key: { '█': '2', '▄': '2', '▀': '2' },
+    frames: [
+      ['                        ',
+       '                        ',
+       '    ▄▄▄▄▄▄▄▄            ',
+       '   ▄██████████▄         ',
+       '   ▀██████████▀         ',
+       '    ▀▀▀▀▀▀▀▀            ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '     ▄▄▄▄▄▄▄▄           ',
+       '    ▄██████████▄        ',
+       '    ▀██████████▀        ',
+       '     ▀▀▀▀▀▀▀▀           ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '      ▄▄▄▄▄▄▄▄          ',
+       '     ▄██████████▄       ',
+       '     ▀██████████▀       ',
+       '      ▀▀▀▀▀▀▀▀          ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '     ▄▄▄▄▄▄▄▄           ',
+       '    ▄██████████▄        ',
+       '    ▀██████████▀        ',
+       '     ▀▀▀▀▀▀▀▀           ',
+       '                        ',
+       '                        ',
+       '                        ',
+       '                        '],
+    ] },
 };
 
 let vpScene = 'deep', vpTick = 0, vpSnow = [], vpOn = true, vpTimer = null;
@@ -2201,9 +2638,20 @@ function vpDraw() {
   // of every single art bug in the first cut, because two hand-typed rows have
   // to stay the same length forever and they never do. A key cannot go ragged.
   const key = S.key ? Object.assign({}, VP_KEY, S.key) : VP_KEY;
+
+  // FRAMES, the TW2002 way. A scene may be a single drawing (`art`) or a short
+  // loop of them (`frames`) — three or four, with only a few cells differing:
+  // a mouth opening a little, eyes sliding side to side, a light going on and
+  // off. That is exactly how the ANSI sequences in those games worked, and it
+  // is why they had so much life for so few bytes. `hold` slows a scene down so
+  // a breathing thing breathes and a warning light blinks.
+  const frames = S.frames && S.frames.length ? S.frames : [S.art];
+  const hold = S.hold || 2;
+  const A = frames[Math.floor(vpTick / hold) % frames.length];
+
   const ch = [], co = [];
   for (let y = 0; y < VP_H; y++) {
-    const ar = (S.art[y] || '').padEnd(VP_W, ' ').slice(0, VP_W);
+    const ar = (A[y] || '').padEnd(VP_W, ' ').slice(0, VP_W);
     ch.push(ar.split(''));
     co.push(ar.split('').map(g => g === ' ' ? ' ' : (key[g] || '7')));
   }
@@ -2273,11 +2721,19 @@ function showScene(key) {
 // never disagree with the prose, which would be worse than having no viewport.
 function sceneForNow() {
   if (state.foot) return 'ruin';
-  if (state.currentDepth <= 1) return 'surface';
+  // ADJACENCY FIRST: something alongside outranks everything, including the
+  // surface. Any creature with a scene now shows it — this used to be the
+  // angler alone, because the angler was the only creature ever drawn.
   const near = (state.creatures || []).find(c => !c.gone && c.awake
     && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
     && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID);
-  if (near && near.type === 'angler') return 'angler';
+  if (near && VP_SCENES[near.type]) return near.type;
+  // Then a RECENT CONTACT — heard but not alongside. You get to look at what
+  // is out there while it is out there, which is what an illustration window
+  // in a game made of text is for.
+  if (state._contactScene && state.moves < (state._contactUntil || 0)
+      && VP_SCENES[state._contactScene]) return state._contactScene;
+  if (state.currentDepth <= 1) return 'surface';
   const t = getTile(state.q, state.r);
   if (t && (t.poi === 'ruin' || t.poi === 'salvage')) return 'ruin';
   const L = layerAt(state.q, state.r);
@@ -8387,6 +8843,12 @@ function creatureTick() {
       // creature is recorded exactly when the boat could genuinely know of it,
       // and never from omniscience.
       noteCreature(c.type);
+      // Show the thing. The viewport is state-driven, so a contact holds the
+      // creature's own scene until the situation changes — you get to look at
+      // what is out there while it is out there, which is the entire reason
+      // an illustration window exists in a game made of text.
+      state._contactScene = c.type;
+      state._contactUntil = state.moves + 6;
     }
   }
   // The advisory re-arms once no hunter is locked on.

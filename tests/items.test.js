@@ -842,10 +842,17 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // rather than a parallel grid, which removes the ragged-row failure mode
   // entirely; what is left to check is that the art is square and that every
   // glyph drawn actually has a colour somewhere.
+  // A scene is either one drawing (`art`) or a loop of them (`frames`). Every
+  // frame of every scene must be square, or a single ragged row in frame three
+  // shows up once a second and nowhere else.
+  const framesOf = (s) => s.frames && s.frames.length ? s.frames : [s.art];
   let bad = [];
   for (const [k, s] of Object.entries(S)) {
-    if (!s.art || s.art.length !== H) bad.push(k + ' rows=' + (s.art || []).length);
-    (s.art || []).forEach((r, y) => { if (r.length !== W) bad.push(k + ' y' + y + '=' + r.length); });
+    if (!s.art && !(s.frames && s.frames.length)) { bad.push(k + ' has neither art nor frames'); continue; }
+    framesOf(s).forEach((f, fi) => {
+      if (!f || f.length !== H) { bad.push(k + ' f' + fi + ' rows=' + ((f || []).length)); return; }
+      f.forEach((r, y) => { if (r.length !== W) bad.push(k + ' f' + fi + ' y' + y + '=' + r.length); });
+    });
     if (s.col) bad.push(k + ' still carries a parallel colour grid');
   }
   check(bad.length === 0, 'every scene is exactly ' + W + 'x' + H, bad.slice(0, 6).join(' · ') || 'clean');
@@ -854,7 +861,7 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   let unkeyed = new Set(), drawn = 0;
   for (const s of Object.values(S)) {
     const key = Object.assign({}, baseKey, s.key || {});
-    for (const row of s.art) for (const g of row) {
+    for (const row of [].concat(...framesOf(s))) for (const g of row) {
       if (g === ' ') continue;
       drawn++;
       const c = key[g];
@@ -869,11 +876,22 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   let deadPulse = [];
   for (const [k, s] of Object.entries(S)) {
     const key = Object.assign({}, baseKey, s.key || {});
-    const used = new Set([].concat(...s.art.map(r => r.split('').map(g => key[g]))));
+    const used = new Set([].concat(...framesOf(s)).map(r => r.split('').map(g => key[g])).reduce((x,y)=>x.concat(y),[]));
     for (const pk of (s.pulse || [])) if (!used.has(pk)) deadPulse.push(k + ':' + pk);
   }
   check(deadPulse.length === 0, 'every pulse key names a colour the scene uses',
     deadPulse.join(', ') || 'all live');
+
+  // ANIMATION: a scene that declares frames must actually CHANGE between them,
+  // or it is paying the cost of animation and showing a still.
+  const still = names.filter(k => {
+    const f = S[k].frames;
+    if (!f || f.length < 2) return false;
+    return f.every(x => x.join('|') === f[0].join('|'));
+  });
+  check(still.length === 0, 'every animated scene actually moves', still.join(', ') || 'all move');
+  const animated = names.filter(k => S[k].frames && S[k].frames.length > 1);
+  check(animated.length >= 8, 'and there are real animations, not one showpiece', animated.length + ' animated');
 
   const noCap = names.filter(k => !S[k].cap || S[k].cap.length < 8);
   check(noCap.length === 0, 'every scene says what it is', noCap.join(', ') || 'all captioned');
