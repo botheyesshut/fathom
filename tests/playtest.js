@@ -63,6 +63,7 @@ function boot(seed) {
     '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
     '\nfunction __tile(q,r){ return tileAt(q,r); }' +
     '\nfunction __accepts(t,d){ return hexAcceptsDepth(t,d); }' +
+    '\nfunction __sound(){ return soundingBelow(); }' +
     '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
     '\nfunction __sub(){ return activeSub(); }' +
     '\nfunction __footTile(x,y){ return footTile(x,y); }' +
@@ -112,7 +113,7 @@ function playOne(tallies, personaName, seed) {
   let sb;
   try { sb = boot(seed); } catch (e) { T.errors['boot: ' + e.message] = (T.errors['boot: ' + e.message] || 0) + 1; return; }
   const s = sb.__state();
-  const run = { seen: {} };
+  const run = { seen: {}, followedSounder: false };
   const sawOnce = (_T, _run, key) => {
     if (run.seen[key]) return;
     run.seen[key] = 1;
@@ -253,7 +254,21 @@ function playOne(tallies, personaName, seed) {
     }
     run.goalTurns++;
 
-    // On a prize tile, get down to the floor — you dive TO salvage and ruins.
+    // FOLLOW THE SOUNDER, the way a reading captain does.
+    //
+    // This used to dive toward `here.floor` — the seabed — which stopped being
+    // where prizes are the moment they were anchored to their chambers. Worse,
+    // it meant the harness could not see the signposting work at all: the
+    // sounder is the game's answer to "prizes are present, reachable, and never
+    // found", and a bot that ignores it under-reads every cargo number and then
+    // gets quoted as evidence. It reads the same instrument now.
+    const snd = sb.__sound();
+    if (snd && snd.odd && snd.oddUnder > 0 && canGo(sb, s, 1)) {
+      run.followedSounder = true;
+      call(sb.changeDepth, sub.diveStep);
+      continue;
+    }
+    // Legacy seabed prizes (shelf wrecks) still lie on the floor.
     const here = sb.__tile(s.q, s.r);
     if (here && here.poi && (here.poi === 'salvage' || here.poi === 'ruin') && here.floor != null
         && Math.abs(s.currentDepth - here.floor) > 60 && s.currentDepth < here.floor && canGo(sb, s, 1)) {
@@ -296,6 +311,7 @@ function playOne(tallies, personaName, seed) {
     t.crewHired += (s.crew || []).length;
     t.peakCargo.push(peakCargo);
     if (peakCargo > 0) t.everCollected++;
+    if (run.followedSounder) t.followedSounder = (t.followedSounder || 0) + 1;
     for (const k of Object.keys(s.items || {})) t.itemsFound[k] = (t.itemsFound[k] || 0) + 1;
   }
 }
@@ -390,6 +406,7 @@ for (const p of names) {
 
 console.log('\n=== ECONOMY ===');
 console.log(`  runs that ever picked up ANY cargo: ${T.everCollected}/${T.runs} (${pct(T.everCollected, T.runs)}%)`);
+console.log(`  runs that followed the sounder down: ${T.followedSounder||0}/${T.runs} (${pct(T.followedSounder||0, T.runs)}%)`);
 console.log(`  median peak cargo held: ${median(T.peakCargo)}   (best ${Math.max(...T.peakCargo)})`);
 console.log(`  median crates banked: ${median(T.cratesBanked)}   (max ${Math.max(...T.cratesBanked)})`);
 console.log(`  median relics vaulted: ${median(T.relicsVaulted)}  (max ${Math.max(...T.relicsVaulted)})`);
