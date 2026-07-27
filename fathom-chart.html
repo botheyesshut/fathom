@@ -459,14 +459,15 @@
      the whole point of an afterthought. Tap it to put it away. */
   #viewport {
     position: absolute;
-    top: 8px; left: 8px;
+    top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left));
     z-index: 18;
     padding: 3px 4px 2px;
     background: rgba(4, 8, 16, 0.62);
     border: 1px solid rgba(90, 120, 150, 0.22);
     border-radius: 2px;
     backdrop-filter: blur(2px);
-    cursor: pointer;
+    /* NOT `cursor: pointer` — nothing here is clickable any more, and a hand
+       cursor over something that ignores clicks is a promise the page breaks. */
     user-select: none;
     max-width: 45vw;
     /* The porthole floats over the top-left of the chart and was eating every
@@ -476,7 +477,11 @@
        tap-to-hide gesture on the picture. */
     pointer-events: none;
   }
-  #vp-art, #vp-cap { pointer-events: auto; }
+  /* THE WHOLE THING IS CLICK-THROUGH, art included. Giving the picture back its
+     own taps still left it eating 4.9% of the chart's legal move targets — and
+     the gesture it was keeping (tap the porthole to hide it) is the same switch
+     that already sits in Options, where Sean asked for it. A decoration does
+     not get to take moves off the board to save a settings trip. */
   #viewport.hidden { display: none; }
   #vp-art {
     margin: 0;
@@ -604,7 +609,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    padding: 0 1rem 1.2rem;
+    padding: 0 max(1rem, env(safe-area-inset-left)) max(1.2rem, env(safe-area-inset-bottom))
+               max(1rem, env(safe-area-inset-right));
     flex-shrink: 0;
   }
 
@@ -641,11 +647,15 @@
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 24px;
+    height: 44px;
     background: transparent;
     cursor: pointer;
     margin: 0;
     padding: 0;
+    /* The bar it draws stays a hairline; only the part your thumb has to find
+       gets bigger. An instrument should look like an instrument and still be
+       usable one-handed on a bus. */
+    touch-action: none;
   }
 
   #ping-power::-webkit-slider-runnable-track {
@@ -672,6 +682,11 @@
     margin-top: -7px;
     cursor: pointer;
   }
+  /* The thumb centres itself on a 2px track inside a 44px box in Chrome by
+     centring the RUNNABLE TRACK, so the track needs the box height to lay the
+     thumb against. Without this the hairline pinned to the top edge. */
+  #ping-power::-webkit-slider-runnable-track { margin: 21px 0; }
+  #ping-power::-moz-range-track { margin: 21px 0; }
 
   #ping-power::-moz-range-thumb {
     width: 16px;
@@ -710,6 +725,16 @@
      flex:1 there grew the restart button into a 462px-tall tap trap over the
      text you are still reading. */
   #gameover .btn { flex: 0 0 auto; }
+  /* The only button on the death screen, and it measured 41 px. If a player is
+     going to press one control after losing a boat, it is this one. */
+  #go-restart { min-height: 48px; min-width: 140px; }
+
+  /* THE TOUCH FLOOR, applied where the game is actually played. Every button
+     in the control row measured 41 px tall — close enough to look fine on a
+     desktop and not close enough for a thumb on a moving bus, which is the
+     stated target. Scoped to #controls so panel rows keep their compact
+     buttons; a panel is read with two hands and a settled attention. */
+  #controls .btn { min-height: 44px; }
 
   /* A control the game has disabled must LOOK disabled. */
   .btn:disabled, .btn[disabled] {
