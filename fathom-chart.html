@@ -2167,20 +2167,7 @@ const VP_SCENES = {
            '▒█████████████████████▒ ',
            '▒▓███████████████████▓▒ '] },
 
-  surface: { cap: 'air, and an unkind sky',
-    pulse: ['7'],
-    key: { '░': '8', '~': '3', '▒': '1', '█': '8', '▄': '7' },
-    snowFrom: 6,
-    art: ['    ░░         ░░░      ',
-           ' ░░░░░░      ░░░░░░░    ',
-           '                        ',
-           '~~~~~~~~~~~~~~~~~~~~~~~~',
-           '          ▄█▄           ',
-           '~~~~~~~~▄█████▄~~~~~~~~~',
-           '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
-           '                        ',
-           '                        ',
-           '                        '] },
+
 
 
   // ---- THE BESTIARY, DRAWN. One scene per creature, each a few frames with
@@ -2610,6 +2597,238 @@ const VP_SCENES = {
        '                        ',
        '                        '],
     ] },
+
+  // ---- THE AMBIENT SCENES, seen through the porthole. Everything here is
+  // framed by a hull rim on purpose: you never look at this sea directly,
+  // you look through a hole in a boat. The surface and the underground lake
+  // share a composition deliberately — a captain should recognise a surface
+  // instantly, and only then notice that the sky above this one is stone.
+
+  dock: { cap: 'the pier, and the last solid ground for hundreds of miles', hold: 4, porthole: true, snowFrom: 7,
+    key: { '▄': '6', '║': '6', '~': '3', '≈': 'b', '░': '1', 'ᵛ': '7', '▐': '8', '▌': '8', '▗': '8', '▖': '8', '▝': '8', '▘': '8', '▀': '8' },
+    frames: [
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐        ᵛ         ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐~~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ░░░░░░░░░░░░░░░ ▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐         ᵛ        ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐≈~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ░░░░░░░░░░░░░░░ ▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐       ᵛ          ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐~~≈~~~~~~~~~~~~~~~▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ░░░░░░░░░░░░░░░ ▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐~~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐  ║      ║      ║ ▌  ',
+       '  ▐  ░░░░░░░░░░░░░░░ ▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+    ] },
+
+  surface: { cap: 'the glass half under, and a sky that has not been kind', hold: 3, porthole: true, snowFrom: 7,
+    pulse: ['e'],
+    key: { '☼': 'e', '~': 'b', '≈': 'f', '░': '3', '▒': '1', '▐': '8', '▌': '8', '▗': '8', '▖': '8', '▝': '8', '▘': '8', '▀': '8', '▄': '8' },
+    frames: [
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐      ☼           ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐░░▒░░░░░░░▒░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░▒░░░░░░░▒░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐       ☼          ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~~≈~~~~~~~~≈~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░▒░░░░░░░▒░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐      ☼           ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░▒░░░░░░░▒░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐       ☼          ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~~≈~~~~~~~~≈~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░▒░░░░░░░▒░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+    ] },
+
+  shallow: { cap: 'light still reaches here, and things still live in it', hold: 3, porthole: true, snowFrom: 1,
+    key: { '│': 'b', '>': 'a', '<': 'a', '░': '3', '▐': '8', '▌': '8', '▗': '8', '▖': '8', '▝': '8', '▘': '8', '▀': '8', '▄': '8' },
+    frames: [
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐  │     │   │    │▌  ',
+       '  ▐  │     │   │    │▌  ',
+       '  ▐  │     │   │    │▌  ',
+       '  ▐ ><>              ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐             <><  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐   │   │     │  │ ▌  ',
+       '  ▐   │   │     │  │ ▌  ',
+       '  ▐   │   │     │  │ ▌  ',
+       '  ▐     ><>          ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐         <><      ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐  │     │   │    │▌  ',
+       '  ▐  │     │   │    │▌  ',
+       '  ▐  │     │   │    │▌  ',
+       '  ▐         ><>      ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐     <><          ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐   │   │     │  │ ▌  ',
+       '  ▐   │   │     │  │ ▌  ',
+       '  ▐   │   │     │  │ ▌  ',
+       '  ▐             ><>  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐ <><              ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+    ] },
+
+  midwater: { cap: 'the light is going out of the water, and taking the colour', hold: 4, porthole: true, snowFrom: 1,
+    key: { '·': '3', '>': '2', '<': '2', '▒': '1', '░': '1', '▐': '8', '▌': '8', '▗': '8', '▖': '8', '▝': '8', '▘': '8', '▀': '8', '▄': '8' },
+    frames: [
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐     ·        ·   ▌  ',
+       '  ▐     ·        ·   ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐  ><>             ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐      ·      ·    ▌  ',
+       '  ▐      ·      ·    ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐     ><>          ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐     ·        ·   ▌  ',
+       '  ▐     ·        ·   ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐        ><>       ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐      ·      ·    ▌  ',
+       '  ▐      ·      ·    ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐           ><>    ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+    ] },
+
+  cavernlake: { cap: 'a surface, and a sky of stone above it', hold: 4, porthole: true, snowFrom: 6,
+    key: { '▓': '8', '▒': '8', '~': '1', '≈': '9', '░': '1', '^': '8', 'v': '8', '▐': '8', '▌': '8', '▗': '8', '▖': '8', '▝': '8', '▘': '8', '▀': '8', '▄': '8' },
+    frames: [
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▌  ',
+       '  ▐▓▓▒▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▌  ',
+       '  ▐   ^v             ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▌  ',
+       '  ▐▓▓▒▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▌  ',
+       '  ▐        ^v        ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~≈~~~~~~~~~≈~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▌  ',
+       '  ▐▓▓▒▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▌  ',
+       '  ▐             ^v   ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~~~~~~~~~~~~~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+      ['   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ',
+       '  ▐▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▌  ',
+       '  ▐▓▓▒▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▌  ',
+       '  ▐                  ▌  ',
+       '  ▐                  ▌  ',
+       '  ▐~~≈~~~~~~~~~≈~~~~~▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐░░░░░░░░░░░░░░░░░░▌  ',
+       '  ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌  ',
+       '   ▝▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘   '],
+    ] },
 };
 
 let vpScene = 'deep', vpTick = 0, vpSnow = [], vpOn = true, vpTimer = null;
@@ -2662,6 +2881,11 @@ function vpDraw() {
   for (const p of vpSnow) {
     const y = Math.floor(p.y) % VP_H, x = p.x;
     if (y < snowTop || ch[y][x] !== ' ') continue;
+    // A PORTHOLE HAS AN INSIDE AND AN OUTSIDE. Marine snow drifting past the
+    // rim reads as dirt on the lens, and drifting through the SKY above a
+    // waterline reads as a mistake. Scenes framed by a hull say so, and the
+    // snow stays in the water where it belongs.
+    if (S.porthole && (x < 4 || x > 19)) continue;
     // Not into NARROW enclosed gaps — the angler's teeth and the ruin's windows
     // are one-cell holes with art on both sides, and a mote landing in one reads
     // as a smudge on the drawing rather than as weather. But a cave passage is
@@ -2733,14 +2957,41 @@ function sceneForNow() {
   // in a game made of text is for.
   if (state._contactScene && state.moves < (state._contactUntil || 0)
       && VP_SCENES[state._contactScene]) return state._contactScene;
-  if (state.currentDepth <= 1) return 'surface';
   const t = getTile(state.q, state.r);
+
+  // AT A SURFACE — but WHICH surface? The open sea and the roof of a drowned
+  // cavern are the same act (you are at the top of the water) and completely
+  // different places. The run's own ceiling tells them apart: open sea has sky
+  // above it and a cavern has several kilometres of rock. The two scenes share
+  // a composition on purpose — a captain reads "surface" instantly and only
+  // then notices that this sky is stone.
+  const runHere = cellRun(state.q, state.r, state.currentDepth);
+  const atTop = runHere && Math.abs(state.currentDepth - runHere.ceiling) <= DEPTH_GRID;
+  if (state.currentDepth <= 1) {
+    return hexDistance({ q: state.q, r: state.r }, { q: 1, r: 1 }) <= 4 ? 'dock' : 'surface';
+  }
+  // ...and a cavern LAKE needs air over the water, not merely rock over your
+  // head. Being pressed against a chamber roof is not a surface, it is a
+  // ceiling — the difference is whether you could open the hatch. The game
+  // already marks the two places where you could: a trapped gas pocket and a
+  // cavern beach.
+  const cellHere = cells.get(cellKey(state.q, state.r, state.currentDepth));
+  const hasAir = (t && t.poi === 'air') || (cellHere && cellHere.kind === 'beach');
+  if (atTop && runHere.ceiling > 0 && hasAir) return 'cavernlake';
+
   if (t && (t.poi === 'ruin' || t.poi === 'salvage')) return 'ruin';
   const L = layerAt(state.q, state.r);
   if (L && layerKnown(state.q, state.r, state.currentDepth)
       && Math.abs(state.currentDepth - L.depth) <= DEPTH_GRID) return 'layer';
+  // OPEN WATER, BY DEPTH. The same sea with the light going out of it: fish and
+  // sun-shafts up top, a dimmer version of both below, and past that the water
+  // stops being a place with things in it. Tight water is a passage regardless
+  // of depth — walls beat everything, because walls are what you hit.
   const nbrs = hexNeighbors(state.q, state.r).filter(n => { const nt = getTile(n.q, n.r); return nt && !nt.wall; });
-  return nbrs.length >= 4 ? 'open' : 'deep';
+  if (nbrs.length < 4) return 'deep';
+  if (state.currentDepth < 400) return 'shallow';
+  if (state.currentDepth < 1200) return 'midwater';
+  return 'open';
 }
 function syncScene() { showScene(sceneForNow()); }
 
