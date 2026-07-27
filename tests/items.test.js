@@ -439,6 +439,10 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   fd.x = adj.x; fd.y = adj.y;
   const nerve0 = s.crew[0].nerve;
   sandbox.__step(body.x, body.y);
+  // This hand fell ON the breach, so the S6 leave-guard arms on the first tap.
+  // The confirming tap still takes the body up before it hauls you out — the
+  // guard delays LEAVING, it never blocks recovering your dead.
+  if (s.foot) sandbox.__step(body.x, body.y);
   check((s.corpses || []).length === 1, 'you can go back for your dead and take them up', s.corpses.length + ' aboard');
   check(s.crew[0].nerve < nerve0, 'and the living watch you do it', nerve0 + ' -> ' + s.crew[0].nerve);
 

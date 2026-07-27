@@ -1052,7 +1052,9 @@
   <div id="ping-power-row">
     <div class="ping-info">
       <span class="ping-label">Sonar Power</span>
-      <span class="ping-stats"><span id="ping-cost">5</span> air · <span id="ping-range">300</span> m</span>
+      <!-- O8: the units used to be hardcoded around these spans, so silent
+           running read "OFF air · silent m". They live in the spans now. -->
+      <span class="ping-stats"><span id="ping-cost">5 air</span> · <span id="ping-range">300 m</span></span>
     </div>
     <input type="range" id="ping-power" min="0" max="5" value="2" step="1">
   </div>
@@ -2499,9 +2501,16 @@ function renderTrade(e) {
 
   const buyRows = cu.sells.map(k => {
     const it = ITEMS[k], p = buyPriceFrom(e.culture, k), can = state.cargo >= p;
+    // M2: an unaffordable row used to render a dead button showing only the
+    // price, so tapping it did nothing and said nothing — the top complaint in
+    // the audit. The Port states the shortfall; so does the deep now. Note the
+    // peoples deal in CARGO ABOARD, not the bank ashore, which is itself worth
+    // saying out loud since every other counter in the game is banked.
+    const short = p - state.cargo;
     return `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
       `<div class="in"><b>${it.name}</b><span class="fl">${it.flavor}</span></div>` +
-      `<button class="act ${can ? '' : 'none'}" ${can ? `data-buy="${k}"` : ''}>${p} cr</button></div>`;
+      (can ? `<button class="act" data-buy="${k}">${p} cr</button>`
+           : `<button class="act none">${short} more<br>in the hold</button>`) + `</div>`;
   }).join('');
   buyEl.innerHTML = buyRows || '<div id="inv-empty">They have nothing to sell just now.</div>';
 
@@ -2881,7 +2890,12 @@ const PAGES = [
   "You find yourself standing at the end of an underwater quay that stretches off along the rock wall. Strange, blue light comes from a bowl in the wall up near the ceiling, the source of which is anyone's guess. You get the impression that it's been burning for a long, long time. Thick ropes lie in ancient, cobwebbed coils here and there along the dock, some of them trailing into the black, shimmering water. A rusted anchor rests beside a gaff with a rotten, wooden handle. There are no boats docked here.",
   "Against one wall sits an old, metal lunchbox, the kind you've seen in photographs of construction workers in the nineteen-twenties. It is open and entirely empty. Beside it is a stack of clothing, neatly folded and covered with perhaps a quarter-inch of dust. The dust comes off in a single sheet when you brush it away, then disintegrates into the air. It is as though somebody took his lunch and decided to go for a swim, but never got back to work.",
   "You drop the paddle into the bottom of the canoe and stretch. The clatter resounds and reverberates throughout the cavern. Every move you make is the loudest sound here, accompanied only by your ragged breathing and the dripping of water into the lake all around you, like a slow rain. When you catch your breath, you realize that you're actually very lost now, even more lost than you've been so far.",
-  "It is as if these very words were written in a book somewhere by someone else entirely, as if you were only reading them on your phone for your own pleasure. You do hear the voice of the thoughts that pretend to be yours, and it is increasingly difficult to continue. Half of you thinks, almost screaming, Pay attention and paddle, Aeneas! Keep moving forward! But the other half cannot ignore the voice that repeats like an echo in your brain: it's just a book – never mind – just put it down and you'll be home.",
+  // The 2016 original read "on your phone" — a fourth-wall gag that worked for
+  // a gamebook and breaks here, because a captain may be at a desk. Replaced
+  // with the contrast the sentence was always reaching for: warm and dry,
+  // against a freezing underground lake. Device-agnostic, and it does more work
+  // than the gag did.
+  "It is as if these very words were written in a book somewhere by someone else entirely, as if you were only reading them somewhere warm and dry, for your own pleasure. You do hear the voice of the thoughts that pretend to be yours, and it is increasingly difficult to continue. Half of you thinks, almost screaming, Pay attention and paddle, Aeneas! Keep moving forward! But the other half cannot ignore the voice that repeats like an echo in your brain: it's just a book – never mind – just put it down and you'll be home.",
   "Behind you and ten feet to your right, the leg of your unfortunate comrade, Mikhail, is being gnawed by a hominid fish with webbed hands and feet. He has been dead for days and so does not feel it, but you feel it vicariously. You know that it knows you are here, here just a few feet away from it, carving into the rock wall. It's not the least bit concerned you might escape. It merely sucks on Mikhail's leg as if it were a chicken bone and stares out of its round, white, vestigial eyes at nothing.",
   "You note that by waiting a few seconds at each step of the way, you can tell what side of your canoe the fish-men are on by subtle ripples on the surface of the lake.",
   "You stop looking at the walls and the falls and the firelight, and start searching beneath the surface of the water with sharp, intent eyes. There, just beneath the waterline, gape a crowd of wide, open mouths full of sharp, triangular teeth, a standing group of gray-skinned fish-beings with infinite patience, their heads thrown back to catch whatever it might be that occasionally comes over the falls and across the lake into their waiting mouths.",
@@ -4894,8 +4908,14 @@ function render() {
         // Invisible tap target on the sub's own hex — tapping it issues a "wait"
         const waitHit = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         waitHit.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 0.85));
-        waitHit.setAttribute('fill', 'rgba(0,0,0,0.001)');
-        waitHit.setAttribute('stroke', 'none');
+        // O7: this was fill 0.001 / stroke none — a completely invisible target
+        // on your own hex. "Hold station" is a real tactical move in a game
+        // built on sound (waiting is how you let a hunter lose your thread), and
+        // nothing on screen ever suggested it existed.
+        waitHit.setAttribute('fill', 'rgba(110,207,174,0.04)');
+        waitHit.setAttribute('stroke', 'rgba(110,207,174,0.30)');
+        waitHit.setAttribute('stroke-width', '0.8');
+        waitHit.setAttribute('stroke-dasharray', '1.5 2.5');
         waitHit.style.cursor = 'pointer';
         waitHit.addEventListener('click', () => wait());
         g.appendChild(waitHit);
@@ -5260,10 +5280,10 @@ function updatePingDisplay() {
   const rangeEl = document.getElementById('ping-range');
   if (p === 0) {
     if (costEl) costEl.textContent = 'OFF';
-    if (rangeEl) rangeEl.textContent = 'silent';
+    if (rangeEl) rangeEl.textContent = 'running silent';
   } else {
-    if (costEl) costEl.textContent = lvl.activeCost;
-    if (rangeEl) rangeEl.textContent = lvl.activeRange * 60;
+    if (costEl) costEl.textContent = lvl.activeCost + ' air';
+    if (rangeEl) rangeEl.textContent = (lvl.activeRange * 60) + ' m';
   }
   // Disable the Ping button when sonar is set to silent
   const pingBtn = document.getElementById('btn-ping');
@@ -6854,6 +6874,22 @@ function stepFoot(x, y) {
     return;
   }
 
+  // S6: LEAVING SPENDS THE SITE, SO IT TAKES TWO TAPS.
+  // Stepping onto the breach used to call leaveInterior() on the first tap, and
+  // the breach sits among ordinary walkable tiles — one mis-tap next to the exit
+  // ended the expedition and worked the ruin out for good. Same arm-then-confirm
+  // as Jettison: the first tap asks, any other move cancels.
+  if (t.t === 'entry') {
+    if (f.leaveArmed !== nk) {
+      f.leaveArmed = nk;
+      log('The breach is right there, and daylight-coloured water beyond it. Step onto it again to haul yourself out — anything else and you stay.', 'warn', 'BREACH');
+      render();
+      return;
+    }
+  } else {
+    f.leaveArmed = null;   // any other move is an answer of "not yet"
+  }
+
   // DROWNED WATER. A flooded passage is a wall to a body that breathes air —
   // and no wall at all to something that does not. Going under costs dearly and
   // can fill a lung; the crew will not follow you in, and wait at the edge.
@@ -7252,8 +7288,11 @@ function renderInterior() {
     if (t.t === 'carved') { box(x, y, '#2c2a20', dim); glyph(x, y, '·', '#5f6a4e', 12, dim * 0.8); }
     else
     if (t.t === 'entry') {
-      box(x, y, '#1b3f4a', dim);
-      glyph(x, y, '≈', '#6ecfae', 13, dim);
+      // Armed to leave: the breach lights up so the confirming tap is a
+      // deliberate act rather than a repeat of the accident.
+      const armed = f.leaveArmed === k;
+      box(x, y, armed ? '#2f6f5a' : '#1b3f4a', dim);
+      glyph(x, y, armed ? '⇑' : '≈', armed ? '#b8f0d8' : '#6ecfae', armed ? 15 : 13, dim);
     } else if (t.t === 'door') {
       const shut = f.closed.includes(k);
       box(x, y, shut ? '#5b4a2e' : '#2f3a33', dim);
@@ -8536,6 +8575,13 @@ function changeDepth(deltaMeters) {
   // 3% of runs ever picked up any cargo at all.)
   const tileHere = getTile(state.q, state.r);
   if (tileHere && tileHere.poi && !state.foot) handleTile(tileHere);
+
+  // E7: AN ENCLAVE IS AT A DEPTH TOO. checkEnclave() had exactly one call site,
+  // in move(), so a captain who dived onto one of the peoples sat inside their
+  // settlement with no panel, no greeting, and no way to trade — the same class
+  // of bug as "descend to work it" above, and it silently gated the entire
+  // culture economy behind arriving horizontally.
+  if (!state.foot) checkEnclave();
 
   // The same hex is a different room at a different depth — the boat says so.
   if (rand() < 0.55) log(describeSpace('again'), '', 'WATER');

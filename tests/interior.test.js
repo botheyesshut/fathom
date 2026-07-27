@@ -237,8 +237,14 @@ const inward2 = [[fExit.x, fExit.y - 1], [fExit.x, fExit.y + 1], [fExit.x - 1, f
   .find(([x, y]) => !sandbox.__solid(x, y));
 const ex = fExit.x, ey = fExit.y;
 sandbox.__step(inward2[0], inward2[1]);   // one step in
-sandbox.__step(ex, ey);                   // and back out through the breach
-check(sandbox.__foot() === null, 'stepping onto the breach ends the dive', 'back aboard');
+// S6: leaving spends the site, so the breach ARMS on the first tap and only
+// goes through on the second. One tap next to the exit used to end a dive by
+// accident and work the ruin out for good.
+sandbox.__step(ex, ey);
+check(sandbox.__foot() !== null, 'one tap on the breach ASKS rather than leaving',
+  sandbox.__foot() ? 'still on the deck' : 'left immediately — the guard is gone');
+sandbox.__step(ex, ey);                   // confirmed: out through the breach
+check(sandbox.__foot() === null, 'and the second tap ends the dive', 'back aboard');
 check(sandbox.__st().cargo === cargoBefore + 3 && sandbox.__st().relics === relicsBefore + 1,
   'the haul comes aboard with you',
   'cargo ' + cargoBefore + '->' + sandbox.__st().cargo + ', relics ' + relicsBefore + '->' + sandbox.__st().relics);
