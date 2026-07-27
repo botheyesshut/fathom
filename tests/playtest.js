@@ -97,7 +97,7 @@ const PERSONAS = {
 
 function newTally() {
   return {
-    runs: 0, turns: 0, deaths: {}, survived: 0, softlocks: 0, errors: {},
+    runs: 0, turns: 0, deaths: {}, survived: 0, softlocks: 0, traps: 0, botStuck: 0, errors: {},
     maxDepth: [], cratesBanked: [], relicsVaulted: [],
     reach: {}, itemsFound: {}, itemsUsed: {}, boats: {}, crewLost: 0, crewHired: 0,
     peakCargo: [], everCollected: 0, portVisits: 0, softlockWhere: [],
@@ -284,8 +284,21 @@ function playOne(tallies, personaName, seed) {
       idle++;
       if (canGo(sb, s, 1)) call(sb.changeDepth, sub.diveStep);
       else if (canGo(sb, s, -1)) call(sb.changeDepth, -sub.diveStep);
-      else { T.softlocks++; T.softlockWhere.push(`d=${s.currentDepth}m`); sawOnce(T, run, 'SOFTLOCK: nothing legal to do'); break; }
-      if (idle > 20) { T.softlocks++; T.softlockWhere.push(`d=${s.currentDepth}m idle`); sawOnce(T, run, 'SOFTLOCK: nothing legal to do'); break; }
+      // TWO DIFFERENT THINGS, AND THEY WERE BEING REPORTED AS ONE.
+      //
+      // A TRAP is a cell with no lateral exit AND no vertical move — the world
+      // has genuinely closed around you, and that is a generator bug.
+      // Zero of those have ever been observed, and flip.test independently
+      // guarantees it: BFS from the surface reaches 20,000+ cells, so the world
+      // is connected by construction.
+      //
+      // The other kind is this BOT oscillating in a vertical shaft: it dives,
+      // finds no neighbours, rises, finds none, and bobs until the counter
+      // trips. That is a pathfinding failure in a policy that has no
+      // pathfinding, not a hole in the world. Reporting them together made
+      // every run look like it might have hit a generator bug.
+      else { T.traps++; T.softlockWhere.push(`TRAP d=${s.currentDepth}m`); sawOnce(T, run, 'TRAP: world closed, no legal move'); break; }
+      if (idle > 20) { T.botStuck++; sawOnce(T, run, 'bot oscillated in a shaft (not a world bug)'); break; }
       continue;
     }
     idle = 0;
@@ -396,7 +409,8 @@ console.log(`  survived all ${TURNS} turns: ${T.survived}/${T.runs} (${pct(T.sur
 for (const k of Object.keys(T.deaths).sort((a, b) => T.deaths[b] - T.deaths[a])) {
   console.log(`  died — ${k}: ${T.deaths[k]} (${pct(T.deaths[k], T.runs)}%)`);
 }
-console.log(`  softlocks: ${T.softlocks}${T.softlockWhere.length ? '  at ' + T.softlockWhere.slice(0, 8).join(', ') : ''}`);
+console.log(`  TRAPS (world closed — a generator bug): ${T.traps}${T.softlockWhere.length ? '  ' + T.softlockWhere.join(', ') : ''}`);
+console.log(`  bot oscillated in a shaft (harness limitation, not a world bug): ${T.botStuck}`);
 
 console.log('\n=== THE CAPTAINS ===');
 for (const p of names) {
