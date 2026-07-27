@@ -3277,7 +3277,17 @@ function portRows() {
   if (state.crew.length >= cap) {
     rows.push({ name: 'No berth free', desc: 'A bigger boat carries more hands.', ok: false, why: '', act: null });
   } else {
-    if (!state.portHire) state.portHire = { name: pick(CREW_NAMES), role: pick(CREW_ROLES) };
+    // NOT A NAME ALREADY ABOARD, OR ALREADY LOST. Measured at 9.4% collisions
+    // over 4,000 two-hire trials — and a duplicate is not cosmetic here: the
+    // Muster prints the same header twice, the Outfitter offers "boarding axe
+    // — Ito" for two different people with no way to tell which button kits
+    // whom, and `dweller.worn` and `lostCrew` both key on the name alone. Two
+    // Itos means the deep can put your living engineer's face on a hollow man.
+    if (!state.portHire) {
+      const taken = new Set([...(state.crew || []).map(m => m.name), ...(state.lostCrew || [])]);
+      const free = CREW_NAMES.filter(n => !taken.has(n));
+      state.portHire = { name: pick(free.length ? free : CREW_NAMES), role: pick(CREW_ROLES) };
+    }
     const h = state.portHire;
     const an = /^[aeiou]/i.test(h.role) ? 'an ' : 'a ';
     rows.push({ name: h.name, desc: an + h.role + ' looking for a berth · ' + CREW_HIRE_COST + ' crates',
@@ -4155,6 +4165,20 @@ function resolveCavern(L, tier) {
   updateHUD(); render(); scheduleSave();
 }
 
+// What the crew's injuries cost the boat in air. A flooded lung is not a word:
+// somebody aboard is breathing badly and the scrubbers wear it. Bounded, so a
+// hard-luck crew is expensive and never unsurvivable.
+function crewAirBurden() {
+  let extra = 0;
+  for (const m of (state.crew || [])) {
+    for (const c of (m.conditions || [])) {
+      const spec = CONDITIONS[c];
+      if (spec && spec.airMult) extra += spec.airMult - 1;
+    }
+  }
+  return Math.min(1.5, extra);
+}
+
 function teamScore() {
   let atk = 0, def = 0;
   for (const m of state.crew) {
@@ -4207,6 +4231,20 @@ const CONDITIONS = {
 
 // Every member carries their record. Old saves (and freshly hired hands) are
 // brought up to spec here, so nothing downstream has to null-check.
+// Blood does not wait. A hand who is bleeding out has a handful of turns, and
+// then the boat is one hand lighter — unless somebody spends a dressing.
+function dyingTick() {
+  if (!state.crew || !state.crew.length) return;
+  for (let i = state.crew.length - 1; i >= 0; i--) {
+    const m = state.crew[i];
+    if (!m.dying) { m.bleed = 0; continue; }
+    m.bleed = (m.bleed || 0) + 1;
+    if (m.bleed === 1) log(`${m.name} is bleeding out. There is a little time, and not much.`, 'danger', 'CREW');
+    else if (m.bleed === 3) log(`${m.name} has stopped asking for anything. Whatever is going to be done has to be done now.`, 'danger', 'CREW');
+    else if (m.bleed >= 5) loseCrew(m, 'taken');
+  }
+}
+
 function crewVitals(m) {
   if (m.nerve == null) m.nerve = 70;
   if (!Array.isArray(m.conditions)) m.conditions = [];
@@ -7119,6 +7157,7 @@ function move(q, r) {
   hauntTick();     // the old ones work on the crew while their relics ride below
   holdTick();      // and the rest of the hold — the soothing, the living — stirs too
   corpseTick();    // and the dead, if you are carrying any, go on not keeping
+  dyingTick();     // and a hand who is bleeding out is running out of time
   airCounsel();
   provisionTick();
   baseTick();
@@ -8162,7 +8201,16 @@ function dwellerStep() {
   const bodies = [{ captain: true, x: f.x, y: f.y }];
   for (const m of partyBodies()) bodies.push({ m: m, x: m.fx, y: m.fy });
   let tgt = null, dist = Infinity;
-  for (const b of bodies) { const dd = Math.abs(d.x - b.x) + Math.abs(d.y - b.y); if (dd < dist) { dist = dd; tgt = b; } }
+  for (const b of bodies) {
+    const dd = Math.abs(d.x - b.x) + Math.abs(d.y - b.y);
+    // A HAND AT THE SAME REACH IS THE ONE IT TAKES. Strictly-nearest made the
+    // captain the only target there has ever been, because the party walks
+    // toward the captain and the captain walks toward the thing. Ties, and
+    // near-ties, go to the crew — which is what "a hand you stand between
+    // yourself and it takes the blow meant for you" has always meant.
+    const better = b.m ? dd <= dist : dd < dist;
+    if (better) { dist = dd; tgt = b; }
+  }
   if (!tgt || dist > DWELLER_EAR) return;
 
   let best = null, bestD = dist;
@@ -8255,8 +8303,9 @@ function stepFoot(x, y) {
   else if (drowned) {
     log('You take a breath and go under. The cold takes hold of your chest, and the dark down there is total, and it is a long way across.', 'danger', 'DROWNED');
     // A hard swim can fill a lung. The deep charges for its shortcuts.
-    if (rand() < 0.3 && state.crew.length) {
-      const m = state.crew[Math.floor(rand() * state.crew.length)];
+    const ashoreNow = partyBodies();
+    if (rand() < 0.3 && ashoreNow.length) {
+      const m = ashoreNow[Math.floor(rand() * ashoreNow.length)];
       crewVitals(m); inflictCondition(m, 0.55); frayNerve(m, 6);
     }
   } else if (t.wet === 'shallow') {
@@ -8371,7 +8420,10 @@ const SWING_POOR = [
 // takes the nearest body, so a hand you put between yourself and the thing is a
 // hand between yourself and the thing — the screen made literal. Positions are
 // what turn a crushed hand or a fraying nerve from a number into a decision.
-const PARTY_MAX = 3;   // a small party — you lead a boarding, you do not command a company
+// Matches the largest crewCap in SUBS. At 3 against the Nyx's 4 berths, the
+// fourth hand you paid for never once went ashore — and `deployParty` fills
+// in roster order, so it was always the same person, 60 times out of 60.
+const PARTY_MAX = 4;   // a small party — you lead a boarding, you do not command a company
 
 function partyBodies() { return state.crew.filter(m => m.ashore && !m.lost); }
 
@@ -8379,7 +8431,7 @@ function partyBodies() { return state.crew.filter(m => m.ashore && !m.lost); }
 function deployParty(ch) {
   for (const m of state.crew) { m.ashore = false; m.fx = null; m.fy = null; }
   const spots = [];
-  for (let r = 1; r <= 3 && spots.length < PARTY_MAX; r++) {
+  for (let r = 1; r <= 4 && spots.length < PARTY_MAX; r++) {
     for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [-1, 1], [-1, -1], [1, 1]]) {
       const x = ch.entry.x + dx * r, y = ch.entry.y + dy * r;
       if (x < 1 || y < 1 || x > INT_SIZE - 2 || y > INT_SIZE - 2) continue;
@@ -8543,7 +8595,10 @@ function leaveInterior(prefix) {
   state.foot = null;
   state.cargo += f.crates;
   state.relics += f.relics;
-  for (const m of state.crew) if (m.role === 'diver') m.xp++;   // dives season divers
+  // Divers learn most from a dive. Everyone else crewed the boat that got
+  // there and back, and that is worth something — without it, rung 3 was
+  // unreachable by construction and two of the three roles never advanced.
+  for (const m of state.crew) m.xp += (m.role === 'diver' ? 2 : 1);
   for (const m of state.crew) checkKnackGain(m);
   const hk = hexKey(f.q, f.r);
   if (!state.poisFound.includes(hk)) state.poisFound.push(hk);
@@ -9809,7 +9864,7 @@ function applyMoveCosts(tileCostMultiplier, favour) {
   // Riding the set costs about half; punching it costs about double. This is
   // the single biggest reason to prefer one route over another.
   const curMult = !favour ? 1 : favour > 0 ? (favour >= 2 ? 0.4 : 0.65) : (favour <= -2 ? 2.1 : 1.5);
-  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor * curMult) - fitLevel('trim')) + countHeldWith('heavy');
+  const airCost = Math.max(1, Math.round(sub.airBase * tileCostMultiplier * depthFactor * curMult * (1 + crewAirBurden())) - fitLevel('trim')) + countHeldWith('heavy');
   state.air = Math.max(0, state.air - airCost);
 
   const crush = crushPenalty();
@@ -11251,6 +11306,11 @@ function endGame(title, summary) {
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
   state._lastSetKey = null; state._lastSndKey = null;   // and so does a new boat
+  // THE DROWNED JOIN THE POOL. Every hand aboard when she went down is now
+  // somebody the deep has a name for, and a deck somewhere may put them in
+  // front of you again, wearing what they were wearing.
+  if (!state.lostCrew) state.lostCrew = [];
+  for (const m of (state.crew || [])) if (m.name && state.lostCrew.indexOf(m.name) < 0) state.lostCrew.push(m.name);
   state.corpses = [];   // the sea keeps its dead; they do not sail in the next boat
   state.foot = null;    // and it does not leave you standing in a ruin the boat is no longer under
   state.stores = 100;   // a new hull is provisioned; it does not inherit an empty larder
