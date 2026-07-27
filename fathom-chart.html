@@ -437,21 +437,7 @@
   }
 
   /* ====== SOUND TOGGLE ====== */
-  #sound-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 20;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 1px solid var(--sonar-dim);
-    background: rgba(4, 8, 16, 0.7);
-    color: var(--sonar);
-    font-size: 1rem;
-    line-height: 1;
-  }
-  #sound-btn.muted { opacity: 0.35; }
+
 
   /* THE VIEWPORT — an overlay tile in the map's top-left corner. It takes NO
      layout space: the game is unchanged whether it is there or not, which is
@@ -490,15 +476,7 @@
     padding-top: 1px;
     max-width: 100%;
   }
-  #vp-show {
-    position: absolute; top: 8px; left: 8px; z-index: 18;
-    width: 22px; height: 22px; padding: 0; line-height: 1;
-    border: 1px solid rgba(90, 120, 150, 0.28); border-radius: 2px;
-    background: rgba(4, 8, 16, 0.55);
-    color: rgba(140, 170, 195, 0.55); font-size: 0.62rem;
-    display: none;
-  }
-  #vp-show.on { display: block; }
+
   #vp-x {
     position: absolute; top: 1px; right: 3px;
     font-size: 9px; line-height: 1; color: rgba(150, 180, 200, 0.45);
@@ -772,7 +750,7 @@
   }
   #transcript-list .log-entry { opacity: 1; font-size: 1.02rem; margin-bottom: 0.7rem; }
 
-  #inventory, #muster, #port, #pages, #bestiary {
+  #inventory, #muster, #port, #pages, #bestiary, #options {
     position: fixed;
     inset: 0;
     background: rgba(4, 8, 16, 0.82);
@@ -783,7 +761,22 @@
     padding: 1.2rem;
     backdrop-filter: blur(6px);
   }
-  #inventory.show, #muster.show, #port.show, #pages.show, #bestiary.show { display: flex; }
+  #inventory.show, #muster.show, #port.show, #pages.show, #bestiary.show, #options.show { display: flex; }
+  #options-list { overflow-y: auto; padding: 0.4rem 0.8rem 0.9rem; -webkit-overflow-scrolling: touch; }
+  .opt { padding: 0.75rem 0; border-bottom: 1px solid rgba(160,140,100,0.12); }
+  .opt:last-child { border-bottom: none; }
+  .opt-h { display: flex; align-items: center; gap: 0.7rem; }
+  .opt-n { flex: 1; font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; color: #d8c9a4; }
+  .opt-d { font-size: 0.72rem; color: #6f6247; line-height: 1.35; margin-top: 0.2rem; }
+  .opt-b {
+    flex: none; min-height: 40px; min-width: 84px; padding: 0.45rem 0.8rem;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.12em;
+    text-transform: uppercase; border-radius: 2px; cursor: pointer;
+    border: 1px solid var(--sonar-dim); background: rgba(20,40,36,0.5); color: var(--sonar);
+  }
+  .opt-b.off { border-color: rgba(120,120,120,0.3); background: transparent; color: #6a6250; }
+  .opt-b.danger { border-color: rgba(224,90,74,0.6); color: #e05a4a; background: rgba(60,20,16,0.35); }
+  .opt-s { width: 100%; margin-top: 0.55rem; accent-color: #6ecfae; }
   #bestiary-list { overflow-y: auto; padding: 0.3rem 0.8rem 0.8rem; -webkit-overflow-scrolling: touch; }
   .bst { display: flex; gap: 0.7rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(160,140,100,0.12); }
   .bst:last-child { border-bottom: none; }
@@ -1004,6 +997,16 @@
   </div>
 </div>
 
+<!-- OPTIONS. Everything that is not a move you make in the water. New World
+     lived one thumb away from SURFACE and destroys a campaign, which is no
+     place for it. -->
+<div id="options">
+  <div id="inv-panel">
+    <div id="inv-head"><span>Options</span><button class="btn" id="options-close">Close</button></div>
+    <div id="options-list"></div>
+  </div>
+</div>
+
 <!-- THE BESTIARY — what the boat has learned about what lives down here. -->
 <div id="bestiary">
   <div id="inv-panel">
@@ -1089,7 +1092,6 @@
          feature that already had one, which is the answer. -->
     <span id="vp-x" title="Hide the illustration window">✕</span>
   </div>
-  <button id="vp-show" title="Show the viewport">▣</button>
   <!-- Vertical depth strip overlay -->
   <div id="depth-strip">
     <div id="depth-strip-track">
@@ -1105,9 +1107,6 @@
   </div>
   <!-- Recenter button overlay -->
   <button id="recenter-btn" title="Center on sub">⊕</button>
-  <!-- Sound toggle overlay -->
-  <button id="sound-btn" title="Sound on/off">♪</button>
-  <button id="vp-show" title="Show the viewport">▣</button>
 </div>
 
 
@@ -1148,7 +1147,7 @@
     <button class="btn" id="btn-fortify" style="display:none" title="Spend what is struck below in the station on the next thing between it and the sea">Fortify</button>
     <button class="btn" id="btn-dig" style="display:none" title="Cut the rock of your station outward into new rooms — a bigger warren is harder to take. Dig too near the hull and the sea comes in.">Dig</button>
     <button class="btn primary" id="btn-surface">Surface</button>
-    <button class="btn" id="btn-newworld" title="Abandon this ocean and chart another">New World</button>
+    <button class="btn" id="btn-options" title="Sound, the porthole, and starting over">Options</button>
   </div>
 </div>
 
@@ -3058,9 +3057,8 @@ function syncScene() { showScene(sceneForNow()); }
 
 function vpSetOn(on) {
   vpOn = on;
-  const vp = document.getElementById('viewport'), sh = document.getElementById('vp-show');
+  const vp = document.getElementById('viewport');
   if (vp) vp.classList.toggle('hidden', !on);
-  if (sh) sh.classList.toggle('on', !on);
   try { localStorage.setItem('fathom-viewport', on ? '1' : '0'); } catch (e) {}
   if (on) { vpDraw(); if (!vpTimer) vpTimer = setInterval(vpStep, 200); }
   else if (vpTimer) { clearInterval(vpTimer); vpTimer = null; }
@@ -3070,10 +3068,10 @@ function vpBoot() {
   vpInitSnow();
   let want = true;
   try { want = localStorage.getItem('fathom-viewport') !== '0'; } catch (e) {}
+  // Tapping the tile still dismisses it — that is the fast way. Getting it back
+  // is in Options now, which is also where you would go looking for it.
   const tile = document.getElementById('viewport');
   if (tile) tile.addEventListener('click', () => vpSetOn(false));
-  const sh = document.getElementById('vp-show');
-  if (sh) sh.addEventListener('click', () => vpSetOn(true));
   vpSetOn(want);
 }
 
@@ -3324,6 +3322,81 @@ function renderBestiary() {
       + '<div class="bst-c">' + n + ' CONTACT' + (n === 1 ? '' : 'S') + '</div>' + body + '</div></div>';
   }).join('');
 }
+//--- OPTIONS -----------------------------------------------------------------
+// Everything that is not a move you make in the water. New World used to sit in
+// the control row one thumb away from SURFACE, and it destroys a campaign —
+// that is not a place for it, however many confirmations it carries.
+//
+// The music volume is here because the mix levels are MY GUESSES. I cannot hear
+// the game, so rather than keep asking Sean to describe a loudness in words, he
+// gets the fader.
+let musicGain = 1;
+try { const g = parseFloat(localStorage.getItem('fathom-musicvol')); if (!isNaN(g)) musicGain = g; } catch (e) {}
+
+function renderOptions() {
+  const el = document.getElementById('options-list');
+  if (!el) return;
+  const pct = Math.round(musicGain * 100);
+  el.innerHTML =
+    '<div class="opt"><div class="opt-h"><div class="opt-n">Sound</div>'
+    + '<button class="opt-b' + (audioMuted ? ' off' : '') + '" data-opt="sound">'
+    + (audioMuted ? 'Off' : 'On') + '</button></div>'
+    + '<div class="opt-d">The boat\'s own noises — sonar, impacts, the bell at the dock.</div></div>'
+
+    + '<div class="opt"><div class="opt-h"><div class="opt-n">Music</div>'
+    + '<span class="opt-b off" style="cursor:default">' + pct + '%</span></div>'
+    + '<div class="opt-d">Written in 2012 for The Dark Way Down. These levels are guesses — set them where you want them.</div>'
+    + '<input class="opt-s" type="range" min="0" max="100" step="5" value="' + pct + '" data-opt="musicvol"></div>'
+
+    + '<div class="opt"><div class="opt-h"><div class="opt-n">The porthole</div>'
+    + '<button class="opt-b' + (vpOn ? '' : ' off') + '" data-opt="porthole">'
+    + (vpOn ? 'On' : 'Off') + '</button></div>'
+    + '<div class="opt-d">The illustration window in the corner of the chart.</div></div>'
+
+    + '<div class="opt"><div class="opt-h"><div class="opt-n">New world</div>'
+    + '<button class="opt-b danger" data-opt="newworld">Abandon</button></div>'
+    + '<div class="opt-d">A different sea, and a different seed. You lose the boat, the bank, the vault and your crew. '
+    + 'You keep what you have <em>learned</em> — the recovered pages and the bestiary come with you, because drowning does not un-teach you anything.</div></div>';
+
+  el.querySelectorAll('[data-opt]').forEach(node => {
+    const kind = node.getAttribute('data-opt');
+    if (kind === 'musicvol') {
+      node.addEventListener('input', () => {
+        musicGain = Math.max(0, Math.min(1, node.value / 100));
+        try { localStorage.setItem('fathom-musicvol', String(musicGain)); } catch (e) {}
+        // Take effect NOW, on whatever is playing, so the fader is audible while
+        // you drag it — a volume control you have to restart to hear is a form.
+        const cur = musicEls[musicNow];
+        if (cur && !audioMuted) cur.volume = Math.max(0, Math.min(1, (MUSIC[musicNow] || {}).vol * musicGain));
+        renderOptions();
+      });
+      return;
+    }
+    node.addEventListener('click', () => {
+      if (kind === 'sound') {
+        audioMuted = !audioMuted;
+        try { localStorage.setItem('fathom-audio', audioMuted ? '0' : '1'); } catch (e) {}
+        if (audioMuted) musicStopAll();
+        else { audioEnsure(); sfx('contact'); musicUnlock(); musicNow = null; musicSync(); }
+      } else if (kind === 'porthole') {
+        vpSetOn(!vpOn);
+      } else if (kind === 'newworld') {
+        // Armed in place: the button becomes the confirmation, so the question
+        // and the answer are the same control and neither can be mistaken for
+        // an ordinary tap.
+        if (node.getAttribute('data-armed') === '1') { closeOptions(); restart(); return; }
+        node.setAttribute('data-armed', '1');
+        node.textContent = 'Abandon it?';
+        setTimeout(() => { node.setAttribute('data-armed', '0'); node.textContent = 'Abandon'; }, 4000);
+        return;
+      }
+      renderOptions();
+    });
+  });
+}
+function openOptions() { renderOptions(); document.getElementById('options').classList.add('show'); }
+function closeOptions() { document.getElementById('options').classList.remove('show'); }
+
 function openBestiary() { renderBestiary(); document.getElementById('bestiary').classList.add('show'); }
 function closeBestiary() { document.getElementById('bestiary').classList.remove('show'); }
 
@@ -6968,7 +7041,7 @@ function musicTo(key) {
     for (const k of Object.keys(MUSIC)) {
       const el = musicEls[k];
       if (!el) continue;
-      const target = (k === musicNow && !audioMuted) ? MUSIC[k].vol : 0;
+      const target = (k === musicNow && !audioMuted) ? MUSIC[k].vol * musicGain : 0;
       const d = target - el.volume;
       if (Math.abs(d) <= 0.02) {
         el.volume = Math.max(0, Math.min(1, target));
@@ -11164,7 +11237,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
 // panel pushes a history entry on open; back pops it and closes the topmost.
 // Closing by button consumes the entry so the two can never drift apart.
 const PANELS = [
-  ['bestiary', closeBestiary], ['pages', closePages], ['port', closePort], ['muster', closeMuster],
+  ['options', closeOptions], ['bestiary', closeBestiary], ['pages', closePages], ['port', closePort], ['muster', closeMuster],
   ['trade', () => { const t = document.getElementById('trade'); if (t) t.classList.remove('show'); }],
   ['inventory', closeInventory], ['seachart', closeSeaChart],
   ['transcript', () => { const t = document.getElementById('transcript'); if (t) t.classList.remove('show'); }],
@@ -11252,6 +11325,8 @@ var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListe
 var __pc = document.getElementById('port-close'); if (__pc) __pc.addEventListener('click', closePort);
 var __pgb = document.getElementById('btn-pages'); if (__pgb) __pgb.addEventListener('click', openPages);
 var __bsb = document.getElementById('btn-bestiary'); if (__bsb) __bsb.addEventListener('click', openBestiary);
+var __ob = document.getElementById('btn-options'); if (__ob) __ob.addEventListener('click', openOptions);
+var __oc = document.getElementById('options-close'); if (__oc) __oc.addEventListener('click', closeOptions);
 var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEventListener('click', closeBestiary);
 var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
@@ -11266,37 +11341,16 @@ document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', anotherBoat);
-// Sound toggle — a device preference, stored apart from the save.
-const soundBtn = document.getElementById('sound-btn');
-if (soundBtn) {
-  const syncSoundBtn = () => soundBtn.classList.toggle('muted', audioMuted);
-  soundBtn.addEventListener('click', () => {
-    audioMuted = !audioMuted;
-    try { localStorage.setItem('fathom-audio', audioMuted ? '0' : '1'); } catch (e) {}
-    if (!audioMuted) { audioEnsure(); sfx('contact'); } // confirm with a pip
-    if (audioMuted) musicStopAll(); else { musicUnlock(); musicNow = null; musicSync(); }
-    syncSoundBtn();
-  });
-  syncSoundBtn();
-}
+// The sound toggle moved into Options. `audioMuted` is still the single source
+// of truth and is still read from localStorage at boot; only the control moved.
 
 // Flush the pending save the moment the app is backgrounded — Android is
 // free to kill a hidden tab without ever firing the debounced timer.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && saveTimer) { clearTimeout(saveTimer); saveTimer = 0; doSave(); }
 });
-// New World: armed two-tap so a stray thumb can't abandon a living run.
-let newWorldArmed = 0;
-document.getElementById('btn-newworld').addEventListener('click', () => {
-  if (!gameStarted) return;
-  if (Date.now() - newWorldArmed < 4000) {
-    newWorldArmed = 0;
-    restart();
-  } else {
-    newWorldArmed = Date.now();
-    log('Abandon this ocean? Tap New World again within a breath to chart another.', 'warn');
-  }
-});
+// New World moved into Options, where a control that ends a campaign belongs.
+// It used to sit in the control row one thumb away from SURFACE.
 
 // Dive controls
 const sub = activeSub();
