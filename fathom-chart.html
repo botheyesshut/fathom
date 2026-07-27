@@ -6,9 +6,21 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#040810">
+<!-- Installable. Sean's stated first priority is a mobile game that does not
+     suck, and on a 360x800 phone Chrome's own chrome eats roughly 15% of the
+     screen. Installed, that comes back, it opens offline, and it stops being
+     a page you visit. -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icon-512.png">
 <title>Fathom — The Chart</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap');
+  /* M10: this used to @import from fonts.googleapis.com, which meant the game
+     could not render its own typography offline — fatal for a PWA, and wrong
+     for a single file you might open off a memory stick in ten years. Both
+     families are OFL, so they ship with the work: latin only, 6 faces, 228 KB.
+     ASSETS ARE OPTIONAL, as ever — if assets/ is missing the @import simply
+     fails and every rule below falls through to a system serif/monospace. */
+  @import url('assets/fonts.css');
 
   :root {
     --void: #040810;
@@ -10174,6 +10186,16 @@ document.getElementById('btn-hold').addEventListener('click', openInventory);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('trade-close').addEventListener('click', closeTrade);
 document.getElementById('btn-chart').addEventListener('click', openSeaChart);
+// Register the service worker — but only over http(s). Opened as a bare file://
+// there is no worker, no manifest and no cache, and the game must still run
+// exactly as it always has: that is the single-file delivery path Sean uses to
+// get builds onto his phone, and it stays intact.
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
 vpBoot();
 // The first touch or key anywhere is the gesture browsers require before audio
 // may start. Once only — after that the music follows state on its own.

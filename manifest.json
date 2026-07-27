@@ -1,0 +1,25 @@
+{
+  "name": "Fathom — The Chart",
+  "short_name": "Fathom",
+  "description": "A submersible, an infinite undersea cave world, and only what the boat could know.",
+  "start_url": "fathom-chart.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#040810",
+  "theme_color": "#040810",
+  "icons": [
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
