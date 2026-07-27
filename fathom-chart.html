@@ -921,6 +921,8 @@
   .mus-r { font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8a7a58; }
   .mus-k { font-size: 0.72rem; color: #7fae8a; margin-top: 0.2rem; }
   .mus-c { font-size: 0.72rem; color: #b8705a; margin-top: 0.2rem; }
+  /* Scars read quieter than a fresh wound — they are history, not an emergency. */
+  .mus-s { font-size: 0.7rem; color: #7d7060; font-style: italic; margin-top: 0.15rem; }
   .mus-w { font-size: 0.7rem; color: #6f6247; margin-top: 0.2rem; font-style: italic; }
   #inv-panel {
     width: 100%;
@@ -3205,14 +3207,21 @@ function renderMuster() {
       ? known.map(k => KNACKS[k].name + ' — ' + KNACKS[k].of).join('<br>')
       : 'Nothing yet. Time will tell what they are for.';
     const conds = (m.conditions || []).length
-      ? (m.conditions || []).map(c => (CONDITIONS[c.key] || {}).name || c.key).join(', ')
+      ? (m.conditions || []).map(c => (CONDITIONS[c] || {}).name || c).join(', ')
       : null;
-    const state_ = m.lost ? 'lost' : m.wounded ? 'unfit for work' : m.dying ? 'dying' : null;
+    // Scars are what is left when the surgeon has done all they can. They are
+    // the reason to know a hand's name.
+    const scars = (m.scars || []).length ? (m.scars || []).join(', ') : null;
+    // DYING OUTRANKS UNFIT. A hand who is bleeding out and incapacitated is
+    // not "unfit for work"; the order here was hiding the only state a captain
+    // has to act on this turn.
+    const state_ = m.lost ? 'lost' : m.dying ? 'dying' : m.wounded ? 'unfit for work' : null;
     return '<div class="mus">'
       + '<div class="mus-n">' + m.name + (state_ ? ' <span class="mus-c">(' + state_ + ')</span>' : '') + '</div>'
       + '<div class="mus-r">' + (m.role || '—') + ' · ' + tenure + ' · nerve ' + Math.round(m.nerve) + '</div>'
       + '<div class="mus-k">' + kn + '</div>'
       + (conds ? '<div class="mus-c">' + conds + '</div>' : '')
+      + (scars ? '<div class="mus-s">' + scars + '</div>' : '')
       + (next != null ? '<div class="mus-w">' + (next - xp) + ' more voyages before they learn the next thing.</div>' : '')
       + '</div>';
   });
@@ -4102,7 +4111,7 @@ function resolveQuarry(L, tier) {
   if (c && c.type === pick.type) { c.awake = true; c.interest = 40 + tier * 8; }
   // The cache is real and it is right there. That is the whole offer.
   const crates = 3 + tier * 2 + randInt(4);
-  state.threats = state.threats || {};
+  state.threats = state.threats || [];
   state.quarryCache = state.quarryCache || {};
   state.quarryCache[hexKey(L.q, L.r)] = { crates: crates, tier: tier, taken: false,
                                           d: snapToGrid(state.currentDepth) };
@@ -4184,16 +4193,16 @@ const CONDITIONS = {
   // tier: severity 1-3. atk/def: deltas to what the member contributes.
   // airMult: multiplies this member's air cost. incap: cannot work/fight.
   // mortal: opens a window — a struck-again dying body is lost.
-  bruised:     { pressure: 'body', tier: 1, got: 'takes a hard knock and swears through it' },
-  gashed:      { pressure: 'body', tier: 1, atk: -1, got: 'is opened along the arm — bleeding, but working' },
-  wrenched:    { pressure: 'body', tier: 1, def: -1, got: 'wrenches something going down, and moves the worse for it' },
-  crushedHand: { pressure: 'body', tier: 2, atk: -2, incap: true, got: 'has a hand crushed against the plating — no good on a weapon now', scar: 'a ruined hand' },
-  floodedLung: { pressure: 'body', tier: 2, airMult: 1.6, got: 'goes under and comes up wrong — water in the lungs, and every breath costs', scar: 'a drowned lung' },
-  brokenLeg:   { pressure: 'body', tier: 2, incap: true, got: 'goes down with a leg bent the wrong way', scar: 'a leg that never set right' },
-  bleedingOut: { pressure: 'body', tier: 3, mortal: true, got: 'is torn deep and the blood will not stop. There is a little time, and not much' },
-  shaken:      { pressure: 'nerve', tier: 1, nerve: -20, got: 'has the look of someone who has seen the shape of it now' },
-  theShakes:   { pressure: 'nerve', tier: 2, atk: -1, nerve: -30, got: 'cannot hold a hand steady, and knows it' },
-  unstrung:    { pressure: 'nerve', tier: 2, incap: true, nerve: -40, got: 'stops being any use — just stands, and stares at the dark', scar: 'a mind that flinches now' },
+  bruised:     { name: 'bruised', pressure: 'body', tier: 1, def: -1, got: 'takes a hard knock and swears through it' },
+  gashed:      { name: 'gashed', pressure: 'body', tier: 1, atk: -1, got: 'is opened along the arm — bleeding, but working' },
+  wrenched:    { name: 'wrenched', pressure: 'body', tier: 1, def: -1, got: 'wrenches something going down, and moves the worse for it' },
+  crushedHand: { name: 'a crushed hand', pressure: 'body', tier: 2, atk: -2, incap: true, got: 'has a hand crushed against the plating — no good on a weapon now', scar: 'a ruined hand' },
+  floodedLung: { name: 'water in the lungs', pressure: 'body', tier: 2, airMult: 1.6, got: 'goes under and comes up wrong — water in the lungs, and every breath costs', scar: 'a drowned lung' },
+  brokenLeg:   { name: 'a broken leg', pressure: 'body', tier: 2, incap: true, got: 'goes down with a leg bent the wrong way', scar: 'a leg that never set right' },
+  bleedingOut: { name: 'bleeding out', pressure: 'body', tier: 3, mortal: true, got: 'is torn deep and the blood will not stop. There is a little time, and not much' },
+  shaken:      { name: 'shaken', pressure: 'nerve', tier: 1, nerve: -20, got: 'has the look of someone who has seen the shape of it now' },
+  theShakes:   { name: 'the shakes', pressure: 'nerve', tier: 2, atk: -1, nerve: -30, got: 'cannot hold a hand steady, and knows it' },
+  unstrung:    { name: 'unstrung', pressure: 'nerve', tier: 2, incap: true, nerve: -40, got: 'stops being any use — just stands, and stares at the dark', scar: 'a mind that flinches now' },
 };
 
 // Every member carries their record. Old saves (and freshly hired hands) are
@@ -4831,8 +4840,11 @@ function carveChamber(node) {
                    type: types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr + ':' + node.depth) % types.length] });
       stack.sort((a, b) => a.d - b.d);
       setTile(hq, hr, stack[0].type, true);
-      const at = world.get(hexKey(hq, hr));
-      if (at) at.poiDepth = stack[0].d;
+      // NO `at.poiDepth = ...` HERE. Anything written onto a `world` tile is
+      // destroyed the next time chunk generation rebuilds that tile — measured
+      // at 213 of 232 prize tiles. `cellPois` is the durable record and the
+      // only one anything reads. This is the last instance of the bug class
+      // that has twice made a shipped feature into dead code.
       break;
     }
   }
@@ -11180,6 +11192,9 @@ function endGame(title, summary) {
   state.q = 0; state.r = 0; state.currentDepth = 0;
   state._lastSetKey = null; state._lastSndKey = null;   // and so does a new boat
   state.corpses = [];   // the sea keeps its dead; they do not sail in the next boat
+  state.foot = null;    // and it does not leave you standing in a ruin the boat is no longer under
+  state.stores = 100;   // a new hull is provisioned; it does not inherit an empty larder
+  state.threats = [];   // nor anything the old boat had in the water
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
   state.armament = null; state.torpedoes = 0;
@@ -11217,6 +11232,15 @@ function restart() {
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
   state._lastSetKey = null; state._lastSndKey = null;   // a new sea gets its first reading
+  // A NEW SEA ARRIVES UNREAD. These four are keyed by bare coordinates or by
+  // the campaign, not by the seed, so they used to walk into the next world
+  // intact: free crates at a hex never visited, thermoclines already felt in
+  // water never sailed, last campaign's hand on the dock, and a transcript
+  // that opened on the dead world's log.
+  state.quarryCache = {};
+  state.layersFelt = [];
+  state.portHire = null;
+  if (typeof logHistory !== 'undefined') logHistory.length = 0;
   state.air = sub.air; state.hull = sub.hull;
   state.currentDepth = 0; state.maxDepth = 0;
   state.moves = 0; state.poisFound = [];
@@ -11399,6 +11423,11 @@ function surface() {
 //=============================================================================
 
 const SAVE_KEY = 'fathom-save-v1';
+// The shape version, written into every save and checked on load. It is a
+// CEILING, not a set: `loadSave` accepts anything at or below it so an older
+// campaign still opens, and refuses anything above it WITHOUT deleting it, so
+// a player who touches a newer build and rolls back keeps their sea.
+const SAVE_V = 2;
 let gameStarted = false;
 let saveTimer = 0;
 
@@ -11407,6 +11436,7 @@ function scheduleSave() {
   saveTimer = setTimeout(doSave, 400);
 }
 
+let saveFailedOnce = false;
 function doSave(force) {
   saveTimer = 0;
   if (!gameStarted || (!state.alive && !force)) return;
@@ -11414,7 +11444,7 @@ function doSave(force) {
     const rev = {};
     for (const [k, s] of revealed) rev[k] = [...s];
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 2, seed: worldSeed,
+      v: SAVE_V, seed: worldSeed,
       q: state.q, r: state.r, depth: state.currentDepth,
       air: state.air, hull: state.hull, maxDepth: state.maxDepth,
       moves: state.moves, poisFound: state.poisFound,
@@ -11447,7 +11477,15 @@ function doSave(force) {
       crew: state.crew,
       subKey: activeSubKey,
     }));
-  } catch (e) { /* quota or private mode — persistence is best-effort */ }
+  } catch (e) {
+    // Best-effort, but not SILENT. A player over quota kept playing a campaign
+    // that was no longer being written down and found out on the next reload.
+    // Once per session: a warning every 400 ms would be its own bug.
+    if (!saveFailedOnce) {
+      saveFailedOnce = true;
+      log('The log is not taking ink — there is no room left ashore for another chart. Nothing from here is being written down.', 'danger', 'THE CHART');
+    }
+  }
 }
 
 function loadSave() {
@@ -11455,7 +11493,10 @@ function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (!p || (p.v !== 1 && p.v !== 2) || typeof p.seed !== 'number') return null;
+    // `<= SAVE_V` rather than an exact set: an older shape must still load, or
+    // a rollback (or the service worker handing back a cached older build)
+    // deletes campaigns. A NEWER shape is refused — but refused, not wiped.
+    if (!p || typeof p.v !== 'number' || p.v > SAVE_V || typeof p.seed !== 'number') return null;
     return p;
   } catch (e) { return null; }
 }
@@ -11469,13 +11510,17 @@ function clearSave() {
 // beneath the boat; the overlay puts the player, their charts, and their
 // resources back exactly where they were.
 function resumeGame(save) {
+  // A save is bytes from disk, not a contract. `|| []` trusts any truthy
+  // value — a string, a number, an object — and hands it to `for...of`.
+  const arr = v => Array.isArray(v) ? v : [];
+  const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
   activeSubKey = SUBS[save.subKey] ? save.subKey : 'erebus';
   state._outfitOffer = null;
   const sub = activeSub();
   state.q = save.q; state.r = save.r;
   state.air = save.air; state.hull = save.hull;
   state.currentDepth = save.depth; state.maxDepth = save.maxDepth || 0;
-  state.moves = save.moves || 0; state.poisFound = save.poisFound || [];
+  state.moves = save.moves || 0; state.poisFound = arr(save.poisFound);
   state.alive = true;
   state.panX = 0; state.panY = 0;
   state.trail = []; state.failHex = null;
@@ -11487,8 +11532,8 @@ function resumeGame(save) {
   // chunks don't re-roll their inhabitants into duplicates.
   spawnedChunks.clear();
   for (const ck of save.spawnedChunks || []) spawnedChunks.add(ck);
-  state.creatures = save.creatures || [];
-  state.threats = save.threats || [];
+  state.creatures = arr(save.creatures);
+  state.threats = arr(save.threats);
   state.cargo = save.cargo || 0;
   state.cargoBanked = save.cargoBanked || 0;
   state.armament = save.armament || null;
@@ -11498,11 +11543,11 @@ function resumeGame(save) {
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
   state.base = save.base || null;
-  state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
+  state.layersFelt = arr(save.layersFelt);   // the water you have felt, remembered
   state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
-  state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
-  state.bestiary = save.bestiary || {};      // what you have learned about what lives here
-  state.tipsSeen = save.tipsSeen || [];
+  state.pagesFound = arr(save.pagesFound);  // the account, as far as you have got
+  state.bestiary = obj(save.bestiary);      // what you have learned about what lives here
+  state.tipsSeen = arr(save.tipsSeen);
   state._lastSetKey = null; state._lastSndKey = null;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
@@ -11510,7 +11555,7 @@ function resumeGame(save) {
   state.lockerWeapon = save.lockerWeapon || 'axe';
   const __pgBtn = document.getElementById('btn-pages');
   if (__pgBtn) __pgBtn.style.display = state.pagesFound.length ? '' : 'none';
-  state.quarryCache = save.quarryCache || {};  // a cache you walked away from is still there
+  state.quarryCache = obj(save.quarryCache);  // a cache you walked away from is still there
   if (state.base) {
     // Stations saved before the siege existed still have to load.
     const b = state.base;
@@ -11528,11 +11573,13 @@ function resumeGame(save) {
   state.lostCrew = save.lostCrew || [];
   state.items = save.items || {};
   state.fits = save.fits || {};
-  state.leads = save.leads || [];
-  state.enclaves = save.enclaves || [];
-  state.corpses = save.corpses || [];
-  for (const m of state.crew) crewVitals(m);   // bring older/hired hands up to spec
-  state.foot = save.foot || null;   // reload can find you still inside the ruin
+  state.leads = arr(save.leads);
+  state.enclaves = arr(save.enclaves);
+  state.corpses = arr(save.corpses);
+  // `|| null` accepted a STRING here, and the back-fill below then set
+  // properties on it — which fails silently outside strict mode and throws
+  // three functions later. An object or nothing.
+  state.foot = (save.foot && typeof save.foot === 'object' && !Array.isArray(save.foot)) ? save.foot : null;   // reload can find you still inside the ruin
   if (state.foot) {
     // A save written before the sea came in still has to load.
     const f = state.foot;
@@ -11543,7 +11590,8 @@ function resumeGame(save) {
     if (f.tick == null) f.tick = 0;
     if (f.dweller === undefined) f.dweller = null;
   }
-  state.crew = save.crew || [];
+  state.crew = arr(save.crew);
+  for (const m of state.crew) crewVitals(m);   // AFTER the load, or it vitalises the roster it is about to replace
   state._hireOffer = null;
   state._armoryOffer = null;
   worldSeed = save.seed;
@@ -11578,11 +11626,54 @@ function resumeGame(save) {
 function startGame() {
   const title = document.getElementById('title');
   if (!title) return;
-  title.classList.add('gone');
   setViewport();
+  // Read the raw bytes BEFORE anything can clear them, so a save we cannot
+  // parse can be set aside instead of destroyed.
+  let raw = null;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) {}
   const save = loadSave();
-  if (save) resumeGame(save); else restart();
-  setTimeout(() => { title.style.display = 'none'; }, 1200);
+
+  // The title stays up and TAPPABLE until we know the boot succeeded. It used
+  // to go transparent and pointer-events:none on the first line of this
+  // function, so a throw inside resumeGame left the player with a blank,
+  // unclickable screen that came back blank on every reload — the save intact
+  // and unreachable, escapable only by clearing site data. The recoverable
+  // failure wiped and the unrecoverable one persisted; both of those were the
+  // wrong way round.
+  const shown = () => {
+    title.classList.add('gone');
+    setTimeout(() => { title.style.display = 'none'; }, 1200);
+  };
+
+  if (save) {
+    try {
+      resumeGame(save);
+      shown();
+      return;
+    } catch (err) {
+      // The save parsed and still would not load. Keep it — it is the
+      // player's campaign and somebody may yet get it back — and sail on.
+      try { localStorage.setItem(SAVE_KEY + '-broken', raw); } catch (e) {}
+      restart();
+      shown();
+      log('The last chart would not unroll — something in it is torn. It has been set aside, and this is open water.', 'warn', 'THE CHART');
+      return;
+    }
+  }
+
+  if (raw) {
+    // Unreadable, not absent. Put the bytes somewhere before restart() clears
+    // the slot, and TELL THE PLAYER — a campaign that vanishes in silence is
+    // indistinguishable from a game that lost it on purpose.
+    try { localStorage.setItem(SAVE_KEY + '-broken', raw); } catch (e) {}
+    restart();
+    shown();
+    log('The last chart would not unroll — something in it is torn. It has been set aside, and this is open water.', 'warn', 'THE CHART');
+    return;
+  }
+
+  restart();
+  shown();
 }
 
 const diveBtn = document.getElementById('dive');

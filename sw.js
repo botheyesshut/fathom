@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v3';   // bumped: document fetch now bypasses the HTTP cache
+const VERSION = 'fathom-v4';   // bumped: error responses no longer poison the document cache
 const SHELL = [
   './',
   'fathom-chart.html',
@@ -74,10 +74,18 @@ self.addEventListener('fetch', (e) => {
         // still hand back the FRESH build. Letting a cache error fall through to
         // the catch below would serve a stale game over a working network,
         // which is the exact failure this whole file exists to prevent.
-        try {
-          const cache = await caches.open(VERSION);
-          await cache.put(req, fresh.clone());
-        } catch (cacheErr) { /* not fatal — the player still gets the new build */ }
+        // ONLY CACHE A REAL BUILD. `fetch` RESOLVES for 404 and 500, and
+        // cache.put accepts them — so one transient GitHub Pages 404, or one
+        // captive-portal wifi login page, used to overwrite the cached game
+        // with the error page and destroy the offline copy entirely. The asset
+        // branch below has always had this guard; the document branch, which
+        // is the one that matters, did not.
+        if (fresh && fresh.ok && fresh.type === 'basic') {
+          try {
+            const cache = await caches.open(VERSION);
+            await cache.put(req, fresh.clone());
+          } catch (cacheErr) { /* not fatal — the player still gets the new build */ }
+        }
         return fresh;
       } catch (err) {
         const hit = await caches.match(req);
