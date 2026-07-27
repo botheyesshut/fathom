@@ -466,17 +466,6 @@
     white-space: pre;
     text-shadow: 0 0 3px rgba(80, 160, 200, 0.18);
   }
-  #vp-cap {
-    display: block;
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-size: min(1.9vw, 7.5px);
-    line-height: 1.15;
-    color: #64798c;
-    padding-top: 1px;
-    max-width: 100%;
-  }
-
   #vp-x {
     position: absolute; top: 1px; right: 3px;
     font-size: 9px; line-height: 1; color: rgba(150, 180, 200, 0.45);
@@ -503,8 +492,11 @@
     z-index: 10;
     padding: 0.75rem 1rem 1rem;
     background: linear-gradient(0deg, var(--void) 0%, rgba(4,8,16,0.85) 80%, transparent 100%);
-    min-height: 6rem;
-    max-height: 6rem;
+    /* Was 6rem — two lines — for a game whose voice IS its prose. A room
+       description carrying the set, the layer and the sounder runs to four, so
+       most of the writing scrolled past before it could be read. */
+    min-height: 10rem;
+    max-height: 10rem;
     flex-shrink: 0;
     overflow: hidden;
     display: flex;
@@ -546,6 +538,12 @@
   }
 
   /* ====== CONTROLS ====== */
+  #log-more {
+    flex: none; text-align: center; padding: 0 1rem 0.5rem;
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 0.72rem; color: #4e5c66; cursor: pointer;
+    background: var(--void);
+  }
   #controls {
     position: relative;
     z-index: 10;
@@ -1086,7 +1084,6 @@
        you." So it floats over the map and costs the game no layout at all. -->
   <div id="viewport">
     <pre id="vp-art" aria-hidden="true"></pre>
-    <span id="vp-cap"></span>
     <!-- Tapping the tile has always dismissed it, but an invisible affordance
          is not an affordance. Sean asked for "a way to turn it off" for a
          feature that already had one, which is the answer. -->
@@ -1112,6 +1109,9 @@
 
 <!-- LOG -->
 <div id="log"></div>
+<!-- The full transcript has existed all along and nothing said so. Tap-to-open
+     with no affordance is a secret, not a feature. -->
+<div id="log-more">tap the log to read everything that has been said</div>
 
 <!-- CONTROLS -->
 <div id="controls">
@@ -2984,8 +2984,9 @@ function vpDraw() {
     html += '\n';
   }
   el.innerHTML = html;
-  const cap = document.getElementById('vp-cap');
-  if (cap) cap.textContent = S.cap || '';
+  // No caption is written any more — it rendered at 7.5px and was unreadable on
+  // a phone. `cap` stays in the scene data: it documents what each drawing is
+  // meant to be, and the battery checks every scene has one.
 }
 
 function vpStep() {
@@ -11331,6 +11332,7 @@ var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEvent
 var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('log').addEventListener('click', openTranscript);
+var __lm = document.getElementById('log-more'); if (__lm) __lm.addEventListener('click', openTranscript);
 document.getElementById('transcript-close').addEventListener('click', closeTranscript);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
 document.getElementById('btn-fight').addEventListener('click', fightTenant);
