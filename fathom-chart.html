@@ -1170,7 +1170,7 @@
 
 <!-- CONTROLS -->
 <div id="controls">
-  <div id="ping-power-row">
+  <div id="ping-power-row" title="The sonar dial. Reach is bought with noise and air: at silent you hear almost nothing and almost nothing hears you.">
     <div class="ping-info">
       <span class="ping-label">Sonar Power</span>
       <!-- O8: the units used to be hardcoded around these spans, so silent
@@ -1181,9 +1181,9 @@
   </div>
   <div id="dive-controls">
     <button class="btn dive-btn" id="btn-ascend-fast" title="Ascend 120 m">▲▲</button>
-    <button class="btn dive-btn" id="btn-ascend">▲</button>
+    <button class="btn dive-btn" id="btn-ascend" title="Ascend one step. Rising is how you outlast a hull that is past its rated depth, and how you get home">▲</button>
     <span id="dive-depth-readout">0 m</span>
-    <button class="btn dive-btn" id="btn-descend">▼</button>
+    <button class="btn dive-btn" id="btn-descend" title="Descend one step. The shelf floor is not the sea floor — the sinkholes, drawn O, are the way through it">▼</button>
     <button class="btn dive-btn" id="btn-descend-fast" title="Descend 120 m">▼▼</button>
   </div>
   <div id="controls-row">
@@ -1201,7 +1201,7 @@
     <button class="btn" id="btn-fight" style="display:none" title="Board it — fight with whatever the crew's locker holds. Expensive, and it answers every round you do not finish it.">Board It</button>
     <button class="btn" id="btn-fortify" style="display:none" title="Spend what is struck below in the station on the next thing between it and the sea">Fortify</button>
     <button class="btn" id="btn-dig" style="display:none" title="Cut the rock of your station outward into new rooms — a bigger warren is harder to take. Dig too near the hull and the sea comes in.">Dig</button>
-    <button class="btn primary" id="btn-surface">Surface</button>
+    <button class="btn primary" id="btn-surface" title="Take her up to the air. Do it within sight of the dock and the hold goes ashore, onto the ledger, where it finally counts">Surface</button>
     <button class="btn" id="btn-options" title="Sound, the porthole, and starting over">Options</button>
   </div>
 </div>
@@ -1876,6 +1876,7 @@ function renderInventory() {
   if (!list) return;
   const items = state.items || {};
   const keys = Object.keys(items).filter(k => ITEMS[k] && items[k] > 0);
+  if (keys.some(k => (ITEMS[k].props || []).some(x => x === 'cursed' || x === 'volatile'))) tip('jettison');
   keys.sort((a, b) => ITEM_ORDER.indexOf(ITEMS[a].kind) - ITEM_ORDER.indexOf(ITEMS[b].kind));
   if (!keys.length) {
     list.innerHTML = '<div id="inv-empty">The hold is empty. The deep is full. Go and see.</div>';
@@ -3140,7 +3141,13 @@ function vpBoot() {
 }
 
 function openSeaChart() { document.getElementById('seachart').classList.add('show'); drawSeaChart(); }
-function closeSeaChart() { document.getElementById('seachart').classList.remove('show'); }
+function closeSeaChart() {
+  document.getElementById('seachart').classList.remove('show');
+  // Fired on CLOSE, not open — a tip logged behind a full-screen panel is a tip
+  // nobody reads. The missing position fix is deliberate and the chart's own
+  // note says so in four words; this is the rest of the sentence.
+  tip('chart');
+}
 
 // THE MUSTER — a hand is a history, so the roster reads as one: what they are,
 // how long they have been aboard, what that has made them, and what it has
@@ -3420,10 +3427,25 @@ const TIPS = {
   silent:  'It hunts by sound. Drop the sonar slider to silent and you go deaf, but it loses your thread — which is usually the better trade.',
   layer:   'That is a thermocline. Sound will not cross it. On the far side of a hard layer you are very nearly invisible, and very nearly blind.',
   current: 'The water has a set. Going with it costs a fraction of the air; punching into it costs double and makes a din. The way out is rarely the way home.',
-  crush:   'You are past the depth this hull was built for. The pressure is finding the seams now, and it does not stop finding them.',
-  port:    'Cargo only counts once it is ashore. Surface within sight of the dock and it goes on the ledger — the Port sells hull work, hands, gear and the next boat.',
+  // Split in two, because the old single tip fired 700 m after the lesson had
+  // started costing hull, and was the only entry in the table with no
+  // instruction in it. `depth` is the warning; `crush` is the emergency.
+  depth:   'You are past this hull\'s rated depth. She gives a little on every move now, and more the deeper you take her. The yard cannot mend that — only a deeper boat can.',
+  crush:   'Past crush depth. Every move down here opens her further and no plating answers it. Take her up.',
+  // Moved to the moment cargo first exists. It used to fire AFTER the crates
+  // were banked — a receipt, not a lesson — and its first clause repeated the
+  // opening paragraph nearly verbatim.
+  port:    'That is in the hold, not on the ledger. Lose the boat and you lose the hold with her. Surface within sight of the dock and it goes ashore — the Port sells hull work, hands, gear and the next boat.',
   pages:   'Somebody went down before you and wrote it down. The marks that pay in knowledge rather than cargo are how you recover the rest of it.',
   jettison:'Anything you are carrying can go over the side. Some of it will insist, eventually.',
+  // THE ONE THAT DECIDES WHETHER THERE IS A SECOND SESSION. A first captain
+  // dives, hits 60 m of shelf, is told "the sounder has nothing more to say"
+  // a dozen times, and closes the tab — never learning that the shelf floor
+  // is not the sea floor and the sinkholes are the door.
+  shelf:   'That is the shelf floor, not the sea floor. The deep is under it, and the only ways through are the sinkholes — the chart draws them O. Find one and take her down it.',
+  // The dashed outline is the entire movement affordance and nothing named it.
+  impact:  'That was rock. A hex you can enter at this depth carries a dashed outline; anything without one is stone, or water above or below you. The sonar says which way and how far.',
+  chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. The boat carries no positioning gear, so it cannot mark itself — you dead-reckon, until you find something that can.',
 };
 let tipsOn = true;
 try { tipsOn = localStorage.getItem('fathom-tips') !== '0'; } catch (e) {}
@@ -5417,6 +5439,8 @@ function syncFootControls(inside) {
   // The rule applies to EVERY boat-scale control, not just the first three:
   // the depth ladder, the sonar slider and Surface all answer "you are not
   // aboard" from inside a ruin, while the controls you need are clipped.
+  const dec = document.getElementById('btn-launch');
+  if (dec) dec.textContent = `Decoy (${state.decoys || 0})`;
   for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface']) {
     const el = document.getElementById(id);
     if (el) el.style.display = inside ? 'none' : '';
@@ -6791,12 +6815,13 @@ function ping() {
     log(`${interesting.name.charAt(0).toUpperCase() + interesting.name.slice(1)} ${dir}, ${meters} m out${depthHint}.`, echoClass, echo);
   } else if (atSurface) {
     // Surface pings detect bottom contours and openings — no walls up here.
+    const reach = PING_LEVELS[power] ? PING_LEVELS[power].activeRange * 60 : 0;
     if (power >= 4) {
-      log('The ping ranges out across the shelf. Nothing breaks the seafloor in earshot.', '', 'ECHO');
+      log(`The ping ranges ${reach} m across the shelf. Nothing breaks the seafloor in earshot.`, '', 'ECHO');
     } else if (power >= 3) {
-      log('The ping fans through the water column. Empty.', '', 'ECHO');
+      log(`The ping fans out ${reach} m through the water column. Empty.`, '', 'ECHO');
     } else {
-      log('The ping fades into open water.', '', 'ECHO');
+      log(`The ping fades out at ${reach} m and finds nothing but shelf. The dial buys reach, and spends air and quiet for it.`, '', 'ECHO');
     }
   } else if (power >= 3 && openRatio < 0.15) {
     log('The ping returns from stone in every direction. You are alone in a corridor.', '', 'ECHO');
@@ -6872,12 +6897,31 @@ function move(q, r) {
   // Only allow attempted moves to actual adjacent hexes
   if (hexDistance({q, r}, {q: state.q, r: state.r}) !== 1) return;
 
+  // LAND IS NOT ROCK YOU RAM. The opening paragraph points the captain at the
+  // pier — "bring it back to this dock" — and the pier is adjacent to spawn.
+  // Land is flagged `wall`, so tapping the one named landmark in the game fell
+  // into the collision branch below: 4-8 hull, no confirm, and an IMPACT line
+  // that reads like a random rock strike. Eighteen taps killed the boat. The
+  // shore costs a move and a word, and the word teaches Surface.
+  if (tile.land) {
+    state.lastMoveTime = performance.now();
+    if (tile.type === 'dock') {
+      log('You do not sail onto the pier. Bring her alongside and Surface — they come out to the boat.', 'warn', 'DOCK');
+    } else {
+      log('Rock and packed earth. There is nothing on a beach for a boat.', 'warn', 'SHORE');
+    }
+    flagMoveFail(q, r, '#7a5028');
+    render();
+    return;
+  }
+
   if (tile.wall) {
     // Collision — the sub strikes the rock
     const dmg = 4 + Math.floor(rand() * 5); // 4-8 hull damage
     state.hull = Math.max(0, state.hull - dmg);
     state.lastMoveTime = performance.now();
     log(`${pickLoose(WALL_FACE)} -${dmg} hull.`, 'danger', 'IMPACT');
+    tip('impact');
     flagMoveFail(q, r, '#a04030');
     noiseMade(q, r, 2); // metal on rock carries — hunters hear it
     sfx('impact');
@@ -6900,9 +6944,11 @@ function move(q, r) {
       const delta = Math.max(1, Math.round(near.deltaMeters));
       const dir = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
       log(`${pickLoose(WALL_FACE)} Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
+      tip('impact');
     } else {
       log(`${pickLoose(WALL_FACE)} Not at this depth, at any rate. -${dmg} hull.`, 'danger', 'IMPACT');
     }
+    tip('impact');
     flagMoveFail(q, r, '#a04030');
     noiseMade(q, r, 2); // metal on rock carries — hunters hear it
     sfx('impact');
@@ -6974,10 +7020,13 @@ function move(q, r) {
   if (runNoise()) noiseMade(q, r, runNoise());
   if (favour < 0) {
     noiseMade(q, r, favour <= -2 ? 3 : 2);
-    if (rand() < 0.4) log(favour <= -2
-      ? 'You drive her straight into the set and she labours for every metre of it. The screws are making a din.'
-      : 'The water pushes back. The boat works harder than she should have to.', 'warn', 'CURRENT');
-    tip('current');
+    const firstSet = !(state.tipsSeen || []).includes('current');
+    if (firstSet || rand() < 0.4) {
+      log(favour <= -2
+        ? 'You drive her straight into the set and she labours for every metre of it. The screws are making a din.'
+        : 'The water pushes back. The boat works harder than she should have to.', 'warn', 'CURRENT');
+      tip('current');
+    }
   } else if (favour > 0 && rand() < 0.3) {
     log(favour >= 2
       ? 'You find the spine of the current and let it take you. The screws barely turn; the sea does the work.'
@@ -8796,8 +8845,8 @@ function noiseMade(q, r, loudness) {
     c.interest = Math.min(100, was + spike);
     c.tq = q; c.tr = r;
     if (was < LURK_STALK && c.interest >= LURK_STALK && d <= wakeNoticeR()) {
-      tip('silent');
       log('Passive sonar: something out there turns toward the noise.', 'danger', 'CONTACT');
+      tip('silent');
       sfx('contact');
     }
   }
@@ -9658,6 +9707,7 @@ function applyMoveCosts(tileCostMultiplier, favour) {
     state.hull = Math.max(0, state.hull - dmg);
     if (crush) {
       log(`Past crush depth. The hull screams — no plating you can bolt on answers this.`, 'danger', 'PRESSURE');
+      tip('crush');
     } else if (over > 50) {
       log(`The hull groans under the pressure.`, 'warn', 'PRESSURE');
     }
@@ -9773,12 +9823,12 @@ function changeDepth(deltaMeters) {
   const xL = crossedLayer(prevDepth, actual, state.q, state.r);
   if (xL) {
     noteLayerFelt(state.q, state.r);   // felt once is known thereafter
-    tip('layer');
     const cold = xL.below
       ? 'The thermometer drops away under you. Cold water, and the sea above goes quiet — too quiet.'
       : 'The water warms. Sound comes back all at once, and the sea is louder than you left it.';
     log(`${cold} ${xL.strong ? 'A hard layer' : 'A soft layer'} at ${xL.depth} m.`,
         xL.strong ? 'good' : 'sys', 'LAYER');
+    tip('layer');
   }
   state.currentDepth = actual;
   state.moves++;
@@ -10261,6 +10311,8 @@ function depthBand(d) {
 // The full report. mode 'first' is stable per place; 'again' varies, so that
 // looking twice gives you new words for the same rock.
 function describeSpace(mode) {
+  const asked = mode === 'ask';   // the player tapped Look; answer in full
+  if (asked) mode = 'again';
   const q = state.q, r = state.r, d = state.currentDepth;
   const s = spaceAround(q, r, d);
   const cls = spaceClass(s);
@@ -10275,11 +10327,16 @@ function describeSpace(mode) {
   // The set of the water, always stated. A current you cannot read is not a
   // decision, it is a tax — so the boat reports it every time it reports a room.
   const cur = currentAt(q, r, d);
-  const setLine = cur
-    ? (cur.strong
-        ? ` A strong set runs ${cur.name} through here — you will feel it in the helm.`
-        : ` The water sets ${cur.name}, slow and steady.`)
-    : ' The water here is slack.';
+  const curKey = cur ? (cur.strong ? 'S' : 'w') + cur.name : 'slack';
+  let setLine = '';
+  if (asked || curKey !== state._lastSetKey) {
+    setLine = cur
+      ? (cur.strong
+          ? ` A strong set runs ${cur.name} through here — you will feel it in the helm.`
+          : ` The water sets ${cur.name}, slow and steady.`)
+      : ' The water here is slack.';
+    state._lastSetKey = curKey;
+  }
 
   // Where the layer sits, and which side of it you are on. Same principle as
   // the set: a hiding place you cannot see is not a tactic, it is an accident.
@@ -10301,14 +10358,21 @@ function describeSpace(mode) {
   // you are never told about is a floor you never dive to.
   const snd = soundingBelow();
   let sndLine = '';
+  // An ODD return always speaks — that one is never wallpaper, it is the most
+  // actionable fact the boat has. Only the null reading and the plain depth
+  // are damped, and only while they are unchanged.
   if (snd) {
-    if (snd.under <= 0) {
-      sndLine = snd.odd
-        ? ' You are on the bottom, and you are on top of whatever the sounder has been complaining about.'
-        : ' You are on the bottom. Silt, and the sounder has nothing more to say.';
-    } else {
-      sndLine = ` The sounder reads ${snd.under} m under the keel.`;
-      if (snd.odd) sndLine += ` ${snd.oddUnder > 0 ? snd.oddUnder + ' m down, the' : 'The'} return comes back wrong — too hard, too sharp for silt. Something is there.`;
+    const sndKey = snd.odd ? 'odd' + snd.oddUnder : String(snd.under);
+    if (asked || snd.odd || sndKey !== state._lastSndKey) {
+      if (snd.under <= 0) {
+        sndLine = snd.odd
+          ? ' You are on the bottom, and you are on top of whatever the sounder has been complaining about.'
+          : ' You are on the bottom. Silt, and the sounder has nothing more to say.';
+      } else {
+        sndLine = ` The sounder reads ${snd.under} m under the keel.`;
+        if (snd.odd) sndLine += ` ${snd.oddUnder > 0 ? snd.oddUnder + ' m down, the' : 'The'} return comes back wrong — too hard, too sharp for silt. Something is there.`;
+      }
+      state._lastSndKey = sndKey;
     }
   }
   return (lead + ' ' + exits + mood + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
@@ -10344,7 +10408,7 @@ function describeDeck() {
 function lookAround() {
   if (!state.alive) return;
   if (state.foot) { log(describeDeck(), '', 'LOOK'); return; }
-  log(describeSpace('again'), '', 'LOOK');
+  log(describeSpace('ask'), '', 'LOOK');
 }
 
 // Air literacy. The captain who drowns because nobody told them where air
@@ -10553,10 +10617,12 @@ function handleTile(tile) {
   // It gets its own tag so it survives a crowded log.
   const snd = soundingBelow();
   if (snd && snd.odd && snd.under > 0) {
-    tip('sounder');
     log(`The sounder will not settle. ${snd.oddUnder} m under the keel something answers hard — not silt, not rock. Whatever it is, it is directly beneath you.`,
         'good', 'SOUNDER');
+    tip('sounder');
     sfx('contact');
+  } else if (snd && snd.under <= 0 && state.currentDepth < 300) {
+    tip('shelf');
   }
 
   // First-time visits get a flavor log
@@ -10680,6 +10746,7 @@ function handleTile(tile) {
         const haul = 3 + randInt(2) + Math.floor(Math.min(4, state.currentDepth / 900));
         state.cargo += haul;
         log(`Wreckage. You patch the hull with what fits and work her over for what she still holds. (+${repair} hull, +${haul} cargo)`, '', 'SALVAGE');
+        tip('port');
         // A wreck sometimes gives up a real thing, not just crating.
         if (rand() < 0.30) {
           const item = rollItem(state.currentDepth);
@@ -10999,8 +11066,8 @@ function updateHUD() {
   const dr = document.getElementById('depth-rating');
   if (dr) {
     const safe = safeDepthNow(), crush = crushDepthNow();
-    if (d > crush) { dr.textContent = 'PAST CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; tip('crush'); }
-    else if (d > safe) { dr.textContent = 'crush at ' + crush + 'm'; dr.style.color = '#e8a050'; }
+    if (d > crush) { dr.textContent = 'PAST CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; }
+    else if (d > safe) { dr.textContent = 'crush at ' + crush + 'm'; dr.style.color = '#e8a050'; tip('depth'); }
     else { dr.textContent = 'safe to ' + safe + 'm'; dr.style.color = ''; }
   }
   // E9: and it never showed you your own money.
@@ -11063,6 +11130,7 @@ function endGame(title, summary) {
   activeSubKey = 'erebus';
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
+  state._lastSetKey = null; state._lastSndKey = null;   // and so does a new boat
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
   state.armament = null; state.torpedoes = 0;
@@ -11099,6 +11167,7 @@ function restart() {
   const sub = activeSub();
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
+  state._lastSetKey = null; state._lastSndKey = null;   // a new sea gets its first reading
   state.air = sub.air; state.hull = sub.hull;
   state.currentDepth = 0; state.maxDepth = 0;
   state.moves = 0; state.poisFound = [];
@@ -11167,7 +11236,9 @@ function restart() {
   // the premise, not a tutorial — it names the trade and the two things that
   // kill you, and then it stops. Nobody is told how to play, only what the job
   // is and what the sea charges for it.
-  log(`The trade is salvage. Take the boat down, find what the Fall left on the bottom, and bring it back to this dock — nothing counts until it is ashore. Two things end you down there: the air runs out, or the pressure finds a seam. Both are on the gauges. Nothing else is promised, and the sea keeps no ledger of what you meant to do.`,
+  log(`The other half of the work is the chart. Water you have sounded stays sounded, and a captain who comes home with nothing but new water has still come home with something. Nothing else is promised, and the sea keeps no ledger of what you meant to do.`,
+      '', 'THE CHART');
+  log(`The trade is salvage. Take the boat down, find what the Fall left on the bottom, and bring it back to this dock — nothing counts until it is ashore. Two things end you down there: the air runs out, or the pressure finds a seam. Both are on the gauges.`,
       '', 'THE TRADE');
   document.getElementById('gameover').classList.remove('show');
   // Cap ping power slider at sub's max
@@ -11204,7 +11275,6 @@ function surface() {
       const n = state.cargo;
       state.cargoBanked += n;
       state.cargo = 0;
-      tip('port');
       log(`The dockhands haul ${n} crate${n > 1 ? 's' : ''} of salvage ashore. The ledger grows: ${state.cargoBanked} banked.`, '', 'PORT');
       sfx('bell');
     }
@@ -11384,6 +11454,7 @@ function resumeGame(save) {
   state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
   state.bestiary = save.bestiary || {};      // what you have learned about what lives here
   state.tipsSeen = save.tipsSeen || [];
+  state._lastSetKey = null; state._lastSndKey = null;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
