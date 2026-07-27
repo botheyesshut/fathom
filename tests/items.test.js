@@ -110,6 +110,12 @@ try { vm.runInContext(script +
   '\nfunction __recover(){ return recoverPage(); }' +
   '\nfunction __pagesFound(){ return state.pagesFound || []; }' +
   '\nfunction __setPages(a){ state.pagesFound = a; }' +
+  '\nfunction __bestiary(){ return BESTIARY; }' +
+  '\nfunction __noteCreature(t){ noteCreature(t); }' +
+  '\nfunction __rung(t){ return bestiaryRung(t); }' +
+  '\nfunction __bestState(){ return state.bestiary || {}; }' +
+  '\nfunction __setBest(o){ state.bestiary = o; }' +
+  '\nfunction __creatureTough(){ return CREATURE_TOUGH; }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -921,6 +927,48 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const raw = JSON.parse(sandbox.localStorage.getItem('fathom-save-v1') || '{}');
   check(Array.isArray(raw.pagesFound) && raw.pagesFound.length === 1,
     'the account is in the save', JSON.stringify(raw.pagesFound));
+}
+
+//--- 20. THE BESTIARY: knowledge earned by surviving -------------------------
+{
+  console.log('\n--- 20. THE BESTIARY ---');
+  const B = sandbox.__bestiary();
+
+  // Every creature the game can actually put in the water needs an entry, or
+  // the player meets something the bestiary cannot name.
+  const inWater = Object.keys(sandbox.__creatureTough());
+  const missing = inWater.filter(k => !B[k]);
+  check(missing.length === 0, 'every creature in the game has an entry', missing.join(', ') || 'all covered');
+  check(!!B.rival, 'and so does a rival boat, which is a creature by every mechanic that matters');
+
+  // Each entry must carry all three rungs, and the last one must be USEFUL —
+  // the whole point is teaching the sound grammar nothing else teaches.
+  const thin = Object.keys(B).filter(k => !B[k].heard || !B[k].seen || !B[k].known || B[k].known.length < 40);
+  check(thin.length === 0, 'every entry has all three rungs and a real lesson at the end',
+    thin.join(', ') || 'all complete');
+
+  // It fills in by CONTACT, and only crosses a rung when it is earned.
+  sandbox.__setBest({});
+  check(sandbox.__rung('lurker') === 0, 'an unmet creature is unknown');
+  sandbox.__noteCreature('lurker');
+  check(sandbox.__rung('lurker') === 1, 'one contact records that you heard it');
+  sandbox.__noteCreature('lurker'); sandbox.__noteCreature('lurker');
+  check(sandbox.__rung('lurker') === 2, 'three contacts earn what it looks like');
+  for (let i = 0; i < 3; i++) sandbox.__noteCreature('lurker');
+  check(sandbox.__rung('lurker') === 3, 'six contacts earn the thing that saves you');
+
+  // It never runs away with itself, and unknown types are ignored rather than
+  // creating phantom entries.
+  for (let i = 0; i < 50; i++) sandbox.__noteCreature('lurker');
+  check(sandbox.__rung('lurker') === 3, 'and it tops out there — no fourth rung to grind for');
+  sandbox.__noteCreature('not-a-creature');
+  check(!sandbox.__bestState()['not-a-creature'], 'an unknown type records nothing');
+
+  // Knowledge is campaign-level: it survives the boat, like the bank.
+  sandbox.doSave(true);
+  const raw = JSON.parse(sandbox.localStorage.getItem('fathom-save-v1') || '{}');
+  check(raw.bestiary && raw.bestiary.lurker > 0, 'the bestiary is in the save',
+    JSON.stringify(raw.bestiary || {}).slice(0, 60));
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

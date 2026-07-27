@@ -767,7 +767,7 @@
   }
   #transcript-list .log-entry { opacity: 1; font-size: 1.02rem; margin-bottom: 0.7rem; }
 
-  #inventory, #muster, #port, #pages {
+  #inventory, #muster, #port, #pages, #bestiary {
     position: fixed;
     inset: 0;
     background: rgba(4, 8, 16, 0.82);
@@ -778,7 +778,18 @@
     padding: 1.2rem;
     backdrop-filter: blur(6px);
   }
-  #inventory.show, #muster.show, #port.show, #pages.show { display: flex; }
+  #inventory.show, #muster.show, #port.show, #pages.show, #bestiary.show { display: flex; }
+  #bestiary-list { overflow-y: auto; padding: 0.3rem 0.8rem 0.8rem; -webkit-overflow-scrolling: touch; }
+  .bst { display: flex; gap: 0.7rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(160,140,100,0.12); }
+  .bst:last-child { border-bottom: none; }
+  .bst-g { flex: none; width: 1.9rem; text-align: center; font-size: 1.5rem; line-height: 1.2; }
+  .bst-b { flex: 1; min-width: 0; }
+  .bst-n { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; color: #d8c9a4; }
+  .bst-c { font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; letter-spacing: 0.14em;
+           color: #6f8496; margin: 0.1rem 0 0.25rem; }
+  .bst-t { font-size: 0.78rem; line-height: 1.4; color: #9a8f72; }
+  .bst-k { font-size: 0.78rem; line-height: 1.4; color: #7fae8a; margin-top: 0.25rem; }
+  .bst-u { font-size: 0.75rem; font-style: italic; color: #5a5140; }
   /* The account reads as a DOCUMENT, not a menu: serif body, generous leading,
      numbered pages, and a dim rule where a page has not been found yet — the
      gaps are honest about how much of the descent is still out there. */
@@ -988,6 +999,15 @@
   </div>
 </div>
 
+<!-- THE BESTIARY — what the boat has learned about what lives down here. -->
+<div id="bestiary">
+  <div id="inv-panel">
+    <div id="inv-head"><span>The Bestiary</span><button class="btn" id="bestiary-close">Close</button></div>
+    <div id="pages-sub">what the boat has met, and what it learned by surviving it</div>
+    <div id="bestiary-list"></div>
+  </div>
+</div>
+
 <!-- THE ACCOUNT — the recovered pages of The Dark Way Down, for rereading.
      The moment of finding prints to the log; this is the shelf it lives on. -->
 <div id="pages">
@@ -1110,6 +1130,7 @@
     <button class="btn" id="btn-chart" title="The sea chart — the surface entire, and beneath it only the water you have sounded">Chart</button>
     <button class="btn" id="btn-muster" title="The muster — who is aboard, how long they have served, and what that has made them">Muster</button>
     <button class="btn" id="btn-pages" style="display:none" title="The recovered pages of an account somebody wrote on the way down">Account</button>
+    <button class="btn" id="btn-bestiary" style="display:none" title="The bestiary — what the boat has met down here, and what it learned by surviving it">Bestiary</button>
     <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
@@ -2505,6 +2526,39 @@ function renderPages() {
   }
   el.innerHTML = rows.join('');
 }
+// THE BESTIARY, as a document. Entries you have filled in read in full; ones
+// you have met but not learned show what you know and say what is still
+// missing, because "you have not survived enough of these yet" is itself
+// information. Creatures you have never met are not listed at all — a bestiary
+// that shows you empty slots is a checklist, and this game does not do
+// checklists; it does knowledge you went and got.
+function renderBestiary() {
+  const el = document.getElementById('bestiary-list');
+  if (!el) return;
+  const met = Object.keys(BESTIARY).filter(k => ((state.bestiary || {})[k] || 0) > 0);
+  if (!met.length) {
+    el.innerHTML = '<div class="bst"><div class="bst-b"><div class="bst-u">Nothing recorded. You have not met anything down there yet — or nothing has let you know it was there.</div></div></div>';
+    return;
+  }
+  met.sort((a, b) => (state.bestiary[b] || 0) - (state.bestiary[a] || 0));
+  el.innerHTML = met.map(k => {
+    const b = BESTIARY[k], n = state.bestiary[k] || 0, rung = bestiaryRung(k);
+    let body = '<div class="bst-t">' + b.heard + '</div>';
+    if (rung >= 2) body += '<div class="bst-t">' + b.seen + '</div>';
+    if (rung >= 3) body += '<div class="bst-k">' + b.known + '</div>';
+    else {
+      const need = BEST_AT[rung] - n;
+      body += '<div class="bst-u">' + need + ' more encounter' + (need === 1 ? '' : 's')
+            + ' before you understand it well enough to write that down.</div>';
+    }
+    return '<div class="bst"><div class="bst-g" style="color:' + b.col + '">' + b.glyph + '</div>'
+      + '<div class="bst-b"><div class="bst-n">' + b.name + '</div>'
+      + '<div class="bst-c">' + n + ' CONTACT' + (n === 1 ? '' : 'S') + '</div>' + body + '</div></div>';
+  }).join('');
+}
+function openBestiary() { renderBestiary(); document.getElementById('bestiary').classList.add('show'); }
+function closeBestiary() { document.getElementById('bestiary').classList.remove('show'); }
+
 function openPages() { renderPages(); document.getElementById('pages').classList.add('show'); }
 function closePages() { document.getElementById('pages').classList.remove('show'); }
 
@@ -4302,6 +4356,10 @@ const state = {
   // with one in the locker, which is why this is set on death and on restart
   // rather than saved as a possession you could lose.
   lockerWeapon: 'axe',
+  // What the boat has learned about what lives down here. Campaign knowledge:
+  // it survives losing the boat, because drowning does not un-teach you what
+  // a hunter listens for.
+  bestiary: {},
   alive: true,
   cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
   panX: 0, panY: 0,         // user-applied pan offset (drag)
@@ -5422,6 +5480,84 @@ const WEAPONS = {
   torpedo: { power: 16, range: 3, loud: 5 }, // consumable, ranged, heavy
 };
 const CREATURE_TOUGH = { drifter: 6, lurker: 10, eel: 4, shoal: 3, silt: 12, baro: 26, angler: 10, chorus: 8, hulk: 999 };
+
+//=============================================================================
+// THE BESTIARY — what the boat has learned about what lives down here.
+//
+// This game's real currency is knowledge: the chart shows only what you have
+// sounded, a layer must be felt before it is known, and the account arrives a
+// page at a time. The creatures were the hole in that. A captain could be hunted
+// by the same thing for forty voyages and never be told what wakes it, what
+// drives it off, or that going quiet works — the sound grammar is the deepest
+// system in the game and nothing ever taught it.
+//
+// So an entry FILLS IN as you survive the thing. First contact gives you a
+// sound and a shape; meeting it again earns its habits; surviving it repeatedly
+// earns the one fact that actually saves you. That is the epistemic law applied
+// to living things, and it makes a second encounter valuable rather than merely
+// dangerous — you are paying attention, not grinding.
+const BESTIARY = {
+  lurker: { name: 'the hunter', glyph: '⊗', col: '#d05048',
+    heard: 'Something long turns over in the dark and starts to follow.',
+    seen:  'It never hurries. It does not need to.',
+    known: 'It hunts by sound alone. Drop the sonar to silent and it loses the thread — noise is what it eats, not you.' },
+  angler: { name: 'the lure', glyph: '✸', col: '#e05070',
+    heard: 'A light where no light should be, and the water very still around it.',
+    seen:  'The light is on a stalk. The stalk is attached to something.',
+    known: 'The light is bait and the mouth is beneath it. Everything it does is an invitation; the only safe answer is distance.' },
+  silt:   { name: 'the floor that moves', glyph: '▲', col: '#8a7048',
+    heard: 'The bottom shifts where nothing should be shifting.',
+    seen:  'A ridge of silt, and it is not silt.',
+    known: 'It waits on the floor for something to come within reach. Cross the bottom high, or do not cross it.' },
+  baro:   { name: 'the pressure', glyph: '●', col: '#8050b0',
+    heard: 'A vastness pacing you, somewhere out in the deep water.',
+    seen:  'It is bigger than the boat and it is in no hurry about that.',
+    known: 'It belongs to the deep and rarely leaves it. Rise, and it loses interest long before you lose the hull.' },
+  chorus: { name: 'the chorus', glyph: '¤', col: '#70c8c0',
+    heard: 'Voices in the water, none of them answering each other.',
+    seen:  'Many small things moving as one intention.',
+    known: 'It is loudest where the water is tightest. Open water robs it of whatever it is doing.' },
+  eel:    { name: 'the thief', glyph: '~', col: '#c8b040',
+    heard: 'Something narrow works along the hull, testing.',
+    seen:  'Long, and quick, and interested in the hold rather than in you.',
+    known: 'It steals and leaves. What it takes is gone; what it does not take is not worth its trouble.' },
+  shoal:  { name: 'the shoalfang', glyph: '»', col: '#a0b840',
+    heard: 'Small, fast returns, and more of them than you would like.',
+    seen:  'Three of them, moving to put you between them.',
+    known: 'Each bite is nothing. Being surrounded is the danger — never let them close the ring.' },
+  drifter:{ name: 'the drifter', glyph: '⊙', col: '#5a8a72',
+    heard: 'Something large and slow, going wherever the water goes.',
+    seen:  'It drifts. It does not appear to be hunting anything.',
+    known: 'It is not hunting you and never was. Give it room and it will give you room.' },
+  hulk:   { name: 'the hulk', glyph: '◆', col: '#4a7a8a',
+    heard: 'A mountain moving, and the water going with it.',
+    seen:  'You cannot see the whole of it from here.',
+    known: 'Nothing you carry will hurt it. It is weather, not an enemy — the only tactic is to not be there.' },
+  rival:  { name: 'another boat', glyph: '⊘', col: '#7090b8',
+    heard: 'Screws. Someone else is down here, and they are under power.',
+    seen:  'A hull like yours, running dark.',
+    known: 'They hunt the way you do — by listening. Everything you can do to them, they can do to you.' },
+};
+const BEST_AT = [1, 3, 6];   // contacts before heard / seen / known
+
+function noteCreature(type) {
+  if (!BESTIARY[type]) return;
+  if (!state.bestiary) state.bestiary = {};
+  const was = state.bestiary[type] || 0;
+  state.bestiary[type] = was + 1;
+  const b = BESTIARY[type];
+  // Announce only when a rung is crossed, so the log marks LEARNING rather
+  // than repeating itself at every sighting.
+  if (was + 1 === BEST_AT[0]) log(`${b.heard} (Recorded: ${b.name}.)`, 'strange', 'BESTIARY');
+  else if (was + 1 === BEST_AT[1]) log(`You have seen enough of ${b.name} to write it down properly. ${b.seen}`, 'strange', 'BESTIARY');
+  else if (was + 1 === BEST_AT[2]) log(`${b.known} (${ucfirst(b.name)}: the account is complete.)`, 'good', 'BESTIARY');
+  const btn = document.getElementById('btn-bestiary');
+  if (btn) btn.style.display = '';
+}
+function bestiaryRung(type) {
+  const n = (state.bestiary || {})[type] || 0;
+  return n >= BEST_AT[2] ? 3 : n >= BEST_AT[1] ? 2 : n >= BEST_AT[0] ? 1 : 0;
+}
 function creatureTough(c) {
   const base = CREATURE_TOUGH[c.type] || 10;
   return Math.max(1, Math.round(base * (0.7 + mulberry32(hashStr('tough:' + (c.id || c.type)))() * 0.6)));
@@ -8246,6 +8382,11 @@ function creatureTick() {
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
       log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, hunting || c.fleeing ? 'danger' : 'strange', 'CONTACT');
       sfx('contact');
+      // A contact is a lesson if you live through it. This is the ONLY hook the
+      // bestiary needs: it rides the existing passive-sonar contact, so a
+      // creature is recorded exactly when the boat could genuinely know of it,
+      // and never from omniscience.
+      noteCreature(c.type);
     }
   }
   // The advisory re-arms once no hunter is locked on.
@@ -10072,6 +10213,7 @@ function doSave(force) {
       layersFelt: state.layersFelt,
       portHire: state.portHire,
       pagesFound: state.pagesFound,
+      bestiary: state.bestiary,
       lockerWeapon: state.lockerWeapon,
       quarryCache: state.quarryCache,
       crew: state.crew,
@@ -10131,6 +10273,9 @@ function resumeGame(save) {
   state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
   state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
   state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
+  state.bestiary = save.bestiary || {};      // what you have learned about what lives here
+  const __bsBtn = document.getElementById('btn-bestiary');
+  if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
   state.lockerWeapon = save.lockerWeapon || 'axe';
   const __pgBtn = document.getElementById('btn-pages');
   if (__pgBtn) __pgBtn.style.display = state.pagesFound.length ? '' : 'none';
@@ -10245,7 +10390,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
 // panel pushes a history entry on open; back pops it and closes the topmost.
 // Closing by button consumes the entry so the two can never drift apart.
 const PANELS = [
-  ['pages', closePages], ['port', closePort], ['muster', closeMuster],
+  ['bestiary', closeBestiary], ['pages', closePages], ['port', closePort], ['muster', closeMuster],
   ['trade', () => { const t = document.getElementById('trade'); if (t) t.classList.remove('show'); }],
   ['inventory', closeInventory], ['seachart', closeSeaChart],
   ['transcript', () => { const t = document.getElementById('transcript'); if (t) t.classList.remove('show'); }],
@@ -10332,6 +10477,8 @@ var __mb = document.getElementById('btn-muster'); if (__mb) __mb.addEventListene
 var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListener('click', closeMuster);
 var __pc = document.getElementById('port-close'); if (__pc) __pc.addEventListener('click', closePort);
 var __pgb = document.getElementById('btn-pages'); if (__pgb) __pgb.addEventListener('click', openPages);
+var __bsb = document.getElementById('btn-bestiary'); if (__bsb) __bsb.addEventListener('click', openBestiary);
+var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEventListener('click', closeBestiary);
 var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('log').addEventListener('click', openTranscript);
