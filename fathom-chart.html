@@ -3045,6 +3045,55 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
+  // ON THE BOTTOM — three bands of sediment, not two. The floor-bearing
+  // depth scenes all draw the same two rows whether the keel is IN the silt
+  // or a step above it, so the window said nothing the sounder had not.
+  // `wet` dims it with depth, so this one picture serves every band.
+  seabed: { cap: 'the keel is in it, and the silt does not settle', wet: true, hold: 3, porthole: true, snowFrom: 1,
+    key: { '·': '3', '░': '1', '▒': '1', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8' },
+    frames: [
+      ['   ┌────────────────┐   ',
+       '  │    ·             │  ',
+       '  │           ·      │  ',
+       '  │               ·  │  ',
+       '  │                  │  ',
+       '  │                  │  ',
+       '  │ ░░░░░░ ░░░░ ░░░░░│  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '  │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │                  │  ',
+       '  │    ·             │  ',
+       '  │           ·      │  ',
+       '  │               ·  │  ',
+       '  │                  │  ',
+       '  │░░░░░ ░░░░░░ ░░░░ │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '  │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │               ·  │  ',
+       '  │                  │  ',
+       '  │    ·             │  ',
+       '  │           ·      │  ',
+       '  │                  │  ',
+       '  │░░░░ ░░░░░ ░░░░░░ │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '  │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │           ·      │  ',
+       '  │               ·  │  ',
+       '  │                  │  ',
+       '  │    ·             │  ',
+       '  │                  │  ',
+       '  │░░░░ ░░░░ ░░░░░ ░░│  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '  │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│  ',
+       '   └────────────────┘   '],
+    ] },
+
   midwater: { cap: 'the light is going out of the water, and taking the colour', wet: true, hold: 4, porthole: true, snowFrom: 1,
     key: { '·': '3', '>': '2', '<': '2', '▒': '1', '░': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
@@ -3343,8 +3392,14 @@ function sceneForNow() {
   if (nearRoof && !nearFloor) return 'roof';       // stone over the sail, water under the keel
   if (!nearRoof && !nearFloor) return 'column';    // suspended, neither in reach
 
-  // On or near the bottom: the depth-band scenes, which is where their seabeds
-  // belong.
+  // IN THE SILT versus A STEP ABOVE IT. Sean, playing at 720 m with "the floor
+  // is right there" and at 660 m with "the floor is open below", got the same
+  // picture both times — so the window told him nothing the sounder had not
+  // already said. On the bottom is its own place, and it looks like one.
+  if (below <= 0) return 'seabed';
+
+  // A step above the floor: the depth-band scenes, which is where their
+  // thinner seabeds belong.
   if (state.currentDepth < 400) return 'shallow';
   if (state.currentDepth < 1200) return 'midwater';
   return 'open';
