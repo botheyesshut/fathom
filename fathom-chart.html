@@ -3946,7 +3946,7 @@ function recoverPage() {
     log('It is written as though it happened to whoever reads it.', 'strange', 'PAGE');
   }
   if (idx === PAGES.length - 1) {
-    log('That is the last of it. The account ends there.', 'strange', 'PAGE');
+    log('The account ends there.', 'strange', 'PAGE');
   }
   const pb = document.getElementById('btn-pages');
   if (pb) pb.style.display = '';
@@ -6458,7 +6458,7 @@ const BESTIARY = {
   angler: { name: 'the lure', glyph: '✸', col: '#e05070',
     heard: 'A light where no light should be, and the water very still around it.',
     seen:  'The light is on a stalk. The stalk is attached to something.',
-    known: 'The light is bait and the mouth is beneath it. Everything it does is an invitation; the only safe answer is distance.' },
+    known: 'The light is bait and the mouth is under it. Nothing it does is meant for you to watch. Stay out of its water.' },
   silt:   { name: 'the floor that moves', glyph: '▲', col: '#8a7048',
     heard: 'The bottom shifts where nothing should be shifting.',
     seen:  'A ridge of silt, and it is not silt.',
@@ -6486,7 +6486,7 @@ const BESTIARY = {
   hulk:   { name: 'the hulk', glyph: '◆', col: '#4a7a8a',
     heard: 'A mountain moving, and the water going with it.',
     seen:  'You cannot see the whole of it from here.',
-    known: 'Nothing you carry will hurt it. It is weather, not an enemy — the only tactic is to not be there.' },
+    known: 'Nothing you carry will hurt it. It is weather, not an enemy. You do not fight weather. You get out from under it.' },
   rival:  { name: 'another boat', glyph: '⊘', col: '#7090b8',
     heard: 'Screws. Someone else is down here, and they are under power.',
     seen:  'A hull like yours, running dark.',
@@ -7325,30 +7325,80 @@ const interiorCache = new Map();   // 'q,r,d' -> chunk (substrate; cleared on re
 // INDIVIDUAL varies within its species range — the same law the bestiary in
 // the water obeys. Toughness is what a boarding party has to get through
 // before the thing decides the deck is not worth it.
+// The sea coming in, which was one sentence for the entire flooding system.
+// 'Something floats past your knee, going the way you came' withholds the noun
+// and makes the DIRECTION the information: the sea is running the wrong way
+// through the boat.
+const FLOOD_GAIN = [
+  'Behind you, the water finds another doorway.',
+  'The water comes over a coaming somewhere behind you, all at once, and then goes quiet again.',
+  'Something floats past your knee, going the way you came.',
+  'The sea is in the next compartment. You can hear it working at the door.',
+  'It is over your boots now. It was not, three rooms ago.',
+  'A pipe goes under with a swallow, and the sound of it comes down the passage after you.',
+  'The lamp finds water where the lamp found deck.',
+];
+
 const TENANTS = {
   hollow: {
     name: 'a hollow man', glyph: 'Ω', color: '#9fc4a8', tough: 7, hit: [30, 55],
-    look: 'Something that used to be crew stands in the dark, patient, and turns its head as the lamp finds it.',
-    hurt: 'It comes apart at the seams and does not put itself back together.',
-    near: 'Somewhere close, plate scrapes on plate at about walking pace.',
+    look: ['Something that used to be crew stands in the dark, patient, and turns its head as the lamp finds it.',
+           'A man is standing in the dark with his back to you. He waits for the lamp to settle before he turns.',
+           'It is wearing boots, and the boots are laced. Something dressed it once.',
+           'The lamp finds it and it does not flinch. Its eyes have been open a long, long time.'],
+    hurt: ['It comes apart at the seams and does not put itself back together.',
+           'It folds down where it stands and does not gather itself up again.',
+           'The seams give. What was holding it together was never much.',
+           'It goes down without a sound, and lies in the water the way wet clothes lie.'],
+    near: ['Somewhere close, plate scrapes on plate at about walking pace.',
+           'Something takes a step somewhere off to your left, and then another, in no hurry at all.',
+           'Water shifts ahead of you in a rhythm, the way it shifts when somebody is walking through it.',
+           'You hear a buckle knock against plate, twice, and then nothing.'],
   },
   clutch: {
     name: 'a clutch', glyph: 'ॐ', color: '#c8a06a', tough: 14, hit: [45, 75],
-    look: 'A knot of limbs fills the passage, too many and all of them wrong, working slowly against itself.',
-    hurt: 'The knot loosens, sheds most of itself, and drags what is left away into the dark.',
-    near: 'Something heavy shifts nearby, and goes on shifting for longer than it should take.',
+    look: ['A knot of limbs fills the passage, too many and all of them wrong, working slowly against itself.',
+           'The passage ahead is full. What fills it has more arms than it has any use for.',
+           'It works at itself in the dark, a great knot of limbs pulling every way at once and getting nowhere.',
+           'The lamp finds hands. It keeps finding them, and it does not find a face.'],
+    hurt: ['The knot loosens, sheds most of itself, and drags what is left away into the dark.',
+           'It comes apart into parts, and most of the parts stop moving.',
+           'It sheds what it can spare and takes the rest away down the passage. It is quieter going than it was coming.',
+           'The knot loosens. What is left of it fits through a doorway now, and does.'],
+    near: ['Something heavy shifts nearby, and goes on shifting for longer than it should take.',
+           'Something heavy drags itself over a coaming and takes a long time doing it.',
+           'A wet sound comes down the passage, the sort of noise a full sack makes going down stairs.',
+           'Knuckles go over the plate somewhere close, a great many of them, and not in any order.'],
   },
   whisper: {
     name: 'a whisper', glyph: 'ʬ', color: '#bfa8e0', tough: 4, hit: [15, 30],
-    look: 'A thin pale shape, barely there, and the lamp dims wherever it stands.',
-    hurt: 'It thins out to nothing at all, and the lamp comes back up.',
-    near: 'The lamp gutters for no reason you can name.',
+    look: ['A thin pale shape, barely there, and the lamp dims wherever it stands.',
+           'A shape stands in the passage, thin and pale, and the light goes into it and does not come out.',
+           'The lamp is on something, and showing you less than it did with nothing there.',
+           'It has the outline of a person and none of the thickness. You can read the rivets through it.'],
+    hurt: ['It thins out to nothing at all, and the lamp comes back up.',
+           'It goes out. The lamp comes back up, and the passage is only a passage.',
+           'There is less of it, and then less, and then the light is yours again.',
+           'It thins until there is nothing left to thin, and the cold goes out of the air with it.'],
+    near: ['The lamp gutters for no reason you can name.',
+           'The lamp drops to a coal and comes back up. Nothing came past it.',
+           'Your own breathing comes back off the walls, and it comes back late.',
+           'Something takes the edge off the light without ever crossing it.'],
   },
   warden: {
     name: 'a warden', glyph: 'Ψ', color: '#a8d68c', tough: 22, hit: [55, 90],
-    look: 'It was built to keep people out of this deck, and it is still doing the job.',
-    hurt: 'It goes down on one side, gives up the passage, and withdraws into the deep of the structure.',
-    near: 'Something enormous is moving through the structure, and it is not in a hurry.',
+    look: ['It was built to keep people out of this deck, and it is still doing the job.',
+           'It fills the passage from deck to deckhead, and it has been here longer than the rust.',
+           'Somebody made this, and made it for one job, and it is still on shift.',
+           'It does not look at you. It steps into the doorway and stops, and that is all it intends to do.'],
+    hurt: ['It goes down on one side, gives up the passage, and withdraws into the deep of the structure.',
+           'It gives at one side and stops filling the doorway. Whatever it was standing in front of, you can walk to now.',
+           'It puts a hand out to the bulkhead, misses, and goes down heavily on the plate.',
+           'It backs off into the dark of the structure and stands there. It has not finished. It has only stopped.'],
+    near: ['Something enormous is moving through the structure, and it is not in a hurry.',
+           'The deck takes a weight somewhere forward, and gives, and takes it again.',
+           'A bulkhead somewhere ahead of you swings, and something dogs it shut again.',
+           'Rust comes down off the deckhead in a fine rain. Something is walking above you.'],
   },
 };
 
@@ -8007,10 +8057,10 @@ function dwellerStep() {
     if (d.worn) {
       log(`The lamp finds a hollow man wearing what is left of a uniform you gave out yourself. ${d.worn} — or what has ${d.worn}'s face — turns its head toward the light.`, 'danger', 'CONTACT');
     } else {
-      log(spec.look, 'danger', 'CONTACT');
+      log(pickLoose(spec.look), 'danger', 'CONTACT');
     }
   } else if (dist <= 3 && rand() < 0.5) {
-    log(spec.near, 'warn', 'CONTACT');
+    log(pickLoose(spec.near), 'warn', 'CONTACT');
   }
 }
 
@@ -8123,7 +8173,7 @@ function stepFoot(x, y) {
   const broke = partyStep();   // the party keeps pace, and fights what it stands beside
   if (!stationSecure(f.q, f.r, f.d)) {
     if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
-      log('Behind you, the water finds another doorway.', 'warn', 'WATER');
+      log(pickLoose(FLOOD_GAIN), 'warn', 'WATER');
     }
     if (!broke && f.dweller) dwellerStep();
   }
@@ -8254,7 +8304,7 @@ function applyTenantDamage(dmg, by) {
   t.hurt = (t.hurt || 0) + dmg;
   const spec = TENANTS[t.kind] || TENANTS.hollow;
   if (t.hurt >= (t.tough || spec.tough)) {
-    log(spec.hurt, 'warn', 'BOARDING');
+    log(pickLoose(spec.hurt), 'warn', 'BOARDING');
     if (t.boarder) {
       state.base.boarder = null;
       log('It goes down in the flooded passage of your own station. The deck is yours again — now get the water out.', '', 'BOARDING');
@@ -9614,7 +9664,7 @@ function lostWithHer() {
   if (items) bits.push(items + ' thing' + (items > 1 ? 's' : '') + ' out of the hold');
   const hands = (state.crew || []).filter(m => !m.lost).length;
   if (hands) bits.push(hands === 1 ? 'one hand' : hands + ' hands');
-  if (!bits.length) return ' She goes down with nothing aboard, which is its own kind of failure.';
+  if (!bits.length) return ' She goes down with nothing in her.';
   const last = bits.pop();
   return ' Down with her: ' + (bits.length ? bits.join(', ') + ' and ' + last : last) + '.';
 }
@@ -9905,7 +9955,7 @@ const SPACE_FIRST = {
     'Sea and sky, in their usual argument. Neither one troubles you much.',
   ],
   shaft: [
-    'You seem to have entered a vertical tunnel. Dark water haunts below. The tunnel beckons you back toward the open water above.',
+    'The rock stands the passage on end. The lights go up until they give out, and down until they give out, and the tunnel is longer than either.',
     'A chimney in the rock. The boat hangs in it like a stone in a throat, and the walls go up and down past the reach of the lights.',
     'The passage stands on end here — a flooded shaft, cut or worn, running away in both directions.',
     'This is a vertical tube. The rock face looks scraped by things that fell, or climbed, through it over uncountable ages.',
@@ -10111,7 +10161,7 @@ function exitsClause(s) {
   // then only sometimes — said every time, it stops meaning anything.
   const unknown = s.lateral - s.lateralKnown;
   const hedge = (unknown >= 2 && rand() < 0.35) ? ' ' + pickLoose(HEDGE) : '';
-  return parts.join('; ').replace(/^./, c => c.toUpperCase()) + '.' + hedge + ' ';
+  return parts.map(x => x.replace(/^./, c => c.toUpperCase()) + '.').join(' ') + hedge + ' ';
 }
 
 const DEPTH_MOOD = {
@@ -10658,21 +10708,21 @@ function growthKind(q, r) { return GROWTH_KINDS[hashStr(worldSeed + ':growth:' +
 const FLAVOR = {
   surface: [
     'Grey swells roll under the hull. The horizon is empty in all directions.',
-    'Surface chop. Whitecaps to the northwest. The sky is the color of old iron.',
+    'Surface chop. Whitecaps to the northwest. The sky is the colour of old iron.',
     'Spray on the conning tower. The wind has been at it for hours.',
     'A bird passes low over the water, then nothing for miles.',
-    'The boat rocks in the swell. The sea is restless and indifferent.',
+    'The boat rocks in the swell. The swell was doing this before there was a boat.',
     'Cold light off the water. Long swells, slow rhythm.',
-    'Wind in the rigging. The hull creaks against the chop.',
+    'Wind across the casing. The hull creaks against the chop.',
     'The horizon is a thin grey line. Nothing breaks it.',
     'Salt on your face. The boat smells of diesel and brine.',
-    'Open ocean in every direction. The sky goes on forever and means nothing.',
+    'Open water on every heading. A single crate lid rides the swell a hundred yards off, and it is going the same way you are.',
   ],
   breach: [
     'The hatch breaks the surface. Cold air pours in.',
     'You break the surface. The sky is grey and wide and welcome.',
     'The boat shoulders up into chop. The wind is the first sound in hours.',
-    'Daylight, finally. The instruments seem dim by comparison.',
+    'Daylight comes down through the open hatch. The instrument panel goes grey and stops being worth reading.',
     'You surface. The world above is still here, and still indifferent.',
   ],
   dockAdjacent: [
@@ -10697,7 +10747,7 @@ const FLAVOR = {
     ],
     deep: [
       'Through the porthole: pure dark. Something fast crosses your light, then gone.',
-      'Through the porthole: a fish with too many teeth and too few eyes.',
+      'A fish comes to the porthole and stays there. It has more teeth than it has room for, and no eyes at all.',
       'Through the porthole: shapes at the edge of vision. They do not approach.',
       'Through the porthole: bioluminescent flecks, like a sky that doesn\u2019t belong here.',
     ],
@@ -10705,7 +10755,7 @@ const FLAVOR = {
   openWater: [
     'The water column stretches above and below. You hang suspended.',
     'A school of something silver passes through your sonar and is gone.',
-    'Cold blue all around. Visibility limited to instruments.',
+    'The water goes blue and then goes nothing. From here on you see with the instruments or you do not see.',
     'The hull is silent. You could be the only living thing for miles.',
     'Sunlight from far above, bent and broken by the swell.',
     'Pressure builds slowly. The boat settles into the depth.',
@@ -10722,7 +10772,7 @@ const FLAVOR = {
     'The walls open. Your light does not reach the far side.',
     'A flooded chamber. The water here is older than the sea above.',
     'The roof curves away into dark. You drift in a held breath of stone.',
-    'A vast hollow in the rock. The hull seems small.',
+    'The rock opens out and keeps opening. Your lights put a small bright disc on a wall a long way off, and nothing else.',
     'Open water inside the earth. The roof presses down at the edge of your light.',
   ],
   kelp: [
@@ -10740,14 +10790,14 @@ const FLAVOR = {
     'A staircase descending into deeper water. You do not take it.',
   ],
   signal: [
-    'A pulse. Rhythmic. Almost regular.',
+    'A pulse comes up through the hull. It comes again. The gap between them does not vary by so much as a second.',
     'Something is sending. You do not know what receives.',
-    'A frequency that should not be alive.',
+    'The set picks up a tone and holds it. It rises a little, and falls, and rises, at about the rate of a man breathing.',
   ],
   growth: [
-    'The walls here have grown teeth.',
+    'The wall carries rows of small white curves, evenly spaced and all set the same way. Nothing here has a mouth to put them in.',
     'A bloom of something. It moves when you do not look at it.',
-    'Tissue. Where tissue should not be.',
+    'A pale sheet of something lies flat against the rock, and it is warm enough to read on the sonar.',
   ],
 };
 
