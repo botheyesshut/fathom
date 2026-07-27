@@ -2101,25 +2101,27 @@ const SNOW_CH = ['.', '·', '˙', ','];
 // makes its blocks red, the layer makes its water cold — and everything else
 // falls through to this. Unknown characters render mid-grey rather than black,
 // so a typo shows up as visible art instead of an invisible hole.
-// EVERY GLYPH THE VIEWPORT MAY DRAW, AND WHY THIS LIST EXISTS.
+// GLYPHS THE VIEWPORT MAY DRAW — a LEGIBILITY guard, not a grid guard.
 //
-// ANSI art is a grid, and a grid only holds if every character advances the
-// same width. These do, MEASURED in the browser at the viewport's own font.
-// Several obvious-looking choices do not, and the failure is silent and ugly:
-// the quadrant blocks ▗▖▝▘ measure 6.92 against a 5.40 base — 28% wide — so
-// every row containing a porthole corner rendered longer than the rest and the
-// frame came apart. The partial blocks ▂▃▅▆ measure NINE. The fisheye ◉ is
-// 7.52. The box diagonals ╲╱ are 4.95, narrow.
+// READ THIS BEFORE TRUSTING IT. I first wrote this list as the fix for a torn
+// porthole frame, having measured each glyph's advance width in the browser and
+// kept the uniform ones. That was wrong in a way worth remembering: I measured
+// in DESKTOP Chrome, where Courier New exists. Sean plays on Android, which has
+// neither Courier New nor Consolas, falls back to a different monospace face
+// with different coverage, and sends a different set of characters off to a
+// proportional fallback. Every row measured identical on my machine while his
+// frame was visibly torn. A whitelist measured on one machine is a statement
+// about that machine, and nothing else.
 //
-// None of that is a font bug: those glyphs are absent from the monospace face
-// and the browser substitutes a proportional one per character. Self-hosting
-// JetBrains Mono does not fix it either — the latin subset has no block
-// elements. So the rule is a WHITELIST, and items.test enforces it, because a
-// broken grid is invisible in code review and obvious on a phone.
-// Measured safe. NOTE ┃ and ╎ are NOT here — heavy and dashed verticals come in
-// at 4.95 while the plain │ and the double ║ are exactly on the base. There is
-// no rule to intuit; the only way to know is to measure, so measure before
-// adding anything to this string.
+// The grid is now enforced by LAYOUT in vpDraw — every run is an inline-block
+// exactly N characters wide — so glyph advance cannot break it on any font.
+// Verified against four font regimes including plain `serif`, which has no
+// monospace at all.
+//
+// What this list still buys is that the art sticks to characters likely to
+// EXIST in a common monospace face, so a scene degrades to a wrong-looking
+// glyph rather than to a tofu box. That is worth keeping. It is not what keeps
+// the frame square.
 const VP_SAFE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
               + '█▓▒░▄▀│║─┌┐└┘├┤┬┴┼●◦○•*·~≈=+-^v><»«¤☼∙ᵛ◘†‡¦|.,\'"!?:;()[]/ ';
 const VP_KEY = { '█':'8', '▓':'8', '▒':'1', '░':'1', '▄':'8', '▀':'8',
@@ -2951,19 +2953,35 @@ function vpDraw() {
     co[y][x] = c;
   }
 
+  // THE GRID IS ENFORCED BY LAYOUT, NOT BY TRUSTING THE FONT.
+  //
+  // First attempt at this bug was to whitelist glyphs I had MEASURED as
+  // uniform — measured in desktop Chrome, where Courier New exists. Sean is on
+  // Android, which has neither Courier New nor Consolas, falls back to a
+  // different monospace face with different coverage, and sends a different
+  // set of characters off to a proportional fallback. The frame was still torn
+  // on his phone while every row measured identically on mine. A whitelist
+  // measured on one machine is a statement about that machine.
+  //
+  // So glyph width is made IRRELEVANT: every run of the same character and
+  // colour is an inline-block exactly N characters wide. Runs of identical
+  // glyphs are uniform by construction whatever the font does, and an isolated
+  // odd glyph sits centred in its own one-character box — it may bleed a
+  // fraction over its neighbour, which nobody will notice, but it can no longer
+  // shift the rest of the row, which everybody notices.
   let html = '';
   for (let y = 0; y < VP_H; y++) {
-    let run = '', runCol = null;
-    for (let x = 0; x < VP_W; x++) {
-      const c = co[y][x] === ' ' ? '0' : co[y][x];
-      if (c !== runCol) {
-        if (run) html += '<span style="color:' + (ANSI16[parseInt(runCol, 16)] || '#0a0a12') + '">' + run + '</span>';
-        run = ''; runCol = c;
-      }
+    let x = 0;
+    while (x < VP_W) {
       const g = ch[y][x];
-      run += g === '<' ? '&lt;' : g === '>' ? '&gt;' : g === '&' ? '&amp;' : g;
+      const c = co[y][x] === ' ' ? '0' : co[y][x];
+      let n = 1;
+      while (x + n < VP_W && ch[y][x + n] === g && (co[y][x + n] === ' ' ? '0' : co[y][x + n]) === c) n++;
+      const esc = g === '<' ? '&lt;' : g === '>' ? '&gt;' : g === '&' ? '&amp;' : g;
+      html += '<span style="display:inline-block;text-align:center;width:' + n + 'ch;color:'
+            + (ANSI16[parseInt(c, 16)] || '#0a0a12') + '">' + esc.repeat(n) + '</span>';
+      x += n;
     }
-    if (run) html += '<span style="color:' + (ANSI16[parseInt(runCol, 16)] || '#0a0a12') + '">' + run + '</span>';
     html += '\n';
   }
   el.innerHTML = html;
