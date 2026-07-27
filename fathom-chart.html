@@ -7789,7 +7789,13 @@ const STATION_ARRIVE = [
 
 // The threshold. You stop rolling dice about the divers and become one.
 function enterInterior(tile) {
-  const d = state.currentDepth;
+  // THE ANCHOR'S DEPTH, NOT THE BOAT'S. Three depths can enter the same ruin
+  // (the prize admits anything within DEPTH_GRID, and DEPTH_GRID is the dive
+  // step), so generating the deck from `state.currentDepth` gave ONE ruin
+  // THREE different interiors depending on where you happened to stop — and
+  // three separate cleared-deck records to go with them. A ruin is one place.
+  const anchor = poiAtDepth(tile, state.currentDepth);
+  const d = anchor ? anchor.d : state.currentDepth;
   const ch = interiorAt(tile.q, tile.r, d);
   const claimed = stationSecure(tile.q, tile.r, d);
   const own = isBaseDeck(tile.q, tile.r, d);
@@ -8541,9 +8547,13 @@ function leaveInterior(prefix) {
   for (const m of state.crew) checkKnackGain(m);
   const hk = hexKey(f.q, f.r);
   if (!state.poisFound.includes(hk)) state.poisFound.push(hk);
-  // AND the cell key, which is how handleTile asks. Recording only the hex left
-  // every dived ruin reading as a first visit forever.
-  const ck = f.q + ',' + f.r + ',' + (f.d == null ? state.currentDepth : f.d);
+  // AND the cell key, which is how handleTile asks — under the PRIZE ANCHOR'S
+  // depth, not the depth the boat happened to be sitting at. A ruin is one
+  // place however you came at it.
+  const entryD = (f.d == null ? state.currentDepth : f.d);
+  const anchorT = getTile(f.q, f.r);
+  const anchorP = anchorT ? poiAtDepth(anchorT, entryD) : null;
+  const ck = f.q + ',' + f.r + ',' + (anchorP ? anchorP.d : entryD);
   if (!state.poisFound.includes(ck)) state.poisFound.push(ck);
   // A claimed deck keeps its mark on the chart; a stripped one goes back to
   // being ordinary water.
@@ -9245,7 +9255,7 @@ function tickChorus(c, dPlayer) {
   c.phase = (c.phase + 1) % (c.period || 3);
   if (c.phase !== 0) return;
   noiseMade(c.q, c.r, 2 + Math.round((c.volume || 0.5) * 3)); // hunters turn toward it
-  if (dPlayer <= 10 && rand() < 0.6) {
+  if (dPlayer <= 10 && !sonarSilent() && rand() < 0.6) {
     const dir = COMPASS[Math.floor(rand() * COMPASS.length)];
     const m = (1 + Math.floor(rand() * 6)) * 60;
     log(`Passive sonar: something moving — ${dir}, ${m} m.`, 'strange', 'CONTACT'); // a voice thrown
@@ -9433,12 +9443,15 @@ function tickLurker(c, dPlayer, silent) {
   }
 
   // --- The dice each turn: how interest grows and fades. ---
-  let dec = 6 - Math.round(c.tenacity * 4);                 // 2..6 baseline fade
+  let dec = 3 - Math.round(c.tenacity * 2);                 // 1..3 baseline fade
   if (silent && dPlayer > 1) dec += 8;                       // gone dark: it loses you
   let gain = 0;
   if (!silent && dPlayer <= passiveContactR(c.depth, c.q, c.r) + 1 && Math.abs(c.depth - state.currentDepth) <= 2 * DEPTH_GRID)
     gain += 3 + Math.round(c.aggression * 5);                // your live sonar betrays you
   if (dPlayer <= 2 && sameSlice) gain += 6 + Math.round(c.aggression * 6); // it's right on you
+  // A hull passing close enough to see is close enough to be noticed, even
+  // running quiet — quieter than a live sonar, but not nothing.
+  else if (dPlayer <= 4 && sameSlice) gain += (silent ? 1 : 3) + Math.round(c.aggression * 2);
   const before = c.interest;
   c.interest = Math.max(0, Math.min(100, c.interest - dec + gain));
   if (before >= LURK_STALK && c.interest < LURK_WARY && dPlayer <= 14)
@@ -9453,11 +9466,29 @@ function tickLurker(c, dPlayer, silent) {
       log('It has your scent. Unarmed, distance and silence are your only defenses — run, or kill the sonar and pray it loses you.', 'danger', 'THE DEEP');
     }
     if (sameSlice && dPlayer === 1) { lurkerStrike(c); return; }
-    if (dPlayer <= 14 && c.depth !== state.currentDepth) {
+    // WHAT IT IS ACTUALLY CHASING. Three things can be true, in this order:
+    //   a buoy is nearer than you are     -> it goes for the buoy
+    //   a hard layer lies between you     -> it goes for the last noise it had
+    //   otherwise                         -> it comes for you
+    // Only the third used to exist, which made the decoy a way to buy noise
+    // and the thermocline a way to go deaf for nothing.
+    let aimQ = state.q, aimR = state.r, onYou = dPlayer <= 14;
+    let nearest = dPlayer;
+    for (const b of (state.buoys || [])) {
+      const bd = hexDistance({ q: c.q, r: c.r }, { q: b.q, r: b.r });
+      if (bd < nearest) { nearest = bd; aimQ = b.q; aimR = b.r; onYou = false; }
+    }
+    if (onYou && layerDamp(state.currentDepth, c.depth, state.q, state.r) <= 0.5) {
+      // It cannot hear through the layer. It works the last bearing it had.
+      onYou = false;
+      aimQ = (c.tq == null ? state.q : c.tq); aimR = (c.tr == null ? state.r : c.tr);
+    }
+    if (!onYou && nearest === dPlayer && aimQ === state.q && aimR === state.r) onYou = dPlayer <= 14;
+    if (onYou && c.depth !== state.currentDepth) {
       const dd = state.currentDepth > c.depth ? DEPTH_GRID : -DEPTH_GRID;
       if (c.depth + dd >= 0 && cells.has(cellKey(c.q, c.r, c.depth + dd))) { c.depth += dd; return; }
     }
-    lurkerStep(c, dPlayer <= 14 ? state.q : c.tq, dPlayer <= 14 ? state.r : c.tr);
+    lurkerStep(c, onYou ? state.q : aimQ, onYou ? state.r : aimR);
     return;
   }
 
@@ -9486,8 +9517,32 @@ function creatureTick() {
   // in the noise, so the ear can no longer be trusted to report what's there.
   const masked = state.creatures.some(x => x.type === 'chorus'
     && hexDistance({q: x.q, r: x.r}, {q: state.q, r: state.r}) <= 8);
-  // Decoy buoys shout into the water, pulling the sound-hunters off the boat.
-  for (const b of state.buoys) { noiseMade(b.q, b.r, 3); b.turns--; }
+  // DECOY BUOYS SHOUT SO THAT YOU DO NOT HAVE TO — and `noiseMade` was the
+  // wrong instrument for it. Noise STOKES: loudness 3 is a +42 interest spike,
+  // so the buoy pinned every nearby hunter at 100 for the ten turns it lived,
+  // and the boat was still the nearest thing to it. Measured before this: a
+  // decoy cost +53% more hull with the sonar on and +116% running silent.
+  //
+  // A decoy gives a hunter a BEARING, not an appetite. It sets the thing's
+  // target to the buoy and takes the edge off its interest in you — which is
+  // what the button has always claimed: "Move — let it have their attention."
+  // Far-off creatures still get drawn in, because a screaming buoy is a real
+  // risk and the racks hold three.
+  for (const b of state.buoys) {
+    for (const c of state.creatures) {
+      if (c.gone) continue;
+      const bd = hexDistance({ q: c.q, r: c.r }, { q: b.q, r: b.r });
+      if (bd > 11) continue;
+      c.tq = b.q; c.tr = b.r;                       // it turns toward the noise
+      if (c.interest == null) continue;
+      const pd = hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r });
+      // Nearer the buoy than the boat: it is working the wrong contact, and
+      // its fix on YOU decays. Nearer the boat: the shrieking only wakes it.
+      if (bd < pd) c.interest = Math.max(0, c.interest - (8 + Math.round(6 * (1 - bd / 12))));
+      else c.interest = Math.min(100, c.interest + 4);
+    }
+    b.turns--;
+  }
   if (state.buoys.length) state.buoys = state.buoys.filter(b => b.turns > 0);
   tickThreats(); // torpedoes in the water run before the boats move
   if (!state.alive) return;
@@ -9506,6 +9561,11 @@ function creatureTick() {
     else tickLurker(c, d, silent);
     const d2 = hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r});
     const depthOff = Math.abs(c.depth - state.currentDepth);
+    // CLOSE ENOUGH TO TOUCH IS CLOSE ENOUGH TO WRITE DOWN. The bestiary used
+    // to ride only the passive-sonar contact, which is gated on the sonar
+    // being ON — so a captain running silent, which is the correct answer to
+    // most of this game, learned nothing about anything, ever.
+    if (d2 <= 1 && depthOff <= DEPTH_GRID) noteCreature(c.type);
     // Silent running = deaf: no passive contacts while the sonar's off.
     const hunting = c.type === 'lurker' && (c.interest || 0) >= LURK_HUNT;
     // Silent things make no contact: an angler holding still, and a rival boat
