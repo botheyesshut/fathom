@@ -352,9 +352,24 @@
   }
   .dive-btn {
     flex: 0 1 auto !important;
-    min-width: 38px;
+    /* !important because `.btn { min-width: 0 }` is declared later at equal
+       specificity and was silently winning — measured 21.6 × 35.2 px, well
+       under the 44 px an adult thumb needs, on the two most-tapped buttons in
+       the game. Ascend and Descend are how you play; they cannot be slivers. */
+    min-width: 44px !important;
+    min-height: 44px !important;
     padding: 0.6rem 0.4rem !important;
     font-size: 0.7rem !important;
+  }
+
+  /* EVERY PANEL'S WAY OUT. All nine were 63.5 × 31 px — under the touch floor
+     on the one control a player needs when they have opened something by
+     accident. Sized here rather than on `.btn` so the panel bodies keep their
+     compact buttons. */
+  #chart-close, #transcript-close, #inv-close, #muster-close, #port-close,
+  #options-close, #bestiary-close, #pages-close, #trade-close {
+    min-height: 44px;
+    min-width: 72px;
   }
   #dive-depth-readout {
     flex: 1;
@@ -454,7 +469,14 @@
     cursor: pointer;
     user-select: none;
     max-width: 45vw;
+    /* The porthole floats over the top-left of the chart and was eating every
+       tap that landed under it — 10.4% of the drawn hexes, including legal
+       moves. `pointer-events: none` on the box with `auto` on the art itself
+       gives the padding and the backdrop back to the chart while keeping the
+       tap-to-hide gesture on the picture. */
+    pointer-events: none;
   }
+  #vp-art, #vp-cap { pointer-events: auto; }
   #viewport.hidden { display: none; }
   #vp-art {
     margin: 0;
@@ -930,7 +952,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    z-index: 50;
+    /* ABOVE EVERY PANEL. At z-index 50 this sat UNDER the panels (55–58), so
+       dying with the Hold or the Port open drew the death screen behind an
+       opaque panel: the game was over, nothing said so, and the restart button
+       was unreachable. Death outranks furniture. */
+    z-index: 90;
     padding: 2rem;
     backdrop-filter: blur(8px);
   }
@@ -1824,7 +1850,8 @@ function holdTick() {
       crewVitals(m); frayNerve(m, 2 + randInt(3));
       if (rand() < 0.25) log(`Whatever shares the hold with ${ITEMS[k].name} is not where you left it.`, 'strange', 'STIR');
     }
-    if (rand() < 0.04) { giveItem(k, 1); log(`${ucfirst(ITEMS[k].name)}: there is more of it than there was. It is growing.`, 'strange', 'STIR'); }
+    const n = itemCount(k);
+    if (n < 4 && rand() < 0.04 / n) { giveItem(k, 1); log(`${ucfirst(ITEMS[k].name)}: there is more of it than there was. It is growing.`, 'strange', 'STIR'); }
   }
 }
 
@@ -4015,7 +4042,8 @@ function resolveQuarry(L, tier) {
   const crates = 3 + tier * 2 + randInt(4);
   state.threats = state.threats || {};
   state.quarryCache = state.quarryCache || {};
-  state.quarryCache[hexKey(L.q, L.r)] = { crates: crates, tier: tier, taken: false };
+  state.quarryCache[hexKey(L.q, L.r)] = { crates: crates, tier: tier, taken: false,
+                                          d: snapToGrid(state.currentDepth) };
   log(`The marked position, and the mark was honest: a cache, plain in the silt — and ${pick.name} lying over it, which has not moved in a long while and is moving now. ${crates} crates' worth, if you want it that badly. Nobody is making you.`,
       'danger', 'QUARRY');
   sfx('warn');
@@ -8412,6 +8440,10 @@ function leaveInterior(prefix) {
   for (const m of state.crew) checkKnackGain(m);
   const hk = hexKey(f.q, f.r);
   if (!state.poisFound.includes(hk)) state.poisFound.push(hk);
+  // AND the cell key, which is how handleTile asks. Recording only the hex left
+  // every dived ruin reading as a first visit forever.
+  const ck = f.q + ',' + f.r + ',' + (f.d == null ? state.currentDepth : f.d);
+  if (!state.poisFound.includes(ck)) state.poisFound.push(ck);
   // A claimed deck keeps its mark on the chart; a stripped one goes back to
   // being ordinary water.
   const own = isBaseDeck(f.q, f.r, f.d);
@@ -10436,7 +10468,15 @@ function atReachableBottom(tile) {
   // by the floor rule, or the chamber silently hijacks the wreck. Caught by
   // the battery only because cargo.test rolls a random seed: on most worlds
   // the colliding hex had no stack and the coupling was invisible.
-  if (stack.length && tile.poiDepth != null) {
+  // D1: ASK cellPois, NOT THE TILE. `poiDepth` is written at carve time onto a
+  // `world` tile object that later chunk generation replaces — the exact bug
+  // that moved the prize stack into `cellPois` in the first place, and I left
+  // this mirror of it behind. Measured across five seeds: 0 of 29 prize hexes
+  // still carried poiDepth, so this branch never ran and EVERY stack prize fell
+  // through to the legacy floor rule. The strict claim rule the handoff records
+  // as shipped was dead code, the announcement named a depth that did not work,
+  // and the haul paid at the deeper rate.
+  if (stack.length && cellPois.has(hexKey(tile.q, tile.r))) {
     return stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID);
   }
   // LEGACY seabed prizes (shelf wrecks and kin — tile.poi with no stack):
@@ -10496,9 +10536,13 @@ function handleTile(tile) {
   // NOT poiKey — a quarry cache is written by resolveQuarry under the HEX key,
   // and rekeying only the read side would have silently orphaned every one.
   const qc = state.quarryCache && state.quarryCache[hexKey(tile.q, tile.r)];
-  if (qc && !qc.taken) {
-    const guard = state.creatures.some(c => !c.gone && c.q === tile.q && c.r === tile.r
-      && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID);
+  // The cache lies AT a depth, and the thing on it is in that water with you.
+  // This used to read the cache by hex with no depth test while scoping the
+  // GUARD to your own 60 m slice — so one Dive action stepped past the guard
+  // and took the cache. That deleted the whole quarry lead type: "come back
+  // with a torpedo, or braver" cost a single tap.
+  if (qc && !qc.taken && (qc.d == null || Math.abs(state.currentDepth - qc.d) <= DEPTH_GRID)) {
+    const guard = state.creatures.some(c => !c.gone && c.q === tile.q && c.r === tile.r);
     if (guard) log(`The cache is still there, and so is what is lying on it. ${qc.crates} crates. Your call.`, 'warn', 'QUARRY');
     else claimQuarryCache();
   }
@@ -10998,6 +11042,15 @@ function updateHUD() {
 //=============================================================================
 
 function endGame(title, summary) {
+  // Shut the furniture first. You can die with a panel open — a hull breach
+  // resolves while you are reading the Hold — and leaving it up put an opaque
+  // sheet between the player and the only button on the screen.
+  ['inventory', 'seachart', 'muster', 'port', 'options', 'bestiary', 'pages',
+   'trade', 'transcript'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('show');
+  });
+  tradeAt = null;
   document.getElementById('go-title').textContent = title;
   document.getElementById('go-summary').textContent = summary;
   document.getElementById('go-stats').innerHTML =
@@ -11428,10 +11481,8 @@ document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-launch').addEventListener('click', launchDecoy);
 document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
-document.getElementById('btn-hold').addEventListener('click', openInventory);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
 document.getElementById('trade-close').addEventListener('click', closeTrade);
-document.getElementById('btn-chart').addEventListener('click', openSeaChart);
 // Register the service worker — but only over http(s). Opened as a bare file://
 // there is no worker, no manifest and no cache, and the game must still run
 // exactly as it always has: that is the single-file delivery path Sean uses to
@@ -11464,7 +11515,9 @@ function topPanel() {
 // Wrap each opener so history tracks what is actually on screen.
 (function wirePanelHistory() {
   const openers = { pages: openPages, port: openPort, muster: openMuster,
-                    inventory: openInventory, seachart: openSeaChart };
+                    inventory: openInventory, seachart: openSeaChart,
+                    options: openOptions, bestiary: openBestiary,
+                    transcript: openTranscript };
   for (const key of Object.keys(openers)) {
     const orig = openers[key];
     if (typeof orig !== 'function') continue;
@@ -11521,6 +11574,12 @@ function topPanel() {
     if (fired) { fired = false; e.preventDefault(); e.stopPropagation(); }
   }, true);
 })();
+
+// Bound HERE, after wirePanelHistory has replaced the globals — binding these
+// earlier captured the unwrapped functions and was why two panels stayed
+// invisible to the back button even though they were in the openers map.
+document.getElementById('btn-hold').addEventListener('click', () => openInventory());
+document.getElementById('btn-chart').addEventListener('click', () => openSeaChart());
 
 vpBoot();
 // The first touch or key anywhere is the gesture browsers require before audio
