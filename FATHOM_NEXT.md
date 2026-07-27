@@ -6,6 +6,14 @@
 
 **DONE (2026-07-26): T2 all five bugs (`d1ffc77`) and the PWA (`61e3df4`).** E7 enclave-on-descend, S6 breach arm-then-confirm, O8 sonar units, O7 visible hold-station, M2 trade shortfalls. PWA: manifest + service worker + icon, fonts self-hosted (M10), **verified offline by killing the server for real**. Remaining below: T4 polish, music levels, bestiary, T6 harness, and the Sean calls.
 
+**QUEUE CLEARED (2026-07-26).** T2 (`d1ffc77`), PWA + fonts (`61e3df4`), S2 free axe + D7 zoom + T4 polish (`507e869`), T6 harness (`a1bb979`, `a699b10`). Everything below is history except the WAITING ON SEAN block at the end, which is the whole remaining list.
+
+**KEY FINDINGS FROM CLEARING IT:**
+- **The sounder works, and now we can prove it.** Teaching the bot to read it took cargo pickup **20% → 32%/31%** (twice), against a ±4–6 noise floor. The old 20% was the harness being blind, not the strict-claim rule losing content.
+- **"Softlocks" were never softlocks.** Split into TRAPS (world closed = generator bug; **zero, ever**) and bot-oscillation (harness limitation). Every "softlocks: N" in this project's history was the harmless kind.
+- **The free axe lives on the BOAT** (`state.lockerWeapon`), not a hand — reissued with each hull. It is a floor, not a solution: 20 rounds of axe-work leaves a tough-40 tenant standing; relic-work settles it in 3.
+- **A workflow hazard:** the service worker will serve a cached build when the dev server is down, so browser probes can silently verify the PREVIOUS version. Symptom: a change that "did not take" while the file on disk is correct. Purge with `caches.keys()`/`delete` + `unregister` before trusting any browser check after a server restart.
+
 **T2 — DONE, kept for the record:**
 1. **E7**: `checkEnclave()` has one call site (in `move()`), so descending onto an enclave never opens trade. Mirror the existing fix pattern: `handleTile` is already called after a successful `changeDepth` — add `checkEnclave()` the same way. Verify by descending onto a spawned enclave in the browser.
 2. **S6**: inside a ruin, the exit tile (`t:'entry'`) is styled nearly identically to floor and one mis-tap calls `leaveInterior`, spending the site. Give it a distinct glyph/colour AND an arm-then-confirm on tap, same pattern as Jettison ("Leave? tap again").
