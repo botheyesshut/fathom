@@ -564,11 +564,17 @@
 
   .log-entry {
     font-size: 1.15rem;
-    line-height: 1.4;
+    line-height: 1.5;
     color: var(--bone);
-    font-style: italic;
+    /* UPRIGHT, and at the heavier of the two normal cuts already in the
+       bundle. Italic Cormorant at this size is a display face doing body-text
+       work on a phone: beautiful in a screenshot, genuinely hard to read for
+       four lines at a time in daylight. The serifs stay faint. */
+    font-style: normal;
+    font-weight: 500;
+    letter-spacing: 0.005em;
     animation: log-in 0.4s ease-out;
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.4rem;
   }
 
   /* 0.55 measured 2.23:1 against the void — below the 4.5:1 legibility floor,
@@ -2733,6 +2739,113 @@ const VP_SCENES = {
        '                        '],
     ] },
 
+
+  // ---- THE VERTICAL SITUATION. A window that shows a seabed while the
+  // sounder says the ceiling is just above is worse than no window: it
+  // contradicts the instrument the player is being asked to trust.
+  // Whitelisted glyphs ONLY — the rim characters that would have framed
+  // these nicely are the same ones that tore the frame on Sean's phone.
+
+  roof: { cap: 'rock overhead, and the water going down past the lamps', hold: 5, wet: 1,
+    key: { '█': '8', '▓': '8', '▒': '8', '░': '1', '·': '7', '∙': '7' },
+    frames: [
+      ['████████████████████████',
+       '▓▓▓▒▓▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▓▓',
+       '▒░▒░▒▒▒░▒▒▒▒▒▒░▒▒▒▒░░   ',
+       '░      ░         ░      ',
+       '     ·                  ',
+       '            ·           ',
+       '                  ·     ',
+       '                        ',
+       '   ∙                    ',
+       '                        '],
+      ['████████████████████████',
+       '▓▓▓▓▓▒▓▓▓▓▒▓▓▓▓▓▓▓▓▒▓▓▓▓',
+       '▒▒▒░▒▒▒▒▒░░▒▒▒▒▒░▒▒▒░   ',
+       '░      ░         ░      ',
+       '                  ·     ',
+       '     ·                  ',
+       '            ·           ',
+       '                        ',
+       '      ∙                 ',
+       '                        '],
+      ['████████████████████████',
+       '▓▓▓▒▓▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▓▓',
+       '▒░▒░▒▒▒░▒▒▒▒▒▒░▒▒▒▒░░   ',
+       '░      ░         ░      ',
+       '            ·           ',
+       '                  ·     ',
+       '     ·                  ',
+       '                        ',
+       '         ∙              ',
+       '                        '],
+      ['████████████████████████',
+       '▓▓▓▓▓▒▓▓▓▓▒▓▓▓▓▓▓▓▓▒▓▓▓▓',
+       '▒▒▒░▒▒▒▒▒░░▒▒▒▒▒░▒▒▒░   ',
+       '░      ░         ░      ',
+       '     ·                  ',
+       '            ·           ',
+       '                  ·     ',
+       '                        ',
+       '            ∙           ',
+       '                        '],
+    ] },
+
+  column: { cap: 'water above and water below, and the boat between them', hold: 5, wet: 1,
+    key: { '·': '7', '∙': '8' },
+    frames: [
+      ['    ·                   ',
+       '                        ',
+       '               ∙        ',
+       '           ·            ',
+       '                        ',
+       '        ∙               ',
+       '                   ·    ',
+       '  ·                     ',
+       '                        ',
+       '                        '],
+      ['                        ',
+       '    ·                   ',
+       '                        ',
+       '               ∙        ',
+       '           ·            ',
+       '                        ',
+       '        ∙               ',
+       '                   ·    ',
+       '  ·                     ',
+       '                        '],
+      ['                        ',
+       '                        ',
+       '    ·                   ',
+       '                        ',
+       '               ∙        ',
+       '           ·            ',
+       '                        ',
+       '        ∙               ',
+       '                   ·    ',
+       '  ·                     '],
+      ['  ·                     ',
+       '                        ',
+       '                        ',
+       '    ·                   ',
+       '                        ',
+       '               ∙        ',
+       '           ·            ',
+       '                        ',
+       '        ∙               ',
+       '                   ·    '],
+      ['                   ·    ',
+       '  ·                     ',
+       '                        ',
+       '                        ',
+       '    ·                   ',
+       '                        ',
+       '               ∙        ',
+       '           ·            ',
+       '                        ',
+       '        ∙               '],
+    ] },
+
   // ---- THE AMBIENT SCENES, seen through the porthole. Everything here is
   // framed by a hull rim on purpose: you never look at this sea directly,
   // you look through a hole in a boat. The surface and the underground lake
@@ -3083,8 +3196,8 @@ function vpDraw() {
       let n = 1;
       while (x + n < VP_W && ch[y][x + n] === g && (co[y][x + n] === ' ' ? '0' : co[y][x + n]) === c) n++;
       const esc = g === '<' ? '&lt;' : g === '>' ? '&gt;' : g === '&' ? '&amp;' : g;
-      html += '<span style="display:inline-block;text-align:center;width:' + n + 'ch;color:'
-            + (ANSI16[parseInt(c, 16)] || '#0a0a12') + '">' + esc.repeat(n) + '</span>';
+      html += '<span style="display:inline-block;overflow:hidden;text-align:center;width:' + n
+            + 'ch;color:' + (ANSI16[parseInt(c, 16)] || '#0a0a12') + '">' + esc.repeat(n) + '</span>';
       x += n;
     }
     html += '\n';
@@ -3135,7 +3248,12 @@ function sceneForNow() {
   const runHere = cellRun(state.q, state.r, state.currentDepth);
   const atTop = runHere && Math.abs(state.currentDepth - runHere.ceiling) <= DEPTH_GRID;
   if (state.currentDepth <= 1) {
-    return hexDistance({ q: state.q, r: state.r }, { q: 1, r: 1 }) <= 4 ? 'dock' : 'surface';
+    // ALONGSIDE, not "somewhere in the bay". This was a radius of 4 hexes
+    // around the pier, so the porthole drew pilings and gulls from open water
+    // with no dock in sight. You see the dock when you could touch it.
+    const alongside = hexNeighbors(state.q, state.r).concat([{ q: state.q, r: state.r }])
+      .some(n => { const nt = getTile(n.q, n.r); return nt && nt.type === 'dock'; });
+    return alongside ? 'dock' : 'surface';
   }
   // ...and a cavern LAKE needs air over the water, not merely rock over your
   // head. Being pressed against a chamber roof is not a surface, it is a
@@ -3146,7 +3264,7 @@ function sceneForNow() {
   const hasAir = (t && t.poi === 'air') || (cellHere && cellHere.kind === 'beach');
   if (atTop && runHere.ceiling > 0 && hasAir) return 'cavernlake';
 
-  if (t && (t.poi === 'ruin' || t.poi === 'salvage')) return 'ruin';
+  if (t && (t.poi === 'ruin' || t.poi === 'salvage') && atReachableBottom(t)) return 'ruin';
   const L = layerAt(state.q, state.r);
   if (L && layerKnown(state.q, state.r, state.currentDepth)
       && Math.abs(state.currentDepth - L.depth) <= DEPTH_GRID) return 'layer';
@@ -3156,6 +3274,20 @@ function sceneForNow() {
   // of depth — walls beat everything, because walls are what you hit.
   const nbrs = hexNeighbors(state.q, state.r).filter(n => { const nt = getTile(n.q, n.r); return nt && !nt.wall; });
   if (nbrs.length < 4) return 'deep';
+
+  // WHAT IS ACTUALLY ABOVE AND BELOW YOU, not merely how deep you are. The
+  // depth-band scenes all draw a seabed, so at 600 m with rock overhead and
+  // 120 m of open water under the keel the window drew a floor that was not
+  // there — while the SOUNDING line one inch below it said the opposite.
+  const above = runHere ? state.currentDepth - runHere.ceiling : 999;
+  const below = runHere ? runHere.floor - state.currentDepth : 999;
+  const nearRoof  = above <= DEPTH_GRID;
+  const nearFloor = below <= DEPTH_GRID;
+  if (nearRoof && !nearFloor) return 'roof';       // stone over the sail, water under the keel
+  if (!nearRoof && !nearFloor) return 'column';    // suspended, neither in reach
+
+  // On or near the bottom: the depth-band scenes, which is where their seabeds
+  // belong.
   if (state.currentDepth < 400) return 'shallow';
   if (state.currentDepth < 1200) return 'midwater';
   return 'open';
@@ -10397,6 +10529,16 @@ const SPACE_AGAIN = {
 // half the world, and this pool used to have two alternates — one of them a
 // wry aside from a narrator who does not otherwise editorialise, firing at
 // 9.4% of everything a player read.
+// Open water has no throats. Said in an expanse or on the surface, "passages
+// run off in four directions" describes a cave the player is not in.
+const DIR_COUNT_OPEN = {
+  3: ['the water is open on three sides', 'three ways out across open water', 'it runs away clear in three directions'],
+  4: ['open water on four sides', 'four ways out, none of them narrow', 'the water goes on in four directions'],
+  5: ['five ways out, all of them open water', 'the water is clear on five sides', 'open in five directions'],
+  6: ['open water on every bearing', 'no wall on any side of you', 'it runs away clear in every direction',
+      'water on all six sides, and none of it interested in you'],
+};
+
 const DIR_COUNT = {
   3: ['passages lead off in three directions', 'three ways on from here', 'the rock opens three ways',
       'three throats, and no telling which is the one', 'the stone lets you out three ways'],
@@ -10476,7 +10618,11 @@ function exitsClause(s) {
   if (s.lateral === 0 && !s.up && !s.down) return 'Nothing leads anywhere. ';
 
   const vert = [];
-  if (s.upRun >= 3) vert.push(pickLoose(['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
+  // At the surface there is nothing overhead but weather, so say nothing about
+  // it — "the roof is open above you" with the hatch in the wind is a cave
+  // sentence in the wrong place.
+  if (s.surfaced) { /* the sky is not an exit */ }
+  else if (s.upRun >= 3) vert.push(pickLoose(['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
   else if (s.up) vert.push(pickLoose(['there is a way up', 'the roof is open above you', 'water continues overhead']));
   if (s.downRun >= 3) vert.push(pickLoose(['the lights give out long before the water does', 'the dark goes down a long way', 'the column runs down past anything the lamps will answer for']));
   else if (s.down) vert.push(pickLoose(['the floor is open below', 'there is a way down', 'water continues beneath the keel']));
@@ -10485,7 +10631,14 @@ function exitsClause(s) {
   // Two clauses is a sentence; three is a list, and a list stops being read.
   const parts = [];
   if (vert.length) parts.push(vert.length === 2 && rand() < 0.45 ? vert.join(' and ') : pickLoose(vert));
-  if (s.lateral >= 3) parts.push(pickLoose(DIR_COUNT[Math.min(6, s.lateral)]));
+  if (s.lateral >= 3) {
+    // WHICH VOCABULARY. Rock words for rock, water words for water — an
+    // expanse or the surface is not a cave and must not be described as one.
+    const cls = spaceClass(s);
+    const openHere = (cls === 'expanse' || cls === 'surface');
+    const table = openHere ? DIR_COUNT_OPEN : DIR_COUNT;
+    parts.push(pickLoose(table[Math.min(6, s.lateral)]));
+  }
   if (!parts.length) return '';
 
   // Hedge only when the chart is genuinely ignorant of several ways on, and
@@ -10650,9 +10803,9 @@ function describeSpace(mode) {
   if (asked || curKey !== state._lastSetKey) {
     setLine = cur
       ? (cur.strong
-          ? ` A strong set runs ${cur.name} through here — you will feel it in the helm.`
-          : ` The water sets ${cur.name}, slow and steady.`)
-      : ' The water here is slack.';
+          ? ` A strong current runs ${cur.name} through here — go with it and the air lasts, fight it and it costs double.`
+          : ` A slow current sets ${cur.name}.`)
+      : ' The water here is slack — no current either way.';
     state._lastSetKey = curKey;
   }
 
@@ -10966,7 +11119,13 @@ function handleTile(tile) {
   // never picked up a single crate.
   //
   // RANDOMISE FLAVOUR; NEVER RANDOMISE INSTRUCTION.
-  if (firstVisit && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'air')) {
+  // AN INSTRUCTION ABOUT A PRIZE STILL SITTING THERE REPEATS. Flavour is
+  // first-visit-only, correctly; "descend to work it" is not flavour, and
+  // gating it on firstVisit meant a captain who came back to a wreck got a
+  // brown hex, a picture of a hull, and no verb.
+  const unworked = tile.poi && !state.poisFound.includes(poiKey)
+                && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'air');
+  if (unworked) {
     const noun = tile.poi === 'air' ? 'A pocket of trapped gas' : tile.poi === 'ruin' ? 'A sunken ruin' : 'Wreckage';
     if (tile.poi === 'air') {
       if (Math.abs(state.currentDepth - tile.ceiling) > DEPTH_GRID) {
@@ -10981,8 +11140,13 @@ function handleTile(tile) {
       const target = prizeDepthHere(tile);
       if (target == null) return;
       const dz = Math.round(target - state.currentDepth);
+      // Say what working it MEANS, so the two kinds of prize read as the two
+      // different jobs they are: a wreck is a hold to empty from the boat, a
+      // ruin is a place you go into on foot.
+      const what = tile.poi === 'ruin' ? 'Put the boat on the floor and the divers go over.'
+                                       : 'Take her down onto it and the crew work her over.';
       log(dz >= 0
-        ? `${noun}, ${Math.max(1, dz)} m below the keel. Descend to work it.`
+        ? `${noun}, ${Math.max(1, dz)} m below the keel. ${what}`
         : `${noun}, ${-dz} m above the keel. Rise to it.`,
         'warn', tile.poi === 'ruin' ? 'FOUND' : 'SALVAGE');
       return;
