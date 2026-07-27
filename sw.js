@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v2';   // bumped: range-request handling changed
+const VERSION = 'fathom-v3';   // bumped: document fetch now bypasses the HTTP cache
 const SHELL = [
   './',
   'fathom-chart.html',
@@ -62,7 +62,14 @@ self.addEventListener('fetch', (e) => {
     // fallback for no signal, and the cache is refreshed on every success.
     e.respondWith((async () => {
       try {
-        const fresh = await fetch(req);
+        // `cache: 'reload'` BYPASSES THE HTTP CACHE and refills it.
+        //
+        // Without it "network-first" was a lie: GitHub Pages serves the HTML
+        // with Cache-Control max-age=600, so this fetch was answered from the
+        // browser's own ten-minute cache and a pushed build could take ten
+        // minutes to reach a player who was actively reloading to get it. The
+        // whole point of network-first is that a deploy lands immediately.
+        const fresh = await fetch(req, { cache: 'reload' });
         // The put gets its own guard: if caching fails (quota, private mode) we
         // still hand back the FRESH build. Letting a cache error fall through to
         // the catch below would serve a stale game over a working network,
