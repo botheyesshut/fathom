@@ -735,7 +735,7 @@
   }
   #transcript-list .log-entry { opacity: 1; font-size: 1.02rem; margin-bottom: 0.7rem; }
 
-  #inventory, #muster, #port {
+  #inventory, #muster, #port, #pages {
     position: fixed;
     inset: 0;
     background: rgba(4, 8, 16, 0.82);
@@ -746,7 +746,31 @@
     padding: 1.2rem;
     backdrop-filter: blur(6px);
   }
-  #inventory.show, #muster.show, #port.show { display: flex; }
+  #inventory.show, #muster.show, #port.show, #pages.show { display: flex; }
+  /* The account reads as a DOCUMENT, not a menu: serif body, generous leading,
+     numbered pages, and a dim rule where a page has not been found yet — the
+     gaps are honest about how much of the descent is still out there. */
+  #pages-sub {
+    padding: 0.35rem 0.9rem; border-bottom: 1px solid rgba(160,140,100,0.2);
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 0.8rem; color: #8a7a58;
+  }
+  #pages-list { overflow-y: auto; padding: 0.3rem 0.9rem 0.8rem; -webkit-overflow-scrolling: touch; }
+  .pg { padding: 0.6rem 0 0.7rem; border-bottom: 1px solid rgba(160,140,100,0.12); }
+  .pg:last-child { border-bottom: none; }
+  .pg-n {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.55rem;
+    letter-spacing: 0.14em; color: #6f8496; margin-bottom: 0.25rem;
+  }
+  .pg-x {
+    font-family: 'Cormorant Garamond', serif; font-size: 0.98rem;
+    line-height: 1.45; color: #d8c9a4;
+  }
+  .pg-missing {
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 0.78rem; color: #5a5140; padding: 0.45rem 0;
+    border-bottom: 1px solid rgba(160,140,100,0.12);
+  }
   #port-ledger {
     padding: 0.4rem 0.7rem; border-bottom: 1px solid rgba(160,140,100,0.2);
     font-size: 0.7rem; color: #9a8a62; letter-spacing: 0.04em;
@@ -926,6 +950,16 @@
   </div>
 </div>
 
+<!-- THE ACCOUNT — the recovered pages of The Dark Way Down, for rereading.
+     The moment of finding prints to the log; this is the shelf it lives on. -->
+<div id="pages">
+  <div id="inv-panel">
+    <div id="inv-head"><span>The Dark Way Down</span><button class="btn" id="pages-close">Close</button></div>
+    <div id="pages-sub">an account, recovered in pieces</div>
+    <div id="pages-list"></div>
+  </div>
+</div>
+
 <!-- TRADE (with an enclave) -->
 <div id="trade">
   <div id="inv-panel">
@@ -1035,6 +1069,7 @@
     <button class="btn" id="btn-hold" title="Open the hold — everything you have found. Use a consumable, bolt on a fitting, read a chart.">Hold</button>
     <button class="btn" id="btn-chart" title="The sea chart — the surface entire, and beneath it only the water you have sounded">Chart</button>
     <button class="btn" id="btn-muster" title="The muster — who is aboard, how long they have served, and what that has made them">Muster</button>
+    <button class="btn" id="btn-pages" style="display:none" title="The recovered pages of an account somebody wrote on the way down">Account</button>
     <button class="btn" id="btn-fire" title="Fire on the nearest hostile — loud, and violence in the deep is rarely the safe answer">Fire</button>
     <button class="btn" id="btn-launch" title="Launch a decoy buoy — it shouts into the water and draws the hunters off you">Launch Decoy</button>
     <button class="btn" id="btn-seal" style="display:none" title="Dog the bulkhead beside you shut — it holds back the water and whatever else is coming, and everything on the far side is lost to you">Seal Bulkhead</button>
@@ -2413,6 +2448,26 @@ function portBuy(act) {
 function openPort() { renderPort(); document.getElementById('port').classList.add('show'); }
 function closePort() { document.getElementById('port').classList.remove('show'); }
 
+// THE ACCOUNT, for rereading. Found pages in full; unfound ones as a dim rule,
+// so the shape of what is still out there is honest without being a checklist.
+function renderPages() {
+  const el = document.getElementById('pages-list');
+  if (!el) return;
+  const found = state.pagesFound || [];
+  const rows = [];
+  for (let i = 0; i < PAGES.length; i++) {
+    if (i < found.length) {
+      rows.push('<div class="pg"><div class="pg-n">PAGE ' + ROMAN[i] + '</div>'
+        + '<div class="pg-x">' + PAGES[i] + '</div></div>');
+    } else {
+      rows.push('<div class="pg-missing">page ' + ROMAN[i].toLowerCase() + ' — not yet recovered</div>');
+    }
+  }
+  el.innerHTML = rows.join('');
+}
+function openPages() { renderPages(); document.getElementById('pages').classList.add('show'); }
+function closePages() { document.getElementById('pages').classList.remove('show'); }
+
 function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
 function closeInventory() { document.getElementById('inventory').classList.remove('show'); }
 
@@ -2799,6 +2854,70 @@ function resolveLead(L) {
   updateHUD(); render(); scheduleSave();
 }
 
+//=============================================================================
+// THE ACCOUNT — found text. Somebody went down before you and wrote it.
+//
+// The pages are from THE DARK WAY DOWN, the gamebook Sean wrote in 2016 and a
+// collaborator orphaned. Nothing here is pastiche: every page is his prose,
+// verbatim except for trimmed choice-mechanics and two copy-edits. The fish-men
+// waiting under the waterline and the trick of reading their ripples — the
+// Children of Dagon, and passive sonar — were in this account years before
+// this game existed. It is not an easter egg. It is the game's own prehistory,
+// recovered in pieces.
+//
+// The account is written in the SECOND PERSON, because the gamebook was — and
+// found text that says "you" is worth more here than any rewrite: a dead man's
+// pages that read as though they describe whoever holds them. The game frames
+// that once, on the first page, and never comments again.
+//
+// Pages are recovered IN ORDER, one per resolved `word` lead — the account is
+// one document, and every captain reassembles the same descent. Sean's ruling
+// holds: word leads are chance-gated, so the story is never guaranteed, only
+// earned. The writer's name surfaces on its own page; the game never says it.
+const PAGES = [
+  "A large, warped piece of plywood covers a slab of concrete here. It's probably covering a few hundred spiders, too, but you're pretty curious as to what else might be under it. You could move it if you wanted to. On the other hand, you've already found the cat, and there's a fresh, delicious pitcher of lemonade in the fridge. When you take no risks, the same thing always happens to you.",
+  "The passageway immediately begins sloping downward. This does not surprise you. In fact, it's almost like down is the only meaningful direction in this place. Down, down, down... How can anything go down so far? Surely there must be a limit to such delving, an end to what can reasonably be? Yet you've plumbed miles toward the center of the earth, and there seems no end to what lies beneath. Crack apart the pavement and look inside the globe, and there's a world of madness and decline that's been lurking beneath everyone's sneakers all along.",
+  "The first exit is an archway with a large keystone bearing two carved, worn words that you can barely make out, but they are not in your native English: NAUE TOURN, they say. There seems to be light down there, real light that comes from fire or maybe even electricity, but that would suggest people, people who live far underground and know what naue tourn means. Such people are likely reclusive, and may not appreciate your visit.",
+  "You find yourself standing at the end of an underwater quay that stretches off along the rock wall. Strange, blue light comes from a bowl in the wall up near the ceiling, the source of which is anyone's guess. You get the impression that it's been burning for a long, long time. Thick ropes lie in ancient, cobwebbed coils here and there along the dock, some of them trailing into the black, shimmering water. A rusted anchor rests beside a gaff with a rotten, wooden handle. There are no boats docked here.",
+  "Against one wall sits an old, metal lunchbox, the kind you've seen in photographs of construction workers in the nineteen-twenties. It is open and entirely empty. Beside it is a stack of clothing, neatly folded and covered with perhaps a quarter-inch of dust. The dust comes off in a single sheet when you brush it away, then disintegrates into the air. It is as though somebody took his lunch and decided to go for a swim, but never got back to work.",
+  "You drop the paddle into the bottom of the canoe and stretch. The clatter resounds and reverberates throughout the cavern. Every move you make is the loudest sound here, accompanied only by your ragged breathing and the dripping of water into the lake all around you, like a slow rain. When you catch your breath, you realize that you're actually very lost now, even more lost than you've been so far.",
+  "It is as if these very words were written in a book somewhere by someone else entirely, as if you were only reading them on your phone for your own pleasure. You do hear the voice of the thoughts that pretend to be yours, and it is increasingly difficult to continue. Half of you thinks, almost screaming, Pay attention and paddle, Aeneas! Keep moving forward! But the other half cannot ignore the voice that repeats like an echo in your brain: it's just a book – never mind – just put it down and you'll be home.",
+  "Behind you and ten feet to your right, the leg of your unfortunate comrade, Mikhail, is being gnawed by a hominid fish with webbed hands and feet. He has been dead for days and so does not feel it, but you feel it vicariously. You know that it knows you are here, here just a few feet away from it, carving into the rock wall. It's not the least bit concerned you might escape. It merely sucks on Mikhail's leg as if it were a chicken bone and stares out of its round, white, vestigial eyes at nothing.",
+  "You note that by waiting a few seconds at each step of the way, you can tell what side of your canoe the fish-men are on by subtle ripples on the surface of the lake.",
+  "You stop looking at the walls and the falls and the firelight, and start searching beneath the surface of the water with sharp, intent eyes. There, just beneath the waterline, gape a crowd of wide, open mouths full of sharp, triangular teeth, a standing group of gray-skinned fish-beings with infinite patience, their heads thrown back to catch whatever it might be that occasionally comes over the falls and across the lake into their waiting mouths.",
+  "The mural tells the story of the beginning of life on earth, except that it is far more disturbing than any creation myth you have studied. In time immeasurably long ago, the great Old Ones seeped down from their roosts in the empty blackness of remote space. They were not accustomed to living on hard land. They descended into the watery deeps of the ocean trenches, where they scooped up what gelatinous life forms were there and modified them to their purposes. Like clockwork dolls, ancient man came out of the water and began to fearfully work for his creators. The Old Ones overran the earth several times by water, and several times by ice, to cull the burgeoning herd of their human stock.",
+  "In a place where the only direction is down, relativity does not exist. You can't shake the feeling that you're going inward, rather than downward. The thought is strangely comforting. Inward is more like forward – and you are progressing, aren't you? The question is, progressing into what, exactly?",
+  "You consider the ubiquity of dust, the crumbs of a thousand ages sealing up all the world's little cracks. Even stones heal. Everything is crumbling apart, sloughing off, becoming the ash and the clay, and meanwhile the ash and clay are patching every little fracture in creation.",
+  "You dive in, and the cold takes the wind right out of you. The tingle that hits your body is like tangible, bright light, and you almost lose consciousness. You swim, break the surface, take a gulp of air, and can see nothing. Darkness envelops you, but you hear the noise of water – white water. You suddenly become aware of velocity. You hear a wave slap stone with a loud smack just a moment before you are smashed into a sharp edge of the cavern wall. You sink and do not come up.",
+];
+const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI'];
+
+// Recover the next page in sequence. The moment of finding IS the payoff, so
+// the page prints in full, to the log, right then — the panel is only for
+// rereading. Returns the index recovered, or -1 when the account is complete.
+function recoverPage() {
+  if (!state.pagesFound) state.pagesFound = [];
+  const idx = state.pagesFound.length;
+  if (idx >= PAGES.length) return -1;
+  state.pagesFound.push(idx);
+  if (idx === 0) {
+    log('Folded into the packet, sealed in oilskin: a page in a small, hard hand. The first sheet bears a title, pressed through the paper: THE DARK WAY DOWN.', 'strange', 'PAGE');
+  } else {
+    log(`Folded into the packet, sealed in oilskin: another page of the account, numbered ${ROMAN[idx]} in the same small, hard hand.`, 'strange', 'PAGE');
+  }
+  log(`"${PAGES[idx]}"`, '', 'PAGE');
+  if (idx === 0) {
+    log('It is written as though it happened to whoever reads it.', 'strange', 'PAGE');
+  }
+  if (idx === PAGES.length - 1) {
+    log('That is the last of it. The account ends there.', 'strange', 'PAGE');
+  }
+  const pb = document.getElementById('btn-pages');
+  if (pb) pb.style.display = '';
+  sfx('relic');
+  return idx;
+}
+
 // WORD — information, and nothing you can put in the hold. It pays in the only
 // currency a charting session should pay in: knowing where things are. Sean's
 // ruling made explicit — "if a person just wants to explore in the sub and see
@@ -2822,6 +2941,10 @@ function resolveWord(L, tier) {
   log(`No cache. A slate, wedged where the current would not take it, and a survey scratched into it in a hand that gave out partway. ${n} hex${n === 1 ? '' : 'es'} of water you have never seen, ${bearing(state.q, state.r, cq, cr)}, ${km} km off — on your chart now, and paid for with nothing but the going.`,
       'strange', 'WORD');
   sfx('bell');
+  // And with the survey, a page. The account is why a charting run is worth
+  // making even when the chain never turns to cargo: the word lead pays in
+  // knowledge, and this is the knowledge.
+  recoverPage();
   // Word begets word. Information is the thing that most reliably leads to more
   // information — and the chain can turn into cargo, which is how a charting
   // run eventually becomes a paying run without ever having to be one.
@@ -4110,6 +4233,10 @@ const state = {
   maxDepth: 0,          // session record (in meters)
   moves: 0,
   poisFound: [],
+  // The recovered pages of the account. Deliberately NOT reset by restart():
+  // like the bank and the vault, what you have read survives the boat — pages
+  // are campaign knowledge, and the sea cannot take back what you know.
+  pagesFound: [],
   alive: true,
   cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
   panX: 0, panY: 0,         // user-applied pan offset (drag)
@@ -9037,7 +9164,14 @@ function atReachableBottom(tile) {
   // connected shaft or laterally through the cave system at depth — or, one
   // day, through a wall, with the digging rig this game already has.
   const stack = poiStack(tile).filter(p => cells.has(cellKey(tile.q, tile.r, p.d)));
-  if (stack.length) {
+  // The stack preempts the legacy rule ONLY when this tile's own face came
+  // from the stack — which is exactly what poiDepth records. poiStack consults
+  // cellPois BY COORDINATES, so a legacy floor prize (poiDepth null) standing
+  // on a hex that also happens to hold a chamber stack must still be claimed
+  // by the floor rule, or the chamber silently hijacks the wreck. Caught by
+  // the battery only because cargo.test rolls a random seed: on most worlds
+  // the colliding hex had no stack and the coupling was invisible.
+  if (stack.length && tile.poiDepth != null) {
     return stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID);
   }
   // LEGACY seabed prizes (shelf wrecks and kin — tile.poi with no stack):
@@ -9838,6 +9972,7 @@ function doSave(force) {
       corpses: state.corpses,
       layersFelt: state.layersFelt,
       portHire: state.portHire,
+      pagesFound: state.pagesFound,
       quarryCache: state.quarryCache,
       crew: state.crew,
       subKey: activeSubKey,
@@ -9895,6 +10030,9 @@ function resumeGame(save) {
   state.base = save.base || null;
   state.layersFelt = save.layersFelt || [];   // the water you have felt, remembered
   state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
+  state.pagesFound = save.pagesFound || [];  // the account, as far as you have got
+  const __pgBtn = document.getElementById('btn-pages');
+  if (__pgBtn) __pgBtn.style.display = state.pagesFound.length ? '' : 'none';
   state.quarryCache = save.quarryCache || {};  // a cache you walked away from is still there
   if (state.base) {
     // Stations saved before the siege existed still have to load.
@@ -10002,6 +10140,8 @@ vpBoot();
 var __mb = document.getElementById('btn-muster'); if (__mb) __mb.addEventListener('click', openMuster);
 var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListener('click', closeMuster);
 var __pc = document.getElementById('port-close'); if (__pc) __pc.addEventListener('click', closePort);
+var __pgb = document.getElementById('btn-pages'); if (__pgb) __pgb.addEventListener('click', openPages);
+var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('log').addEventListener('click', openTranscript);
 document.getElementById('transcript-close').addEventListener('click', closeTranscript);

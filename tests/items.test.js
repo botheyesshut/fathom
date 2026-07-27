@@ -106,6 +106,10 @@ try { vm.runInContext(script +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
   '\nfunction __palette(){ return ANSI16; }' +
   '\nfunction __vpKey(){ return VP_KEY; }' +
+  '\nfunction __pages(){ return PAGES; }' +
+  '\nfunction __recover(){ return recoverPage(); }' +
+  '\nfunction __pagesFound(){ return state.pagesFound || []; }' +
+  '\nfunction __setPages(a){ state.pagesFound = a; }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
   '\nfunction __start(){ gameStarted = true; }',
   sandbox, { timeout: 20000 }); } catch (e) { if (typeof sandbox.state === 'undefined') { console.log('BOOT FAIL', e.message); process.exit(1); } }
@@ -868,6 +872,51 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // state — an unknown key would leave the panel frozen on the last picture.
   const picked = sandbox.__sceneNow();
   check(!!S[picked], 'the scene chosen for the current state is one that exists', picked);
+}
+
+//--- 19. THE ACCOUNT: Sean's own pages, recovered in order ---------------------
+{
+  console.log('\n--- 19. THE ACCOUNT (found text) ---');
+  const P = sandbox.__pages();
+
+  // The document is real and each page is a page, not a stub or a wall.
+  check(P.length >= 12, 'the account has a real length', P.length + ' pages');
+  const words = P.map(x => x.split(/\s+/).length);
+  check(words.every(w => w >= 25 && w <= 160), 'every page is page-sized',
+    'range ' + Math.min(...words) + '-' + Math.max(...words) + ' words');
+
+  // No CYOA machinery may survive into the found text — a choice button or a
+  // programmer note inside a drowned man's page breaks the whole illusion.
+  const residue = P.filter(x => /\\|\/\/\/|\[|\]|GetObject|CheckObject|#X\d|\*[a-z]/i.test(x));
+  check(residue.length === 0, 'no gamebook machinery survives in the pages',
+    residue.length ? residue[0].slice(0, 60) : 'clean');
+
+  // Recovery is SEQUENTIAL — the account is one document, reassembled in the
+  // order it was written, for every captain.
+  sandbox.__setPages([]);
+  const a = sandbox.__recover(), b = sandbox.__recover(), c = sandbox.__recover();
+  check(a === 0 && b === 1 && c === 2, 'pages come back in order', a + ',' + b + ',' + c);
+  check(sandbox.__pagesFound().length === 3, 'and the finding is recorded');
+
+  // The account ENDS. Recovery past the last page refuses politely rather than
+  // wrapping, duplicating, or inventing a page fifteen.
+  sandbox.__setPages(P.map((_, i) => i));
+  check(sandbox.__recover() === -1, 'the account ends — there is no page after the last');
+  check(sandbox.__pagesFound().length === P.length, 'and completion does not overshoot');
+
+  // A resolved word lead recovers a page alongside the survey.
+  sandbox.__setPages([]);
+  sandbox.__clearLeads();
+  const W = sandbox.__mkLead(1, 0, 0, 'account-probe', 'word');
+  sandbox.__resolve(W);
+  check(sandbox.__pagesFound().length === 1, 'a word lead recovers the next page',
+    sandbox.__pagesFound().length + ' found');
+
+  // The pages survive in the save payload — what you have read outlives the boat.
+  sandbox.doSave(true);
+  const raw = JSON.parse(sandbox.localStorage.getItem('fathom-save-v1') || '{}');
+  check(Array.isArray(raw.pagesFound) && raw.pagesFound.length === 1,
+    'the account is in the save', JSON.stringify(raw.pagesFound));
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
