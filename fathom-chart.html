@@ -7514,7 +7514,7 @@ const FLOOD_GAIN = [
 
 const TENANTS = {
   hollow: {
-    name: 'a hollow man', glyph: 'Ω', color: '#9fc4a8', tough: 7, hit: [30, 55],
+    name: 'a hollow man', glyph: 'Ω', color: '#9fc4a8', tough: 7, hit: [15, 28],
     look: ['Something that used to be crew stands in the dark, patient, and turns its head as the lamp finds it.',
            'A man is standing in the dark with his back to you. He waits for the lamp to settle before he turns.',
            'It is wearing boots, and the boots are laced. Something dressed it once.',
@@ -7529,7 +7529,7 @@ const TENANTS = {
            'You hear a buckle knock against plate, twice, and then nothing.'],
   },
   clutch: {
-    name: 'a clutch', glyph: 'ॐ', color: '#c8a06a', tough: 14, hit: [45, 75],
+    name: 'a clutch', glyph: 'ॐ', color: '#c8a06a', tough: 14, hit: [22, 38],
     look: ['A knot of limbs fills the passage, too many and all of them wrong, working slowly against itself.',
            'The passage ahead is full. What fills it has more arms than it has any use for.',
            'It works at itself in the dark, a great knot of limbs pulling every way at once and getting nowhere.',
@@ -7544,7 +7544,7 @@ const TENANTS = {
            'Knuckles go over the plate somewhere close, a great many of them, and not in any order.'],
   },
   whisper: {
-    name: 'a whisper', glyph: 'ʬ', color: '#bfa8e0', tough: 4, hit: [15, 30],
+    name: 'a whisper', glyph: 'ʬ', color: '#bfa8e0', tough: 4, hit: [8, 15],
     look: ['A thin pale shape, barely there, and the lamp dims wherever it stands.',
            'A shape stands in the passage, thin and pale, and the light goes into it and does not come out.',
            'The lamp is on something, and showing you less than it did with nothing there.',
@@ -7559,7 +7559,7 @@ const TENANTS = {
            'Something takes the edge off the light without ever crossing it.'],
   },
   warden: {
-    name: 'a warden', glyph: 'Ψ', color: '#a8d68c', tough: 22, hit: [55, 90],
+    name: 'a warden', glyph: 'Ψ', color: '#a8d68c', tough: 22, hit: [28, 45],
     look: ['It was built to keep people out of this deck, and it is still doing the job.',
            'It fills the passage from deck to deckhead, and it has been here longer than the rust.',
            'Somebody made this, and made it for one job, and it is still on shift.',
@@ -9758,7 +9758,19 @@ function soundingBelow() {
     state.currentDepth = was;
     if (odd) oddAt = run.floor;
   }
-  return { floor: run.floor, under: under, odd: odd,
+  // A PEOPLE, SOMEWHERE UNDER THE KEEL. Same law as everything else the
+  // sounder says: only within the water you are actually in, and only below —
+  // the instrument looks down. `enclaveHere` accepts a neighbouring hex, so
+  // this does too, or the reading would be narrower than the thing it finds.
+  let camp = null;
+  for (const e of (state.enclaves || [])) {
+    if (hexDistance({ q: e.q, r: e.r }, { q: state.q, r: state.r }) > 1) continue;
+    if (e.depth < state.currentDepth - DEPTH_GRID) continue;   // above you
+    if (e.depth > run.floor) continue;                          // stone between
+    if (camp === null || e.depth < camp) camp = e.depth;
+  }
+  return { floor: run.floor, under: under, odd: odd, camp: camp,
+           campUnder: camp == null ? null : Math.max(0, camp - state.currentDepth),
            oddUnder: oddAt == null ? under : Math.max(0, oddAt - state.currentDepth) };
 }
 
@@ -10902,6 +10914,10 @@ function handleTile(tile) {
     sfx('contact');
   } else if (snd && snd.under <= 0 && state.currentDepth < 300) {
     tip('shelf');
+  }
+  if (snd && snd.camp != null && snd.campUnder > 0) {
+    log(`The sounder finds worked stone ${snd.campUnder} m under the keel — cut surfaces, and something regular about them. Somebody lives down there.`, 'strange', 'SOUNDER');
+    sfx('contact');
   }
 
   // First-time visits get a flavor log
