@@ -4,7 +4,9 @@
 
 **Guardrails first, they are why tonight went long:** read the traps sections below before touching substrate. New seed-derived caches go in `resetWorldCaches()` and nowhere else. After ANY substrate change run `node tests/economy.js` and read the SOUNDER block, not just reachability. Do not restore the deep-claim fallback. The playtest harness noise floor is ±4–6 points — run the same build twice before believing a delta. When a diagnosis depends on a number, instrument the thing itself, not a proxy.
 
-**T2 — real bugs, cheap, verified open (do these first):**
+**DONE (2026-07-26): T2 all five bugs (`d1ffc77`) and the PWA (`61e3df4`).** E7 enclave-on-descend, S6 breach arm-then-confirm, O8 sonar units, O7 visible hold-station, M2 trade shortfalls. PWA: manifest + service worker + icon, fonts self-hosted (M10), **verified offline by killing the server for real**. Remaining below: T4 polish, music levels, bestiary, T6 harness, and the Sean calls.
+
+**T2 — DONE, kept for the record:**
 1. **E7**: `checkEnclave()` has one call site (in `move()`), so descending onto an enclave never opens trade. Mirror the existing fix pattern: `handleTile` is already called after a successful `changeDepth` — add `checkEnclave()` the same way. Verify by descending onto a spawned enclave in the browser.
 2. **S6**: inside a ruin, the exit tile (`t:'entry'`) is styled nearly identically to floor and one mis-tap calls `leaveInterior`, spending the site. Give it a distinct glyph/colour AND an arm-then-confirm on tap, same pattern as Jettison ("Leave? tap again").
 3. **O8**: sonar readout prints "OFF air · silent m" — the units are hardcoded around the spans (index ~line 970 region, `updatePingDisplay`). Suppress units when the value is a word.
