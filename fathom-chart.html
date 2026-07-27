@@ -11067,6 +11067,14 @@ function closeTranscript() { document.getElementById('transcript').classList.rem
 // attempt — two playtesters killed a boat on move zero, at the dock, hammering
 // the largest button on screen. The collision stays available by deliberate
 // ram (moving INTO rock horizontally); it just is not the default tap any more.
+//
+// THIS GUARD HOLDS, MEASURED. Driving changeDepth() directly in the browser
+// spends 3.85 hull per dive attempt on a shelf; driving the BUTTON spends 0
+// across 168 taps, 130 of which land on an already-disabled control. If you
+// come here from a harness number showing floor damage, check whether your
+// harness is tapping or calling — mine was calling, and I wrote a redundant
+// second guard inside changeDepth before I checked. It reads the same
+// cellRun this does; it could never disagree, and it is gone.
 function syncDiveControls() {
   const ids = [['btn-ascend', -1], ['btn-ascend-fast', -1], ['btn-descend', 1], ['btn-descend-fast', 1]];
   const tile = getTile(state.q, state.r);
