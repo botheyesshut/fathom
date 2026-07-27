@@ -3481,7 +3481,7 @@ const TIPS = {
   sounder: 'The sounder only answers straight down. A hard return means something is on the bottom BENEATH you — you have to take the boat down to it, not across to it.',
   silent:  'It hunts by sound. Drop the sonar slider to silent and you go deaf, but it loses your thread — which is usually the better trade.',
   layer:   'That is a thermocline. Sound will not cross it. On the far side of a hard layer you are very nearly invisible, and very nearly blind.',
-  current: 'The water has a set. Going with it costs a fraction of the air; punching into it costs double and makes a din. The way out is rarely the way home.',
+  current: 'The water has a set. Going with it costs a fraction of the air. Punching into it costs double and makes a din. The way out is rarely the way home.',
   // Split in two, because the old single tip fired 700 m after the lesson had
   // started costing hull, and was the only entry in the table with no
   // instruction in it. `depth` is the warning; `crush` is the emergency.
@@ -3499,7 +3499,7 @@ const TIPS = {
   // is not the sea floor and the sinkholes are the door.
   shelf:   'That is the shelf floor, not the sea floor. The deep is under it, and the only ways through are the sinkholes — the chart draws them O. Find one and take her down it.',
   // The dashed outline is the entire movement affordance and nothing named it.
-  impact:  'That was rock. A hex you can enter at this depth carries a dashed outline; anything without one is stone, or water above or below you. The sonar says which way and how far.',
+  impact:  'That was rock. A hex you can enter at this depth carries a dashed outline. Anything without one is stone, or water above or below you. The sonar says which way and how far.',
   chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. The boat carries no positioning gear, so it cannot mark itself — you dead-reckon, until you find something that can.',
 };
 let tipsOn = true;
@@ -6920,7 +6920,12 @@ function ping() {
   } else if (power >= 3 && openRatio > 0.35) {
     log('The ping opens. Wide spaces nearby.', '', 'ECHO');
   } else {
-    log('The ping returns only stone.', '', 'ECHO');
+    log(pickLoose([
+      `The ping goes out ${lvl.activeRange * 60} m and comes back off rock on every bearing.`,
+      `Stone, all round, out to ${lvl.activeRange * 60} m. The dial buys further, and pays in air and quiet.`,
+      `${lvl.activeRange * 60} m of water and none of it holds anything. The return is rock the whole way round.`,
+      `Rock answers, and only rock, as far as ${lvl.activeRange * 60} m. Whatever is worth finding is not in this room.`,
+    ]), '', 'ECHO');
   }
 
   creatureTick();
@@ -7119,7 +7124,7 @@ function move(q, r) {
     }
   } else if (favour > 0 && rand() < 0.3) {
     log(favour >= 2
-      ? 'You find the spine of the current and let it take you. The screws barely turn; the sea does the work.'
+      ? 'You find the spine of the current and let it take you. The screws barely turn. The sea does the work.'
       : 'The set is with you. Easier going than it has any right to be.', '', 'CURRENT');
   }
 
@@ -8232,7 +8237,12 @@ function dwellerStep() {
       const raw = spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1);
       const loss = Math.max(6, Math.round(raw * (1 - Math.min(0.6, teamScore().def * 0.15))));
       state.air = Math.max(0, state.air - loss);
-      log(`${theTenant(spec)} has you in the dark. Something tears, and your line is venting hard. (-${loss} air)`, 'danger', 'ATTACK');
+      log(pickLoose([
+        `${theTenant(spec)} has you in the dark. Something tears, and your line is venting hard.`,
+        `It gets a hold of the suit and works at it. The line sings once and then goes quiet.`,
+        `Something closes on the hose behind your shoulder. You come away, and the air comes away with you.`,
+        `It takes hold, and lets go, and what it took was air.`,
+      ]) + ` (-${loss} air)`, 'danger', 'ATTACK');
     }
     sfx('strike');
   } else if (dist === 2 && !f.metTenant) {
@@ -8298,7 +8308,12 @@ function stepFoot(x, y) {
   if (t.wet === 'shallow') cost += 1;
   if (drowned) cost = canBreatheWater() ? FOOT_AIR : FOOT_AIR * 8;
   state.air = Math.max(0, state.air - cost);
-  if (flood) log('You go in up to the chest and push through. It is cold, and it is rising.', 'warn', 'WATER');
+  if (flood) log(pickLoose([
+    'You go in up to the chest and push through. It is cold, and it is rising.',
+    'You wade in. The cold is past the suit before your knees are under.',
+    'Chest-deep, and the deck under your boots is not where you left it.',
+    'You push through. The water takes the lamp light and gives nothing back.',
+  ]), 'warn', 'WATER');
   else if (drowned && canBreatheWater()) log('You go under and swim it, easy as walking. The water is not an obstacle to you.', 'strange', 'DROWNED');
   else if (drowned) {
     log('You take a breath and go under. The cold takes hold of your chest, and the dark down there is total, and it is a long way across.', 'danger', 'DROWNED');
@@ -8986,7 +9001,7 @@ function tickEel(c, dPlayer) {
   if (c.carrying && dPlayer === 1 && sameSlice) {
     state.cargo++;
     c.gone = true;
-    log('Cornered! The thief convulses, drops the crate, and is gone into a crack.', '', 'RECOVERED');
+    log('Cornered. The thief convulses, drops the crate, and is gone into a crack.', '', 'RECOVERED');
     sfx('bell');
     return;
   }
@@ -9012,7 +9027,7 @@ function tickEel(c, dPlayer) {
         state.cargo--;
         c.carrying = 1;
         c.flee = 12;
-        log('Something quick raids the hold — a crate is gone into the dark!', 'danger', 'THEFT');
+        log('Something quick raids the hold. A crate is gone into the dark.', 'danger', 'THEFT');
         sfx('theft');
         return;
       }
@@ -10088,11 +10103,24 @@ function logZContext(tile, currentVolume) {
     // Surface sounding describes only what's below, never above
     if (below >= 30) line = `Open water ${Math.round(below)} m below.`;
   } else if (above >= 30 && below >= 30) {
-    line = `Open water ${Math.round(above)} m above, ${Math.round(below)} m below.`;
+    line = pickLoose([
+      `Open water ${Math.round(above)} m above, ${Math.round(below)} m below.`,
+      `${Math.round(above)} m of water over the sail, ${Math.round(below)} m under the keel.`,
+      `The column runs ${Math.round(above)} m up and ${Math.round(below)} m down from here.`,
+      `Room above and room below — ${Math.round(above)} m and ${Math.round(below)} m.`,
+    ]);
   } else if (above >= 30) {
-    line = `Open water ${Math.round(above)} m above. The floor is just below.`;
+    line = pickLoose([
+      `Open water ${Math.round(above)} m above. The floor is just below.`,
+      `${Math.round(above)} m of water over you, and the bottom close under the keel.`,
+      `The floor is right there. ${Math.round(above)} m of column above it.`,
+    ]);
   } else if (below >= 30) {
-    line = `The ceiling is just above. Open water ${Math.round(below)} m below.`;
+    line = pickLoose([
+      `The ceiling is just above. Open water ${Math.round(below)} m below.`,
+      `Rock over the sail, and ${Math.round(below)} m of water under the keel.`,
+      `${Math.round(below)} m of room below. None at all above.`,
+    ]);
   }
   if (line) {
     log(line, '', 'SOUNDING');
@@ -10195,7 +10223,7 @@ const SPACE_FIRST = {
     'The boat breaks out into open air. Grey light, a grey swell, and the horizon going nowhere in particular.',
     'You come up into daylight. The sea moves under the hull the way it has always moved, indifferent and busy.',
     'Surface. Wind across the casing, and a sky the colour of wet slate.',
-    'The Erebus rides the top of the water. Above is only weather; below is everything else.',
+    'The Erebus rides the top of the water. Above is only weather. Below is everything else.',
     'Weather, after all that water. The swell takes the hull and rocks it like it means something by it.',
     'Open sky, such as it is. Cloud in every direction and the sea getting on with its business underneath.',
     'Air on the casing — real air — and a horizon doing nothing in particular.',
@@ -10247,7 +10275,7 @@ const SPACE_FIRST = {
     'The chamber is enormous, or it is merely dark. The instruments decline to distinguish.',
     'Everything opens at once — floor, ceiling, walls, all of it gone past the reach of the lights.',
     'The hull noise stops coming back. That is how you know how big this is.',
-    'No wall answers the sonar in any direction worth mentioning.',
+    'No wall answers the sonar inside a hundred metres.',
     'A cavern, or something too large to be called anything so specific.',
     'The dark here has room to spread out, and it takes full advantage.',
   ],
@@ -10321,11 +10349,21 @@ const SPACE_AGAIN = {
     'Back in the hollow off the passage.', 'Still just a dent in the rock, and nothing more.'],
 };
 
+// Sized to how often each case actually occurs. Six-way cells are more than
+// half the world, and this pool used to have two alternates — one of them a
+// wry aside from a narrator who does not otherwise editorialise, firing at
+// 9.4% of everything a player read.
 const DIR_COUNT = {
-  3: ['passages lead off in three directions', 'three ways on from here', 'the rock opens three ways'],
-  4: ['four ways lead off', 'passages run off in four directions', 'four throats open out of this one'],
-  5: ['five ways open from here', 'the rock is riddled — five ways on'],
-  6: ['ways lead off on every side', 'six ways out, which is to say the rock here is more hole than rock'],
+  3: ['passages lead off in three directions', 'three ways on from here', 'the rock opens three ways',
+      'three throats, and no telling which is the one', 'the stone lets you out three ways'],
+  4: ['four ways lead off', 'passages run off in four directions', 'four throats open out of this one',
+      'four openings, none of them wider than the boat needs', 'the rock gives four ways on'],
+  5: ['five ways open from here', 'the rock is riddled — five ways on', 'five openings, and the sonar likes none of them better',
+      'five throats out of this one', 'the stone here is thin between five passages'],
+  6: ['ways lead off on every side', 'six ways out of here, and the rock between them is barely rock at all',
+      'openings on every bearing', 'the rock is more opening than rock here',
+      'six throats, and the sonar comes back confused', 'a way out on every side, which is its own kind of problem',
+      'the stone is worn through in every direction', 'six ways on, and no reason to prefer one'],
 };
 
 // The rock, when you find it with the hull. This fires often enough that one
@@ -10361,7 +10399,7 @@ const WALL_UNDER = [
   'The keel finds bottom hard, and the dive is over',
   'Rock underfoot before the gauges expected it',
   'The descent ends against a floor the sonar missed',
-  'Sediment cushions nothing; the hull feels all of it',
+  'Sediment cushions nothing. The hull feels all of it',
 ];
 
 const WALL_OVER = [
@@ -10396,7 +10434,7 @@ function exitsClause(s) {
   const vert = [];
   if (s.upRun >= 3) vert.push(pickLoose(['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
   else if (s.up) vert.push(pickLoose(['there is a way up', 'the roof is open above you', 'water continues overhead']));
-  if (s.downRun >= 3) vert.push(pickLoose(['it drops away below into nothing you can sound', 'the dark goes down a long way', 'below, the column falls further than the lights reach']));
+  if (s.downRun >= 3) vert.push(pickLoose(['the lights give out long before the water does', 'the dark goes down a long way', 'the column runs down past anything the lamps will answer for']));
   else if (s.down) vert.push(pickLoose(['the floor is open below', 'there is a way down', 'water continues beneath the keel']));
   if (!vert.length && !s.surfaced) vert.push(pickLoose(['rock above and rock below', 'the water here is a flat seam in the stone']));
 
@@ -10413,7 +10451,66 @@ function exitsClause(s) {
   return parts.map(x => x.replace(/^./, c => c.toUpperCase()) + '.').join(' ') + hedge + ' ';
 }
 
+// The ambient beat, keyed to the water the boat is actually in. This replaced
+// FLAVOR.openWater, which was seven depth-blind sentences firing one turn in
+// seven — 20.3% of everything a player read, exhausted by turn 27.
+const AMBIENT = {
+  // The widest pool here on purpose: the shelf is where hour one happens and
+  // where a first captain spends most of their taps, so it has to carry more
+  // than the deep ones do.
+  sunlit: [
+    'A school of something silver passes through your sonar and is gone.',
+    'The water column stretches above and below. You hang suspended.',
+    'Weed comes past the glass in long ropes, going up.',
+    'The swell reaches down even here, and the boat rolls with it, slightly, like a sleeper.',
+    'Sunlight from far above, bent and broken by the swell.',
+    'A shadow crosses the light above and does not come back.',
+    'The water is busy up here. Most of it is too small to be anything.',
+    'Sand comes off the bottom in a slow curtain and settles again behind you.',
+    'The light moves on the seabed the way it moves on a ceiling.',
+    'Something has been at the rock here — old growth, cut back, and grown again over the cut.',
+    'The hull warms a little. It is the last warm water there is.',
+  ],
+  upper: [
+    'The water goes blue and then goes nothing. From here on you see with the instruments or you do not see.',
+    'Something goes past the hull to starboard, and the sonar has nothing to say about it.',
+    'The water has stopped being blue. It has not started being anything else.',
+    'The hull is silent. You could be the only living thing for miles.',
+    'Cold on the hull plate, and the seams weep a little, and the drops taste of the outside.',
+  ],
+  middle: [
+    'A single flake of something white falls past the port and keeps falling.',
+    'Pressure builds slowly. The boat settles into the depth.',
+    'The boat holds. The water leans on her and the water is patient.',
+    'The air in here has gone over and over through the scrubbers and tastes of it.',
+    "Somebody's oilskin is drying somewhere aft, and it is the only warm smell left aboard.",
+  ],
+  deep: [
+    'Particles drift past the viewport. Marine snow, falling.',
+    'The lamps put a small yellow ring on nothing at all.',
+    'Marine snow. It has been falling since before there was anyone to name it.',
+    'Something creaks that has not creaked before, once, and then does not do it again.',
+    "There is a sweetness in the boat's air that was not in it this morning.",
+  ],
+  abyss: [
+    'Nothing has crossed the lights in an hour. That is the good outcome.',
+    'The dark out there is not an absence of light. It is the condition, and the light is the visitor.',
+    'The hull talks to itself at this depth, quietly, and nobody aboard discusses it.',
+    'Cold comes through the plate faster than the heaters answer it.',
+    'The water down here has not moved in a long time and does not want to start.',
+  ],
+};
+
 const DEPTH_MOOD = {
+  // On top, the sky is the subject and the water is what you are standing on.
+  surface: [
+    'The wind has been at this water a long time and has nothing to show for it.',
+    'Salt dries on the casing as fast as the spray puts it there.',
+    'The swell comes from a long way off and is in no hurry about it.',
+    'Somewhere under all this is everywhere you have been.',
+    'Weather, and the smell of the open, and no instrument worth reading.',
+    '',
+  ],
   sunlit: [
     'Light still reaches down here, green and used up.',
     'The water holds a little daylight, and the shapes in it are almost honest.',
@@ -10467,7 +10564,7 @@ const DEPTH_MOOD = {
 };
 
 function depthBand(d) {
-  if (d <= 0) return 'sunlit';
+  if (d <= 0) return 'surface';
   if (d <= 300) return 'sunlit';
   if (d <= 1200) return 'upper';
   if (d <= 2400) return 'middle';
@@ -10477,6 +10574,16 @@ function depthBand(d) {
 
 // The full report. mode 'first' is stable per place; 'again' varies, so that
 // looking twice gives you new words for the same rock.
+// The bottom, said five ways. One sentence carrying eleven per cent of
+// everything a player reads is not prose any more, it is furniture.
+const BOTTOM_LINES = [
+  'You are on the bottom. Silt, and the sounder has nothing more to say.',
+  'The keel is in silt. Nothing under it but more of the same.',
+  'She settles. The return comes back soft on every bearing, and stays soft.',
+  'Bottom. The sounder reads its own mud back at you.',
+  'You are down as far as this water goes. Silt, and silt under the silt.',
+];
+
 function describeSpace(mode) {
   const asked = mode === 'ask';   // the player tapped Look; answer in full
   if (asked) mode = 'again';
@@ -10529,12 +10636,17 @@ function describeSpace(mode) {
   // actionable fact the boat has. Only the null reading and the plain depth
   // are damped, and only while they are unchanged.
   if (snd) {
-    const sndKey = snd.odd ? 'odd' + snd.oddUnder : String(snd.under);
+    const band = snd.under <= 0 ? 'bottom'
+               : snd.under < 120 ? 'close'
+               : snd.under < 480 ? 'under'
+               : snd.under < 1500 ? 'deep'
+               : 'abyssal';
+    const sndKey = snd.odd ? 'odd' + Math.round(snd.oddUnder / 120) : band;
     if (asked || snd.odd || sndKey !== state._lastSndKey) {
       if (snd.under <= 0) {
         sndLine = snd.odd
           ? ' You are on the bottom, and you are on top of whatever the sounder has been complaining about.'
-          : ' You are on the bottom. Silt, and the sounder has nothing more to say.';
+          : ' ' + pickLoose(BOTTOM_LINES);
       } else {
         sndLine = ` The sounder reads ${snd.under} m under the keel.`;
         if (snd.odd) sndLine += ` ${snd.oddUnder > 0 ? snd.oddUnder + ' m down, the' : 'The'} return comes back wrong — too hard, too sharp for silt. Something is there.`;
@@ -10844,10 +10956,11 @@ function handleTile(tile) {
     maybePorthole();
     return;
   }
-  if (inShallow && !workableHere && (firstVisit || rand() < 0.14)) {
-    log(pickFlavor(FLAVOR.openWater));
+  if (!workableHere && (firstVisit || rand() < 0.05)) {
+    const amb = AMBIENT[depthBand(state.currentDepth)];
+    if (amb && amb.length) log(pickLoose(amb));
     maybePorthole();
-    return;
+    if (inShallow) return;
   }
 
   switch (tile.type) {
@@ -10958,6 +11071,8 @@ function handleTile(tile) {
       if (hull) bits.push(`-${hull} hull`);
       if (air) bits.push(`-${air} air`);
       log(`${gk.msg}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`, 'strange', 'STRANGE');
+      // What it LOOKS like, the first time. This pool had no call site at all.
+      if (firstVisit) log(pickFlavor(FLAVOR.growth), 'strange');
       if (firstVisit) state.poisFound.push(poiKey);
       break;
     }
@@ -10978,7 +11093,7 @@ function handleTile(tile) {
 const GROWTH_KINDS = [
   { msg: 'Pale tendrils rake the hull as you pass.', hull: [4, 9] },
   { msg: 'A bladder bursts — spores foul the scrubbers.', hull: [1, 3], air: [6, 14] },
-  { msg: 'A rubbery holdfast seizes the boat; you tear loose.', hull: [6, 12], air: [2, 5] },
+  { msg: 'A rubbery holdfast seizes the boat. You tear loose.', hull: [6, 12], air: [2, 5] },
   { msg: 'Eyeless polyps turn to follow you. Nothing touches the hull — this time.' },
 ];
 function growthKind(q, r) { return GROWTH_KINDS[hashStr(worldSeed + ':growth:' + q + ':' + r) % GROWTH_KINDS.length]; }
@@ -11000,7 +11115,7 @@ const FLAVOR = {
     'The hatch breaks the surface. Cold air pours in.',
     'You break the surface. The sky is grey and wide and welcome.',
     'The boat shoulders up into chop. The wind is the first sound in hours.',
-    'Daylight comes down through the open hatch. The instrument panel goes grey and stops being worth reading.',
+    'Daylight comes down through the open hatch, and every dial in the boat goes grey and stops being worth reading.',
     'You surface. The world above is still here, and still indifferent.',
   ],
   dockAdjacent: [
@@ -11508,7 +11623,7 @@ function surface() {
     if (atPort) openPort();
 
     if (state.air >= sub.air) {
-      log('Already at full air. The hatch is sealed; the boat waits.', 'warn');
+      log('Already at full air. The hatch is sealed and the boat waits.', 'warn');
       return;
     }
     state.air = sub.air;
