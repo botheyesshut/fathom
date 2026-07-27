@@ -55,11 +55,15 @@ try { vm.runInContext(script +
   '\nfunction __noise(q,r,l){ noiseMade(q,r,l); }' +
   '\nfunction __see(){ seeAround(); }' +
   '\nfunction __itemsAll(){ return Object.keys(ITEMS); }' +
+  '\nfunction __itemFit(k){ return ITEMS[k] && ITEMS[k].fit; }' +
+  '\nfunction __hireCost(){ return CREW_HIRE_COST; }' +
   '\nfunction __itemFind(k){ return ITEMS[k] && ITEMS[k].find; }' +
   '\nfunction __itemKind(k){ return ITEMS[k] && ITEMS[k].kind; }' +
   '\nfunction __buyMult(c,k){ return buyMult(c,k); }' +
   '\nfunction __sellTo(c,k){ return sellPriceTo(c,k); }' +
   '\nfunction __buyFrom(c,k){ return buyPriceFrom(c,k); }' +
+  '\nfunction __fitcap(){ return FIT_CAP; }' +
+  '\nfunction __cv(f){ return corpseValue({ fresh: f }); }' +
   '\nfunction __spawnEnclave(c,q,r,d){ spawnEnclave(c,q,r,d); }' +
   '\nfunction __enclaveHere(){ return enclaveHere(); }' +
   '\nfunction __tradeSell(e,k){ tradeSell(e,k); }' +
@@ -1030,12 +1034,47 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
       for (const buyer of keys) {
         const bp = sandbox.__sellTo(buyer, it);        // what you are paid for it
         if (!bp || bp <= 0) continue;
-        if (bp > sp) printers.push(it + ': buy from ' + seller + ' @' + sp + ', sell to ' + buyer + ' @' + bp + ' = +' + (bp - sp));
+        if (bp >= sp) printers.push(it + ': buy from ' + seller + ' @' + sp + ', sell to ' + buyer + ' @' + bp
+          + (bp > sp ? ' = +' + (bp - sp) : ' = BREAK-EVEN'));
       }
     }
   }
-  check(printers.length === 0, 'no item can be bought from one people and sold to another at a profit',
-    printers.slice(0, 4).join(' | ') || 'no printers');
+  check(printers.length === 0, 'no item can be bought from one people and sold back to another at a profit OR AT COST',
+    printers.slice(0, 4).join(' | ') || 'no printers, no break-evens');
+
+  // A DECLARED APPETITE THAT CAN NEVER BE HONOURED. `buyMult` returns 0 for
+  // anything a people also sells — the guard that killed the idol faucet — so
+  // naming an item in `buys.keys` that also appears in `sells` is a want the
+  // code silently voids. Harmless today because the trade panel filters on the
+  // real price; a printer the day someone edits that `sells` line. The check is
+  // on named keys only: `kinds` is a broad category and a people may reasonably
+  // buy a class of thing while selling three specific members of it.
+  const liars = [];
+  for (const c of keys) {
+    const sells = new Set(C[c].sells || []);
+    for (const k of ((C[c].buys || {}).keys || [])) if (sells.has(k)) liars.push(c + ' declares it wants ' + k + ' and also sells it');
+  }
+  check(liars.length === 0, 'no people declares an appetite the code voids', liars.join(' | ') || 'every named want is real');
+
+  // A FITTING CANNOT BE UN-FITTED OR SOLD. A slot missing from FIT_CAP falls
+  // through to a cap of 2, so a one-of-a-kind instrument could be bolted on
+  // twice and the second one was a whole find thrown into the sea.
+  const caps = sandbox.__fitcap();
+  const slots = [...new Set(items.map(k => sandbox.__itemFit(k)).filter(Boolean))];
+  check(slots.length >= 4, 'the fitting slots are actually being read', slots.length + ' slots: ' + slots.join(', '));
+  const uncapped = slots.filter(f => caps[f] === undefined);
+  check(uncapped.length === 0, 'every fitting slot declares its own ceiling',
+    uncapped.length ? 'falls through to 2: ' + uncapped.join(', ')
+                    : slots.map(f => f + '=' + caps[f]).join(', '));
+
+  // A HAND MUST NOT BE WORTH MORE DEAD THAN HIRED. Sign-on was 5 crates and a
+  // fresh body fetched 14: hire, kill, sell, repeat, +9 a head, and the only
+  // cost was being the kind of captain who does that.
+  const freshBody = sandbox.__cv(60), signOn = sandbox.__hireCost();
+  check(freshBody > 0 && signOn > 0, 'the corpse trade and the hiring hall are both real numbers',
+    'body ' + freshBody + ', sign-on ' + signOn);
+  check(freshBody < signOn, 'a crewman is worth less dead than the price of hiring one',
+    'fresh body ' + freshBody + ' cr vs ' + signOn + ' cr sign-on');
 
   // AND THE OPPOSITE FAILURE. Three peoples with differential valuation are
   // pointless if a hold of salvage is worth the same everywhere — the handoff

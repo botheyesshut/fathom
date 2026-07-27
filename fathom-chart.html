@@ -1583,7 +1583,7 @@ const ITEMS = {
                 flavor: 'It drifts out on the current, listens, and comes back — and never once makes a sound of its own.' },
   salts:      { name: 'a vial of waking salts', kind: 'use', glyph: '❦', col: '#d0b0e0', nerve: true, val: 2, find: 5, depth: 1200, props: ['fragile'],
                 flavor: 'Sharp enough to call a mind back from wherever the deep was taking it. The vial is thin glass, and the deep is not gentle.' },
-  warhead:    { name: 'a salvaged warhead',     kind: 'valuable', glyph: '☢', col: '#e0724a', val: 5, find: 3, depth: 1200, props: ['volatile'],
+  warhead:    { name: 'a salvaged warhead',     kind: 'valuable', glyph: '☢', col: '#e0724a', val: 5, find: 3, depth: 1200, props: ['volatile'], markup: 3.4,
                 flavor: 'Somebody\'s last argument, still live. Worth a great deal to the right buyer, and to the wrong pressure, worth all your lives.' },
   lumen:      { name: 'a cold-light bead',      kind: 'use', glyph: '✷', col: '#bfe0ff', keep: true, val: 2, find: 4, depth: 600, props: ['luminous'],
                 flavor: 'It has burned with the same pale light since before the Fall, and asks for nothing to keep burning. Carry it and the dark gives ground.' },
@@ -1697,7 +1697,11 @@ const CULTURES = {
             // the Deep Ones' whole character is that they want what the sea and
             // their god touched. I added it here to hit a differentiation count
             // and the battery caught me changing canon for arithmetic.
-            keys: ['specimenjar', 'bonekey', 'effigy', 'ambergris', 'scrimshaw'], mult: 3.6 },
+            // NOR ambergris: they SELL it, three lines down, and `buyMult`
+            // voids any appetite for a people's own stock. Listing it here was
+            // a want that could never be honoured — dead in the data, and a
+            // printer waiting for whoever edits that `sells` line.
+            keys: ['specimenjar', 'bonekey', 'effigy', 'scrimshaw'], mult: 3.6 },
     // They do NOT sell their own sacred things — an idol of their god and a
     // black pearl are what they are trying to GET BACK. They deal in gill-work,
     // wards and strange-craft; the holy objects move one way only, toward them.
@@ -1740,7 +1744,14 @@ function buyMult(cultureKey, itemKey) {
   return m;
 }
 function sellPriceTo(cultureKey, itemKey) { return Math.round((ITEMS[itemKey].val || 1) * buyMult(cultureKey, itemKey)); }   // crates you receive
-function buyPriceFrom(cultureKey, itemKey) { return Math.max(1, Math.round((ITEMS[itemKey].val || 1) * (CULTURES[cultureKey].markup || 2))); }   // crates you pay
+function buyPriceFrom(cultureKey, itemKey) {
+  const it = ITEMS[itemKey];
+  // A per-item premium overrides the house markup. Without this the arms
+  // dealers sold a warhead for exactly what the Confluence paid for it — not
+  // a profit, but a zero-risk, zero-air, zero-noise loop one rounding change
+  // away from being one, which is not a thing to leave lying in an economy.
+  return Math.max(1, Math.round((it.val || 1) * (it.markup || CULTURES[cultureKey].markup || 2)));
+}   // crates you pay
 
 function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 function hasProp(key, p) { const it = ITEMS[key]; return !!(it && it.props && it.props.indexOf(p) >= 0); }
@@ -1834,7 +1845,7 @@ function corpseTick() {
     if (rand() < 0.25) log('Nobody goes aft if they can help it. There is something in the hold that used to answer to a name.', 'strange', 'THE DEAD');
   }
 }
-function corpseValue(c) { return Math.max(3, Math.round(14 * (c.fresh / 60))); }
+function corpseValue(c) { return Math.max(1, Math.round(4 * (c.fresh / 60))); }
 
 // What the hold does to you each turn, beyond the curse. A soothing relic pulls
 // a fraying nerve back; a LIVING thing stirs, nibbles, and now and then grows.
@@ -3211,7 +3222,7 @@ function portRows() {
     // and then discarded — `need` ignored it and `gained` was clipped to the
     // deficit, so a yard bill came to the same crates at every engineer level.
     // Crew you had paid a sign-on for, doing nothing you could measure.
-    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * crewLvl('engineer'));
+    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * Math.min(3, crewLvl('engineer')));
     const need = Math.max(1, Math.ceil(missing / perCrate));
     rows.push({ name: 'Patch the hull', desc: '+' + missing + ' hull · ' + need + ' crate' + (need > 1 ? 's' : ''),
       ok: canPay(need, 0), why: shortfall(need, 0), act: 'repair' });
@@ -3298,7 +3309,7 @@ function portBuy(act) {
     // and then discarded — `need` ignored it and `gained` was clipped to the
     // deficit, so a yard bill came to the same crates at every engineer level.
     // Crew you had paid a sign-on for, doing nothing you could measure.
-    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * crewLvl('engineer'));
+    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * Math.min(3, crewLvl('engineer')));
     const need = Math.max(1, Math.ceil(missing / perCrate));
     if (state.cargoBanked < need) return;
     state.cargoBanked -= need;
@@ -3687,7 +3698,11 @@ function useItem(key) {
 // in shelf water beat the Charon's safe depth before the boat ladder started,
 // and thirty took the Erebus to a 15,000m safe depth against a world floor of
 // 11,000. The hull has a limit; the fitting does not remove it.
-const FIT_CAP = { depth: 2, sonar: 2, quiet: 2, trim: 2 };
+// 'fix' is 1 because canFixPosition() is a BOOLEAN — one positioning log or
+// none. It was missing here, the cap fell through to 2, and a second one could
+// be bolted on for nothing. A fitting cannot be un-fitted or sold, so that is
+// a whole find thrown into the sea.
+const FIT_CAP = { depth: 2, sonar: 2, quiet: 2, trim: 2, fix: 1 };
 
 function fitItem(key) {
   const it = ITEMS[key];
@@ -11131,6 +11146,7 @@ function endGame(title, summary) {
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
   state._lastSetKey = null; state._lastSndKey = null;   // and so does a new boat
+  state.corpses = [];   // the sea keeps its dead; they do not sail in the next boat
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
   state.armament = null; state.torpedoes = 0;
