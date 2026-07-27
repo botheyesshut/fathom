@@ -8835,7 +8835,12 @@ function renderInterior() {
 //=============================================================================
 
 const CREATURE_SIM_RANGE = 24; // hexes — beyond this, creatures rest in the dark
-const CONTACT_LOG_MS = 7000;   // min ms between passive-contact log lines
+// MEASURED IN TURNS, NOT MILLISECONDS. This was 7000 ms, so a player taking
+// three actions in seven seconds — an ordinary pace on a phone — silently lost
+// two contacts, and the boat's ear became a function of thumb speed. It also
+// made the bestiary unmeasurable headlessly: 250 turns run in two seconds, so
+// at most one contact was ever logged.
+const CONTACT_LOG_TURNS = 3;   // min player actions between passive-contact lines
 // Sound envelopes: coarser information carries farther. The passive ear
 // LOCALIZES (bearing + range) to passiveContactR; a woken hunter's first stir
 // is merely NOTICED (one unlocalized bit) out to wakeNoticeR.
@@ -9584,6 +9589,7 @@ function tickLurker(c, dPlayer, silent) {
 // contact lines — the boat hears what it cannot see.
 function creatureTick() {
   if (!state.alive) return;
+  state._deathCheckPending = true;   // cleared at the end of this function
   expeditionTick(); // dive teams work on the same clock the deep hunts on
   const now = performance.now();
   const silent = sonarSilent(); // running dark this turn?
@@ -9647,8 +9653,8 @@ function creatureTick() {
     const hidden = (c.type === 'angler' && !c.revealed)
                 || (c.type === 'rival' && (c.silent || !c.underPower));
     if (!silent && !hidden && !(masked && rand() < 0.5) && d2 <= passiveContactR(c.depth, c.q, c.r) && d2 > 1 && depthOff <= 2 * DEPTH_GRID &&
-        (!state._lastContactLog || now - state._lastContactLog > CONTACT_LOG_MS)) {
-      state._lastContactLog = now;
+        (state._lastContactMove == null || state.moves - state._lastContactMove >= CONTACT_LOG_TURNS)) {
+      state._lastContactMove = state.moves;
       const dir = bearing(state.q, state.r, c.q, c.r);
       const lurkWhat = c.fleeing ? 'something breaking away, fast'
                      : (c.interest || 0) >= LURK_HUNT ? 'something closing, fast and straight'
@@ -9688,6 +9694,13 @@ function creatureTick() {
   if (state.creatures.some(c => c.gone)) {
     state.creatures = state.creatures.filter(c => !c.gone);
   }
+  // EVERY STRIKE IS CHECKED HERE. Creature damage writes the hull and returns;
+  // checkDeath() was reached only from move(), changeDepth() and the torpedo
+  // path, so a boat standing still under a hunter sat at hull 0 with
+  // `state.alive === true` until the player did something — and the death
+  // screen then fired on THEIR input rather than on the blow, which reads like
+  // the game blaming them for it.
+  if (state._deathCheckPending) { state._deathCheckPending = false; checkDeath(); }
 }
 
 // ---- Cell-model queries -------------------------------------------------
