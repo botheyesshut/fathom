@@ -2281,19 +2281,76 @@ const VP_SCENES = {
            '      ▀▀▀▀▀▀▀▀▀▀▀▀      ',
            '                        '] },
 
-  layer: { cap: 'the thermometer drops away', wet: true,
+  layer: { cap: 'the thermometer drops away, and the water changes its mind', wet: true, hold: 3,
+    // FIRST PERSON. This used to draw the Erebus in profile with her name
+    // on the hull — a third-person shot of your own boat in a window whose
+    // whole premise is that you are looking OUT of it. What you actually
+    // see through the glass is the boundary: warm water and motes above,
+    // a seam that bends the light, and colder deader water under it.
     pulse: ['b'],
-    key: { '░': 'b', '▒': '3', '▄': '8', '▀': '8', '│': '7', '│': '7', 'E': '3', 'R': '3', 'B': '3', 'U': '3', 'S': '3' },
-    art: ['  ░       ░      ░      ',
-           '     ░        ░         ',
-           '  ░    ░        ░    ░  ',
-           '░░░░░░░░░░░░░░░░░░░░░░░░',
-           '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
-           '░░░░░░░░░░░░░░░░░░░░░░░░',
-           '                        ',
-           '        ▄▄▄▄▄▄▄▄        ',
-           '       │ EREBUS │       ',
-           '        ▀▀▀▀▀▀▀▀        '] },
+    key: { '·': '3', '~': 'b', '≈': 'b', '░': 'b', '▒': '1', '▓': '8' },
+    frames: [
+      ['   ·                    ',
+       '         ·              ',
+       '                ·       ',
+       '                    ·   ',
+       '≈~~~≈~~~≈~~~≈~~~≈~~~≈~~~',
+       '░░░▒░░░░▒░░░░▒░░░░▒░░░░▒',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
+      ['                    ·   ',
+       '   ·                    ',
+       '         ·              ',
+       '                ·       ',
+       '≈≈≈~≈≈≈~≈≈≈~≈≈≈~≈≈≈~≈≈≈~',
+       '░░▒░░░░▒░░░░▒░░░░▒░░░░▒░',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
+      ['                ·       ',
+       '                    ·   ',
+       '   ·                    ',
+       '         ·              ',
+       '~~≈~~~≈~~~≈~~~≈~~~≈~~~≈~',
+       '░▒░░░░▒░░░░▒░░░░▒░░░░▒░░',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
+      ['         ·              ',
+       '                ·       ',
+       '                    ·   ',
+       '   ·                    ',
+       '~≈≈≈~≈≈≈~≈≈≈~≈≈≈~≈≈≈~≈≈≈',
+       '░░░▒░░░░▒░░░░▒░░░░▒░░░░▒',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
+      ['   ·                    ',
+       '         ·              ',
+       '                ·       ',
+       '                    ·   ',
+       '~~~≈~~~≈~~~≈~~~≈~~~≈~~~≈',
+       '░░▒░░░░▒░░░░▒░░░░▒░░░░▒░',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
+      ['                    ·   ',
+       '   ·                    ',
+       '         ·              ',
+       '                ·       ',
+       '≈≈~≈≈≈~≈≈≈~≈≈≈~≈≈≈~≈≈≈~≈',
+       '░▒░░░░▒░░░░▒░░░░▒░░░░▒░░',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
+    ] },
 
   ruin: { cap: 'squared off by hands, long gone',
     key: { '█': '8', '▄': '6', '▀': '6', '▓': '8', '▒': '1' },
@@ -2739,16 +2796,16 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-
-  // ---- THE VERTICAL SITUATION. A window that shows a seabed while the
-  // sounder says the ceiling is just above is worse than no window: it
-  // contradicts the instrument the player is being asked to trust.
-  // Whitelisted glyphs ONLY — the rim characters that would have framed
-  // these nicely are the same ones that tore the frame on Sean's phone.
 
-  roof: { cap: 'rock overhead, and the water going down past the lamps', hold: 5, wet: 1,
-    key: { '█': '8', '▓': '8', '▒': '8', '░': '1', '·': '7', '∙': '7' },
-    frames: [
+  // ---- THE VERTICAL SITUATION. A window that shows a seabed while the
+  // sounder says the ceiling is just above is worse than no window: it
+  // contradicts the instrument the player is being asked to trust.
+  // Whitelisted glyphs ONLY — the rim characters that would have framed
+  // these nicely are the same ones that tore the frame on Sean's phone.
+
+  roof: { cap: 'rock overhead, and the water going down past the lamps', hold: 5, wet: 1,
+    key: { '█': '8', '▓': '8', '▒': '8', '░': '1', '·': '7', '∙': '7' },
+    frames: [
       ['████████████████████████',
        '▓▓▓▒▓▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▓▓',
        '▒░▒░▒▒▒░▒▒▒▒▒▒░▒▒▒▒░░   ',
@@ -2758,7 +2815,7 @@ const VP_SCENES = {
        '                  ·     ',
        '                        ',
        '   ∙                    ',
-       '                        '],
+       '                        '],
       ['████████████████████████',
        '▓▓▓▓▓▒▓▓▓▓▒▓▓▓▓▓▓▓▓▒▓▓▓▓',
        '▒▒▒░▒▒▒▒▒░░▒▒▒▒▒░▒▒▒░   ',
@@ -2768,7 +2825,7 @@ const VP_SCENES = {
        '            ·           ',
        '                        ',
        '      ∙                 ',
-       '                        '],
+       '                        '],
       ['████████████████████████',
        '▓▓▓▒▓▓▓▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▓▓',
        '▒░▒░▒▒▒░▒▒▒▒▒▒░▒▒▒▒░░   ',
@@ -2778,7 +2835,7 @@ const VP_SCENES = {
        '     ·                  ',
        '                        ',
        '         ∙              ',
-       '                        '],
+       '                        '],
       ['████████████████████████',
        '▓▓▓▓▓▒▓▓▓▓▒▓▓▓▓▓▓▓▓▒▓▓▓▓',
        '▒▒▒░▒▒▒▒▒░░▒▒▒▒▒░▒▒▒░   ',
@@ -2788,12 +2845,12 @@ const VP_SCENES = {
        '                  ·     ',
        '                        ',
        '            ∙           ',
-       '                        '],
-    ] },
+       '                        '],
+    ] },
 
-  column: { cap: 'water above and water below, and the boat between them', hold: 5, wet: 1,
-    key: { '·': '7', '∙': '8' },
-    frames: [
+  column: { cap: 'water above and water below, and the boat between them', hold: 5, wet: 1,
+    key: { '·': '7', '∙': '8' },
+    frames: [
       ['    ·                   ',
        '                        ',
        '               ∙        ',
@@ -2803,7 +2860,7 @@ const VP_SCENES = {
        '                   ·    ',
        '  ·                     ',
        '                        ',
-       '                        '],
+       '                        '],
       ['                        ',
        '    ·                   ',
        '                        ',
@@ -2813,7 +2870,7 @@ const VP_SCENES = {
        '        ∙               ',
        '                   ·    ',
        '  ·                     ',
-       '                        '],
+       '                        '],
       ['                        ',
        '                        ',
        '    ·                   ',
@@ -2823,7 +2880,7 @@ const VP_SCENES = {
        '                        ',
        '        ∙               ',
        '                   ·    ',
-       '  ·                     '],
+       '  ·                     '],
       ['  ·                     ',
        '                        ',
        '                        ',
@@ -2833,7 +2890,7 @@ const VP_SCENES = {
        '           ·            ',
        '                        ',
        '        ∙               ',
-       '                   ·    '],
+       '                   ·    '],
       ['                   ·    ',
        '  ·                     ',
        '                        ',
@@ -2843,7 +2900,7 @@ const VP_SCENES = {
        '               ∙        ',
        '           ·            ',
        '                        ',
-       '        ∙               '],
+       '        ∙               '],
     ] },
 
   // ---- THE AMBIENT SCENES, seen through the porthole. Everything here is
@@ -5764,6 +5821,18 @@ function render() {
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   g.setAttribute('transform', `translate(${-camX}, ${-camY})`);
   svg.appendChild(g);
+  // PER-FRAME defs, distinct from the hoisted static ones.
+  //
+  // Hoisting the static defs out of the render loop left this line's old local
+  // `defs` undefined, and the thermocline bands append a linearGradient per hex
+  // to it — so any render with a KNOWN layer in view threw, inside render, and
+  // the chart stopped updating. The battery never saw it because the battery
+  // does not render; my own browser runs never saw it because the boat has to
+  // be near a layer it has already felt. A probe going deep found it in one
+  // move. Static defs stay hoisted; these are swept with the group that owns
+  // them and cannot leak.
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  g.appendChild(defs);
   // Save references for cheap pan updates during drag — we can update the
   // transform attribute without rebuilding the entire SVG tree.
   worldGroupEl = g;
@@ -7060,7 +7129,7 @@ function ping() {
     if (power >= 4) {
       log(`The ping ranges ${reach} m across the shelf. Nothing breaks the seafloor in earshot.`, '', 'ECHO');
     } else if (power >= 3) {
-      log(`The ping fans out ${reach} m through the water column. Empty.`, '', 'ECHO');
+      log(`The ping fans out ${reach} m through open water. Empty.`, '', 'ECHO');
     } else {
       log(`The ping fades out at ${reach} m and finds nothing but shelf. The dial buys reach, and spends air and quiet for it.`, '', 'ECHO');
     }
@@ -7293,8 +7362,13 @@ function move(q, r) {
   // The boat reports the water it has come into, before anything happens in
   // it. New water always gets the full account; water you have already been
   // through only speaks up sometimes, so the log stays readable.
+  // A CHANGE OF PLACE ALWAYS SPEAKS. Squeezing out of open water into a
+  // passage is news; the fourth hex of the same passage is not.
+  const spNow = spaceClass(spaceAround(state.q, state.r, state.currentDepth));
+  const placeChanged = spNow !== state._lastSpaceClass;
+  state._lastSpaceClass = spNow;
   if (firstHere) log(describeSpace('first'), '', 'WATER');
-  else if (rand() < 0.4) log(describeSpace('again'), '', 'WATER');
+  else if (placeChanged || rand() < 0.4) log(describeSpace('again'), '', 'WATER');
 
   // React to tile
   handleTile(tile);
@@ -10282,14 +10356,14 @@ function logZContext(tile, currentVolume) {
     line = pickLoose([
       `Open water ${Math.round(above)} m above, ${Math.round(below)} m below.`,
       `${Math.round(above)} m of water over the sail, ${Math.round(below)} m under the keel.`,
-      `The column runs ${Math.round(above)} m up and ${Math.round(below)} m down from here.`,
+      `${Math.round(above)} m of water over the sail and ${Math.round(below)} m under the keel.`,
       `Room above and room below — ${Math.round(above)} m and ${Math.round(below)} m.`,
     ]);
   } else if (above >= 30) {
     line = pickLoose([
       `Open water ${Math.round(above)} m above. The floor is just below.`,
       `${Math.round(above)} m of water over you, and the bottom close under the keel.`,
-      `The floor is right there. ${Math.round(above)} m of column above it.`,
+      `The floor is right there, and ${Math.round(above)} m of water over the sail.`,
     ]);
   } else if (below >= 30) {
     line = pickLoose([
@@ -10614,6 +10688,30 @@ const HEDGE = [
 // sounded by the hull's own lights and by what has been charted; laterals it
 // can only count where the chart already reaches, so unknown neighbours make
 // the sentence hedge instead of lie.
+// WHAT KIND OF WAY, and which way it lies. `exitsClause` counts the exits and
+// stops there, so the mouth of a passage beside you reads the same as more
+// open water. This names the transition — narrow water opening off wide, or
+// wide off narrow — and never more than one of them.
+function neighbourWays(q, r, d) {
+  const here = spaceAround(q, r, d);
+  const wide = here.lateral >= 5;
+  const narrow = here.lateral <= 2;
+  if (!wide && !narrow) return '';
+  const hits = [];
+  for (const n of hexNeighbors(q, r)) {
+    if (!cells.get(cellKey(n.q, n.r, d))) continue;
+    const there = spaceAround(n.q, n.r, d);
+    if (wide && there.lateral <= 2) hits.push({ n: n, kind: 'narrow' });
+    else if (narrow && there.lateral >= 5) hits.push({ n: n, kind: 'wide' });
+  }
+  if (!hits.length) return '';
+  const h = hits[0];
+  const dir = bearing(q, r, h.n.q, h.n.r);
+  return h.kind === 'narrow'
+    ? ` A way narrows into the rock ${dir} of you${hits.length > 1 ? ', and it is not the only one' : ''}.`
+    : ` It opens out ${dir} of you — room to move, and room for other things to.`;
+}
+
 function exitsClause(s) {
   if (s.lateral === 0 && !s.up && !s.down) return 'Nothing leads anywhere. ';
 
@@ -10624,7 +10722,7 @@ function exitsClause(s) {
   if (s.surfaced) { /* the sky is not an exit */ }
   else if (s.upRun >= 3) vert.push(pickLoose(['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
   else if (s.up) vert.push(pickLoose(['there is a way up', 'the roof is open above you', 'water continues overhead']));
-  if (s.downRun >= 3) vert.push(pickLoose(['the lights give out long before the water does', 'the dark goes down a long way', 'the column runs down past anything the lamps will answer for']));
+  if (s.downRun >= 3) vert.push(pickLoose(['the lights give out long before the water does', 'the dark goes down a long way', 'the water goes down further than the lamps will follow']));
   else if (s.down) vert.push(pickLoose(['the floor is open below', 'there is a way down', 'water continues beneath the keel']));
   if (!vert.length && !s.surfaced) vert.push(pickLoose(['rock above and rock below', 'the water here is a flat seam in the stone']));
 
@@ -10657,7 +10755,7 @@ const AMBIENT = {
   // than the deep ones do.
   sunlit: [
     'A school of something silver passes through your sonar and is gone.',
-    'The water column stretches above and below. You hang suspended.',
+    'Water above and water below, and the boat hanging in the middle of it.',
     'Weed comes past the glass in long ropes, going up.',
     'The swell reaches down even here, and the boat rolls with it, slightly, like a sleeper.',
     'Sunlight from far above, bent and broken by the swell.',
@@ -10851,7 +10949,8 @@ function describeSpace(mode) {
       state._lastSndKey = sndKey;
     }
   }
-  return (lead + ' ' + exits + mood + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
+  const ways = neighbourWays(q, r, d);
+  return (lead + ' ' + exits + mood + ways + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
 }
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight
@@ -11358,7 +11457,7 @@ const FLAVOR = {
     ],
   },
   openWater: [
-    'The water column stretches above and below. You hang suspended.',
+    'Water above and water below, and the boat hanging in the middle of it.',
     'A school of something silver passes through your sonar and is gone.',
     'The water goes blue and then goes nothing. From here on you see with the instruments or you do not see.',
     'The hull is silent. You could be the only living thing for miles.',
@@ -11632,7 +11731,7 @@ function endGame(title, summary) {
   activeSubKey = 'erebus';
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
-  state._lastSetKey = null; state._lastSndKey = null;   // and so does a new boat
+  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // and so does a new boat
   // THE DROWNED JOIN THE POOL. Every hand aboard when she went down is now
   // somebody the deep has a name for, and a deck somewhere may put them in
   // front of you again, wearing what they were wearing.
@@ -11678,7 +11777,7 @@ function restart() {
   const sub = activeSub();
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
-  state._lastSetKey = null; state._lastSndKey = null;   // a new sea gets its first reading
+  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // a new sea gets its first reading
   // A NEW SEA ARRIVES UNREAD. These four are keyed by bare coordinates or by
   // the campaign, not by the seed, so they used to walk into the next world
   // intact: free crates at a hex never visited, thermoclines already felt in
@@ -11995,7 +12094,7 @@ function resumeGame(save) {
   state.pagesFound = arr(save.pagesFound);  // the account, as far as you have got
   state.bestiary = obj(save.bestiary);      // what you have learned about what lives here
   state.tipsSeen = arr(save.tipsSeen);
-  state._lastSetKey = null; state._lastSndKey = null;   // dampers are per-session
+  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
