@@ -1,4 +1,119 @@
-# FATHOM — START HERE (last updated 2026-07-26)
+# FATHOM — START HERE (last updated 2026-07-27)
+
+## THE SEVEN AUDITS (2026-07-27) — read this section before anything below it
+
+Seven independent agents measured this game end to end: the economy, the
+interface, the first hour, combat and stealth, the crew, state integrity, the
+prose, and the on-foot layer. Every one of them found shipped features that
+were not running. **The pattern is now undeniable and it is the most important
+thing in this file: this project's failure mode is not bad code, it is code
+that looks right, is believed to work, and has never been measured.**
+
+Six things recorded in this handoff as SHIPPED were dead:
+- the strict claim rule (read `poiDepth` off a tile object chunk generation replaces — 0 of 29 prize hexes retained it)
+- the `jettison` tip (no call site, ever)
+- `airMult` on a flooded lung (no reader — air cost was identical with three of them)
+- `FLAVOR.growth` (no call site; contains the best sentence in the file)
+- `noteCreature` for a silent captain (gated on the sonar being ON, so correct play learned nothing)
+- the tip system's ordering (four of eight tips printed the lesson ABOVE the event)
+
+**AND THREE OF MY OWN FIXES WERE WRONG IN WAYS ONLY MEASUREMENT CAUGHT:**
+1. The ruin treadmill fix recorded found-ness under the PLAYER's depth while `handleTile` asks under the PRIZE ANCHOR's — 343 of 343 ruins stayed an unbounded faucet, and I wrote the comment saying it was fixed.
+2. The sounder repetition damper was keyed on the exact metres under the keel, a continuous quantity, so it almost never held. `tests/firsthour.js` said 18.4% → 5.8%; over 500-turn sessions it was still 11.2%, because 25 taps never leaves the shelf.
+3. The specimen-jar breeding printer was created BY my own arbitrage fix the session before.
+
+**THE RULE THAT FOLLOWS FROM THIS:** a feature is not shipped until an
+instrument proves it fires in play. Not "the battery passes" — the battery
+proves it is not broken, which is a different claim. `tests/firsthour.js`,
+`tests/hunt.js` and `tests/corpus.js` exist for exactly this, and each one
+carries a caveat about what its numbers CANNOT tell you. Read the caveat first.
+
+**AND: CHECK YOUR INSTRUMENT BEFORE YOU BELIEVE IT.** Four times this session
+my own probe was the bug — a ruin probe calling `enterInterior` directly and
+missing the guard in `handleTile`; a hull-damage probe calling `changeDepth`
+directly when `syncDiveControls` had held all along; a `layerKnown` check
+sitting inside its own 240 m proximity shortcut; and an income bot with no way
+home that died of air 16 times in 24. Two of my new battery assertions also
+passed vacuously (one read `.fit` off a string; one sat inside an `if` on a
+probe that did not exist). If a number surprises you, suspect the instrument
+first.
+
+## WHAT THE AUDITS FIXED (2026-07-27, commits `9ac18c4`..HEAD)
+
+**Campaign-destroying, now fixed:** a save this game could not parse, it also
+DELETED — and `restart()` calls `clearSave()`, so the evidence went with it.
+A save is a 250 KB write every 400 ms including while Android tears the tab
+down. Unreadable saves are now set aside as `fathom-save-v1-broken`, the
+player is told, and the version gate is a ceiling (older shapes load, newer
+ones are refused without being wiped). The mirror-image bug — a wrong-typed
+field threw inside `resumeGame` AFTER the title had gone
+`pointer-events: none`, giving a blank unclickable screen on every reload
+forever — is fixed by keeping the title tappable until the boot succeeds.
+
+**New World was not a full wipe.** Four things walked through: `quarryCache`
+(free crates at a hex never visited), `layersFelt` (a new sea arriving
+pre-read — a direct break of the epistemic law), `portHire`, and `logHistory`.
+
+**The stealth game did not run.** 267 creatures came within 6 hexes across 40
+games; 253 never touched the hull. The decoy — the one hard counter — cost
++53% MORE hull with the sonar on and drew a hunter off 0 times in 200 trials,
+because `noiseMade` STOKES and the HUNT branch read the player's true position
+within 14 hexes. A silent boat above a hard thermocline was found 200/200
+times, mean final range 0.00. All three fixed and measured in `tests/hunt.js`.
+
+**The crew system:** nobody could die of a wound (`m.dying` had no clock), the
+thing on the deck never reached a hand (nearest-body targeting + a party that
+walks toward the captain = the captain is always nearest, 352 hits to 0), and
+the Muster printed `, , ` where a person's injuries should be.
+
+**The first hour:** the pier the opening paragraph points at cost 4-8 hull to
+touch; nothing ever said the shelf floor is not the sea floor.
+
+## OPEN — SEAN'S CALLS, WITH THE EVIDENCE (2026-07-27)
+
+These are deliberately NOT changed. Each is a feel question, and Sean is the
+one playing it.
+
+1. **THE INCOME QUESTION — the biggest one.** Three audits' bots agree a
+   captain banks ~0-4 crates in 300-400 turns. A hand costs 5. So the crew
+   system, the cultures and the boat ladder are all gated behind a number
+   nobody reaches. BUT `tests/economy.js` says the content is there and
+   reachable — 51 prizes in starter-safe water, sounder precision and recall
+   both 100% — and every bot is a guess at how a human plays. I built a
+   better bot to settle it and ended up tuning the bot. **Sean's ruling stands
+   ("do not buff the economy until progress is reliable"; "enough progress in
+   a 40-minute session should not be virtually guaranteed") and nothing here
+   was touched.** What is wanted is one honest 40-minute session and the
+   answer to: did you bank anything, and did it feel earned or arbitrary?
+2. **`CREW_HIRE_COST` is 5 against a measured ceiling of 4.** One crate. That
+   may be deliberate scarcity or an accident. Not changed.
+3. **Engagement rate is 13% of close passes reaching STALK** (was 1%). The
+   combat audit suggested ~33%. I stopped at 13% because creature aggression
+   is exactly the kind of thing that should be felt, not computed.
+4. **The Libertines are strictly dominated as a market** — 7 of 7 items they
+   buy are paid better elsewhere, top payer for nothing. Fixing it means
+   changing what a people WANTS, which is canon. The canon-safe lever if you
+   want it: give them a category nobody else prizes (worked boat-parts,
+   `kind:'fit'`) rather than raising their multiplier on Dagon's holy things.
+   **Do not resolve this by arithmetic** — the battery caught me doing exactly
+   that once already.
+5. **20 of 35 findable items have no buyer at any culture.** Most are
+   consumables with a use, which is fine; but `saltiron`, `chime`, `lens` and
+   `inertiallog` are deep finds that can never become crates.
+6. **37% of all log output carries no tag** — and it is precisely the
+   atmosphere. Tagged reads as "matters", untagged as "skip", which is
+   backwards for a game whose text is the game. Either tag them (`SEA`,
+   `PORTHOLE`) or accept it.
+7. Still pending from before: music levels, viewport delight-vs-distraction,
+   sounder frequency, whether nine tips is the right number.
+
+**NEVER RAN:** the hours 2-10 mid-game audit. It is the one beat nobody has
+measured, and it owns questions 1 and 2 above.
+
+---
+
+# HISTORY BELOW THIS LINE (pre-2026-07-27)
+
 
 ## OPUS WORK QUEUE (2026-07-26, ordered — Sean-approved split; Fable took the found-text system)
 

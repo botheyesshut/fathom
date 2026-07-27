@@ -734,7 +734,11 @@
      desktop and not close enough for a thumb on a moving bus, which is the
      stated target. Scoped to #controls so panel rows keep their compact
      buttons; a panel is read with two hands and a settled attention. */
-  #controls .btn { min-height: 44px; }
+  /* Both axes. Setting only min-height left Ping, Look and Hold at 41 px WIDE
+     on a 360 px screen, because `flex: 1 1 auto` hands the spare width to the
+     buttons with longer labels. Five buttons at 44 plus gaps and padding is
+     274 px, so it fits the target phone with room to spare. */
+  #controls .btn { min-height: 44px; min-width: 44px; }
 
   /* A control the game has disabled must LOOK disabled. */
   .btn:disabled, .btn[disabled] {
@@ -6616,7 +6620,7 @@ const BESTIARY = {
   eel:    { name: 'the thief', glyph: '~', col: '#c8b040',
     heard: 'Something narrow works along the hull, testing.',
     seen:  'Long, and quick, and interested in the hold rather than in you.',
-    known: 'It steals and leaves. What it takes is gone; what it does not take is not worth its trouble.' },
+    known: 'It steals and leaves. What it takes is gone. What it does not take is not worth its trouble.' },
   shoal:  { name: 'the shoalfang', glyph: '»', col: '#a0b840',
     heard: 'Small, fast returns, and more of them than you would like.',
     seen:  'Three of them, moving to put you between them.',
@@ -10429,11 +10433,11 @@ const HEDGE = [
   'The chart has nothing to say about the rest.',
   'Beyond that, the chart is blank.',
   'Where the others go, nobody has written down.',
-  'The rest are only openings; what is past them is anyone\'s guess.',
+  'The rest are only openings. What is past them is anyone\'s guess.',
   'What lies past the others is not written down anywhere aboard.',
   'That is as far as anyone before you got, if anyone did.',
   'None of the far ends have made it onto the chart yet.',
-  'The instruments have opinions about the near ways only; the rest are guesses.',
+  'The instruments have opinions about the near ways only. The rest are guesses.',
 ];
 
 // What the boat can honestly say about the ways out. The vertical column is
@@ -11555,7 +11559,7 @@ function restart() {
   state.lastZone = 'shelf';
   state.maxZoneReached = 0;
   log(`A grey dock juts east into the chop. Behind you, the shore is rock and packed earth — the last solid ground for hundreds of miles. To the north and west, open water.`);
-  log(`The ${sub.name} casts off. The hatch is open; the air is yours.`, '', 'CAST OFF');
+  log(`The ${sub.name} casts off. The hatch is open. The air is yours.`, '', 'CAST OFF');
   // O2 / Sean's ruling D1: the game never once said what it was FOR. This is
   // the premise, not a tutorial — it names the trade and the two things that
   // kill you, and then it stops. Nobody is told how to play, only what the job
