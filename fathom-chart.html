@@ -10664,7 +10664,7 @@ const DIR_COUNT_OPEN = {
   3: ['the water is open on three sides', 'three ways out across open water', 'it runs away clear in three directions'],
   4: ['open water on four sides', 'four ways out, none of them narrow', 'the water goes on in four directions'],
   5: ['five ways out, all of them open water', 'the water is clear on five sides', 'open in five directions'],
-  6: ['open water on every bearing', 'no wall on any side of you', 'it runs away clear in every direction',
+  6: ['open water on every bearing', 'nothing to bring up against on any side', 'it runs away clear in every direction',
       'water on all six sides, and none of it interested in you'],
 };
 
@@ -10763,23 +10763,33 @@ function neighbourWays(q, r, d) {
   const h = hits[0];
   const dir = bearing(q, r, h.n.q, h.n.r);
   return h.kind === 'narrow'
-    ? ` A way narrows into the rock ${dir} of you${hits.length > 1 ? ', and it is not the only one' : ''}.`
+    ? ` A way narrows ${dir} of you${hits.length > 1 ? ', and it is not the only one' : ''}.`
     : ` It opens out ${dir} of you — room to move, and room for other things to.`;
 }
 
 function exitsClause(s) {
   if (s.lateral === 0 && !s.up && !s.down) return 'Nothing leads anywhere. ';
 
+  // OPEN WATER GETS WATER WORDS VERTICALLY TOO. The lateral clause learned
+  // this and the vertical one did not, so a boat in an expanse with 240 m of
+  // sea over the sail was told "the shaft climbs out of sight above" — a cave
+  // it was nowhere near. Both clauses ask the same question first now.
+  const openHere = s.lateral >= 5 || s.surfaced;
   const vert = [];
   // At the surface there is nothing overhead but weather, so say nothing about
-  // it — "the roof is open above you" with the hatch in the wind is a cave
-  // sentence in the wrong place.
+  // it — a roof with the hatch in the wind is a cave sentence in the wrong place.
   if (s.surfaced) { /* the sky is not an exit */ }
-  else if (s.upRun >= 3) vert.push(pickLoose(['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
-  else if (s.up) vert.push(pickLoose(['there is a way up', 'the roof is open above you', 'water continues overhead']));
+  else if (s.upRun >= 3) vert.push(pickLoose(openHere
+    ? ['the water runs a long way up', 'there is a great deal of open water overhead', 'it goes up further than the lamps reach']
+    : ['the water runs a long way up', 'the shaft climbs out of sight above', 'there is a great deal of open water overhead']));
+  else if (s.up) vert.push(pickLoose(openHere
+    ? ['there is a way up', 'water continues overhead', 'the water is open above you']
+    : ['there is a way up', 'the roof is open above you', 'water continues overhead']));
   if (s.downRun >= 3) vert.push(pickLoose(['the lights give out long before the water does', 'the dark goes down a long way', 'the water goes down further than the lamps will follow']));
   else if (s.down) vert.push(pickLoose(['the floor is open below', 'there is a way down', 'water continues beneath the keel']));
-  if (!vert.length && !s.surfaced) vert.push(pickLoose(['rock above and rock below', 'the water here is a flat seam in the stone']));
+  if (!vert.length && !s.surfaced) vert.push(pickLoose(openHere
+    ? ['it is closed above and below — only sideways from here', 'no water above or below it, and the boat sits in a flat seam of it']
+    : ['rock above and rock below', 'the water here is a flat seam in the stone']));
 
   // Two clauses is a sentence; three is a list, and a list stops being read.
   const parts = [];

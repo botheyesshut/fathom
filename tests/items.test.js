@@ -110,6 +110,12 @@ try { vm.runInContext(script +
   '\nfunction __scenes(){ return VP_SCENES; }' +
   '\nfunction __vpDims(){ return [VP_W, VP_H]; }' +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
+  '\nfunction __describe(m){ return describeSpace(m); }' +
+  '\nfunction __spaceClassAt(q,r,d){ return spaceClass(spaceAround(q,r,d)); }' +
+  '\nfunction __openCell(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
+  '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
+  '\nfunction __put(q,r,d){ state.q=q; state.r=r; state.currentDepth=d;' +
+  '\n  state._lastSetKey=null; state._lastSndKey=null; state._lastSpaceClass=null; }' +
   '\nfunction __palette(){ return ANSI16; }' +
   '\nfunction __vpKey(){ return VP_KEY; }' +
   '\nfunction __vpSafe(){ return VP_SAFE; }' +
@@ -1108,6 +1114,62 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const orphans = forSale.filter(k => keys.every(c => !(sandbox.__sellTo(c, k) > 0)));
   check(orphans.length === 0, 'every findable VALUABLE, key and chart has a buyer somewhere',
     orphans.join(', ') || forSale.length + ' saleable finds, all with a market');
+}
+
+//--- 22. THE BOAT DOES NOT DESCRIBE A CAVE IT IS NOT IN ---------------------
+//
+// Sean found this three times, in three different clauses, and the third time
+// he wrote: "i feel like I'm never going to be rid of this problem." He was
+// right, and the reason is that I kept fixing the sentences he quoted instead
+// of the class they came from.
+//
+// A room description assembles from several pools, and every one of them was
+// written with a cave in mind and then used everywhere. So in open water, with
+// no wall inside a hundred metres, the boat said "passages run off in four
+// directions", and when that was fixed, "the shaft climbs out of sight above",
+// and under that, "no wall on any side of you" — which is accurate and STILL
+// puts a wall in the reader's head.
+//
+// So the rule is absolute, because an absolute rule is the only kind that
+// cannot be broken by accident: IN OPEN WATER, NO ROCK NOUNS AT ALL, not even
+// to deny them. Measured before the fix: 22 distinct offending sentences,
+// 2,149 offences across 4,508 samples.
+{
+  console.log('\n--- 22. OPEN WATER IS NOT A CAVE ---');
+  const ROCK = /\b(shaft|passage|passages|throat|throats|rock|stone|wall|walls|roof|tunnel|corridor|cave|chamber|hollow|seam|blind)\b/i;
+  const offences = new Map();
+  let samples = 0;
+  const classesSeen = new Set();
+  for (const seed of [4242, 90210, 1337]) {
+    sandbox.__seed(seed);
+    sandbox.__tileAt(0, 0);
+    for (let q = -12; q <= 12; q++) for (let r = -12; r <= 12; r++) {
+      const t = sandbox.__tileAt(q, r);
+      if (!t || t.wall || t.land) continue;
+      for (let d = 0; d < 1200; d += 60) {
+        if (!sandbox.__openCell(q, r, d)) continue;
+        const cls = sandbox.__spaceClassAt(q, r, d);
+        classesSeen.add(cls);
+        if (cls !== 'expanse' && cls !== 'surface') continue;
+        sandbox.__put(q, r, d);
+        samples++;
+        for (const sentence of sandbox.__describe('ask').split(/(?<=\.)\s+/)) {
+          if (ROCK.test(sentence)) offences.set(sentence, (offences.get(sentence) || 0) + 1);
+        }
+      }
+    }
+  }
+  // NO VACUOUS PASS. This suite has already shipped two assertions that were
+  // green because they measured nothing. A rock-noun check that sampled zero
+  // open-water hexes would be the third, and it would be the most convincing
+  // of the three.
+  check(samples >= 300, 'the open-water check is actually reading open water',
+    samples + ' descriptions across 3 seeds; space kinds seen: ' + [...classesSeen].sort().join('/'));
+  const ranked = [...offences.entries()].sort((a, b) => b[1] - a[1]);
+  check(ranked.length === 0, 'no rock noun appears in a description of open water',
+    ranked.length
+      ? ranked.length + ' distinct: ' + ranked.slice(0, 3).map(x => x[1] + 'x "' + x[0].slice(0, 60) + '"').join(' | ')
+      : 'clean across ' + samples + ' descriptions');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
