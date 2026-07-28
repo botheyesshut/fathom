@@ -154,18 +154,32 @@ sb.leaveInterior('The team climbs back out');
 check(!st.foot && st.cargo === cargoPre + 2 && st.relics === relicPre + 1,
   'climbing out brings the haul aboard', 'cargo=' + st.cargo + ' relics=' + st.relics);
 check(st.poisFound.includes('5,-9'), 'the ruin is worked out afterwards');
-// 2e. Cavern beach: landfall gives air + a crew expedition; returns refill
+// 2e. THE GROTTO. A cavern beach used to give air and then roll dice at you.
+// It now gives air and puts you on the sand — the same handoff a ruin makes.
+// The economy seam is what this suite cares about: the haul lands aboard, the
+// dive is worth xp, and the beach is NOT a prize that gets worked out.
 sb.__setCell(0, -8, 60, 'beach');
 st.q = 0; st.r = -8; st.currentDepth = 60; st.air = 100; st.expedition = null;
 if (st.crew[0]) { st.crew[0].role = 'diver'; st.crew[0].xp = 0; }
 sb.maybeBeach();
-check(st.air > 100 && !!st.expedition && st.expedition.type === 'beach', 'first landfall: air off the pocket + beach expedition', 'air=' + st.air);
-let bspin = 0;
-while (st.expedition && bspin++ < 12) sb.creatureTick();
-check(st.crew[0] && st.crew[0].xp === 1, 'the dive seasons the diver', 'xp=' + (st.crew[0] && st.crew[0].xp));
-st.air = 200;
+check(st.air > 100, 'first landfall: air off the pocket', 'air=' + st.air);
+check(!!st.foot && st.foot.kind === 'cave' && !st.expedition,
+  'the beach puts the captain on the sand, not dice',
+  st.foot ? 'ashore in a ' + st.foot.kind : 'no body');
+st.foot.crates = 1;
+const poisPre = st.poisFound.slice().sort().join('|');
+sb.leaveInterior('You wade out');
+check(!st.foot && st.crew[0] && st.crew[0].xp >= 1, 'the walk ashore seasons the diver', 'xp=' + (st.crew[0] && st.crew[0].xp));
+// A ruin is a prize and gets worked out. A beach is a place, and coming back
+// aboard must not mark it spent or repaint it on the chart as ordinary water.
+check(st.poisFound.slice().sort().join('|') === poisPre,
+  'a beach is not a prize and never gets worked out',
+  'was ' + st.poisFound.length + ' entries');
+st.air = 200; st.expedition = null;
 sb.maybeBeach();
 check(st.air > 200, 'the old beach refills the tanks on return', 'air=' + st.air);
+check(!!st.foot && st.foot.kind === 'cave', 'and it is still a place you can walk back into');
+sb.leaveInterior('You wade out');
 
 // relics go ashore under guard
 st.relics = 2; st.cargo = 0; st.q = 0; st.r = 0; st.currentDepth = 0; st.hull = 130; st.air = 450;

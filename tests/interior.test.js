@@ -86,6 +86,13 @@ try { vm.runInContext(script +
   '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
   '\nfunction __prizeDepth(t){ return prizeDepthHere(t); }' +
   '\nfunction __openCell(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
+  '\nfunction __plan(q,r,d){ return grottoPlan(q,r,d); }' +
+  '\nfunction __onward(q,r,d,k){ return caveOnward({q:q,r:r,d:d,kind:k}); }' +
+  '\nfunction __back(q,r,d,k){ return caveBack({q:q,r:r,d:d,kind:k}); }' +
+  '\nfunction __suffix(k){ return deckSuffix(k); }' +
+  '\nfunction __setCell(q,r,d,k){ tileAt(q,r); cells.set(cellKey(q,r,d),{type:k,kind:k}); }' +
+  '\nfunction __beach(){ maybeBeach(); }' +
+  '\nfunction __way(){ followWay(); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
 
@@ -1198,6 +1205,164 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
     check(after === before && after !== '{}', 'and the record survives a reload',
       after === before ? Object.keys(sandbox.__st().deckTook).length + ' decks remembered' : 'LOST ON RELOAD');
   }
+}
+
+//--- THE GROTTO --------------------------------------------------------------
+// Sean asked for "a sub anchored in a grotto, an underground lake with a beach
+// and a cave opening that could be spelunked ... it could connect to other
+// caves ... and maybe exit into ruins, too."
+//
+// A cave is not a building, so it gets the opposite rules: no architecture, no
+// bulkheads, and no rising water — but no door to put between you and whatever
+// found the air first, either. The invariants below are the ones that would
+// silently ruin it: a chamber walled off from the mouth, a chain that loops or
+// dead-ends, a beach consumed like a prize, or a grotto sharing its record with
+// a ruin at the same coordinates.
+console.log('\n--- GROTTOES ---');
+{
+  let stranded = 0, doors = 0, decks = 0, wayless = 0;
+  const tileCount = { small: [], medium: [], large: [] };
+  for (let i = 0; i < 120; i++) {
+    const q = (i * 7) % 40 - 20, r = (i * 13) % 40 - 20, d = 60 + (i % 8) * 60;
+    const plan = sandbox.__plan(q, r, d);
+    for (let seg = 0; seg < plan.segs; seg++) {
+      const kind = seg === 0 ? 'cave' : 'cave' + seg;
+      const ch = sandbox.__int(q, r, d, kind);
+      decks++;
+      const seen = new Set([ch.entry.x + ',' + ch.entry.y]);
+      const stack = [[ch.entry.x, ch.entry.y]];
+      while (stack.length) {
+        const cur = stack.pop();
+        for (const step of [[0,-1],[1,0],[0,1],[-1,0]]) {
+          const nk = (cur[0] + step[0]) + ',' + (cur[1] + step[1]);
+          if (seen.has(nk) || !ch.tiles.has(nk)) continue;
+          seen.add(nk); stack.push([cur[0] + step[0], cur[1] + step[1]]);
+        }
+      }
+      if (seen.size !== ch.tiles.size) stranded++;
+      for (const t of ch.tiles.values()) if (t.t === 'door') doors++;
+      if (ch.size) tileCount[ch.size].push(ch.tiles.size);
+      if ((seg < plan.segs - 1 || plan.ruin) && !ch.way) wayless++;
+    }
+  }
+  const avgN = a => a.length ? Math.round(a.reduce((x, n) => x + n, 0) / a.length) : 0;
+  check(decks > 120, 'the grotto probe is generating real decks', decks + ' decks off 120 sites');
+  check(stranded === 0, 'no cave strands a chamber behind solid rock', stranded + ' of ' + decks);
+  check(doors === 0, 'and nobody hung a bulkhead in one', doors + ' doors in rock');
+  check(wayless === 0, 'every deck that promises a way on has one', wayless + ' missing');
+  check(avgN(tileCount.large) > avgN(tileCount.small) * 1.5,
+    'small, medium and large are three different sizes',
+    avgN(tileCount.small) + ' / ' + avgN(tileCount.medium) + ' / ' + avgN(tileCount.large) + ' tiles');
+
+  // The chain: it has to end, it must not loop, and its mouth is the water.
+  let faults = 0, longest = 0, ruinExits = 0;
+  for (let i = 0; i < 200; i++) {
+    const q = (i * 11) % 50 - 25, r = (i * 5) % 50 - 25, d = 120 + (i % 6) * 60;
+    let kind = 'cave', guard = 0; const path = ['cave'];
+    while (guard++ < 12) {
+      const on = sandbox.__onward(q, r, d, kind);
+      if (!on) break;
+      if (path.includes(on)) { faults++; break; }
+      path.push(on); kind = on;
+      if (sandbox.__back(q, r, d, kind) !== path[path.length - 2]) faults++;
+    }
+    if (guard >= 12) faults++;                                  // never terminated
+    if (sandbox.__back(q, r, d, 'cave') !== null) faults++;      // seg 0 exits to water
+    if (kind === 'deepruin') ruinExits++;
+    longest = Math.max(longest, path.length);
+  }
+  check(faults === 0, 'the chain resolves: no loop, no dead link, mouth is the water', faults + ' faults');
+  check(longest >= 3, 'and a large system is genuinely a system', longest + ' decks deep');
+  check(ruinExits > 0, 'some systems open into worked stone', ruinExits + ' of 200');
+
+  // Records must not collide. A hull, a tower and three cave links can all sit
+  // on one set of coordinates; if they share a key they share stripped loot.
+  const gKinds = ['ruin', 'hull', 'cave', 'cave1', 'cave2', 'deepruin'];
+  const sufs = gKinds.map(k => sandbox.__suffix(k));
+  check(new Set(sufs).size === sufs.length,
+    'every kind of place keeps its own record', sufs.join(' '));
+
+  // Going ashore on the sand, and the rules that follow from it.
+  const stG = sandbox.__st();
+  sandbox.__setCell(2, -11, 120, 'beach');
+  stG.q = 2; stG.r = -11; stG.currentDepth = 120; stG.air = 200;
+  stG.expedition = null; stG.foot = null; stG.alive = true;
+  sandbox.__beach();
+  const gf = sandbox.__foot();
+  check(!!gf && gf.kind === 'cave', 'a beach puts the captain on the sand',
+    gf ? 'ashore in a ' + gf.kind : 'NOBODY WENT ASHORE');
+  if (gf) {
+    check(gf.water.length === 0, 'a cave does not flood — you walked in above the waterline',
+      gf.water.length + ' wet tiles at the start');
+    const gained = sandbox.__flood();
+    check(gained === 0, 'and there is nothing for the sea to advance from', gained + ' tiles taken');
+    sandbox.__seal();
+    check(!!sandbox.__foot(), 'asking for a bulkhead in rock is answered, not fatal');
+    // Take everything, leave, come back: the grotto is a place, not a prize.
+    const ch0 = sandbox.__int(gf.q, gf.r, gf.d, gf.kind);
+    let piles = 0;
+    for (const entry of ch0.tiles) if (entry[1].loot) { piles++; gf.took.push(entry[0]); }
+    const poisPre = stG.poisFound.slice().sort().join('|');
+    sandbox.__leave();
+    check(stG.poisFound.slice().sort().join('|') === poisPre,
+      'coming aboard does not work the beach out', 'poisFound unchanged');
+    stG.air = 200;
+    sandbox.__beach();
+    const gf2 = sandbox.__foot();
+    check(!!gf2 && gf2.kind === 'cave', 'and you can walk back in tomorrow',
+      gf2 ? 'ashore again' : 'THE BEACH CLOSED');
+    let regrew = 0;
+    if (gf2) {
+      const ch2 = sandbox.__int(gf2.q, gf2.r, gf2.d, gf2.kind);
+      for (const entry of ch2.tiles) if (entry[1].loot && gf2.took.indexOf(entry[0]) < 0) regrew++;
+    }
+    check(regrew === 0, 'with nothing grown back in it',
+      regrew ? regrew + ' piles REGREW' : piles + ' piles stayed lifted');
+    // A grotto is where a station belongs — the one thing a wreck can never be.
+    if (gf2) {
+      stG.cargo = 40; stG.base = null; gf2.dweller = null;
+      sandbox.__claim();
+      check(!!sandbox.__base(), 'and a station can be kept there',
+        sandbox.__base() ? 'anchored at ' + gf2.q + ',' + gf2.r : 'REFUSED');
+      stG.base = null; stG.foot = null;
+    }
+  }
+}
+
+//--- ashore() IS AN ANSWER, NOT A QUESTION -----------------------------------
+// It writes "You are not aboard" into the log and THEN returns true. That is
+// right for a helm control the captain just pressed, and wrong for anything
+// that only wants to know where the captain is.
+//
+// The music picker had `ashore() && !state.foot`, which is false by
+// construction — ashore() returns true only WHEN state.foot is set — so the
+// entire condition existed to nag the player once per evaluation for as long
+// as they stood on a deck. Walking a grotto end to end is what finally made it
+// loud enough to notice: four transitions, four nags.
+//
+// The rule that prevents the whole class: every call to ashore() must be the
+// LAST term of an early-return guard. If anything can make the condition false
+// after ashore() has already spoken, the log is lying about what happened.
+console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
+{
+  const src = require('fs').readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
+  const body = src.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const lines = body.split('\n');
+  const calls = [], bad = [];
+  lines.forEach((ln, i) => {
+    if (!/\bashore\(\)/.test(ln)) return;
+    const t = ln.trim();
+    if (/^function ashore/.test(t)) return;                      // the definition
+    if (t.startsWith('//') || t.startsWith('*')) return;         // and prose about it
+    calls.push(i + 1);
+    // ashore() must be the last thing evaluated before the return.
+    if (!/\bashore\(\)\s*\)\s*return\b/.test(ln)) bad.push((i + 1) + ': ' + ln.trim().slice(0, 78));
+  });
+  check(calls.length >= 5, 'the ashore() guard check is finding real call sites',
+    calls.length + ' call sites at lines ' + calls.join(', '));
+  check(bad.length === 0,
+    'every ashore() call is the last term of an early return',
+    bad.length ? bad.join('  |  ') : 'all ' + calls.length + ' call sites clean');
 }
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
