@@ -19,7 +19,10 @@ const path = require('path');
 //   links.test    — a link between grotto chambers is a STEP: it costs air, it
 //                   does not heal the tenant, the hands come with you, and the
 //                   deck keeps its own dead
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'items'];
+//   migrate.test  — an older save is still somebody's campaign: deck records
+//                   rekeyed by kind, and a station that predates knowing what
+//                   kind of place it is
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

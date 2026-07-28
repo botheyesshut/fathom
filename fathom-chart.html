@@ -8731,7 +8731,31 @@ function isBaseDeck(q, r, d, kind) {
   const b = state.base;
   if (!b || b.q !== q || b.r !== r || b.d !== d) return false;
   if (kind === undefined) return true;              // asking about the hex, not the deck
-  return deckSuffix(b.kind || 'ruin') === deckSuffix(kind);
+  // A SAVE FROM BEFORE THE FIELD EXISTED SAYS NOTHING, AND SILENCE IS NOT 'ruin'.
+  // Back-filling it to 'ruin' locked a grotto station away forever: the stores
+  // were unreachable, no replacement could be claimed because you "already hold
+  // a station", and sailing home built a phantom ruin on top of it. When the
+  // base does not know what it is, it matches whatever is asking — the old
+  // permissive behaviour — until `resolveBaseKind` can look at the world and
+  // settle it for good.
+  if (b.kind == null) return true;
+  return deckSuffix(b.kind) === deckSuffix(kind);
+}
+
+// Settle an old station's kind by looking at the water it sits in, and write it
+// back so the save heals itself and this only ever runs once.
+function resolveBaseKind() {
+  const b = state.base;
+  if (!b || b.kind != null) return b ? b.kind : null;
+  const cell = cells.get(cellKey(b.q, b.r, b.d));
+  if (cell && cell.kind === 'beach') b.kind = 'cave';
+  else {
+    const t = getTile(b.q, b.r);
+    const anchor = t ? poiAtDepth(t, b.d) : null;
+    b.kind = (anchor && anchor.type === 'hull') || (t && t.poi === 'hull') ? 'hull' : 'ruin';
+  }
+  scheduleSave();
+  return b.kind;
 }
 
 // The deck the captain is standing on IS the station — kind and all.
@@ -12396,7 +12420,7 @@ function handleTile(tile) {
     // ruin or a hull, so a station kept in a grotto used to open as a phantom
     // ruin at the same coordinates — a different layout, a different entry, and
     // its loot marked taken on the way out. 94 of 94 returns, across 6 seeds.
-    if (caveSeg(state.base.kind) >= 0) enterGrotto(state.base.kind);
+    if (caveSeg(resolveBaseKind()) >= 0) enterGrotto(state.base.kind);
     else enterInterior(tile);
     return;
   }
@@ -13242,7 +13266,11 @@ const SAVE_KEY = 'fathom-save-v1';
 // CEILING, not a set: `loadSave` accepts anything at or below it so an older
 // campaign still opens, and refuses anything above it WITHOUT deleting it, so
 // a player who touches a newer build and rolls back keeps their sea.
-const SAVE_V = 2;
+// 3: decks are keyed by KIND as well as coordinates (`deckSuffix`), and a
+//    station records which kind of place it is. Both landed without moving this
+//    number, which is why `migrateSave` below exists and why it has to guess.
+//    Move this the moment a key schema changes, not the session after.
+const SAVE_V = 3;
 let gameStarted = false;
 let saveTimer = 0;
 
@@ -13330,6 +13358,51 @@ function clearSave() {
 // Rebuild the saved run: same seed → the identical infinite world regenerates
 // beneath the boat; the overlay puts the player, their charts, and their
 // resources back exactly where they were.
+// WHAT AN OLDER SAVE MEANT BY A KEY.
+//
+// Deck records were keyed on bare coordinates until `deckSuffix` landed, and
+// the interior CACHE had already carried ':h' for a hull before that — so a
+// hull's stripped loot and driven-off tenant were written under a key nothing
+// reads any more. Measured on real bytes: 0 of 2 recorded takes survived a
+// hull, and the tenant came back. Ruins were unaffected, which is the control
+// that proves it is the suffix and not the generator.
+//
+// A bare key cannot say which kind it meant, so ask the world: the tile is a
+// pure function of the seed and the seed is already set by the time we get
+// here. Wrapped whole in a try — a migration that throws would cost the player
+// the campaign it was written to save, which is the exact failure this file has
+// already shipped once.
+function migrateSave(save) {
+  if ((save.v || 0) >= SAVE_V) return;
+  try {
+    const rekey = (k) => {
+      const parts = k.split(',');
+      if (parts.length !== 3) return null;
+      const q = +parts[0], r = +parts[1], d = +parts[2];
+      if (!isFinite(q) || !isFinite(r) || !isFinite(d)) return null;
+      const t = tileAt(q, r);
+      if (!t) return null;
+      const anchor = poiAtDepth(t, d);
+      const isHull = (anchor && anchor.type === 'hull') || t.poi === 'hull';
+      return isHull ? k + ':h' : null;
+    };
+    let moved = 0;
+    for (const k of Object.keys(state.deckTook)) {
+      const nk = rekey(k);
+      if (nk && !state.deckTook[nk]) { state.deckTook[nk] = state.deckTook[k]; delete state.deckTook[k]; moved++; }
+    }
+    const cleared = state.clearedDecks || [];
+    for (let i = 0; i < cleared.length; i++) {
+      const nk = rekey(cleared[i]);
+      if (nk && cleared.indexOf(nk) < 0) { cleared[i] = nk; moved++; }
+    }
+    if (moved) log(`${moved} wreck${moved === 1 ? '' : 's'} in the log had been filed under the wrong hand. Corrected — what you already stripped stays stripped.`, '', 'LOG');
+  } catch (e) {
+    // A save that cannot be migrated is still a save. Leave it exactly as it
+    // was and let the game run; the worst case is one deck restocking.
+  }
+}
+
 function resumeGame(save) {
   // A save is bytes from disk, not a contract. `|| []` trusts any truthy
   // value — a string, a number, an object — and hands it to `for...of`.
@@ -13427,6 +13500,11 @@ function resumeGame(save) {
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
   tileAt(0, 0);                 // origin (dock, pier entrance) always exists
   tileAt(state.q, state.r);     // and the water under the boat
+  // AFTER `worldSeed`, AND NOT ONE LINE BEFORE IT. The migration decides what an
+  // old bare deck key meant by asking the world what is at those coordinates —
+  // so running it while worldSeed still held the previous value read a
+  // different ocean and re-filed nothing. My own suite caught it: 0 of 5.
+  migrateSave(save);
   for (const k of save.visited || []) visited.add(k);
   const rev = save.revealed || {};
   for (const k in rev) revealed.set(k, new Set(rev[k]));

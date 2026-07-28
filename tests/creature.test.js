@@ -338,14 +338,22 @@ for (let i = 0; i < 40 && st.poisFound.length === poisBefore; i++) {
 check(st.poisFound.length > poisBefore, 'rival finds and strips a site', (st.poisFound.length - poisBefore) + ' site(s) worked');
 check(rivalStone === 0 && st.creatures.length === 1, 'rival stays in open water and persists', 'stoneViolations=' + rivalStone);
 
-// ---- 6. Save v2 round trip + v1 compat ----
+// ---- 6. Save round trip + backwards compat ----
+// The version is pinned ON PURPOSE. It is a schema stamp, and this project has
+// now shipped TWO key-schema changes without moving it — deck records rekeyed
+// by kind, and a station learning what kind of place it is — each of which
+// silently orphaned part of an existing save. A hardcoded number here means the
+// next rekey cannot land without someone deciding, out loud, what old bytes
+// mean. If this check goes red, write the migration before you change it.
 {
   st.q = 0; st.r = -6; st.currentDepth = 0;
   const nCreatures = st.creatures.length;
   const nSpawned = sb.__spawned().size;
   sb.doSave();
   const raw = JSON.parse(store.getItem('fathom-save-v1'));
-  check(raw.v === 2 && Array.isArray(raw.creatures) && raw.creatures.length === nCreatures, 'save v2 carries creatures', raw.creatures.length + ' creatures, ' + raw.spawnedChunks.length + ' spawned chunks');
+  check(raw.v === 3 && Array.isArray(raw.creatures) && raw.creatures.length === nCreatures,
+    'the save stamps its schema version and carries creatures',
+    'v' + raw.v + ', ' + raw.creatures.length + ' creatures, ' + raw.spawnedChunks.length + ' spawned chunks');
   const sb2 = freshContext(store);
   sb2.startGame();
   const st2 = sb2.__state();
