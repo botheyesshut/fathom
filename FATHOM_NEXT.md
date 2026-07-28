@@ -1,5 +1,98 @@
 # FATHOM — START HERE (last updated 2026-07-28)
 
+## FIVE TESTERS ON THE ON-FOOT LAYER (2026-07-28) — read this first
+
+Five agents audited the finished three-kinds-of-place feature: adversarial
+bugs, prose/epistemology, save integrity, economy, and design coherence. They
+found **eleven real defects, nine of them mine from the same day**, and two of
+them would have destroyed a campaign silently. Everything below is fixed and
+battery-gated unless it says otherwise.
+
+**The pattern held, and it is the same one this file has been recording for
+three sessions: code that looks right, is believed to work, and has never been
+measured.** Two new variants of it showed up:
+
+1. **A GUARD CAN HAVE A HOLE THE SIZE OF THE THING IT GUARDS.**
+   `items.test` §22 exists solely to kill rock-nouns-in-open-water — Sean's
+   longest-running grievance. `describeSpace('ask')` opens with
+   `if (asked) mode = 'again'`, and §22 only ever called `'ask'`. So for its
+   entire life it read `SPACE_AGAIN` and never once read `SPACE_FIRST` — the
+   paragraph printed on FIRST entry to every hex, the first sentence a player
+   reads anywhere new. **2,857 offences across 5,112 samples** were sitting
+   behind that one line, including the exact construction §22's own comment
+   names as the subtle case. A check that samples one mode of two can go green
+   on half a lie. §22 now asserts it read both.
+
+2. **A FIX CAN ORPHAN THE SAVES IT WAS WRITTEN TO PROTECT.** Giving the station
+   a `kind` locked away every grotto station claimed before the field existed,
+   an hour after I shipped it. `SAVE_V` had not moved across *two* key-schema
+   changes. There is a `migrate.test.js` now, and `creature.test` pins the
+   version on purpose: **if that check goes red, write the migration before you
+   change the number.**
+
+### What was broken, and how badly
+
+| | found by | measured |
+|---|---|---|
+| a claimed grotto could never be re-entered — you arrived in a **phantom ruin** whose loot was then marked taken | adversarial | 94/94 returns, 6 seeds |
+| claiming the mouth **froze every tenant** deeper in the chain | adversarial | 101/101 |
+| `hull` was in **no detection channel at all** — not the sounder, the chart, leads, or the noun table | design | sounder 0/24 on a hull vs 17/17 on a ruin |
+| the arrival line asked `grottoPlan` how big the cave was while the deck rolled its own size | design | wrong 64.5% of the time |
+| crossing a link was **free**, healed the tenant, stranded the party, and lost your dead | adversarial | 0.00 air vs 2.10; party 14.0 tiles away, 34/129 ever reunited |
+| the LOOK button described a rusted metal interior **wherever you stood** | prose | byte-identical across 4 kinds, 259,215 samples |
+| the porthole drew **a masonry tower** while you stood in a bare cave | prose + UI, independently | all cave segments drew ruin faces |
+| the tenant stood on the **only way onward**, and was drawn over it | UI | 38/38 |
+| `Claim Deck` could never succeed in a hull or a deepruin; `AUTO` was silently mute ashore | UI | proved by clearing every other refusal path |
+| a **warden** — a thing built to guard a deck — spawned in natural caves | prose + design | 15 sub-only lines firing in rock |
+| full tanks **locked you out of your own grotto** | self, before the agents | before/after A–B |
+
+### Still open, with the evidence — NOT fixed
+
+- **A large cave is large, not complex.** Measured with Hopcroft–Tarjan cut
+  vertices: tiles ×4.08 from small to large, decisions ×0.99. Cut tiles
+  10.49 / 10.41 / 10.38; largest open lump 48% → 71% → **84%**. A "small" cave
+  is the most maze-like thing the generator makes. The fix is not a new
+  algorithm — spend the surplus walk budget on separate lobes joined by
+  single-tile throats, and put the `way` at the graph-eccentric tile. Target to
+  measure: cut tiles scaling 10 → 20 → 30 and open-lump share **falling**.
+- **Caves connect to other caves, but not to other BEACHES.** 445/445 links
+  stay at the same (q,r,d). What shipped is a linear elevator behind one beach;
+  what Sean asked for is topological — two beaches you already know turning out
+  to be one system, which gives the *chart* hidden structure. Geography permits
+  it: 3–6 beach hexes per world, closest pair 3–10 hexes apart. Seed 1 had
+  exactly one beach in 817 hexes, so any implementation needs today's terminal
+  as a fallback.
+- **`deepruin` is the ruin generator with a different cache key** — 114.1 vs
+  114.2 tiles, 4.78 vs 4.79 rooms, 2.96 vs 2.96 doors. The hardest-to-reach
+  room in the game pays 3.62 against a floor ruin's 3.74.
+- **The hull is the best site in the game and the one you may not keep** —
+  most loot (4.85), least drowned water, most legible layout. The cheap answer
+  to "claiming and repairing a wreck": weight the hull's loot roll toward
+  `kind:'fit'` (the six salvaged boat parts already in `ITEMS`), so a wreck
+  becomes something you cannibalise to repair *your* boat. Same fantasy, no new
+  system, and it feeds the Libertines question in the open list below.
+- **"Ruins in deeper waters" is not in the world generator.** Prize type is a
+  uniform hash over 7 types with no depth term; hull and ruin have identical
+  depth distributions across 1,127 prizes in 6 worlds.
+- **`ruin` is a still, not an animation** — it has `art`, not `frames`, so one
+  of the three "ruin animations" does not animate. `hullside` has 2 distinct
+  frames of 4.
+- **Interiors and grotto plans ignore `worldSeed`.** `hashStr('interior:q,r,d')`
+  takes no seed, so 0 of 169 ruins differ between two worlds. `restart()`'s
+  comment that interiors "belong to the old seed" is false. Probably harmless
+  (*where* prizes sit does vary) but the model claims otherwise.
+- **UI, measured and not yet acted on:** the porthole's ✕ is 7.4×9 px with
+  `pointer-events: none`, so tapping it falls through and **moves the boat**;
+  `recenter-btn` is 36×36 (the only control under 40×40) and does nothing
+  ashore; the ashore vignette stops 57.8 px short top and bottom because
+  `setViewport` is wired to `window.resize` only; the depth readout ashore is
+  15.68 px, the same size as Air and Hold, and Sean has already said it is too
+  small; `#log` is a hard `7.2rem`, so at 360×700 the chart (279 px) is smaller
+  than log + controls (334 px) — his complaint is arithmetically true on a
+  shorter phone.
+- **The economy audit was still running when this was written.** Nothing in it
+  has been read or acted on.
+
 ## THE ON-FOOT OVERHAUL (2026-07-28, `a1d38e5`..`3bb1400`) — three kinds of place
 
 Sean's brief: *"there should be sunken vessels, submarines, and it should be
