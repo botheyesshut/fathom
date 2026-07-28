@@ -90,8 +90,77 @@ measured.** Two new variants of it showed up:
   small; `#log` is a hard `7.2rem`, so at 360×700 the chart (279 px) is smaller
   than log + controls (334 px) — his complaint is arithmetically true on a
   shorter phone.
-- **The economy audit was still running when this was written.** Nothing in it
-  has been read or acted on.
+### THE ECONOMY AUDIT (came in last, and is the best of the five)
+
+It found **seven bugs in its own probes before reporting a number**, every one
+biasing income downward — targeting a prize's identity depth instead of where
+it rests, BFS on turns instead of air, `setTimeout` stubbed so `endGame` never
+ran. It listed them first. That is the standard.
+
+**RULING 1 HOLDS, COMFORTABLY, AND IS NOT CLOSE TO FAILING.** At the *ceiling*
+(a bot that knows every site from turn 1), over 20 seeds × 500 taps:
+
+```
+                    mean  med   0 crates   >=5 (a hand)   >=6 (a station)
+oracle explorer      0.3    0      80%          0%              0%
+oracle ruin          0.8    0      55%          0%              0%
+oracle grotto        1.7    0      55%         20%              5%
+oracle mixed         3.6    2      25%         30%             25%
+local  mixed         2.9    2      35%         30%             25%
+```
+
+**500 → 700 taps moves the mean by 0.0.** The cause is measured: **3.20
+workable sites in reach per world** (radius 14, ≤2160 m; 2 of 20 worlds have
+none at all). Progress is not gated by yield-per-site — it is gated by SITE
+COUNT. Twenty more minutes buy nothing once the three are worked.
+
+**The grotto is dominant on both scarce axes** — 2.3× a ruin per tap, 2.4× per
+air — because the beach hands back 175 on arrival, so the *visit* is cheaper
+despite being longer. My "1.73× across 2.03 decks" was right in direction and
+measured the wrong denominator: **decks are not a resource the player spends.**
+But it is not *strictly* dominant, and the exception is good: fights per visit
+are ruin 0.00, hull 0.63, **grotto 2.33**, and grottoes drowned 3 of 12
+captains against 1 of 6 and 1 of 8. A cave trades the flood clock for a wipe
+risk. Do not touch that.
+
+**The Erebus's tank cannot empty a deck** — content actually picked up is ruin
+61%, hull 53%, grotto 66%, and every one of the 6 ruin walks ended on air.
+Systems average 1.75 decks; captains walk 1.42.
+
+**Two of Sean's open questions are now answered:**
+- `CREW_HIRE_COST` 5 against "a measured ceiling of 4" — **REFUTED.** 30% of
+  sessions bank ≥5; max observed 15. **Leave it at 5.**
+- 20 of 35 items with no buyer — **CONFIRMED**, with the mechanism: `buyMult`'s
+  "nobody buys back their own stock" voids the only plausible buyer for
+  `saltiron`, `lens`, `chime` (Dagon sells them) and `pressurehull`
+  (Confluence sells it). **And the port buys no items at all** — the dock banks
+  crates and vaults relics, nothing else. An item is only money at an enclave
+  you must first find.
+
+**STILL OPEN — the biggest thing in this file, and it threatens Sean's own
+ruling that charting is a legitimate way to play:**
+
+> **The typed-lead system has exactly one door and it opens about once in
+> twenty sessions.** `makeLead()`'s only player-reachable call site is
+> `readChart()`, which consumes a `kind:'chart'` item. Measured: **0.65 item
+> finds per session**, charts are 6–16% of the item table → **≈0.05 charts per
+> session.** Observed: 0 of 20. That single gate holds shut `word` leads (the
+> charting-pays mechanic), `cavern` leads, `quarry` leads, **and all fourteen
+> pages of THE ACCOUNT.** A feature that fires one session in twenty is
+> indistinguishable from one that does not exist. The ruling-2-safe fix is not
+> more crates — it is a **second door into `makeLead()` that costs the player
+> something other than luck.** Confirm with: charts-read per session, currently
+> 0.05.
+
+**Also still open:** a beach has no instrument pointing at it — not soundable,
+not a `cavern` lead target, not a POI. 55% of beaches have no lateral water
+neighbour at their depth, so the only approach is vertical, from inside the
+chamber below. The audit's proposal, which respects the epistemic law: have
+`soundingBelow()` report a beach cell that lies **inside the boat's own
+`cellRun`** — that is water you are already in, not a reading through rock.
+
+(Its recommendations 1 and 2 — add `hull` to `SOUNDER_PRIZE` and to
+`nearestWayIn` — were already done before it reported.)
 
 ## THE ON-FOOT OVERHAUL (2026-07-28, `a1d38e5`..`3bb1400`) — three kinds of place
 
