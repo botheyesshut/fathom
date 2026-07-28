@@ -1,4 +1,84 @@
-# FATHOM — START HERE (last updated 2026-07-27)
+# FATHOM — START HERE (last updated 2026-07-28)
+
+## THE ON-FOOT OVERHAUL (2026-07-28, `a1d38e5`..`3bb1400`) — three kinds of place
+
+Sean's brief: *"there should be sunken vessels, submarines, and it should be
+clear we're exploring aboard the decks of a wrecked submarine ... there should
+also be ruins in deeper waters ... the rules for each might be slightly
+different ... when I thought of claiming bases, I imagined a sub anchored in a
+grotto, an underground lake with a beach and a cave opening that could be
+spelunked ... it could connect to other caves ... and maybe exit into ruins,
+too. i think the ruins should be revisitable."*
+
+Built in three stages, each battery-gated before the next started.
+
+**Stage 1 — revisitable ruins.** `state.deckTook` is a map of deck key →
+tile keys already lifted, and it is SAVED. The breach reopens; nothing regrows.
+This is what makes re-entry safe to allow: the deck simply has nothing left.
+
+**Stage 2 — a sunken boat is not a sunken building.** `hull` is its own prize
+type with its own generator: one spine the length of the boat, 5–7 compartments
+opening on it and nothing else, half of them upended so the spine runs across
+the deck and the whole place reads wrong on purpose. Measured 53% of tiles on
+the spine vs 38% for a ruin — the shape is real, not a label. Six porthole
+scenes (hullbreak/hullup/hullside, ruin/ruintower/ruinwall), picked by a hash of
+the site's own coordinates so a site always looks like itself. **A hull cannot
+be claimed** — Sean: *"it would be strange to make a base out of a wrecked
+submarine"* — and the refusal is mechanical, not arbitrary: every compartment
+opens on the next one and the last opens on the sea, so there is nothing to
+pump out to.
+
+**Stage 3 — the grotto.** Cavern beaches have been in the world generator since
+the beginning and only ever handed you an abstract dice expedition. Now you go
+ashore. `interiorAt(q,r,d,'cave')` carves by RANDOM WALK, not rooms and
+corridors — a cave is what water left behind. Three sizes: 32 / 66 / 115 tiles
+measured. `grottoPlan(q,r,d)` chains 1–3 segments and decides whether the last
+opens into a `deepruin` (worked stone, ruin generator, own key `:dr`); 15% of
+large systems do. Walked end to end in the browser: cave 36 → cave1 25 → cave2
+115 with a clutch living in it → deepruin 138.
+
+**The rules genuinely differ, and that is the point:**
+
+| | ruin | hull | cave |
+|---|---|---|---|
+| floods from the breach | yes | yes | **no** — you walked in above the waterline |
+| bulkheads to seal | yes | yes | **no** — nobody hung a door in rock |
+| can be your station | yes | **no** | **yes** — it is where one belongs |
+| worked out on leaving | yes | yes | **no** — a beach is a place, not a prize |
+
+So a ruin gives you a clock and a door; a cave gives you neither. The tenant in
+a cave cannot be shut out, only outrun. The `Seal Bulkhead` button is HIDDEN in
+a cave rather than left dead — which also teaches the difference without a word
+of instruction.
+
+**Key discipline:** `deckSuffix(kind)` gives `''`/`:h`/`:c0`/`:c1`/`:c2`/`:dr`.
+A hull, a tower and three cave links can all sit on one set of coordinates and
+they are not the same place. Anything that reads or writes `deckTook`,
+`clearedDecks` or `interiorCache` MUST go through it.
+
+**THE BEACH RATE IS NOT AN ECONOMY BUFF, and here is the measurement that says
+so.** 0.12 → 0.34 looked like one. At radius 14 across five seeds:
+
+```
+rate   nearest landfall from origin        landfalls in range
+0.12   12,  9,  8, 13,  NONE               1, 2, 1, 1, 0     <- old
+0.34   12,  9,  7, 10, 11                  1, 2, 3, 4, 4     <- now
+```
+
+One world in five had no grotto at all. A base site that does not exist in 20%
+of games is broken, not scarce. The nearest is still 7–12 hexes out. Separately:
+a whole grotto pays 1.73× a ruin across 2.03 decks of walking — slightly *less*
+per deck, in exchange for no flood clock and no door. `tests/grotto.js` holds
+both measurements and their method.
+
+**A bug the walkthrough surfaced, and the class-level guard it earned.**
+`trackForNow()` read `ashore() && !state.foot`, which is false by construction —
+`ashore()` returns true only WHEN `state.foot` is set. The condition could never
+fire. It existed solely to write *"You are not aboard"* into the log once per
+music evaluation, forever, while the captain stood on a deck. **`ashore()` is an
+ANSWER, not a question: it logs and then returns.** The battery now enforces
+that every `ashore()` call is the LAST term of an early return, and the guard
+was proven by reintroducing the exact line and watching it fail.
 
 ## THE SEVEN AUDITS (2026-07-27) — read this section before anything below it
 
