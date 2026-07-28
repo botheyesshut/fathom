@@ -1195,6 +1195,44 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     roofs + ' roof scenes out of ' + sampled + ' sampled; scene kinds seen: ' + [...seen].sort().join('/'));
   check(wrong === 0, 'the porthole never calls a cathedral a lid',
     wrong ? wrong + '/' + roofs + ' — ' + firstBad : 'clean across ' + roofs + ' roof scenes');
+
+  // AND IT NEVER CALLS THE SKY A ROOF.
+  //
+  // Sean dove one step into the starting sinkhole. The sounding said "Open
+  // water 60 m above, 780 m below" and the picture said "rock overhead" —
+  // because the run reached the SURFACE, so `above` was 60 and passed a test
+  // written for rock. The game already draws this distinction for cavern lakes
+  // ("a surface needs air over the water, not merely rock over your head");
+  // the scene picker simply was not asking.
+  //
+  // This is the third time the picture has contradicted the sounding, so the
+  // rule is stated as the invariant rather than the instance: if the water you
+  // are in reaches the surface, there is nothing overhead but weather.
+  let skyRoofs = 0, firstSky = null, skySamples = 0;
+  for (const seed of [4242, 1337]) {
+    sandbox.__seed(seed);
+    sandbox.__tileAt(0, 0);
+    for (let q = -13; q <= 13; q++) for (let r = -13; r <= 13; r++) {
+      const t = sandbox.__tileAt(q, r);
+      if (!t || t.wall || t.land) continue;
+      for (let d = 60; d < 1200; d += 60) {
+        if (!sandbox.__openCell(q, r, d)) continue;
+        const run = sandbox.__runAt(q, r, d);
+        if (!run || run.ceiling > 0) continue;      // only water open to the sky
+        skySamples++;
+        sandbox.__put(q, r, d);
+        sandbox.__clearContacts();
+        if (sandbox.__sceneNow() === 'roof') {
+          skyRoofs++;
+          if (!firstSky) firstSky = q + ',' + r + ' @' + d + 'm, water reaches the surface';
+        }
+      }
+    }
+  }
+  check(skySamples >= 100, 'the sky check is actually finding water open to the surface',
+    skySamples + ' depths sampled in surface-connected water');
+  check(skyRoofs === 0, 'and it never calls the sky a roof',
+    skyRoofs ? skyRoofs + '/' + skySamples + ' — ' + firstSky : 'clean across ' + skySamples + ' samples');
 }
 
 //--- 22. THE BOAT DOES NOT DESCRIBE A CAVE IT IS NOT IN ---------------------

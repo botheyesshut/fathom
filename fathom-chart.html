@@ -3508,7 +3508,8 @@ function sceneForNow() {
     const nr = cellRun(n.q, n.r, state.currentDepth);
     if (nr) openestAbove = Math.max(openestAbove, state.currentDepth - nr.ceiling);
   }
-  const nearRoof = above <= DEPTH_GRID && openestAbove <= 2 * DEPTH_GRID;
+  const skyAbove = !runHere || runHere.ceiling <= 0;
+  const nearRoof = above <= 0 && !skyAbove && openestAbove <= 2 * DEPTH_GRID;
   if (nearRoof && !nearFloor) return 'roof';       // stone over the sail, water under the keel
   if (!nearRoof && !nearFloor) return 'column';    // suspended, neither in reach
 
