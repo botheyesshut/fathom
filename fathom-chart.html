@@ -10050,14 +10050,14 @@ function soundingBelow() {
     if (SOUNDER_PRIZE.indexOf(p.type) < 0) continue;
     if (poiTaken(t, p)) continue;
     if (!cells.has(cellKey(t.q, t.r, p.d))) continue;
-    if (p.d < state.currentDepth - DEPTH_GRID) continue;   // it is above you; the sounder looks down
+    if (p.at < state.currentDepth - DEPTH_GRID) continue;   // it is above you; the sounder looks down
     // A sounder reads through WATER. A prize below the floor of YOUR run has
     // stone between you and it, and an instrument that chirps through rock is
     // a liar — the same law as the claim rule, because the claim rule and the
     // instruments must share one definition of "reachable from here" or one of
     // them is always lying.
-    if (p.d > run.floor) continue;
-    if (oddAt === null || p.d < oddAt) { odd = true; oddAt = p.d; }
+    if (p.at > run.floor) continue;
+    if (oddAt === null || p.at < oddAt) { odd = true; oddAt = p.at; }
   }
   // Fall back to the old whole-column test for legacy tiles with no stack.
   if (!odd && !poiStack(t).length && t.poi && SOUNDER_PRIZE.indexOf(t.poi) >= 0
@@ -11165,6 +11165,9 @@ function airCounsel() {
 // Keyed by hex, holding the depth stack, and mirroring `cells`: substrate that
 // nothing else owns cannot be clobbered by something else's rebuild.
 const cellPois = new Map();
+// Bumped whenever the voxel map is rebuilt, so a settled depth cached on a
+// prize is recomputed for the new world instead of describing the old one.
+let cellsEpoch = 0;
 
 // EVERY SEED-DERIVED CACHE, CLEARED IN ONE PLACE.
 //
@@ -11181,6 +11184,7 @@ const cellPois = new Map();
 // this function. `flip.test.js` asserts that reseeding and regenerating
 // reproduces a world exactly, which is what catches a cache you forgot.
 function resetWorldCaches() {
+  cellsEpoch++;
   world.clear();
   cells.clear();
   generatedChunks.clear();
@@ -11190,11 +11194,24 @@ function resetWorldCaches() {
   cellPois.clear();
   if (typeof interiorCache !== 'undefined') interiorCache.clear();
 }
+// Where a thing actually COMES TO REST, as opposed to where the cave graph
+// happened to put a node. Gas is trapped against rock and rises; hulls, ruins,
+// growth and the rest settle on the bottom of the water they are in.
+function settledDepth(tile, p) {
+  const run = cellRun(tile.q, tile.r, p.d);
+  if (!run) return p.d;
+  return p.type === 'air' ? run.ceiling : run.floor;
+}
+
 function poiStack(tile) {
   if (!tile) return [];
   const s = cellPois.get(hexKey(tile.q, tile.r));
-  if (s && s.length) return s;
-  if (tile.poi && tile.poiDepth != null) return [{ d: tile.poiDepth, type: tile.poi }];
+  // `d` IS THE IDENTITY and never moves — poisFound, clearedDecks and the
+  // interior generator all key on it. `at` is where the thing rests, and it
+  // is the only depth anything physical should read.
+  if (s && s.length) return s.map(p => (p.at === undefined || p._for !== cellsEpoch)
+    ? Object.assign(p, { at: settledDepth(tile, p), _for: cellsEpoch }) : p);
+  if (tile.poi && tile.poiDepth != null) return [{ d: tile.poiDepth, at: tile.poiDepth, type: tile.poi }];
   return [];
 }
 // Found-ness is per CELL now, because a hex can hold several prizes and taking
@@ -11210,7 +11227,7 @@ function poiTaken(tile, p) {
 function poiAtDepth(tile, depth) {
   for (const p of poiStack(tile)) {
     if (!cells.has(cellKey(tile.q, tile.r, p.d))) continue;
-    if (Math.abs(depth - p.d) <= DEPTH_GRID) return p;
+    if (Math.abs(depth - p.at) <= DEPTH_GRID) return p;   // where it RESTS
   }
   return null;
 }
@@ -11250,7 +11267,7 @@ function atReachableBottom(tile) {
   // as shipped was dead code, the announcement named a depth that did not work,
   // and the haul paid at the deeper rate.
   if (stack.length && cellPois.has(hexKey(tile.q, tile.r))) {
-    return stack.some(p => Math.abs(state.currentDepth - p.d) <= DEPTH_GRID);
+    return stack.some(p => Math.abs(state.currentDepth - p.at) <= DEPTH_GRID);
   }
   // LEGACY seabed prizes (shelf wrecks and kin — tile.poi with no stack):
   // unchanged. You must reach the floor; the rule relaxes only where the hex's
@@ -11274,8 +11291,8 @@ function prizeDepthHere(tile) {
   let best = null;
   for (const p of stack) {
     if (poiTaken(tile, p)) continue;
-    if (p.d < run.ceiling || p.d > run.floor) continue;   // not in my water
-    if (best === null || Math.abs(p.d - state.currentDepth) < Math.abs(best - state.currentDepth)) best = p.d;
+    if (p.at < run.ceiling || p.at > run.floor) continue;   // not in my water
+    if (best === null || Math.abs(p.at - state.currentDepth) < Math.abs(best - state.currentDepth)) best = p.at;
   }
   return best;
 }
