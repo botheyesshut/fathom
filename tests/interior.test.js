@@ -92,6 +92,7 @@ try { vm.runInContext(script +
   '\nfunction __suffix(k){ return deckSuffix(k); }' +
   '\nfunction __setCell(q,r,d,k){ tileAt(q,r); cells.set(cellKey(q,r,d),{type:k,kind:k}); }' +
   '\nfunction __beach(){ maybeBeach(); }' +
+  '\nfunction __subAir(){ return activeSub().air; }' +
   '\nfunction __way(){ followWay(); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
@@ -1306,6 +1307,20 @@ console.log('\n--- GROTTOES ---');
     sandbox.__leave();
     check(stG.poisFound.slice().sort().join('|') === poisPre,
       'coming aboard does not work the beach out', 'poisFound unchanged');
+    // WITH FULL TANKS, which is how you will usually arrive at your own
+    // station — you topped them at the last refuge. Going ashore used to be
+    // nested inside the air top-up, so a full boat was locked out of its own
+    // grotto and the branch never ran at all.
+    // No `? :` fallback here on purpose. A probe that silently degrades to a
+    // magic number is how a vacuous assertion ships — this suite has shipped
+    // two already. If __subAir goes missing, this line must throw.
+    stG.air = sandbox.__subAir();
+    sandbox.__beach();
+    const gfFull = sandbox.__foot();
+    check(!!gfFull && gfFull.kind === 'cave',
+      'full tanks do not lock you out of your own grotto',
+      gfFull ? 'ashore with the tanks full' : 'LOCKED OUT — the air gate swallowed the beach');
+    if (gfFull) sandbox.__leave();
     stG.air = 200;
     sandbox.__beach();
     const gf2 = sandbox.__foot();
