@@ -366,6 +366,22 @@
      on the one control a player needs when they have opened something by
      accident. Sized here rather than on `.btn` so the panel bodies keep their
      compact buttons. */
+  #chart-layers {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    flex-basis: 100%;          /* its own row, on purpose rather than by accident */
+    order: 2;                  /* under the title and the Close button */
+    padding-top: 0.15rem;
+  }
+  #chart-layer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem; letter-spacing: 0.1em;
+    color: var(--lantern); min-width: 7rem; text-align: center;
+  }
+  #chart-up, #chart-down {
+    min-height: 44px; min-width: 44px; padding: 0.2rem 0.5rem;
+    font-size: 0.7rem; line-height: 1;
+  }
+
   #chart-close, #transcript-close, #inv-close, #muster-close, #port-close,
   #options-close, #bestiary-close, #pages-close, #trade-close {
     min-height: 44px;
@@ -1066,6 +1082,11 @@
   <div id="chart-panel">
     <div id="chart-head">
       <span>The Sea Chart</span>
+      <div id="chart-layers">
+        <button class="btn" id="chart-up" title="A shallower sheet">&#9650;</button>
+        <span id="chart-layer-label">ALL DEPTHS</span>
+        <button class="btn" id="chart-down" title="A deeper sheet">&#9660;</button>
+      </div>
       <div><span id="chart-note"></span><button class="btn" id="chart-close">Close</button></div>
     </div>
     <canvas id="chart-canvas"></canvas>
@@ -2019,9 +2040,53 @@ function renderInventory() {
 // find an instrument that fixes your position. That is what makes the chart a
 // progression track for a captain who only wants to explore.
 //=============================================================================
+// THE CHART HAD ONE SHEET FOR THE WHOLE SEA.
+//
+// Sean: "The sea chart has all depths conflated into a single layer. The
+// captain should be able to toggle all layers or only the current layer with
+// an up and down button for every depth with which the sub has some history."
+//
+// Every reveal has always carried the depth it happened at; the chart simply
+// threw it away and drew the union. So a cavern at 3,000 m and the shelf above
+// it were the same ink, and a captain could not tell one storey of the world
+// from another.
+//
+// `null` is every sheet at once, which stays the default because it is the
+// overview. Any other value is one sheet.
+let chartLayer = null;
+
+// Every depth this campaign has actually charted something at, shallow first.
+function chartDepths() {
+  const set = new Set();
+  for (const d of revealed.values()) for (const x of d) set.add(x);
+  return [...set].sort((a, b) => a - b);
+}
+
+// Does this hex belong on the sheet currently on the table?
 function chartKnown(t) {
   const k = hexKey(t.q, t.r);
-  return visited.has(k) || revealed.has(k);
+  if (chartLayer === null) return visited.has(k) || revealed.has(k);
+  const d = revealed.get(k);
+  return !!(d && d.has(chartLayer));
+}
+
+// Step the sheet: all sheets, then each depth with history, and round again.
+function chartLayerStep(dir) {
+  const ds = chartDepths();
+  if (!ds.length) { chartLayer = null; drawSeaChart(); return; }
+  const seq = [null].concat(ds);
+  let i = seq.indexOf(chartLayer);
+  if (i < 0) i = 0;
+  i = (i + dir + seq.length) % seq.length;
+  chartLayer = seq[i];
+  drawSeaChart();
+}
+
+function chartLayerLabel() {
+  const ds = chartDepths();
+  if (chartLayer === null) return ds.length ? 'ALL DEPTHS (' + ds.length + ')' : 'ALL DEPTHS';
+  const i = ds.indexOf(chartLayer);
+  return chartLayer + ' m' + (i >= 0 ? '  (' + (i + 1) + '/' + ds.length + ')' : '');
 }
 
 function drawSeaChart() {
@@ -2179,6 +2244,8 @@ function drawSeaChart() {
   g.fillText('╪', dockP.x, dockP.y);
 
   // ---- YOUR POSITION — only if you have the instrument for it.
+  const lab = document.getElementById('chart-layer-label');
+  if (lab) lab.textContent = chartLayerLabel();
   const note = document.getElementById('chart-note');
   if (canFixPosition()) {
     const me = P(state.q, state.r);
@@ -7464,6 +7531,7 @@ function move(q, r) {
   // Reveal
   const firstHere = !visited.has(hexKey(q, r));
   visited.add(hexKey(q, r));
+  revealAt(q, r, state.currentDepth);   // you were HERE, at THIS depth: that is a sounding
   revealAt(q, r, state.currentDepth);
   for (const n of hexNeighbors(q, r)) {
     revealAt(n.q, n.r, state.currentDepth);
@@ -12713,6 +12781,8 @@ var __oc = document.getElementById('options-close'); if (__oc) __oc.addEventList
 var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEventListener('click', closeBestiary);
 var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
+document.getElementById('chart-up').addEventListener('click', () => chartLayerStep(-1));
+document.getElementById('chart-down').addEventListener('click', () => chartLayerStep(1));
 document.getElementById('log').addEventListener('click', openTranscript);
 document.getElementById('transcript-close').addEventListener('click', closeTranscript);
 document.getElementById('btn-claim').addEventListener('click', claimOrStore);
