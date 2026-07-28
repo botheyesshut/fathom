@@ -10519,7 +10519,7 @@ function spaceClass(s) {
   if (s.lateral <= 2 && (s.upRun >= 2 || s.downRun >= 2)) return 'shaft';
   if (s.lateral === 1) return 'nook';
   if (s.lateral === 2) return 'tunnel';
-  if (s.lateral >= 5) return 'expanse';
+  if (s.lateral >= 4) return 'expanse';
   return 'junction';
 }
 
@@ -10767,6 +10767,40 @@ function neighbourWays(q, r, d) {
     : ` It opens out ${dir} of you — room to move, and room for other things to.`;
 }
 
+// WHAT IS DRAWN ON THE CHART, SAID OUT LOUD. A prize marked here or in the
+// next hex is the most actionable thing on the screen, and the room
+// description — which reports the set, the layer, traces and the sounding —
+// never mentioned it. Asking the boat to LOOK told a captain nothing about the
+// X he was staring at.
+//
+// Epistemically free: the glyph is only drawn where the boat has already
+// earned the knowledge, so saying it aloud reveals nothing new.
+const PRIZE_NOUN = { salvage: 'wreckage', ruin: 'a sunken ruin', air: 'a pocket of trapped gas',
+                     signal: 'something signalling', growth: 'a mass of growth',
+                     opening: 'a sinkhole', chasm: 'a chasm', base: 'your own station' };
+function prizesInSight(q, r, d) {
+  const out = [];
+  const here = getTile(q, r);
+  if (here && here.poi && PRIZE_NOUN[here.poi] && !state.poisFound.includes(hexKey(q, r))) {
+    const target = prizeDepthHere(here);
+    if (target != null) {
+      const dz = Math.round(target - d);
+      out.push(dz === 0
+        ? ` ${ucfirst(PRIZE_NOUN[here.poi])}, right here, and the boat is on it.`
+        : ` ${ucfirst(PRIZE_NOUN[here.poi])} in this water, ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} the keel.`);
+    }
+  }
+  for (const n of hexNeighbors(q, r)) {
+    const t = getTile(n.q, n.r);
+    if (!t || !t.poi || !PRIZE_NOUN[t.poi]) continue;
+    if (!visited.has(hexKey(n.q, n.r)) && !revealed.has(hexKey(n.q, n.r))) continue;   // not charted yet
+    if (state.poisFound.includes(hexKey(n.q, n.r))) continue;                          // already worked
+    out.push(` ${ucfirst(PRIZE_NOUN[t.poi])} lies ${bearing(q, r, n.q, n.r)} of you.`);
+    break;                                    // one is a fact; a list is furniture
+  }
+  return out.join('');
+}
+
 function exitsClause(s) {
   if (s.lateral === 0 && !s.up && !s.down) return 'Nothing leads anywhere. ';
 
@@ -10774,7 +10808,7 @@ function exitsClause(s) {
   // this and the vertical one did not, so a boat in an expanse with 240 m of
   // sea over the sail was told "the shaft climbs out of sight above" — a cave
   // it was nowhere near. Both clauses ask the same question first now.
-  const openHere = s.lateral >= 5 || s.surfaced;
+  const openHere = s.lateral >= 4 || s.surfaced;
   const vert = [];
   // At the surface there is nothing overhead but weather, so say nothing about
   // it — a roof with the hatch in the wind is a cave sentence in the wrong place.
@@ -10798,7 +10832,7 @@ function exitsClause(s) {
     // WHICH VOCABULARY. Rock words for rock, water words for water — an
     // expanse or the surface is not a cave and must not be described as one.
     const cls = spaceClass(s);
-    const openHere = (cls === 'expanse' || cls === 'surface');
+    const openHere = (cls === 'expanse' || cls === 'surface');   // spaceClass draws the line at 4 lateral ways
     const table = openHere ? DIR_COUNT_OPEN : DIR_COUNT;
     parts.push(pickLoose(table[Math.min(6, s.lateral)]));
   }
@@ -10990,6 +11024,11 @@ function describeSpace(mode) {
     : '';
   // The sounder speaks every time the boat describes a room, because a floor
   // you are never told about is a floor you never dive to.
+  // Computed HERE, above the sounder, because the sounder needs to know
+  // whether the paragraph has already named what is under the keel.
+  const _marks = prizesInSight(q, r, d);
+  const named = !!_marks;
+
   const snd = soundingBelow();
   let sndLine = '';
   // An ODD return always speaks — that one is never wallpaper, it is the most
@@ -11009,13 +11048,17 @@ function describeSpace(mode) {
           : ' ' + pickLoose(BOTTOM_LINES);
       } else {
         sndLine = ` The sounder reads ${snd.under} m under the keel.`;
-        if (snd.odd) sndLine += ` ${snd.oddUnder > 0 ? snd.oddUnder + ' m down, the' : 'The'} return comes back wrong — too hard, too sharp for silt. Something is there.`;
+        // Only when the thing is still a mystery. If the paragraph has already
+        // named the wreck, "something is there" is a stranger describing your
+        // own furniture.
+        if (snd.odd && !named) sndLine += ` ${snd.oddUnder > 0 ? snd.oddUnder + ' m down, the' : 'The'} return comes back wrong — too hard, too sharp for silt. Something is there.`;
       }
       state._lastSndKey = sndKey;
     }
   }
   const ways = neighbourWays(q, r, d);
-  return (lead + ' ' + exits + mood + ways + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
+  const marks = _marks;
+  return (lead + ' ' + exits + mood + ways + marks + setLine + layLine + trLine + sndLine).replace(/\s+/g, ' ').trim();
 }
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight
@@ -11064,7 +11107,16 @@ const AIR_STEPS = [
 function airCounsel() {
   const sub = activeSub();
   const pct = state.air / Math.max(1, sub.air);
-  if (state._airMark == null) state._airMark = 1;
+  // WHERE THE LADDER ACTUALLY IS, not where a fresh boot assumes it is. With
+  // no mark, take the lowest rung still ABOVE the current level: at 1% air
+  // that is the 7% rung, so the next thing said is "the scrubbers are
+  // failing" — true — rather than "half the air is gone", which is what a
+  // captain at 4 of 350 was being told after every reload.
+  if (state._airMark == null) {
+    let mark = 1;
+    for (const step of AIR_STEPS) if (step.at > pct && step.at < mark) mark = step.at;
+    state._airMark = mark;
+  }
   // Refilling resets the ladder, so the counsel fires again next time down.
   if (pct > state._airMark + 0.08) state._airMark = 1;
   for (const step of AIR_STEPS) {
@@ -12082,6 +12134,7 @@ function doSave(force) {
       pagesFound: state.pagesFound,
       bestiary: state.bestiary,
       tipsSeen: state.tipsSeen,
+      airMark: state._airMark,   // which rung of the air counsel we have reached
       decoys: state.decoys,
       lockerWeapon: state.lockerWeapon,
       quarryCache: state.quarryCache,
@@ -12159,6 +12212,7 @@ function resumeGame(save) {
   state.pagesFound = arr(save.pagesFound);  // the account, as far as you have got
   state.bestiary = obj(save.bestiary);      // what you have learned about what lives here
   state.tipsSeen = arr(save.tipsSeen);
+  state._airMark = (typeof save.airMark === 'number') ? save.airMark : null;   // null re-derives from the gauge
   state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
