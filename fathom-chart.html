@@ -8711,7 +8711,10 @@ function interiorAt(q, r, d, kind) {
       const dd = Math.abs(c.x - ex) + Math.abs(c.y - ey);
       if (dd > bestD) { bestD = dd; best = c; }
     }
-    const kinds = Object.keys(TENANTS);
+    // A warden was built for a deck and a hollow man used to be crew. Neither
+    // has any business in a cave that nobody ever worked. The wild things —
+    // the clutch and the whisper — live wherever there is dark and air.
+    const kinds = isCave ? ['clutch', 'whisper'] : Object.keys(TENANTS);
     const kind = kinds[Math.floor(rnd() * kinds.length)];
     if (best) dweller = { x: best.x, y: best.y, kind: kind, tough: tenantTough(kind, key) };
   }
