@@ -16,7 +16,10 @@
 //                   claims one deck, and the boat has to be able to reach it
 const { spawnSync } = require('child_process');
 const path = require('path');
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'items'];
+//   links.test    — a link between grotto chambers is a STEP: it costs air, it
+//                   does not heal the tenant, the hands come with you, and the
+//                   deck keeps its own dead
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'items'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

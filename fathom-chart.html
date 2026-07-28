@@ -6091,6 +6091,8 @@ const state = {
   // one-shot. With the memory, re-entry is safe BY CONSTRUCTION rather than by
   // a lock: you can walk back in, and there is nothing there.
   deckTook: {},
+  deckHurt: {},   // what each deck's tenant is still bleeding from
+  deckDead: {},   // and who is lying on it
   // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
   // on its own. Depletes away from port/base, tops up at either.
   stores: 100,
@@ -8876,8 +8878,17 @@ function enterGrotto(kind) {
   updateHUD(); render(); scheduleSave();
 }
 
+// Everything about a visit that must survive walking through a hole in the
+// rock. A link is a STEP, not a new expedition.
+function carryOver(f) {
+  if (!f) return null;
+  return { crates: f.crates || 0, relics: f.relics || 0, steps: f.steps || 0,
+           tick: f.tick || 0, hurt: (f.dweller && !f.dweller.boarder) ? f.dweller.hurt || 0 : 0,
+           metTenant: !!f.metTenant };
+}
+
 // Shared by the mouth and by every way on: put the party on a deck.
-function footInto(q, r, d, kind, ch) {
+function footInto(q, r, d, kind, ch, carried) {
   const dk = deckKey(q, r, d) + deckSuffix(kind);
   const took = ((state.deckTook || {})[dk] || []).slice();
   const own = isBaseDeck(q, r, d, kind);
@@ -8886,16 +8897,28 @@ function footInto(q, r, d, kind, ch) {
   // because the substrate still remembers where the piles were.
   if (own) for (const [k, t] of ch.tiles) if (t.loot && took.indexOf(k) < 0) took.push(k);
   if (ch.dweller && !isDeckCleared(q, r, d, kind)) {
-    dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 };
+    // WOUNDS KEEP. `state.deckHurt` is overlay, saved, per-deck — without it a
+    // step through the way and back healed the thing completely, for free, and
+    // the only limit on doing that was patience.
+    const hurt = ((state.deckHurt || {})[dk]) || 0;
+    dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: hurt };
     if (dweller.kind === 'hollow' && state.lostCrew && state.lostCrew.length && rand() < 0.4) {
       dweller.worn = state.lostCrew[Math.floor(rand() * state.lostCrew.length)].name;
     }
   }
+  // A DECK REMEMBERS ITS OWN DEAD. Bodies are per-deck (`f.dead`), and a
+  // grotto is explicitly somewhere you come back to — so a hand who fell three
+  // chambers in has to still be lying there when you return for them.
+  if (!state.deckDead) state.deckDead = {};
+  const dead = (state.deckDead[dk] || []).slice();
   state.foot = {
     kind: kind,
     q: q, r: r, d: d,
     x: ch.entry.x, y: ch.entry.y,
-    crates: 0, relics: 0, steps: 0, tick: 0,
+    crates: carried ? carried.crates : 0, relics: carried ? carried.relics : 0,
+    steps: carried ? carried.steps : 0, tick: carried ? carried.tick : 0,
+    metTenant: carried ? carried.metTenant : false,
+    dead: dead,
     seen: [], took: took,
     // A CAVE DOES NOT FLOOD. You came in over the sand, above the waterline, and
     // the sea is not following you up a beach. That is the trade: a ruin runs a
@@ -8914,12 +8937,15 @@ function followWay() {
   if (!f) return;
   const onward = caveOnward(f);
   if (!onward) return;
-  stashDeck(f);
   const ch = interiorAt(f.q, f.r, f.d, onward);
   if (!ch || !ch.entry) return;
-  const crates = f.crates, relics = f.relics;
-  footInto(f.q, f.r, f.d, onward, ch);
-  state.foot.crates = crates; state.foot.relics = relics;   // you carry it with you
+  // A LINK IS A STEP AND A STEP COSTS AIR. stepFoot returns before its own cost
+  // block when it hands off to here, so the crossing was free — 73 of 73 at
+  // 0.00 air against 2.10 for walking one ordinary tile.
+  state.air = Math.max(0, state.air - FOOT_AIR * 2);
+  stashDeck(f);
+  const carried = carryOver(f);
+  footInto(f.q, f.r, f.d, onward, ch, carried);
   log(onward === 'deepruin'
     ? 'The passage narrows, turns, and the wall under your hand stops being rock. It is dressed stone, and it is laid in courses, and somebody cut it.'
     : 'The way goes on, down and back, and opens into another chamber the lamps cannot find the end of.', 'strange', 'GROTTO');
@@ -8933,29 +8959,48 @@ function retreatWay() {
   if (!f) return false;
   const back = caveBack(f);
   if (!back) return false;
-  stashDeck(f);
   const ch = interiorAt(f.q, f.r, f.d, back);
   if (!ch || !ch.entry) return false;
-  const crates = f.crates, relics = f.relics;
-  footInto(f.q, f.r, f.d, back, ch);
-  state.foot.crates = crates; state.foot.relics = relics;
+  state.air = Math.max(0, state.air - FOOT_AIR * 2);   // a link is a step
+  stashDeck(f);
+  const carried = carryOver(f);
+  footInto(f.q, f.r, f.d, back, ch, carried);
   // You come out where you WENT IN — the far end of that chamber, not its mouth.
   // Landing at the mouth made a large system reversible in one step, which is
   // the opposite of what "large and complex" is supposed to cost you.
-  if (ch.way) { state.foot.x = ch.way.x; state.foot.y = ch.way.y; lampSweep(); }
+  //
+  // AND THE HANDS COME WITH YOU. `footInto` calls deployParty, which stands the
+  // crew around the deck's ENTRY — so moving only the captain to the way tile
+  // left the party at the far end of the chamber: worst hand 14.0 tiles away on
+  // average, 29 at worst, and only 34 of 129 parties ever found their way back,
+  // because bodyStepToward is strictly greedy and stalls in any concavity. The
+  // log said they came up the sand behind you. They did not.
+  if (ch.way) {
+    state.foot.x = ch.way.x; state.foot.y = ch.way.y;
+    regroupParty(ch, ch.way);
+    lampSweep();
+  }
   log('You go back up the way you came in. The chamber behind you closes to a mouth, and then to nothing.', '', 'GROTTO');
   updateHUD(); render(); scheduleSave();
   return true;
 }
 
-// Everything this deck has given up, written down before you leave it.
+// Everything this deck owns, written down before you step off it: what it has
+// given up, what it is still bleeding from, and who is lying on it.
 function stashDeck(f) {
+  if (!f) return;
   if (!state.deckTook) state.deckTook = {};
+  if (!state.deckHurt) state.deckHurt = {};
+  if (!state.deckDead) state.deckDead = {};
   const dk = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
   const prev = state.deckTook[dk] || [];
   const merged = prev.slice();
   for (const k of (f.took || [])) if (merged.indexOf(k) < 0) merged.push(k);
   state.deckTook[dk] = merged;
+  if (f.dweller && !f.dweller.boarder) state.deckHurt[dk] = f.dweller.hurt || 0;
+  else if (!f.dweller) delete state.deckHurt[dk];
+  if (f.dead && f.dead.length) state.deckDead[dk] = f.dead.map(b => ({ name: b.name, x: b.x, y: b.y }));
+  else delete state.deckDead[dk];
 }
 
 // One button, three jobs, decided by where you are standing and what you are
@@ -9567,6 +9612,27 @@ const SWING_POOR = [
 const PARTY_MAX = 4;   // a small party — you lead a boarding, you do not command a company
 
 function partyBodies() { return state.crew.filter(m => m.ashore && !m.lost); }
+
+// Put the hands back around the captain after a link crossing. Same placement
+// rule as deployParty, different centre — the crew go where the captain went.
+function regroupParty(ch, at) {
+  const spots = [];
+  for (let rr = 1; rr <= 4 && spots.length < PARTY_MAX; rr++) {
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [-1, 1], [-1, -1], [1, 1]]) {
+      const x = at.x + dx * rr, y = at.y + dy * rr;
+      if (x < 1 || y < 1 || x > INT_SIZE - 2 || y > INT_SIZE - 2) continue;
+      if (!ch.tiles.has(x + ',' + y)) continue;
+      if (spots.some(sp => sp.x === x && sp.y === y)) continue;
+      spots.push({ x, y });
+    }
+  }
+  let i = 0;
+  for (const m of state.crew) {
+    if (!m.ashore || m.lost) continue;
+    const sp = spots[i++] || at;
+    m.fx = sp.x; m.fy = sp.y;
+  }
+}
 
 // Send the able hands over the side, stood around the breach you came in by.
 function deployParty(ch) {
@@ -13000,7 +13066,7 @@ function restart() {
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
-  state.clearedDecks = []; state.deckTook = {};
+  state.clearedDecks = []; state.deckTook = {}; state.deckHurt = {}; state.deckDead = {};
   state.stores = 100;
   state.lostCrew = [];
   state.items = {};
@@ -13209,6 +13275,8 @@ function doSave(force) {
       base: state.base,
       clearedDecks: state.clearedDecks,
       deckTook: state.deckTook,      // what each deck has already given up
+      deckHurt: state.deckHurt,      // ...what its tenant is still bleeding from
+      deckDead: state.deckDead,      // ...and who is lying on it
       stores: state.stores,
       lostCrew: state.lostCrew,
       items: state.items,
@@ -13327,6 +13395,8 @@ function resumeGame(save) {
   }
   state.clearedDecks = save.clearedDecks || [];
   state.deckTook = obj(save.deckTook);
+  state.deckHurt = obj(save.deckHurt);
+  state.deckDead = obj(save.deckDead);
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
   state.items = save.items || {};
