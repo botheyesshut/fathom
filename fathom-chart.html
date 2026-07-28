@@ -5949,6 +5949,11 @@ function syncFootControls(inside) {
   fight.style.display = (capReach || crewReach) ? '' : 'none';
 }
 
+// The daylight flood, remembered between frames. It depends only on where the
+// boat is and how much world exists, so it survives every render that is not a
+// move — which is most of them.
+let litCacheKey = null, litCacheSet = new Set();
+
 // The static half of the chart's SVG: a vignette gradient and two blur
 // filters. Nothing here is state-dependent, so it is built once and survives
 // every redraw. `render()` used to rebuild it from an innerHTML string on
@@ -6041,6 +6046,54 @@ function render() {
   // render on top, regardless of which stone/water hex was iterated first.
   const pendingEdges = [];
 
+  // DAYLIGHT DOES NOT GO THROUGH ROCK.
+  //
+  // Sean, in the starting sinkhole at 300 m: "I'm seeing hexes I'm not sure I
+  // should be seeing... Why am I seeing beyond the rock walls?"
+  //
+  // He was right to doubt it, and it was not old sonar. Two rules below said
+  // that above 300 m any hex whose column reaches the surface is fully lit —
+  // the reasoning being that sunlight fills the shelf, which is true and is
+  // why the shallows read as one bright bay. But it was applied per-hex with
+  // no regard for what stood between, so a boat inside a vertical rock chimney
+  // could see the open sea four hexes away THROUGH the chimney wall.
+  //
+  // Light travels along water, so the test is connectivity: flood out from the
+  // boat through open cells AT THIS DEPTH. Anything the flood reaches shares
+  // the boat's water and is genuinely lit; anything it does not is behind
+  // stone. Bounded, and only computed in the band where the rule applies.
+  const litKey = state.q + ',' + state.r + ',' + state.currentDepth + ':' + cellsEpoch;
+  let litWater;
+  if (litCacheKey === litKey) litWater = litCacheSet;
+  else if (state.currentDepth > 5 * DEPTH_GRID) { litWater = new Set(); litCacheKey = litKey; litCacheSet = litWater; }
+  else {
+    litWater = new Set();
+    const cd0 = state.currentDepth;
+    const startK = hexKey(state.q, state.r);
+    litWater.add(startK);
+    const seenL = new Set([startK]);
+    let frontier = [{ q: state.q, r: state.r }];
+    for (let ring = 0; ring < 10 && frontier.length; ring++) {
+      const next = [];
+      for (const cell of frontier) {
+        for (const n of hexNeighbors(cell.q, cell.r)) {
+          const nk = hexKey(n.q, n.r);
+          if (seenL.has(nk)) continue;
+          const nt = tileAt(n.q, n.r);
+          if (!nt || nt.wall) continue;
+          // Open at THIS depth, or a surface-connected column while we are in
+          // the sunlit band — the shelf is one body of water, not a stack.
+          if (!hexAcceptsDepth(nt, cd0) && !(cd0 <= 5 * DEPTH_GRID && hexNearDepth(nt, 0) && hexNearDepth(nt, cd0))) continue;
+          seenL.add(nk); litWater.add(nk); next.push(n);
+        }
+      }
+      frontier = next;
+    }
+    litCacheKey = litKey; litCacheSet = litWater;
+  }
+  const sunlitHere = (q, r, nt, cd) =>
+    cd <= 5 * DEPTH_GRID && hexNearDepth(nt, 0) && litWater.has(hexKey(q, r));
+
   for (let dr = -rRange; dr <= rRange; dr++) {
     for (let dq = -qRange; dq <= qRange; dq++) {
       const q = camCenter.q + dq;
@@ -6125,8 +6178,9 @@ function render() {
           const seen = isSurf0 || hexNeighbors(q, r).some(n => {
             const nt = tileAt(n.q, n.r);
             if (nt.wall) return false;
-            // At shallow depths ocean tiles always illuminate adjacent stone
-            if (state.currentDepth <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
+            // Shallow ocean lights the stone beside it — but only ocean the
+            // boat shares water with. Rock does not carry daylight.
+            if (sunlitHere(n.q, n.r, nt, state.currentDepth)) return true;
             // Stone is a column — the adjacent passage needn't contain exactly
             // the current depth, just be explored within the 180m fade window.
             return revealFade(n.q, n.r, state.currentDepth) > 0 && hexNearDepth(nt, state.currentDepth);
@@ -6179,7 +6233,7 @@ function render() {
             || hexNeighbors(q, r).some(n => {
               const nt = tileAt(n.q, n.r);
               if (nt.wall || !hexAcceptsDepth(nt, cd)) return false;
-              if (cd <= 5 * DEPTH_GRID && hexNearDepth(nt, 0)) return true;
+              if (sunlitHere(n.q, n.r, nt, cd)) return true;
               return revealFade(n.q, n.r, cd) > 0;
             });
           if (seen) {
@@ -6194,9 +6248,10 @@ function render() {
           continue;
         }
         fade = isPlayer ? 1 : revealFade(q, r, cd);
-        // At ≤300 m, surface-accessible ocean tiles are always lit — sunlight
-        // and reflections illuminate the water column throughout this zone.
-        if (cd <= 5 * DEPTH_GRID && hexNearDepth(tile, 0)) fade = 1;
+        // Sunlight fills the shelf — along the water, not through the rock.
+        // `litWater` is the flood from the boat at this depth, so the bright
+        // bay stays bright and a chimney wall stays a wall.
+        if (sunlitHere(q, r, tile, cd)) fade = 1;
         // Sub floodlights also illuminate cave tiles within the bright bubble
         const bubbleR = cd <= 2 * DEPTH_GRID ? 3 : cd <= 5 * DEPTH_GRID ? 2 : -1;
         // Roofed caves get no sunlight bounce — lights only reach adjacent.
