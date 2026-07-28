@@ -9412,7 +9412,8 @@ function stepFoot(x, y) {
 
   const t = footTile(x, y);
   if (!t) {
-    log('Rock, or plate rusted to rock. No way through there.', '', 'DARK');
+    log(caveSeg(f.kind) >= 0 ? 'Rock. No way through there.'   // there was never any plate
+      : 'Rock, or plate rusted to rock. No way through there.', '', 'DARK');
     return;
   }
   const nk = x + ',' + y;
@@ -9473,7 +9474,12 @@ function stepFoot(x, y) {
   if (drowned && !canBreatheWater()) {
     if (!f.warnedDrown) {
       f.warnedDrown = true;
-      log('The passage ahead is drowned to the deckhead — black water, no air above it at all. You can go under and swim it, and it will cost you, or you can find another way. Whatever lives down here swims it without a thought.', 'warn', 'DROWNED');
+      // A deckhead is a submarine's overhead. 216 of 507 caves carry drowned
+      // water, and not one of them has one.
+      log((caveSeg(f.kind) >= 0 ? 'The way ahead is drowned to the rock above'
+         : f.kind === 'deepruin' ? 'The passage ahead is drowned to the vault'
+         : 'The passage ahead is drowned to the deckhead')
+        + ' — black water, no air above it at all. You can go under and swim it, and it will cost you, or you can find another way. Whatever lives down here swims it without a thought.', 'warn', 'DROWNED');
       return;   // the first tap is a warning, the second is a decision
     }
   }
@@ -9488,7 +9494,7 @@ function stepFoot(x, y) {
   if (flood) log(pickLoose([
     'You go in up to the chest and push through. It is cold, and it is rising.',
     'You wade in. The cold is past the suit before your knees are under.',
-    'Chest-deep, and the deck under your boots is not where you left it.',
+    'Chest-deep, and the floor under your boots is not where you left it.',
     'You push through. The water takes the lamp light and gives nothing back.',
   ]), 'warn', 'WATER');
   else if (drowned && canBreatheWater()) log('You go under and swim it, easy as walking. The water is not an obstacle to you.', 'strange', 'DROWNED');
@@ -9502,7 +9508,10 @@ function stepFoot(x, y) {
     }
   } else if (t.wet === 'shallow') {
     if (rand() < 0.35) log(t.fall
-      ? 'Water comes down through the broken deck above in a cold, steady roar. You wade under it.'
+      ? (caveSeg(f.kind) >= 0
+          // There is no deck above a grotto. 150 of 507 caves carry a fall.
+          ? 'Water comes down off the rock above in a cold, steady roar. You wade under it.'
+          : 'Water comes down through the broken deck above in a cold, steady roar. You wade under it.')
       : 'You wade through running water, ankle-deep and colder than the air.', '', 'WATER');
   }
   lampSweep();
@@ -9537,7 +9546,10 @@ function stepFoot(x, y) {
       if (got) { giveItem(got, 1); log(`${sc.name} stops, turns the fallen structure over, and comes up with ${ITEMS[got].name}. Everyone else had walked past it.`, 'good', 'HOLD'); }
       else { f.crates++; log(`${sc.name} works a sound crate out from under the collapse.`, '', 'SALVAGE'); }
     } else {
-      log('You pick a way over fallen structure. It shifts under the weight.', '', 'DARK');
+      // Nobody built a cave, so nothing structural fell in one. 480 of 507.
+      log(caveSeg(f.kind) >= 0
+        ? 'You pick a way over fallen rock. It shifts under the weight.'
+        : 'You pick a way over fallen structure. It shifts under the weight.', '', 'DARK');
     }
   }
 
@@ -9727,7 +9739,7 @@ function applyTenantDamage(dmg, by) {
       state.base.boarder = null;
       log('It goes down in the flooded passage of your own station. The deck is yours again — now get the water out.', '', 'BOARDING');
     } else {
-      log('The deck is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
+      log('The place is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
       if (!state.clearedDecks) state.clearedDecks = [];
       const k = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
       if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
@@ -9780,7 +9792,7 @@ function fightTenant() {
   const ch = footChunk();
   if (!f || !ch || !state.alive) return;
   const t = f.dweller;
-  if (!t) { log('There is nothing on this deck to fight.', 'warn', 'BOARDING'); return; }
+  if (!t) { log('There is nothing here to fight.', 'warn', 'BOARDING'); return; }
 
   const capAdj = Math.abs(t.x - f.x) + Math.abs(t.y - f.y) <= 1;
   const crewAdj = partyBodies().some(m => !memberIncapacitated(m) && Math.abs(m.fx - t.x) + Math.abs(m.fy - t.y) <= 1);
@@ -12037,16 +12049,55 @@ function describeDeck() {
     if (ch.tiles.has(nk) && !f.closed.includes(nk)) open++;
     if (f.water.includes(nk)) wet++;
   }
+  // WHAT YOU ARE ACTUALLY STANDING IN. This function was byte-identical across
+  // all four kinds of place over 259,215 sampled descriptions — every sentence
+  // written for a rusted metal interior and then used for a stone building and
+  // a natural cave as well. "Plate underfoot" in a grotto. "A corner of the
+  // structure" in something nobody built. Sean's question was exactly this
+  // class: "what are you defining as a 'deck' though? the ruin?"
+  //
+  // And the worst line in it was a flat lie: "No water yet, though you can hear
+  // it working somewhere behind you" — in a cave, where `footInto` sets water
+  // to [] and stepFoot skips floodAdvance outright. Nothing is coming. The
+  // whole point of a cave is that nothing is coming.
+  const cave = caveSeg(f.kind) >= 0;
+  const boat = f.kind === 'hull';
   const lead = open <= 1
-    ? pickLoose(['The lamp finds walls on three sides. This is a corner of the structure, and a poor one to be caught in.', 'A dead end. Plate and rock, and nowhere on from here.'])
+    ? pickLoose(cave
+        ? ['The lamp finds rock on three sides. The pocket ends here.',
+           'A blind end. Wet stone, and nowhere on from here.']
+        : boat
+        ? ['Plate on three sides. A corner of her, and a bad one to be caught in.',
+           'A dead end. Frames and plating, and nothing past them.']
+        : ['Dressed stone on three sides. A corner of the building, and a poor one to be caught in.',
+           'A dead end. Laid stone, and nowhere on from here.'])
     : open >= 3
-    ? pickLoose(['The deck opens out — several ways on from here, all of them dark.', 'A junction of passageways. The lamp picks out openings and gives up on each in turn.'])
-    : pickLoose(['A passage running two ways through the structure.', 'Corridor. Plate underfoot, rust in long streaks down the walls.']);
+    ? pickLoose(cave
+        ? ['The rock opens out — several ways on from here, all of them dark.',
+           'The lamp finds three throats in the stone and gives up on each in turn.']
+        : boat
+        ? ['The spine opens out — compartments off it on both hands, all of them dark.',
+           'A junction of her passages. The lamp picks out openings and gives up on each in turn.']
+        : ['The floor opens out — several ways on from here, all of them dark.',
+           'A junction of corridors. The lamp picks out openings and gives up on each in turn.'])
+    : pickLoose(cave
+        ? ['A low way through the rock, running two directions.',
+           'Sand underfoot, and stone close on both hands.']
+        : boat
+        ? ['The spine, running fore and aft. Plate underfoot, rust in long streaks down her sides.',
+           'A passage running two ways through the boat.']
+        : ['A corridor of laid stone, running two ways.',
+           'Corridor. Silt underfoot, and water marks high on the walls.']);
   const water = wet === 0
-    ? pickLoose(['For the moment the deck here is dry.', 'No water yet, though you can hear it working somewhere behind you.'])
+    ? (cave
+        ? pickLoose(['Dry sand, above the waterline. Nothing is following you up it.',
+                     'You can hear water somewhere below, and it is staying down there.'])
+        : pickLoose(['For the moment the ' + (boat ? 'deck' : 'floor') + ' here is dry.',
+                     'No water yet, though you can hear it working somewhere behind you.']))
     : wet >= 3
     ? 'The water is all around you now, and rising.'
-    : pickLoose(['Water laps at the edge of the lamplight.', 'The sea has found this passage. It is ankle-deep and patient.']);
+    : pickLoose(['Water laps at the edge of the lamplight.',
+                 'The sea has found this ' + (boat ? 'compartment' : 'passage') + '. It is ankle-deep and patient.']);
   const near = f.dweller && Math.abs(f.dweller.x - f.x) + Math.abs(f.dweller.y - f.y) <= 3
     ? ' Something is moving very close by.' : '';
   return lead + ' ' + water + near;

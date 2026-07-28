@@ -111,6 +111,9 @@ try { vm.runInContext(script +
   '\nfunction __vpDims(){ return [VP_W, VP_H]; }' +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
   '\nfunction __describe(m){ return describeSpace(m); }' +
+  '\nfunction __describeDeck(){ return describeDeck(); }' +
+  '\nfunction __standIn(q,r,d,k){ const ch=interiorAt(q,r,d,k); if(!ch||!ch.entry) return false; state.alive=true; state.air=9000; state.foot={kind:k,q:q,r:r,d:d,x:ch.entry.x,y:ch.entry.y,crates:0,relics:0,steps:0,tick:0,seen:[],took:[],water:[],closed:[],dweller:null,dead:[]}; return true; }' +
+  '\nfunction __wander(){ const f=state.foot; if(!f) return false; const ch=footChunk(); if(!ch) return false; for(const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]){ const k=(f.x+dx)+\',\'+(f.y+dy); if(ch.tiles.has(k) && !(f.seen||[]).includes(k)){ f.seen.push(k); f.x+=dx; f.y+=dy; return true; } } const all=[...ch.tiles.keys()]; const pick=all[(f.steps++*7)%all.length].split(\',\'); f.x=+pick[0]; f.y=+pick[1]; return f.steps<40; }' +
   '\nfunction __spaceClassAt(q,r,d){ return spaceClass(spaceAround(q,r,d)); }' +
   '\nfunction __openCell(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
   '\nfunction __runAt(q,r,d){ var c = cellRun(q,r,d); return c ? { ceiling: c.ceiling, floor: c.floor } : null; }' +
@@ -1346,6 +1349,77 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     ranked.length
       ? ranked.length + ' distinct: ' + ranked.slice(0, 20).map(x => x[1] + 'x "' + x[0].slice(0, 60) + '"').join(' | ')
       : 'clean across ' + samples + ' descriptions');
+}
+
+//--- 24. A CAVE IS NOT A SUBMARINE -------------------------------------------
+// The same disease as SS22 and SS23, one layer in. Those two guard the water and
+// the porthole; nothing guarded the prose ASHORE, and the on-foot layer now has
+// three kinds of place that were all being described by one set of sentences
+// written for a rusted metal interior.
+//
+// Measured before the fix: `describeDeck()` was byte-identical across ruin,
+// hull, cave and deepruin over 259,215 samples. "Plate underfoot" in a natural
+// cave. "A corner of the structure" in something nobody built. And a flat lie —
+// "No water yet, though you can hear it working somewhere behind you" — in the
+// one kind of place where nothing is coming, by design.
+//
+// The rule, stated so it cannot be broken by accident: a description of a CAVE
+// may not use a shipwright's noun or an architect's, and a description of a
+// BOAT may not call her a building.
+{
+  console.log('\n--- 24. A CAVE IS NOT A SUBMARINE ---');
+  // Nouns that mean somebody built this out of metal, or out of stone.
+  const BUILT = /\b(plate|plating|deck|deckhead|bulkhead|coaming|rivets?|hull|compartments?|corridors?|masonry|dressed stone|laid stone|structure|building|tower|doorway|stairs?)\b/i;
+  const CARVED = /\b(sand|rock|stone|cavern|grotto)\b/i;
+  const lines = { cave: new Map(), hull: new Map(), ruin: new Map() };
+  let walks = 0;
+  const seeds = [4242, 90210];
+  for (const seed of seeds) {
+    sandbox.__seed(seed);
+    for (const kind of ['cave', 'hull', 'ruin']) {
+      for (let i = 0; i < 40; i++) {
+        const q = (i * 7) % 30 - 15, r = (i * 13) % 30 - 15, d = 60 + (i % 8) * 60;
+        if (!sandbox.__standIn(q, r, d, kind)) continue;
+        walks++;
+        // Walk the deck and collect every LOOK it will give.
+        for (let step = 0; step < 12; step++) {
+          const txt = sandbox.__describeDeck();
+          if (txt) for (const sentence of txt.split(/(?<=\.)\s+/)) {
+            lines[kind].set(sentence, (lines[kind].get(sentence) || 0) + 1);
+          }
+          if (!sandbox.__wander()) break;
+        }
+      }
+    }
+  }
+  const n = k => lines[k].size;
+  check(walks >= 60 && n('cave') > 3 && n('hull') > 3 && n('ruin') > 3,
+    'the ashore-prose check is really walking all three kinds',
+    walks + ' decks walked; distinct lines — cave ' + n('cave') + ', hull ' + n('hull') + ', ruin ' + n('ruin'));
+
+  // A cave described as though somebody built it.
+  const caveBuilt = [...lines.cave.keys()].filter(l => BUILT.test(l));
+  check(caveBuilt.length === 0,
+    'nothing describes a cave as though somebody built it',
+    caveBuilt.length ? caveBuilt.length + ' distinct: ' + caveBuilt.slice(0, 4).map(x => '"' + x.slice(0, 58) + '"').join(' | ')
+                     : 'clean across ' + n('cave') + ' distinct lines');
+
+  // A boat described as a building — and the three kinds must not be identical,
+  // which is the check that would have caught the original.
+  const sameAsCave = [...lines.hull.keys()].filter(l => lines.cave.has(l));
+  check(n('hull') > 0 && sameAsCave.length < n('hull'),
+    'a wrecked boat and a cave do not read as the same place',
+    sameAsCave.length + ' of ' + n('hull') + ' hull lines also appear in a cave');
+  const ruinSameAsCave = [...lines.ruin.keys()].filter(l => lines.cave.has(l));
+  check(n('ruin') > 0 && ruinSameAsCave.length < n('ruin'),
+    'and neither do a sunken building and a cave',
+    ruinSameAsCave.length + ' of ' + n('ruin') + ' ruin lines also appear in a cave');
+
+  // The specific lie, named, because it is the one a player can catch the game in.
+  const promisesWater = [...lines.cave.keys()].filter(l => /hear it working|no water yet|rising|the sea has found/i.test(l));
+  check(promisesWater.length === 0,
+    'and a cave never promises water that is not coming',
+    promisesWater.length ? promisesWater.map(x => '"' + x.slice(0, 60) + '"').join(' | ') : 'clean');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
