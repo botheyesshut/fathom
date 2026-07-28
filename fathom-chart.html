@@ -487,6 +487,14 @@
     /* NOT `cursor: pointer` — nothing here is clickable any more, and a hand
        cursor over something that ignores clicks is a promise the page breaks. */
     user-select: none;
+    /* THE PICTURE SETS THE WIDTH; THE WORDS WRAP UNDER IT.
+       The art is a fixed 24 characters, about 119 px. The caption is prose, so
+       it used to stretch the box out to the 45vw cap and wrap inside THAT —
+       which left a wide margin of nothing to the right of the picture.
+       `min-content` sizes the box to its widest UNWRAPPABLE child: the art is
+       `white-space: pre` so its min-content is all 24 characters, while the
+       caption can wrap, so its min-content is only its longest word. */
+    width: min-content;
     max-width: 45vw;
     /* The porthole floats over the top-left of the chart and was eating every
        tap that landed under it — 10.4% of the drawn hexes, including legal
