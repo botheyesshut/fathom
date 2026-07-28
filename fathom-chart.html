@@ -8144,10 +8144,18 @@ function maybeBeach() {
     log('The boat breaks into still black air under stone — a cavern beach, pale sand rising out of the water. The crew tops the tanks off the pocket.', 'strange', 'BEACH');
     sfx('bell');
     if (!state.expedition && !state.foot) enterGrotto();
-  } else if (state.air < sub.air) {
-    state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.25));
+  } else {
+    // TOPPING THE TANKS AND GOING ASHORE ARE TWO DIFFERENT THINGS, and nesting
+    // one inside the other meant a captain who arrived at a KNOWN beach with
+    // full tanks could not get back into their own grotto — the whole branch
+    // was skipped. The air is conditional; the beach never is.
     noteRefuge('air');
-    log('The old beach. The crew tops the tanks off the pocket.', '', 'BEACH');
+    if (state.air < sub.air) {
+      state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.25));
+      log('The old beach. The crew tops the tanks off the pocket.', '', 'BEACH');
+    } else {
+      log('The old beach, and the tanks already full. The sand is where you left it.', '', 'BEACH');
+    }
     // A grotto you have found stays a place you can walk back into.
     if (!state.expedition && !state.foot) enterGrotto();
   }
