@@ -5828,6 +5828,12 @@ const state = {
   // Decks whose tenant has been driven off. The substrate goes on generating
   // the thing; this is the overlay record that says you already dealt with it.
   clearedDecks: [],
+  // WHAT HAS ALREADY BEEN LIFTED OFF EACH DECK, by deck key. `f.took` lives on
+  // `state.foot` and dies when you surface, so before this the game had no way
+  // to remember a stripped room — which is the whole reason a ruin had to be
+  // one-shot. With the memory, re-entry is safe BY CONSTRUCTION rather than by
+  // a lock: you can walk back in, and there is nothing there.
+  deckTook: {},
   // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
   // on its own. Depletes away from port/base, tops up at either.
   stores: 100,
@@ -8306,8 +8312,12 @@ function enterInterior(tile) {
   // A station deck was stripped when you cleared it — its loot does not grow
   // back just because the substrate still remembers where it was, and a breach
   // does not restock it either.
-  const took = [];
-  if (own) for (const [k, t] of ch.tiles) if (t.loot) took.push(k);
+  // Everything this deck has already given up, on any previous visit.
+  const dk = deckKey(tile.q, tile.r, d);
+  const took = ((state.deckTook || {})[dk] || []).slice();
+  // A station deck was stripped when you cleared it — its loot does not grow
+  // back just because the substrate still remembers where it was.
+  if (own) for (const [k, t] of ch.tiles) if (t.loot && took.indexOf(k) < 0) took.push(k);
 
   // Who is on the deck. A breached station holds whatever forced the lock, in
   // residence at the breach until you clear it — that overrides the substrate's
@@ -9093,6 +9103,16 @@ function fightTenant() {
 function leaveInterior(prefix) {
   const f = state.foot;
   if (!f) return;
+  // WHAT THIS DECK HAS GIVEN UP, remembered past the visit. Without this the
+  // room refills the moment you surface, which is the restock faucet twice
+  // over — and WITH it, re-entering is free to allow, because the deck simply
+  // has nothing left in it.
+  if (!state.deckTook) state.deckTook = {};
+  const dkOut = deckKey(f.q, f.r, f.d);
+  const prev = state.deckTook[dkOut] || [];
+  const merged = prev.slice();
+  for (const k of (f.took || [])) if (merged.indexOf(k) < 0) merged.push(k);
+  state.deckTook[dkOut] = merged;
   recallParty();   // the hands that are still standing come up through the breach with you
   state.foot = null;
   state.cargo += f.crates;
@@ -11719,6 +11739,17 @@ function handleTile(tile) {
   // brown hex, a picture of a hull, and no verb.
   const unworked = tile.poi && !state.poisFound.includes(poiKey)
                 && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'air');
+  // A WORKED RUIN IS STILL A PLACE. Re-entry used to be barred with the
+  // announcement, because loot lived only for the length of a visit and an
+  // open door meant a restocking room. `deckTook` remembers, so the door can
+  // stand open: you may go back into somewhere you have stripped, which is
+  // what a station, or a cave that leads on from it, is going to need.
+  if (!unworked && tile.poi === 'ruin' && atReachableBottom(tile)
+      && !state.expedition && !state.foot && !state.autoTarget) {
+    log('The breach in the ruin is where you left it. Whatever you took is still taken.', '', 'FOUND');
+    enterInterior(tile);
+    return;
+  }
   if (unworked) {
     const noun = tile.poi === 'air' ? 'A pocket of trapped gas' : tile.poi === 'ruin' ? 'A sunken ruin' : 'Wreckage';
     if (tile.poi === 'air') {
@@ -12295,7 +12326,7 @@ function restart() {
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
-  state.clearedDecks = [];
+  state.clearedDecks = []; state.deckTook = {};
   state.stores = 100;
   state.lostCrew = [];
   state.items = {};
@@ -12503,6 +12534,7 @@ function doSave(force) {
       foot: state.foot,
       base: state.base,
       clearedDecks: state.clearedDecks,
+      deckTook: state.deckTook,      // what each deck has already given up
       stores: state.stores,
       lostCrew: state.lostCrew,
       items: state.items,
@@ -12620,6 +12652,7 @@ function resumeGame(save) {
     if (!b.stores.items) b.stores.items = {};
   }
   state.clearedDecks = save.clearedDecks || [];
+  state.deckTook = obj(save.deckTook);
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
   state.items = save.items || {};

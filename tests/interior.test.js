@@ -82,6 +82,10 @@ try { vm.runInContext(script +
   '\nfunction __dwellerStep(){ dwellerStep(); }' +
   '\nfunction __hold(m){ toggleHold(m); }' +
   '\nfunction __resume(){ resumeGame(loadSave()); }' +
+  '\nfunction __leave(){ leaveInterior(); }' +
+  '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
+  '\nfunction __prizeDepth(t){ return prizeDepthHere(t); }' +
+  '\nfunction __openCell(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
   '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
 
@@ -1042,6 +1046,80 @@ sandbox.__st().crew = []; sandbox.__resume();
 const rell = sandbox.__st().crew[0];
 check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s position and orders survive a reload',
   rell ? 'at ' + rell.fx + ',' + rell.fy + (rell.hold ? ' holding' : '') : 'lost');
+}
+
+//--- REVISITABLE RUINS, AND THE FAUCET THAT MUST NOT COME BACK --------------
+//
+// A ruin was one-shot because `f.took` lives on `state.foot` and dies when you
+// surface — so the game had no way to remember a stripped room, and an open
+// door meant a room that refilled. That restock faucet has been fixed twice in
+// this project already, once at 20 crates from a single hex and once unbounded.
+//
+// `state.deckTook` remembers per deck, so re-entry is safe BY CONSTRUCTION
+// rather than by a lock. Both halves are asserted here, because either one
+// alone is a bug: the door must open again, AND the room must be empty when it
+// does.
+{
+  console.log('\n--- REVISITABLE RUINS ---');
+  sandbox.__seed(90210);
+  const st = sandbox.__st();
+  st.poisFound = []; st.deckTook = {}; st.clearedDecks = [];
+  st.air = 99999; st.hull = 100; st.cargo = 0; st.relics = 0; st.crew = [];
+
+  let ruin = null, at = null;
+  outer:
+  for (let q = -22; q <= 22 && !ruin; q++) for (let r = -22; r <= 22; r++) {
+    const t = sandbox.__tileAt(q, r);
+    if (!t || t.poi !== 'ruin') continue;
+    st.q = q; st.r = r;
+    for (let d = 0; d < 5000; d += 60) {
+      if (!sandbox.__openCell(q, r, d)) continue;
+      st.currentDepth = d;
+      if (sandbox.__prizeDepth(t) != null) { ruin = t; at = d; break outer; }
+    }
+  }
+  check(!!ruin, 'a reachable ruin exists to test with', ruin ? ruin.q + ',' + ruin.r + ' @' + at + 'm' : 'none found');
+
+  if (ruin) {
+    // VISIT ONE — take everything and surface.
+    st.q = ruin.q; st.r = ruin.r; st.currentDepth = at;
+    sandbox.__enter(ruin.q, ruin.r, at);
+    const gotIn1 = !!sandbox.__foot();
+    let piles = 0;
+    if (gotIn1) {
+      const f = sandbox.__foot();
+      const ch = sandbox.__int(f.q, f.r, f.d);
+      for (const [k, tt] of ch.tiles) if (tt.loot) { piles++; f.took.push(k); }
+      sandbox.__leave();
+    }
+    check(gotIn1 && piles > 0, 'the first visit opens a deck with loot on it', piles + ' piles lifted');
+
+    // VISIT TWO — the door must open...
+    st.currentDepth = at;
+    sandbox.__enter(ruin.q, ruin.r, at);
+    const gotIn2 = !!sandbox.__foot();
+    check(gotIn2, 'and the ruin can be entered AGAIN',
+      gotIn2 ? 'the breach is where you left it' : 'BARRED — revisiting is broken');
+
+    // ...and every pile already lifted must still be gone.
+    let regrew = 0;
+    if (gotIn2) {
+      const f = sandbox.__foot();
+      const ch = sandbox.__int(f.q, f.r, f.d);
+      for (const [k, tt] of ch.tiles) if (tt.loot && f.took.indexOf(k) < 0) regrew++;
+      sandbox.__leave();
+    }
+    check(regrew === 0, 'and nothing you already lifted has grown back',
+      regrew ? regrew + ' piles REGREW — the restock faucet is back' : 'the deck stayed empty');
+
+    // And the record has to outlive the session, or the faucet returns on reload.
+    const before = JSON.stringify(st.deckTook);
+    sandbox.__save();
+    sandbox.__resume();
+    const after = JSON.stringify(sandbox.__st().deckTook);
+    check(after === before && after !== '{}', 'and the record survives a reload',
+      after === before ? Object.keys(sandbox.__st().deckTook).length + ' decks remembered' : 'LOST ON RELOAD');
+  }
 }
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
