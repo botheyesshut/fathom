@@ -8612,7 +8612,15 @@ function interiorAt(q, r, d, kind) {
         if (dd > bestD) { bestD = dd; best = c; }
       }
       const t = best && tiles.get(best.x + ',' + best.y);
-      if (t && t.t !== 'entry') { t.t = 'way'; t.loot = null; way = { x: best.x, y: best.y }; }
+      // THE WAY ON IS DRY. Not a rule about caves — a rule about `retreatWay`,
+      // which sets you down on this exact tile when you come back through it.
+      // 11 of 518 ways were generating in DROWNED water, so coming back put a
+      // body in water it cannot breathe without ever charging the swim or
+      // saying a word about it. A passage onward is also just clearer dry.
+      if (t && t.t !== 'entry') {
+        t.t = 'way'; t.loot = null; t.wet = null; t.fall = false;
+        way = { x: best.x, y: best.y };
+      }
     }
   }
 
