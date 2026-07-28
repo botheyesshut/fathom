@@ -112,6 +112,9 @@ try { vm.runInContext(script +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
   '\nfunction __describe(m){ return describeSpace(m); }' +
   '\nfunction __describeDeck(){ return describeDeck(); }' +
+  '\nfunction __scene(){ return sceneForNow(); }' +
+  '\nfunction __unfoot(){ state.foot = null; }' +
+  '\nfunction __cap(k){ return VP_SCENES[k] ? VP_SCENES[k].cap : null; }' +
   '\nfunction __standIn(q,r,d,k){ const ch=interiorAt(q,r,d,k); if(!ch||!ch.entry) return false; state.alive=true; state.air=9000; state.foot={kind:k,q:q,r:r,d:d,x:ch.entry.x,y:ch.entry.y,crates:0,relics:0,steps:0,tick:0,seen:[],took:[],water:[],closed:[],dweller:null,dead:[]}; return true; }' +
   '\nfunction __wander(){ const f=state.foot; if(!f) return false; const ch=footChunk(); if(!ch) return false; for(const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]){ const k=(f.x+dx)+\',\'+(f.y+dy); if(ch.tiles.has(k) && !(f.seen||[]).includes(k)){ f.seen.push(k); f.x+=dx; f.y+=dy; return true; } } const all=[...ch.tiles.keys()]; const pick=all[(f.steps++*7)%all.length].split(\',\'); f.x=+pick[0]; f.y=+pick[1]; return f.steps<40; }' +
   '\nfunction __spaceClassAt(q,r,d){ return spaceClass(spaceAround(q,r,d)); }' +
@@ -1420,6 +1423,50 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   check(promisesWater.length === 0,
     'and a cave never promises water that is not coming',
     promisesWater.length ? promisesWater.map(x => '"' + x.slice(0, 60) + '"').join(' | ') : 'clean');
+}
+
+//--- 25. AND THE PICTURE AGREES WITH THE PROSE -------------------------------
+// render() carries the law: "the picture can never disagree with the prose — a
+// wrong illustration is worse than none." The on-foot branch of `sceneForNow`
+// had exactly two cases, hull and everything-else, so a captain standing on
+// sand in a random-walk rock cavern was shown squared masonry captioned "a
+// tower, still standing" — two lines after the log said there was not a door in
+// the whole of it. Found independently by two audits, which is usually the sign
+// a player would have found it first.
+{
+  console.log('\n--- 25. THE PORTHOLE DRAWS THE PLACE YOU ARE IN ---');
+  const BUILT_SCENE = /^(ruin|ruintower|ruinwall|hullbreak|hullup|hullside)$/;
+  const byKind = {};
+  for (const kind of ['cave', 'cave1', 'cave2', 'hull', 'ruin', 'deepruin']) {
+    const seen = new Set();
+    for (let i = 0; i < 40; i++) {
+      sandbox.__standIn(i * 3 - 20, -i, 300, kind);
+      const sc = sandbox.__scene();
+      if (sc) seen.add(sc);
+    }
+    byKind[kind] = [...seen].sort();
+  }
+  sandbox.__unfoot();
+  const caveScenes = [...new Set([].concat(byKind.cave, byKind.cave1, byKind.cave2))];
+  check(caveScenes.length >= 2 && byKind.hull.length >= 2 && byKind.ruin.length >= 2,
+    'the scene check is really getting scenes for every kind',
+    Object.keys(byKind).map(k => k + ':' + byKind[k].length).join(' '));
+  const wrong = caveScenes.filter(sc => BUILT_SCENE.test(sc));
+  check(wrong.length === 0,
+    'a cave is never drawn as something somebody built',
+    wrong.length ? 'drew ' + wrong.join(', ') + ' in a cave' : 'cave faces: ' + caveScenes.join(', '));
+  check(byKind.hull.every(sc => /^hull/.test(sc)),
+    'and a wrecked boat is always drawn as a boat', byKind.hull.join(', '));
+  // The sand is only behind you at the MOUTH. Three chambers in there is no
+  // beach and no boat to draw.
+  check(byKind.cave1.indexOf('cavebeach') < 0 && byKind.cave2.indexOf('cavebeach') < 0,
+    'and the boat is only in the picture where the boat actually is',
+    'cave1: ' + byKind.cave1.join(', '));
+  // Every caption must still fit the porthole on a 360px phone.
+  const long = caveScenes.map(sc => [sc, sandbox.__cap(sc)]).filter(x => (x[1] || '').length > 29);
+  check(long.length === 0, 'and every new caption fits the frame',
+    long.length ? long.map(x => x[0] + ' ' + x[1].length).join(', ')
+                : caveScenes.map(sc => (sandbox.__cap(sc) || '').length).join('/') + ' chars');
 }
 
 console.log(failures === 0 ? '\nALL ITEM CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
