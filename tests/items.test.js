@@ -925,8 +925,35 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const animated = names.filter(k => S[k].frames && S[k].frames.length > 1);
   check(animated.length >= 8, 'and there are real animations, not one showpiece', animated.length + ' animated');
 
+  // No scene may be declared twice. The later wins silently and the earlier
+  // becomes dead art nobody knows is dead — which is how a caption fix landed
+  // on a copy the game never draws.
+  {
+    const src2 = html;
+    const i0 = src2.indexOf('const VP_SCENES');
+    const blk = src2.slice(i0, src2.indexOf('\nfunction ', i0));
+    const counts = {};
+    let mm; const rex = /^\s{2}(\w+):\s*\{/gm;
+    while ((mm = rex.exec(blk))) counts[mm[1]] = (counts[mm[1]] || 0) + 1;
+    const dup = Object.keys(counts).filter(k => counts[k] > 1);
+    check(dup.length === 0, 'no scene is declared twice (the later one silently wins)',
+      dup.length ? dup.join(', ') : Object.keys(counts).length + ' scenes, all unique');
+  }
+
   const noCap = names.filter(k => !S[k].cap || S[k].cap.length < 8);
   check(noCap.length === 0, 'every scene says what it is', noCap.join(', ') || 'all captioned');
+
+  // ...IN ONE LINE. These were written as prose by someone who knew nobody
+  // would read them, so they grew into clauses with commas. The moment they
+  // were rendered — under a picture 24 characters wide — they became two and
+  // three lines of cramped type wider than the art itself. A caption under a
+  // small picture is a LABEL; 29 characters is what fits on one line at the
+  // tile's width, and the picture does the rest.
+  const tooLong = names.filter(k => S[k].cap && S[k].cap.length > 29)
+    .map(k => k + ' (' + S[k].cap.length + ')');
+  check(tooLong.length === 0, 'and says it in one line under the picture',
+    tooLong.length ? tooLong.join(', ')
+      : 'longest is ' + Math.max(...names.map(k => (S[k].cap || '').length)) + ' chars');
 
   // ...AND SOMETHING ACTUALLY SHOWS IT. The check above passed for months
   // while `.cap` was read by NOTHING — twenty hand-written captions and the

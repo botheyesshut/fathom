@@ -2338,7 +2338,7 @@ const VP_KEY = { '█':'8', '▓':'8', '▒':'1', '░':'1', '▄':'8', '▀':'8
 // that breathe.  Both grids are VP_W x VP_H and the battery enforces it.
 const VP_SCENES = {
 
-  deep: { cap: 'the passage, and the weight of the water', wet: true,
+  deep: { cap: 'the weight of the water', wet: true,
     art: ['█████▓▒░        ░▒▓█████',
            '████▓▒░          ░▒▓████',
            '███▓▒░            ░▒▓███',
@@ -2350,7 +2350,7 @@ const VP_SCENES = {
            '███▓▒░            ░▒▓███',
            '█████▓▓▒▒░░░░░░▒▒▓▓█████'] },
 
-  open: { cap: 'open water, and nothing in it', wet: true,
+  open: { cap: 'open water, nothing in it', wet: true,
     art: ['                        ',
            '        ░               ',
            '                        ',
@@ -2362,21 +2362,7 @@ const VP_SCENES = {
            '                    ░   ',
            '                        '] },
 
-  angler: { cap: 'a light that is not a light',
-    pulse: ['e', 'c'],
-    key: { '█': '4', '▄': '4', '▀': 'c', '^': 'f', 'v': 'f', '¤': 'e', '│': '6', '▓': '4' },
-    art: ['           ¤            ',
-           '           │            ',
-           '   ▄▄▄▄▄▄▄▄▀▄▄▄▄▄▄▄▄    ',
-           '   ▄████████████████▄   ',
-           '   ████▀▀▀▀▀▀▀▀▀▀████   ',
-           '   ███ ^v^v^v^v^v ███   ',
-           '   ▀████▄▄▄▄▄▄▄▄████▀   ',
-           '    ▀██████████████▀    ',
-           '      ▀▀▀▀▀▀▀▀▀▀▀▀      ',
-           '                        '] },
-
-  layer: { cap: 'the thermometer drops away, and the water changes its mind', wet: true, hold: 3,
+  layer: { cap: 'the thermometer drops away', wet: true, hold: 3,
     // FIRST PERSON. This used to draw the Erebus in profile with her name
     // on the hull — a third-person shot of your own boat in a window whose
     // whole premise is that you are looking OUT of it. What you actually
@@ -2447,7 +2433,7 @@ const VP_SCENES = {
        '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
     ] },
 
-  ruin: { cap: 'squared off by hands, long gone',
+  ruin: { cap: 'squared off by hands',
     key: { '█': '8', '▄': '6', '▀': '6', '▓': '8', '▒': '1' },
     art: ['                        ',
            '    ▄▄▄▄▄▄▄▄▄           ',
@@ -2468,7 +2454,7 @@ const VP_SCENES = {
   // running light blinking, a big thing breathing. TW2002 did exactly this,
   // and it is why those sequences had so much life for so few bytes.
 
-  lurker: { cap: 'it never hurries, and it does not need to', hold: 3,
+  lurker: { cap: 'it never hurries', hold: 3,
     pulse: ['c'],
     key: { '█': '4', '▄': '4', '▀': '4', '●': 'c' },
     frames: [
@@ -2514,7 +2500,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  angler: { cap: 'a light that is not a light, and the mouth under it', hold: 2,
+  angler: { cap: 'a light that is not a light', hold: 2,
     pulse: ['e', 'c'],
     key: { '█': '4', '▄': '4', '▀': 'c', '^': 'f', 'v': 'f', '¤': 'e', '│': '6', '·': '6' },
     frames: [
@@ -2560,7 +2546,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  rival: { cap: 'screws — someone else is down here, running dark', hold: 3,
+  rival: { cap: 'someone else, running dark', hold: 3,
     pulse: ['c'],
     key: { '█': '8', '▄': '8', '▀': '8', '◘': 'c', '·': '4' },
     frames: [
@@ -2606,7 +2592,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  shoal: { cap: 'small, fast, and more of them than you would like', hold: 2,
+  shoal: { cap: 'small, fast, and many', hold: 2,
     key: { '»': 'a', '«': 'a', '█': '8', '▄': '8', '▀': '8' },
     frames: [
       ['                        ',
@@ -2651,7 +2637,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  silt: { cap: 'a ridge of silt, and it is not silt', hold: 3,
+  silt: { cap: 'a ridge that is not silt', hold: 3,
     key: { '─': '6', '▄': '6', '▄': '6', '▄': '6', '█': '6', '█': '6', '▓': '6', '◦': 'c', '●': 'c' },
     frames: [
       ['                        ',
@@ -2706,7 +2692,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  baro: { cap: 'a vastness, pacing you in the deep', hold: 4,
+  baro: { cap: 'a vastness, pacing you', hold: 4,
     key: { '█': '5' },
     frames: [
       ['                        ',
@@ -2751,7 +2737,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  chorus: { cap: 'voices in the water, none of them answering', hold: 3,
+  chorus: { cap: 'voices, none answering', hold: 3,
     key: { '¤': 'b' },
     frames: [
       ['                        ',
@@ -2786,7 +2772,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  eel: { cap: 'something narrow, working along the hull', hold: 2,
+  eel: { cap: 'something narrow, working', hold: 2,
     key: { '~': 'e' },
     frames: [
       ['                        ',
@@ -2821,7 +2807,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  hulk: { cap: 'a mountain moving, and the water going with it', hold: 4,
+  hulk: { cap: 'a mountain, moving', hold: 4,
     key: { '█': '8', '▄': '8' },
     frames: [
       ['                        ',
@@ -2846,7 +2832,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  drifter: { cap: 'it drifts, and it is not hunting anything', hold: 5,
+  drifter: { cap: 'it is not hunting anything', hold: 5,
     key: { '█': '2', '▄': '2', '▀': '2' },
     frames: [
       ['                        ',
@@ -2898,7 +2884,7 @@ const VP_SCENES = {
   // Whitelisted glyphs ONLY — the rim characters that would have framed
   // these nicely are the same ones that tore the frame on Sean's phone.
 
-  roof: { cap: 'rock overhead, and the water going down past the lamps', hold: 5, wet: 1,
+  roof: { cap: 'rock overhead', hold: 5, wet: 1,
     key: { '█': '8', '▓': '8', '▒': '8', '░': '1', '·': '7', '∙': '7' },
     frames: [
       ['████████████████████████',
@@ -2943,7 +2929,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  column: { cap: 'water above and water below, and the boat between them', hold: 5, wet: 1,
+  column: { cap: 'water above, water below', hold: 5, wet: 1,
     key: { '·': '7', '∙': '8' },
     frames: [
       ['    ·                   ',
@@ -3004,7 +2990,7 @@ const VP_SCENES = {
   // share a composition deliberately — a captain should recognise a surface
   // instantly, and only then notice that the sky above this one is stone.
 
-  dock: { cap: 'the pier, and the last solid ground for hundreds of miles', hold: 4, porthole: true, snowFrom: 7,
+  dock: { cap: 'the last solid ground', hold: 4, porthole: true, snowFrom: 7,
     key: { '▄': '6', '║': '6', '~': '3', '≈': 'b', '░': '1', 'ᵛ': '7', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -3049,7 +3035,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  surface: { cap: 'the glass half under, and a sky that has not been kind', hold: 3, porthole: true, snowFrom: 7,
+  surface: { cap: 'the glass half under', hold: 3, porthole: true, snowFrom: 7,
     pulse: ['e'],
     key: { '☼': 'e', '~': 'b', '≈': 'f', '░': '3', '▒': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
@@ -3095,7 +3081,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  shallow: { cap: 'light still reaches here, and things still live in it', wet: true, hold: 3, porthole: true, snowFrom: 1,
+  shallow: { cap: 'light still reaches here', wet: true, hold: 3, porthole: true, snowFrom: 1,
     key: { '│': 'b', '>': 'a', '<': 'a', '░': '3', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -3144,7 +3130,7 @@ const VP_SCENES = {
   // depth scenes all draw the same two rows whether the keel is IN the silt
   // or a step above it, so the window said nothing the sounder had not.
   // `wet` dims it with depth, so this one picture serves every band.
-  seabed: { cap: 'the keel is in it, and the silt does not settle', wet: true, hold: 3, porthole: true, snowFrom: 1,
+  seabed: { cap: 'the keel is in the silt', wet: true, hold: 3, porthole: true, snowFrom: 1,
     key: { '·': '3', '░': '1', '▒': '1', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -3189,7 +3175,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  midwater: { cap: 'the light is going out of the water, and taking the colour', wet: true, hold: 4, porthole: true, snowFrom: 1,
+  midwater: { cap: 'the colour going out of it', wet: true, hold: 4, porthole: true, snowFrom: 1,
     key: { '·': '3', '>': '2', '<': '2', '▒': '1', '░': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -3234,7 +3220,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  cavernlake: { cap: 'a surface, and a sky of stone above it', wet: true, hold: 4, porthole: true, snowFrom: 6,
+  cavernlake: { cap: 'a sky of stone', wet: true, hold: 4, porthole: true, snowFrom: 6,
     key: { '▓': '8', '▒': '8', '~': '1', '≈': '9', '░': '1', '^': '8', 'v': '8', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -3869,6 +3855,11 @@ const TIPS = {
   shelf:   'That is the shelf floor, not the sea floor. The deep is under it, and the only ways through are the sinkholes — the chart draws them O. Find one and take her down it.',
   // The dashed outline is the entire movement affordance and nothing named it.
   impact:  'That was rock. A hex you can enter at this depth carries a dashed outline. Anything without one is stone, or water above or below you. The sonar says which way and how far.',
+  // Sean, first time on a deck: "I tried to seal bulkhead but I wasn't sure
+  // what the rules were... I didn't know what claim deck meant either." Both
+  // buttons appear the moment you are ashore and neither said what it was for.
+  bulkhead: 'A bulkhead beside you can be dogged shut. It holds back water and whatever is walking in it — and everything on the far side is lost to you while it holds.',
+  claimdeck: 'A deck with nothing living on it can be claimed as your station: the breach becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
   chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. The boat carries no positioning gear, so it cannot mark itself — you dead-reckon, until you find something that can.',
 };
 let tipsOn = true;
@@ -8750,13 +8741,30 @@ function stepFoot(x, y) {
   if (t.t === 'entry') {
     if (f.leaveArmed !== nk) {
       f.leaveArmed = nk;
-      log('The breach is right there, and daylight-coloured water beyond it. Step onto it again to haul yourself out — anything else and you stay.', 'warn', 'BREACH');
+      // What is still lying on this deck. Leaving works the ruin out for good,
+      // so the one thing the question must carry is its price.
+      let left = 0;
+      const deck = footChunk();
+      if (deck) for (const [k, tt] of deck.tiles) if (tt.loot && !f.took.includes(k)) left++;
+      const carrying = (f.crates || 0) + (f.relics || 0);
+      const behind = left
+        ? ` ${left} thing${left > 1 ? 's' : ''} still lie${left > 1 ? '' : 's'} on this deck, and the ruin is worked out once you are through.`
+        : ' Nothing is left down here that you have not already got.';
+      const hold = carrying
+        ? ` You have ${f.crates || 0} crate${(f.crates || 0) === 1 ? '' : 's'}${f.relics ? ' and ' + f.relics + ' relic' + (f.relics === 1 ? '' : 's') : ''} to bring up.`
+        : ' Your hands are empty.';
+      log('The breach is right there, and daylight-coloured water beyond it. Step onto it again to haul yourself out — anything else and you stay.'
+        + hold + behind, 'warn', 'BREACH');
       render();
       return;
     }
   } else {
     f.leaveArmed = null;   // any other move is an answer of "not yet"
   }
+
+  noteBulkheadNear();
+  // A deck you have cleared is a deck you could keep.
+  if (!state.foot.dweller && !state.base) tip('claimdeck');
 
   // DROWNED WATER. A flooded passage is a wall to a body that breathes air —
   // and no wall at all to something that does not. Going under costs dearly and
@@ -8859,6 +8867,16 @@ function stepFoot(x, y) {
 
 // Dog the bulkhead beside you shut, or haul it open again. The whole tactical
 // question of this stage is which side of it you want to be on.
+// A bulkhead within reach is the moment the verb means something.
+function noteBulkheadNear() {
+  const f = state.foot, ch = footChunk();
+  if (!f || !ch) return;
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const t = ch.tiles.get((f.x + dx) + ',' + (f.y + dy));
+    if (t && t.t === 'door') { tip('bulkhead'); return; }
+  }
+}
+
 function sealDoor() {
   const f = state.foot;
   const ch = footChunk();
