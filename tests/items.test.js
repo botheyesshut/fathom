@@ -113,6 +113,9 @@ try { vm.runInContext(script +
   '\nfunction __describe(m){ return describeSpace(m); }' +
   '\nfunction __spaceClassAt(q,r,d){ return spaceClass(spaceAround(q,r,d)); }' +
   '\nfunction __openCell(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
+  '\nfunction __runAt(q,r,d){ var c = cellRun(q,r,d); return c ? { ceiling: c.ceiling, floor: c.floor } : null; }' +
+  '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
+  '\nfunction __clearContacts(){ state.creatures = []; state._contactScene = null; }' +
   '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
   '\nfunction __put(q,r,d){ state.q=q; state.r=r; state.currentDepth=d;' +
   '\n  state._lastSetKey=null; state._lastSndKey=null; state._lastSpaceClass=null; }' +
@@ -1130,6 +1133,68 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const orphans = forSale.filter(k => keys.every(c => !(sandbox.__sellTo(c, k) > 0)));
   check(orphans.length === 0, 'every findable VALUABLE, key and chart has a buyer somewhere',
     orphans.join(', ') || forSale.length + ' saleable finds, all with a market');
+}
+
+//--- 23. A DRILL CORE IS NOT A ROOM ----------------------------------------
+//
+// Sean: "it's terrifying to me that you're still thinking in terms of
+// 'columns'. that's been a source of endless grief for this project."
+//
+// He is right, and it is a habit rather than a bug — which is why a comment
+// was not going to hold it. Measuring the habit split it in two:
+//
+//   WHERE A THING RESTS is genuinely a column question. Gravity is vertical, a
+//   hull falls until it meets rock, and walking one hex straight down answers
+//   "what is directly under this" exactly. That code is fine.
+//
+//   WHAT KIND OF PLACE THIS IS is NOT. The space is a branching network — a
+//   flood fill from a prize reaches 400-900 hexes whose floors spread over
+//   1,500 m — so a hex's own vertical extent is a fact about a drill core, and
+//   reading one to describe a room is how "the shaft climbs out of sight
+//   above" got said in open water, and how the porthole drew a lid over a
+//   cathedral 20 times in 576.
+//
+// So: anything that DESCRIBES the space must agree with the space. If the
+// water opens far above one hex away, the boat may not call it a roof.
+{
+  console.log('\n--- 23. A DRILL CORE IS NOT A ROOM ---');
+  let roofs = 0, wrong = 0, firstBad = null, sampled = 0;
+  const seen = new Set();
+  for (const seed of [4242, 1337]) {
+    sandbox.__seed(seed);
+    sandbox.__tileAt(0, 0);
+    for (let q = -13; q <= 13; q++) for (let r = -13; r <= 13; r++) {
+      const t = sandbox.__tileAt(q, r);
+      if (!t || t.wall || t.land) continue;
+      for (let d = 120; d < 2400; d += 120) {
+        if (!sandbox.__openCell(q, r, d)) continue;
+        sandbox.__put(q, r, d);
+        sandbox.__clearContacts();
+        const sc = sandbox.__sceneNow();
+        seen.add(sc);
+        sampled++;
+        if (sc !== 'roof') continue;
+        roofs++;
+        // How high does the water go ONE HEX AWAY at this depth? If it opens
+        // hundreds of metres up next door, this is an overhang in a large
+        // space, not a lid.
+        let maxUp = 0;
+        for (const n of sandbox.__nbrs(q, r)) {
+          const run = sandbox.__runAt(n.q, n.r, d);
+          if (run) maxUp = Math.max(maxUp, d - run.ceiling);
+        }
+        if (maxUp >= 240) {
+          wrong++;
+          if (!firstBad) firstBad = 'roof at ' + q + ',' + r + ' @' + d + 'm while water rises ' + maxUp + ' m one hex away';
+        }
+      }
+    }
+  }
+  // No vacuous pass: this check is worthless if it never sampled a roof.
+  check(roofs >= 100, 'the roof check is actually finding roofs',
+    roofs + ' roof scenes out of ' + sampled + ' sampled; scene kinds seen: ' + [...seen].sort().join('/'));
+  check(wrong === 0, 'the porthole never calls a cathedral a lid',
+    wrong ? wrong + '/' + roofs + ' — ' + firstBad : 'clean across ' + roofs + ' roof scenes');
 }
 
 //--- 22. THE BOAT DOES NOT DESCRIBE A CAVE IT IS NOT IN ---------------------
