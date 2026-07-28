@@ -6186,7 +6186,7 @@ function syncFootControls(inside) {
   const f = state.foot;
   if (!f) return;
   // One control, four meanings, chosen by where you stand and what you hold.
-  const own = isBaseDeck(f.q, f.r, f.d);
+  const own = onOwnDeckNow();
   if (!own) claim.textContent = inCave ? 'Anchor Here' : 'Claim Deck';
   else if (state.base.breached) claim.textContent = 'Repump Station';
   else if (f.crates + f.relics + state.cargo + state.relics + Object.keys(state.items || {}).length > 0) claim.textContent = 'Stow Goods';
@@ -8648,7 +8648,7 @@ function footChunk() {
 // deck grid is read, which is the whole trick: one accessor, and the tunnels
 // you cut are real.
 function baseCarved() { return (state.base && state.base.carved) || []; }
-function onOwnDeck() { const f = state.foot; return !!f && isBaseDeck(f.q, f.r, f.d); }
+function onOwnDeck() { return onOwnDeckNow(); }
 
 function footTile(x, y) {
   const ch = footChunk();
@@ -8703,9 +8703,38 @@ function ashore() {
 // what gives on-foot combat something to be for.
 const CLAIM_COST = 6;   // crates of plate, valves and pumps, hauled down and spent
 
-function isBaseDeck(q, r, d) {
+// A STATION IS A PLACE, AND A PLACE HAS A KIND.
+//
+// `state.base` recorded {q,r,d} and nothing else, so this matched EVERY kind of
+// deck at those coordinates. The consequences were all silent and all bad:
+//
+//   - You claim a grotto, sail one hex out, and sail back. `handleTile` sees
+//     `isBaseDeck` and calls `enterInterior`, which can only build a ruin or a
+//     hull — so you arrive in a phantom RUIN standing where your station was.
+//     Measured 94 of 94 returns, across 6 seeds. Because `own` was true, that
+//     phantom's loot was marked taken and written to the save.
+//   - Arriving VERTICALLY gave the real cave, because a beach hex has no
+//     `tile.poi` and changeDepth's handleTile is gated on it. So the same
+//     station was two different places depending on how you came at it.
+//   - Claiming the mouth of a grotto froze every tenant deeper in the chain
+//     (101 of 101), because `stationSecure` matched them too.
+//   - The hold banked and drew from any chamber in the system.
+//   - `breachStation` put the sea into a cave, on a deck whose own comment
+//     says a cave does not flood.
+//
+// An old save has no `kind`; treat it as the ruin it must have been, since a
+// grotto could not be claimed before the field existed.
+function isBaseDeck(q, r, d, kind) {
   const b = state.base;
-  return !!b && b.q === q && b.r === r && b.d === d;
+  if (!b || b.q !== q || b.r !== r || b.d !== d) return false;
+  if (kind === undefined) return true;              // asking about the hex, not the deck
+  return deckSuffix(b.kind || 'ruin') === deckSuffix(kind);
+}
+
+// The deck the captain is standing on IS the station — kind and all.
+function onOwnDeckNow() {
+  const f = state.foot;
+  return !!f && isBaseDeck(f.q, f.r, f.d, f.kind);
 }
 
 function deckKey(q, r, d) { return q + ',' + r + ',' + d; }
@@ -8722,8 +8751,8 @@ function deckSuffix(kind) {
 // Yours AND still sealed. A station whose lock has been forced is your deck in
 // name only — the sea is in it and it behaves like any other drowning ruin
 // until you pump it out and reseat the lock.
-function stationSecure(q, r, d) {
-  return isBaseDeck(q, r, d) && !(state.base && state.base.breached);
+function stationSecure(q, r, d, kind) {
+  return isBaseDeck(q, r, d, kind) && !(state.base && state.base.breached);
 }
 
 // A deck whose tenant you drove off stays driven off. Overlay, saved — the
@@ -8751,8 +8780,8 @@ function enterInterior(tile) {
   const d = anchor ? anchor.d : state.currentDepth;
   const deckKind = (anchor && anchor.type === 'hull') ? 'hull' : (tile.poi === 'hull' ? 'hull' : 'ruin');
   const ch = interiorAt(tile.q, tile.r, d, deckKind);
-  const claimed = stationSecure(tile.q, tile.r, d);
-  const own = isBaseDeck(tile.q, tile.r, d);
+  const claimed = stationSecure(tile.q, tile.r, d, deckKind);
+  const own = isBaseDeck(tile.q, tile.r, d, deckKind);
   // A station deck was stripped when you cleared it — its loot does not grow
   // back just because the substrate still remembers where it was, and a breach
   // does not restock it either.
@@ -8820,12 +8849,25 @@ function enterInterior(tile) {
 function enterGrotto(kind) {
   if (!state.alive || state.foot) return;
   const d = state.currentDepth;
-  const ch = interiorAt(state.q, state.r, d, kind || 'cave');
+  kind = kind || 'cave';
+  const ch = interiorAt(state.q, state.r, d, kind);
   if (!ch || !ch.entry) return;
-  const plan = grottoPlan(state.q, state.r, d);
-  footInto(state.q, state.r, d, kind || 'cave', ch);
-  const what = plan.size === 'large' ? 'It goes back a long way, and it branches.'
-             : plan.size === 'medium' ? 'It goes back further than the lamps reach.'
+  const own = isBaseDeck(state.q, state.r, d, kind);
+  footInto(state.q, state.r, d, kind, ch);
+  if (own) {
+    // Coming home. The lamps are already up and the stores are where you left
+    // them — this must not read like a first landing on strange sand.
+    if (state.stores < 90) { state.stores = Math.min(100, state.stores + 40); log('The station\'s lockers put something back in the boat — a stay here is nearly as good as a run home.', '', 'STORES'); }
+    updateHUD(); render(); scheduleSave();
+    return;
+  }
+  // ASK THE DECK HOW BIG IT IS, NOT THE PLAN. `grottoPlan` seeds off
+  // 'grotto:q,r,d' and the deck seeds its size off 'interior:key' — two
+  // independent rolls, so this sentence was wrong 64.5% of the time. It told
+  // one captain "a pocket in the rock, and an end to it" and set them down in
+  // 128 tiles. The deck is standing right there; ask it.
+  const what = ch.size === 'large' ? 'It goes back a long way, and the lamps do not find the end of it.'
+             : ch.size === 'medium' ? 'It goes back further than the lamps reach.'
              : 'It is not deep. A pocket in the rock, and an end to it.';
   log('Sand, and then rock, and a way in at the back of the beach. ' + what, 'strange', 'GROTTO');
   log('Nothing is coming in after you here. The rock is dry and the roof holds — but there is not a door in the whole of it, either.', '', 'GROTTO');
@@ -8837,7 +8879,11 @@ function enterGrotto(kind) {
 function footInto(q, r, d, kind, ch) {
   const dk = deckKey(q, r, d) + deckSuffix(kind);
   const took = ((state.deckTook || {})[dk] || []).slice();
+  const own = isBaseDeck(q, r, d, kind);
   let dweller = null;
+  // Your own deck was stripped when you took it, and it does not restock
+  // because the substrate still remembers where the piles were.
+  if (own) for (const [k, t] of ch.tiles) if (t.loot && took.indexOf(k) < 0) took.push(k);
   if (ch.dweller && !isDeckCleared(q, r, d, kind)) {
     dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 };
     if (dweller.kind === 'hollow' && state.lostCrew && state.lostCrew.length && rand() < 0.4) {
@@ -8917,7 +8963,7 @@ function claimOrStore() {
   const f = state.foot;
   const ch = footChunk();
   if (!f || !ch || !state.alive) return;
-  if (isBaseDeck(f.q, f.r, f.d)) {
+  if (onOwnDeckNow()) {
     return state.base.breached ? repumpStation() : storeAtBase();
   }
   if (state.base) {
@@ -8928,8 +8974,8 @@ function claimOrStore() {
   // out of a wrecked submarine." He is right, and the reason is mechanical as
   // well as fictional — a hull is one spine with the sea already through every
   // compartment, and there is nothing to pump out to.
-  if (f.kind === 'deepruin') {
-    log('This is a long way in through rock, and everything you own would have to come the same way. Put the station on the sand where the boat can reach it.', 'warn', 'STATION');
+  if (f.kind === 'deepruin' || caveSeg(f.kind) > 0) {
+    log('This is a long way in through rock, and everything you own would have to come the same way on somebody\'s back. Put the station on the sand, where the boat can lie alongside it.', 'warn', 'STATION');
     return;
   }
   if (f.kind === 'hull') {
@@ -8947,7 +8993,8 @@ function claimOrStore() {
     return;
   }
   state.cargo -= CLAIM_COST;
-  state.base = { q: f.q, r: f.r, d: f.d, stores: { crates: 0, relics: 0, items: {} },
+  state.base = { q: f.q, r: f.r, d: f.d, kind: f.kind || 'ruin',
+                 stores: { crates: 0, relics: 0, items: {} },
                  defence: 0, threat: 0, siege: null, breached: false, boarder: null, carved: [] };
   f.water = [];
   f.dweller = null;
@@ -9024,7 +9071,7 @@ function breachStation() {
   // If the captain is standing in it when it goes, both the water AND the thing
   // come down the passage at them, then and there.
   const f = state.foot;
-  if (f && isBaseDeck(f.q, f.r, f.d)) {
+  if (f && onOwnDeckNow()) {
     const ch = footChunk();
     if (ch) {
       f.water = [ch.entry.x + ',' + ch.entry.y];
@@ -9085,7 +9132,7 @@ function digTargetNear() {
 // gamble — the sea is a hand's breadth beyond it, and a bad cut lets it in.
 function digAdjacent() {
   const f = state.foot, b = state.base;
-  if (!f || !b || !stationSecure(f.q, f.r, f.d)) {
+  if (!f || !b || !stationSecure(f.q, f.r, f.d, f.kind)) {
     if (f) log(b && b.breached ? 'The station is flooded. Reseat the lock and pump it dry before you cut any more rock.' : 'You can only dig out a sealed station of your own.', 'warn', 'DIG');
     return;
   }
@@ -9119,7 +9166,7 @@ function digAdjacent() {
 function fortifyBase() {
   const b = state.base;
   const f = state.foot;
-  if (!b || !f || !isBaseDeck(f.q, f.r, f.d)) return;
+  if (!b || !f || !onOwnDeckNow()) return;
   if (b.breached) { log('Pump the station out and reseat the lock before you bolt anything else to it.', 'warn', 'STATION'); return; }
   const next = DEFENCES[(b.defence || 0) + 1];
   if (!next) { log('There is nothing further to bolt onto this lock. It is as hard as you can make it.', 'warn', 'STATION'); return; }
@@ -9433,12 +9480,13 @@ function stepFoot(x, y) {
   // A CAVE DOES NOT FLOOD. You walked up a beach to get here; the sea does not
   // climb after you. What a cave has instead is no door to put between you and
   // whatever else found the air first.
-  if (!stationSecure(f.q, f.r, f.d) && caveSeg(f.kind) < 0 && f.kind !== 'deepruin') {
+  const secureHere = stationSecure(f.q, f.r, f.d, f.kind);
+  if (!secureHere && caveSeg(f.kind) < 0 && f.kind !== 'deepruin') {
     if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
       log(pickLoose(FLOOD_GAIN), 'warn', 'WATER');
     }
     if (!broke && f.dweller) dwellerStep();
-  } else if (!broke && f.dweller && !stationSecure(f.q, f.r, f.d)) {
+  } else if (!broke && f.dweller && !secureHere) {
     dwellerStep();   // the rock has a tenant even where the sea has no way in
   }
   provisionTick(0.3);   // a body ashore eats into the stores too
@@ -9725,7 +9773,7 @@ function leaveInterior(prefix) {
   if (!state.poisFound.includes(ck)) state.poisFound.push(ck);
   // A claimed deck keeps its mark on the chart; a stripped one goes back to
   // being ordinary water.
-  const own = isBaseDeck(f.q, f.r, f.d);
+  const own = onOwnDeckNow();
   setTile(f.q, f.r, own ? 'base' : 'passage');
   if (own) {
     log('You cycle the lock behind you and swim up to the boat. The station holds.', '', 'STATION');
@@ -12276,7 +12324,12 @@ function handleTile(tile) {
   // first-visit gate, because you are meant to keep coming back.
   if (!state.foot && isBaseDeck(tile.q, tile.r, state.currentDepth)) {
     log(pickLoose(STATION_ARRIVE), '', 'STATION');
-    enterInterior(tile);
+    // OPEN THE DOOR THAT IS ACTUALLY THERE. `enterInterior` can only build a
+    // ruin or a hull, so a station kept in a grotto used to open as a phantom
+    // ruin at the same coordinates — a different layout, a different entry, and
+    // its loot marked taken on the way out. 94 of 94 returns, across 6 seeds.
+    if (caveSeg(state.base.kind) >= 0) enterGrotto(state.base.kind);
+    else enterInterior(tile);
     return;
   }
 

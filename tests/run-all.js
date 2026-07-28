@@ -11,9 +11,12 @@
 //   interior.test — the resolution ladder: deck determinism, hull integrity,
 //                   FULL reachability from the entry, loot taken once, reload
 //                   mid-dive, and the helm locked out while ashore
+//   station.test  — a station is a PLACE and a place has a KIND: the round trip
+//                   out and back lands on the deck you claimed, one anchor
+//                   claims one deck, and the boat has to be able to reach it
 const { spawnSync } = require('child_process');
 const path = require('path');
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'items'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'items'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');
