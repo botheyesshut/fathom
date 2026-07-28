@@ -375,8 +375,10 @@
     flex: 1;
     text-align: center;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.18em;
+    font-size: 1.5rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    line-height: 1;
     color: var(--lantern);
   }
 
@@ -553,7 +555,7 @@
     /* Was 6rem — two lines — for a game whose voice IS its prose. A room
        description carrying the set, the layer and the sounder runs to four, so
        most of the writing scrolled past before it could be read. */
-    height: 9.5rem;
+    height: 7.2rem;
     /* SCROLLABLE, by finger or wheel. It used to be overflow:hidden with the
        content pinned to the bottom, so anything that had gone past was simply
        unreachable without opening the full transcript. */
@@ -626,17 +628,17 @@
     z-index: 10;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    padding: 0 max(1rem, env(safe-area-inset-left)) max(1.2rem, env(safe-area-inset-bottom))
-               max(1rem, env(safe-area-inset-right));
+    gap: 0.3rem;
+    padding: 0 max(0.7rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-bottom))
+               max(0.7rem, env(safe-area-inset-right));
     flex-shrink: 0;
   }
 
   #ping-power-row {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.5rem 0.8rem;
+    gap: 0.1rem;
+    padding: 0.15rem 0.6rem 0;
     border: 1px solid var(--sonar-dim);
     border-radius: 2px;
     background: rgba(94, 184, 154, 0.03);
@@ -646,10 +648,14 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    gap: 0.4rem;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
+    font-size: 0.56rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    /* One line. It used to wrap to two inside a column, which is most of why
+       this row was 94 px tall for a control you set once and leave. */
+    white-space: nowrap;
   }
 
   .ping-label {
@@ -665,7 +671,7 @@
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 44px;
+    height: 44px;   /* the touch floor holds here: you must land on it before you can drag it */
     background: transparent;
     cursor: pointer;
     margin: 0;
@@ -1251,6 +1257,7 @@
     <button class="btn" id="btn-fight" style="display:none" title="Board it — fight with whatever the crew's locker holds. Expensive, and it answers every round you do not finish it.">Board It</button>
     <button class="btn" id="btn-fortify" style="display:none" title="Spend what is struck below in the station on the next thing between it and the sea">Fortify</button>
     <button class="btn" id="btn-dig" style="display:none" title="Cut the rock of your station outward into new rooms — a bigger warren is harder to take. Dig too near the hull and the sea comes in.">Dig</button>
+    <button class="btn" id="btn-auto" title="Retrace the way you came, a hex a second - to the surface, to the last air you breathed, or to your station. Tap again to change the mark, or to take the helm back. Anything in the water stops it.">AUTO</button>
     <button class="btn primary" id="btn-surface" title="Take her up to the air. Do it within sight of the dock and the hold goes ashore, onto the ledger, where it finally counts">Surface</button>
     <button class="btn" id="btn-options" title="Sound, the porthole, and starting over">Options</button>
   </div>
@@ -5730,6 +5737,11 @@ const state = {
   lastFailTime: 0,
   failHex: null,            // { q, r, color, expires } — flashed on failed move
   trail: [],                // recent positions, newest first, capped at 3
+  // THE LOG OF THE WAY WE CAME. Not a path-finder: the boat cannot navigate
+  // rock it has not swum, which is the epistemic law and it stays. Loops
+  // collapse, so circling a chamber does not make the way home longer.
+  route: [],                // "q,r,d" breadcrumbs, oldest first
+  refuges: {},              // where air was last taken: { surface: "q,r,d", air: "q,r,d" }
   // Zone tracking for "you have left the shelf" style transitions
   lastZone: 'shelf',
   maxZoneReached: 0,        // 0=shelf, 1=shelf-edge, 2=deep
@@ -5808,6 +5820,10 @@ function setViewport() {
 
 // The control row belongs to whichever world you are standing in.
 function syncFootControls(inside) {
+  // The autopilot is a boat control like any other, and it must not survive
+  // going ashore.
+  if (inside && state.autoTarget) autoStop('you are not aboard');
+  syncAutoBtn();
   const seal = document.getElementById('btn-seal');
   if (seal) seal.style.display = inside ? '' : 'none';
   // Boat controls are dead weight while the captain is off the boat — they do
@@ -7407,6 +7423,7 @@ function move(q, r) {
 
   state.q = q;
   state.r = r;
+  noteRoute(q, r, state.currentDepth);   // the crumb marks where we ARE now
   state.moves++;
   state.lastMoveTime = performance.now();
   state.failHex = null;
@@ -7727,11 +7744,13 @@ function maybeBeach() {
   if (!state.poisFound.includes(k)) {
     state.poisFound.push(k);
     state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.5));
+    noteRefuge('air');
     log('The boat breaks into still black air under stone — a cavern beach, pale sand rising out of the water. The crew tops the tanks off the pocket.', 'strange', 'BEACH');
     sfx('bell');
     if (!state.expedition) startExpedition({ q: state.q, r: state.r }, 'beach');
   } else if (state.air < sub.air) {
     state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.25));
+    noteRefuge('air');
     log('The old beach. The crew tops the tanks off the pocket.', '', 'BEACH');
   }
 }
@@ -10197,6 +10216,7 @@ function surfaceAirRecovery(amount) {
   if (state.currentDepth > 0) return;
   if (state.air >= sub.air) return;
   state.air = Math.min(sub.air, state.air + (amount || 8));
+  noteRefuge('air');   // a pocket you have actually breathed is one you can steer back to
 }
 
 // Tick ping memory — each turn, every remembered hex loses one freshness.
@@ -10356,6 +10376,7 @@ function changeDepth(deltaMeters) {
     tip('layer');
   }
   state.currentDepth = actual;
+  noteRoute(state.q, state.r, state.currentDepth);   // a dive is a move; the log records both
   state.moves++;
   state.lastMoveTime = performance.now();
   state.pingArrows = null; // depth-relative distances now stale
@@ -11142,6 +11163,158 @@ const AIR_STEPS = [
   { at: 0.07, cls: 'danger', text: 'The scrubbers are failing. Whatever you were down here for, it is no longer worth it.' },
 ];
 
+//=============================================================================
+// THE WAY BACK - route memory and the autopilot
+//=============================================================================
+//
+// Sean: "The sub should be able to retrace its steps to the base... There
+// should be an autopilot to last air and autopilot to last surface available
+// from the start. These should be under the same single button that will turn
+// on auto movement at one hex per second unless an enemy or other danger is
+// sensed."
+//
+// The boat has no positioning gear and cannot pathfind through rock it has not
+// seen - that is the epistemic law and it does not bend for convenience. But a
+// crew keeps a log of the way they came, and retracing it needs no chart at
+// all. So this is DEAD RECKONING BACKWARDS: it can only take you somewhere you
+// have already been, by the route you actually swam.
+
+const ROUTE_MAX = 600;      // a very long dive, and still nothing on a phone
+
+// A breadcrumb per move. If we have stood here before, the route SNAPS BACK to
+// that visit and everything since is discarded - so an hour of circling a
+// chamber leaves one crumb, not three hundred, and the way home is the short
+// way home.
+function noteRoute(q, r, d) {
+  if (!state.route) state.route = [];
+  const k = q + ',' + r + ',' + d;
+  const i = state.route.lastIndexOf(k);
+  if (i >= 0) state.route.length = i + 1;
+  else {
+    state.route.push(k);
+    if (state.route.length > ROUTE_MAX) state.route.splice(0, state.route.length - ROUTE_MAX);
+  }
+}
+
+// Where the boat last drew breath. Recorded when it actually happens, never
+// inferred - a refuge you have not used is a refuge you cannot be sure of.
+function noteRefuge(kind) {
+  if (!state.refuges) state.refuges = {};
+  state.refuges[kind] = state.q + ',' + state.r + ',' + state.currentDepth;
+  noteRoute(state.q, state.r, state.currentDepth);
+}
+
+const AUTO_ORDER = ['surface', 'air', 'base'];
+const AUTO_NAME = { surface: 'the surface', air: 'the last air', base: 'the station' };
+let autoTimer = 0;
+
+function autoAvailable(kind) {
+  if (kind === 'surface') return true;                       // up is always somewhere
+  if (kind === 'air') return !!(state.refuges && state.refuges.air);
+  if (kind === 'base') return !!state.base;
+  return false;
+}
+
+// WHAT TAKES THE HELM BACK. Anything a captain would want to be awake for.
+function autoHazard() {
+  if (!state.alive) return 'the boat is lost';
+  if (state.foot) return 'you are not aboard';
+  for (const c of (state.creatures || [])) {
+    if (c.gone) continue;
+    const d = hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r });
+    if (d <= passiveRange() + 1 && (c.type !== 'lurker' || (c.interest || 0) >= LURK_STALK))
+      return 'something is close';
+  }
+  if ((state.threats || []).length) return 'there is a weapon in the water';
+  if (state.hull <= 30) return 'the hull will not take much more';
+  if (state.air <= 20) return 'the air is nearly gone';
+  return null;
+}
+
+function autoArrived() {
+  const here = state.q + ',' + state.r + ',' + state.currentDepth;
+  if (state.autoTarget === 'surface') return state.currentDepth <= 0;
+  if (state.autoTarget === 'air') return !!(state.refuges && state.refuges.air === here);
+  if (state.autoTarget === 'base') return !!(state.base && state.base.q === state.q && state.base.r === state.r);
+  return true;
+}
+
+function autoStop(why) {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = 0; }
+  const was = state.autoTarget;
+  state.autoTarget = null;
+  syncAutoBtn();
+  if (why && was) log('The helm is yours again - ' + why + '.', 'warn', 'HELM');
+  render();
+}
+
+// ONE STEP OF THE WAY BACK. Pops the breadcrumb; the boat retraces and never
+// routes through water it has not swum.
+function autoStep() {
+  const stop = autoHazard();
+  if (stop) return autoStop(stop);
+  if (autoArrived()) {
+    log('Autopilot: ' + (AUTO_NAME[state.autoTarget] || 'the mark') + ' reached.', 'good', 'HELM');
+    return autoStop(null);
+  }
+  // Rising needs no log - up is always up.
+  if (state.autoTarget === 'surface' && (!state.route || state.route.length < 2)) {
+    if (state.currentDepth > 0) { changeDepth(-activeSub().diveStep); return; }
+    return autoStop('there is no more log to follow');
+  }
+  if (!state.route || state.route.length < 2) return autoStop('the log of the way back runs out here');
+  const wasAt = state.q + ',' + state.r + ',' + state.currentDepth;
+  const prev = state.route[state.route.length - 2].split(',').map(Number);
+  const pq = prev[0], pr = prev[1], pd = prev[2];
+  if (pd !== state.currentDepth) {
+    changeDepth(pd > state.currentDepth ? activeSub().diveStep : -activeSub().diveStep);
+  } else {
+    const t = tileAt(pq, pr);
+    if (!t || t.wall || !hexAcceptsDepth(t, state.currentDepth)) return autoStop('the way back has closed');
+    move(pq, pr);
+  }
+  // Did the boat actually go anywhere? A step that changes nothing means the
+  // way is blocked or the helm is refusing, and ticking against it forever is
+  // worse than handing control back.
+  if (state.q + ',' + state.r + ',' + state.currentDepth === wasAt)
+    return autoStop('she will not answer the helm');
+}
+
+function autoStart(kind) {
+  state.autoTarget = kind;
+  const stop = autoHazard();
+  if (stop) { state.autoTarget = null; syncAutoBtn(); log('Not while ' + stop + '.', 'warn', 'HELM'); return; }
+  log('Autopilot: steering for ' + AUTO_NAME[kind] + ', a hex at a time. Anything in the water and the helm comes back to you.', '', 'HELM');
+  syncAutoBtn();
+  if (autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(autoStep, 1000);
+  autoStep();
+}
+
+// ONE BUTTON. Off -> the surface -> the last air -> the station -> off,
+// skipping whatever this boat has no record of. The label always says what is
+// about to happen, so there is nothing to remember and nothing to discover.
+function autoCycle() {
+  if (!state.alive || state.foot) return;
+  const have = AUTO_ORDER.filter(autoAvailable);
+  const i = state.autoTarget ? have.indexOf(state.autoTarget) : -1;
+  const next = have[i + 1];
+  if (!next) return autoStop(null);
+  autoStart(next);
+}
+
+function syncAutoBtn() {
+  const b = document.getElementById('btn-auto');
+  if (!b) return;
+  if (state.autoTarget) {
+    b.textContent = AUTO_NAME[state.autoTarget].replace('the ', '').toUpperCase();
+    b.classList.add('armed');
+  } else {
+    b.textContent = 'AUTO';
+    b.classList.remove('armed');
+  }
+}
+
 function airCounsel() {
   const sub = activeSub();
   const pct = state.air / Math.max(1, sub.air);
@@ -11910,6 +12083,7 @@ function endGame(title, summary) {
   if (!state.lostCrew) state.lostCrew = [];
   for (const m of (state.crew || [])) if (m.name && state.lostCrew.indexOf(m.name) < 0) state.lostCrew.push(m.name);
   state.corpses = [];   // the sea keeps its dead; they do not sail in the next boat
+  state.route = ['0,0,0']; state.refuges = { surface: '0,0,0' }; state.autoTarget = null;   // a new hull starts at the pier
   state.foot = null;    // and it does not leave you standing in a ruin the boat is no longer under
   state.stores = 100;   // a new hull is provisioned; it does not inherit an empty larder
   state.threats = [];   // nor anything the old boat had in the water
@@ -11956,6 +12130,7 @@ function restart() {
   // water never sailed, last campaign's hand on the dock, and a transcript
   // that opened on the dead world's log.
   state.quarryCache = {};
+  state.route = ['0,0,0']; state.refuges = { surface: '0,0,0' }; state.autoTarget = null;
   state.layersFelt = [];
   state.portHire = null;
   if (typeof logHistory !== 'undefined') logHistory.length = 0;
@@ -12110,6 +12285,7 @@ function surface() {
       return;
     }
     state.air = sub.air;
+    noteRefuge('surface');
     log(`Hatch open. Air reserves restored.`, '', 'SURFACE');
     updateHUD();
     render();
@@ -12189,6 +12365,8 @@ function doSave(force) {
       pagesFound: state.pagesFound,
       bestiary: state.bestiary,
       tipsSeen: state.tipsSeen,
+      route: state.route,        // the way back is knowledge, and it is saved
+      refuges: state.refuges,
       airMark: state._airMark,   // which rung of the air counsel we have reached
       decoys: state.decoys,
       lockerWeapon: state.lockerWeapon,
@@ -12267,6 +12445,9 @@ function resumeGame(save) {
   state.pagesFound = arr(save.pagesFound);  // the account, as far as you have got
   state.bestiary = obj(save.bestiary);      // what you have learned about what lives here
   state.tipsSeen = arr(save.tipsSeen);
+  state.route = arr(save.route);
+  state.refuges = obj(save.refuges);
+  state.autoTarget = null;       // never resume under power
   state._airMark = (typeof save.airMark === 'number') ? save.airMark : null;   // null re-derives from the gauge
   state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
@@ -12410,6 +12591,7 @@ if (diveBtn) {
 
 document.getElementById('btn-ping').addEventListener('click', ping);
 document.getElementById('btn-launch').addEventListener('click', launchDecoy);
+document.getElementById('btn-auto').addEventListener('click', autoCycle);
 document.getElementById('btn-seal').addEventListener('click', sealDoor);
 document.getElementById('btn-look').addEventListener('click', lookAround);
 document.getElementById('inv-close').addEventListener('click', closeInventory);
