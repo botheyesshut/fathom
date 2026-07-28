@@ -1283,11 +1283,30 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
 // cannot be broken by accident: IN OPEN WATER, NO ROCK NOUNS AT ALL, not even
 // to deny them. Measured before the fix: 22 distinct offending sentences,
 // 2,149 offences across 4,508 samples.
+//
+// AND THIS CHECK HAD A HOLE THE SIZE OF THE FIRST IMPRESSION.
+//
+// `describeSpace('ask')` opens with `if (asked) mode = 'again'`. This section
+// only ever called `__describe('ask')`, so for its whole life it read
+// SPACE_AGAIN and nothing else — while SPACE_FIRST, the paragraph printed on
+// FIRST entry to every hex, the first sentence a player reads anywhere new,
+// was never measured once. 2,857 offences across 5,112 samples were sitting
+// behind that one line.
+//
+// The regex was short too. `room`, `cavern`, `ceiling`, `vault` and
+// `underground` all put architecture in the reader's head and none were
+// listed. `room` needs care — "room to move" and "room to spread out" are
+// quantity, not architecture — so it is matched only as a noun phrase.
 {
   console.log('\n--- 22. OPEN WATER IS NOT A CAVE ---');
-  const ROCK = /\b(shaft|passage|passages|throat|throats|rock|stone|wall|walls|roof|tunnel|corridor|cave|chamber|hollow|seam|blind)\b/i;
+  const ROCK = /\b(shaft|passage|passages|throat|throats|rock|stone|wall|walls|roof|tunnel|corridor|cave|cavern|chamber|vault|hollow|seam|blind|ceiling|underground)\b/i;
+  // "a great flooded room", "the big room" — architecture. "room to move",
+  // "room for other things" — quantity. Only the first kind is a lie.
+  const ROOM = /\b(?:the|a|an|another|great|big|wide|vast|enormous|flooded|same)\s+(?:\w+\s+){0,2}rooms?\b/i;
+  const offends = (line) => ROCK.test(line) || ROOM.test(line);
   const offences = new Map();
   let samples = 0;
+  const modesSeen = new Set();
   const classesSeen = new Set();
   for (const seed of [4242, 90210, 1337]) {
     sandbox.__seed(seed);
@@ -1301,9 +1320,15 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
         classesSeen.add(cls);
         if (cls !== 'expanse' && cls !== 'surface') continue;
         sandbox.__put(q, r, d);
-        samples++;
-        for (const sentence of sandbox.__describe('ask').split(/(?<=\.)\s+/)) {
-          if (ROCK.test(sentence)) offences.set(sentence, (offences.get(sentence) || 0) + 1);
+        // BOTH MODES. 'first' is the paragraph on arrival; 'ask' is the LOOK
+        // button, which internally becomes 'again'. Reading only one of them
+        // is how half this pool went unmeasured for its entire life.
+        for (const mode of ['first', 'ask']) {
+          samples++;
+          modesSeen.add(mode);
+          for (const sentence of sandbox.__describe(mode).split(/(?<=\.)\s+/)) {
+            if (offends(sentence)) offences.set(sentence, (offences.get(sentence) || 0) + 1);
+          }
         }
       }
     }
@@ -1312,12 +1337,14 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // green because they measured nothing. A rock-noun check that sampled zero
   // open-water hexes would be the third, and it would be the most convincing
   // of the three.
-  check(samples >= 300, 'the open-water check is actually reading open water',
-    samples + ' descriptions across 3 seeds; space kinds seen: ' + [...classesSeen].sort().join('/'));
+  check(samples >= 300 && modesSeen.size === 2,
+    'the open-water check is actually reading open water, in BOTH modes',
+    samples + ' descriptions across 3 seeds; modes: ' + [...modesSeen].sort().join('+')
+      + '; space kinds seen: ' + [...classesSeen].sort().join('/'));
   const ranked = [...offences.entries()].sort((a, b) => b[1] - a[1]);
   check(ranked.length === 0, 'no rock noun appears in a description of open water',
     ranked.length
-      ? ranked.length + ' distinct: ' + ranked.slice(0, 3).map(x => x[1] + 'x "' + x[0].slice(0, 60) + '"').join(' | ')
+      ? ranked.length + ' distinct: ' + ranked.slice(0, 20).map(x => x[1] + 'x "' + x[0].slice(0, 60) + '"').join(' | ')
       : 'clean across ' + samples + ' descriptions');
 }
 
