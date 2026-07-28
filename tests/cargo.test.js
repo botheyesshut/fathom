@@ -175,9 +175,20 @@ check(!st.foot && st.crew[0] && st.crew[0].xp >= 1, 'the walk ashore seasons the
 check(st.poisFound.slice().sort().join('|') === poisPre,
   'a beach is not a prize and never gets worked out',
   'was ' + st.poisFound.length + ' entries');
-st.air = 200; st.expedition = null;
+// A POCKET IS NOT A PUMP. Stepping off the sand and straight back on used to
+// pay +88 air a time, forever — 5.1 taps per 100 air against the surface's
+// 12.5, which made a known beach the cheapest air in the game by 2.4x AND
+// infinite. This check used to encode the faucet: it drove maybeBeach twice
+// with no moves between and asserted the second one paid.
+st.air = 200; st.expedition = null; st.foot = null;
 sb.maybeBeach();
-check(st.air > 200, 'the old beach refills the tanks on return', 'air=' + st.air);
+check(st.air === 200, 'a beach you just drew from has nothing left to give',
+  'air=' + st.air + ' (was +88, unlimited)');
+if (st.foot) sb.leaveInterior('You wade out');
+// ...but it seeps back out of the rock, so it is still a refuge on a route.
+st.moves += 60; st.air = 200; st.expedition = null; st.foot = null;
+sb.maybeBeach();
+check(st.air > 200, 'and it is worth coming back to once it has recovered', 'air=' + st.air);
 check(!!st.foot && st.foot.kind === 'cave', 'and it is still a place you can walk back into');
 sb.leaveInterior('You wade out');
 

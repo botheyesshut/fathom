@@ -6244,6 +6244,7 @@ const state = {
   deckTook: {},
   deckHurt: {},   // what each deck's tenant is still bleeding from
   deckDead: {},   // and who is lying on it
+  beachDrawn: {}, // when each trapped pocket was last drawn down
   // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
   // on its own. Depletes away from port/base, tops up at either.
   stores: 100,
@@ -8299,6 +8300,10 @@ function startExpedition(tile, kind) {
 
 // Rising into a cavern beach: air off the trapped pocket, landfall for the
 // crew, and afterwards a remembered waypoint that tops the tanks on return.
+// How long a trapped pocket takes to be worth drawing again. Long enough that
+// it is a refuge on a route, not a pump you stand next to.
+const BEACH_RECHARGE = 40;
+
 function maybeBeach() {
   const cell = cells.get(cellKey(state.q, state.r, state.currentDepth));
   if (!cell || cell.kind !== 'beach') return;
@@ -8307,6 +8312,8 @@ function maybeBeach() {
   if (!state.poisFound.includes(k)) {
     state.poisFound.push(k);
     state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.5));
+    if (!state.beachDrawn) state.beachDrawn = {};
+    state.beachDrawn[k] = state.moves;
     noteRefuge('air');
     log('The boat breaks into still black air under stone — a cavern beach, pale sand rising out of the water. The crew tops the tanks off the pocket.', 'strange', 'BEACH');
     sfx('bell');
@@ -8317,11 +8324,20 @@ function maybeBeach() {
     // full tanks could not get back into their own grotto — the whole branch
     // was skipped. The air is conditional; the beach never is.
     noteRefuge('air');
-    if (state.air < sub.air) {
+    if (!state.beachDrawn) state.beachDrawn = {};
+    const since = state.moves - (state.beachDrawn[k] == null ? -BEACH_RECHARGE : state.beachDrawn[k]);
+    if (state.air >= sub.air) {
+      log('The old beach, and the tanks already full. The sand is where you left it.', '', 'BEACH');
+    } else if (since < BEACH_RECHARGE) {
+      // A POCKET IS NOT A SPRING. Without this, stepping off the sand and back
+      // on paid +88 air a time, forever — 5.1 taps per 100 air against the
+      // surface's 12.5, which made a known beach the cheapest air in the game
+      // by 2.4x and made it infinite.
+      log('The pocket is thin — the crew take what there is and it is not much. It seeps back out of the rock in its own time.', 'warn', 'BEACH');
+    } else {
+      state.beachDrawn[k] = state.moves;
       state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.25));
       log('The old beach. The crew tops the tanks off the pocket.', '', 'BEACH');
-    } else {
-      log('The old beach, and the tanks already full. The sand is where you left it.', '', 'BEACH');
     }
     // A grotto you have found stays a place you can walk back into.
     if (!state.expedition && !state.foot) enterGrotto();
@@ -8973,6 +8989,13 @@ function isDeckCleared(q, r, d, kind) {
   return (state.clearedDecks || []).includes(deckKey(q, r, d) + deckSuffix(kind));
 }
 
+const GROTTO_ARRIVE = [
+  'Your own lamps on the sand, still burning where you left them.',
+  'Home, of a kind. The boat noses up to your own beach and the crew make her fast.',
+  'The grotto. Dry rock, your gear stacked above the waterline, and one mouth to watch.',
+  'You warp her in against the sand. Nothing has been at it while you were gone.',
+];
+
 const STATION_ARRIVE = [
   'Your own hatch light, still burning where you left it.',
   'The station. The lock cycles, and the deck beyond it is dry.',
@@ -9242,11 +9265,17 @@ function claimOrStore() {
     log('Something still lives on this deck. You are not about to seal yourself in with it.', 'warn', 'STATION');
     return;
   }
-  if (state.cargo < CLAIM_COST) {
-    log(`Claiming a deck takes ${CLAIM_COST} crates of plate and pumps. There are ${state.cargo} aboard.`, 'warn', 'STATION');
+  const fromHold = Math.min(state.cargo, CLAIM_COST);
+  const fromBank = CLAIM_COST - fromHold;
+  if (fromBank > (state.cargoBanked || 0)) {
+    log(`Claiming a deck takes ${CLAIM_COST} crates of plate and pumps. There are ${state.cargo} aboard and ${state.cargoBanked || 0} on the ledger at the dock.`, 'warn', 'STATION');
     return;
   }
-  state.cargo -= CLAIM_COST;
+  state.cargo -= fromHold;
+  if (fromBank > 0) {
+    state.cargoBanked -= fromBank;
+    log(`${fromBank} crate${fromBank === 1 ? '' : 's'} come off your own ledger at the dock and down the water to here. The dockhands will want telling where they went.`, '', 'STATION');
+  }
   state.base = { q: f.q, r: f.r, d: f.d, kind: f.kind || 'ruin',
                  stores: { crates: 0, relics: 0, items: {} },
                  defence: 0, threat: 0, siege: null, breached: false, boarder: null, carved: [] };
@@ -12665,7 +12694,9 @@ function handleTile(tile) {
   // Your own station opens to you every time, at the depth you cut it — no
   // first-visit gate, because you are meant to keep coming back.
   if (!state.foot && isBaseDeck(tile.q, tile.r, state.currentDepth)) {
-    log(pickLoose(STATION_ARRIVE), '', 'STATION');
+    // A grotto has no lock and was never wet, so the ruin's homecoming lines
+    // are a lie there.
+    log(caveSeg(resolveBaseKind()) >= 0 ? pickLoose(GROTTO_ARRIVE) : pickLoose(STATION_ARRIVE), '', 'STATION');
     // OPEN THE DOOR THAT IS ACTUALLY THERE. `enterInterior` can only build a
     // ruin or a hull, so a station kept in a grotto used to open as a phantom
     // ruin at the same coordinates — a different layout, a different entry, and
@@ -13340,7 +13371,7 @@ function restart() {
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
-  state.clearedDecks = []; state.deckTook = {}; state.deckHurt = {}; state.deckDead = {};
+  state.clearedDecks = []; state.deckTook = {}; state.deckHurt = {}; state.deckDead = {}; state.beachDrawn = {};
   state.stores = 100;
   state.lostCrew = [];
   state.items = {};
@@ -13555,6 +13586,7 @@ function doSave(force) {
       deckTook: state.deckTook,      // what each deck has already given up
       deckHurt: state.deckHurt,      // ...what its tenant is still bleeding from
       deckDead: state.deckDead,      // ...and who is lying on it
+      beachDrawn: state.beachDrawn,  // ...and when each pocket was last drawn
       stores: state.stores,
       lostCrew: state.lostCrew,
       items: state.items,
@@ -13720,6 +13752,7 @@ function resumeGame(save) {
   state.deckTook = obj(save.deckTook);
   state.deckHurt = obj(save.deckHurt);
   state.deckDead = obj(save.deckDead);
+  state.beachDrawn = obj(save.beachDrawn);
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
   state.items = save.items || {};
