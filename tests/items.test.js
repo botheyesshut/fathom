@@ -925,6 +925,22 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const noCap = names.filter(k => !S[k].cap || S[k].cap.length < 8);
   check(noCap.length === 0, 'every scene says what it is', noCap.join(', ') || 'all captioned');
 
+  // ...AND SOMETHING ACTUALLY SHOWS IT. The check above passed for months
+  // while `.cap` was read by NOTHING — twenty hand-written captions and the
+  // player never saw one. Sean, looking at the wreck illustration: "I still
+  // don't know what it is. I think it's a monster?" That is what a check on
+  // data nobody consumes buys you: a green tick over a dead feature.
+  //
+  // Asserting the field exists is not the same as asserting it reaches the
+  // player, and this suite has now shipped that mistake in three different
+  // forms. The source must READ it.
+  const src = html;
+  const capRead = /\bS\.cap\b|\bscene\.cap\b|\bVP_SCENES\[[^\]]+\]\.cap\b/.test(src);
+  const capRendered = /vp-cap/.test(src);
+  check(capRead && capRendered, 'and something actually renders that caption',
+    capRead && capRendered ? 'read and written to #vp-cap'
+      : (capRead ? 'read but never rendered' : 'NEVER READ — the captions are dead data'));
+
   // And the selector must always land on a scene that exists, whatever the
   // state — an unknown key would leave the panel frozen on the last picture.
   const picked = sandbox.__sceneNow();

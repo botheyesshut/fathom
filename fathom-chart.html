@@ -493,6 +493,18 @@
     white-space: pre;
     text-shadow: 0 0 3px rgba(80, 160, 200, 0.18);
   }
+  #vp-cap {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.62rem;
+    line-height: 1.15;
+    color: #8fa8b8;
+    text-align: center;
+    padding: 2px 2px 0;
+    max-width: 100%;
+    /* The art is a fixed 24 characters wide; the caption wraps inside that and
+       never widens the tile, which floats over the chart and owns no layout. */
+    overflow-wrap: break-word;
+  }
   #vp-x {
     position: absolute; top: 1px; right: 3px;
     font-size: 9px; line-height: 1; color: rgba(150, 180, 200, 0.45);
@@ -1179,6 +1191,7 @@
        you." So it floats over the map and costs the game no layout at all. -->
   <div id="viewport">
     <pre id="vp-art" aria-hidden="true"></pre>
+    <div id="vp-cap"></div>
     <!-- Tapping the tile has always dismissed it, but an invisible affordance
          is not an affordance. Sean asked for "a way to turn it off" for a
          feature that already had one, which is the answer. -->
@@ -3309,6 +3322,10 @@ function vpDraw() {
     html += '\n';
   }
   el.innerHTML = html;
+  // AND WHAT IT IS. Written for every scene since the window was built, and
+  // never rendered until now.
+  const capEl = document.getElementById('vp-cap');
+  if (capEl) capEl.textContent = S.cap || '';
   // No caption is written any more — it rendered at 7.5px and was unreadable on
   // a phone. `cap` stays in the scene data: it documents what each drawing is
   // meant to be, and the battery checks every scene has one.
