@@ -2190,6 +2190,7 @@ function drawSeaChart() {
     if (!chartKnown(t) || !t.poi) continue;
     const p = P(t.q, t.r);
     const mk = t.poi === 'base' ? ['⌂', '#1d6b4f'] : t.poi === 'ruin' ? ['◙', '#8a5a1e']
+             : t.poi === 'hull' ? ['⊟', '#6a6f52']
              : t.poi === 'salvage' ? ['✕', '#9a3b26'] : t.poi === 'air' ? ['○', '#2c6e7a']
              : t.poi === 'opening' ? ['O', '#7a5a10'] : t.poi === 'signal' ? ['◉', '#5c3a86']
              : t.poi === 'surface' ? ['☼', '#8a6a12'] : null;
@@ -4493,7 +4494,7 @@ function nearestWayIn(q, r, R) {
   for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
     const t = tileAt(q + dq, r + dr);
     if (!t || t.wall) continue;
-    if (t.poi !== 'ruin' && t.poi !== 'opening' && t.poi !== 'salvage') continue;
+    if (t.poi !== 'ruin' && t.poi !== 'hull' && t.poi !== 'opening' && t.poi !== 'salvage') continue;
     const d = hexDistance({ q: q + dq, r: r + dr }, { q, r });
     if (d < bd) { bd = d; best = t; }
   }
@@ -10884,7 +10885,7 @@ function cellRun(q, r, d) {
 // It does not break the epistemic law. A sounder reads straight down, only
 // where you are, and it tells you the DEPTH of the return and how it came back
 // — never what the thing is. You still have to go down and look.
-const SOUNDER_PRIZE = ['salvage', 'ruin', 'signal', 'growth', 'air'];
+const SOUNDER_PRIZE = ['salvage', 'ruin', 'hull', 'signal', 'growth', 'air'];
 function soundingBelow() {
   if (state.foot || ashore()) return null;
   const t = getTile(state.q, state.r);
@@ -11647,7 +11648,8 @@ function neighbourWays(q, r, d) {
 //
 // Epistemically free: the glyph is only drawn where the boat has already
 // earned the knowledge, so saying it aloud reveals nothing new.
-const PRIZE_NOUN = { salvage: 'wreckage', ruin: 'a sunken ruin', air: 'a pocket of trapped gas',
+const PRIZE_NOUN = { salvage: 'wreckage', ruin: 'a sunken ruin', hull: 'a boat on the bottom',
+                     air: 'a pocket of trapped gas',
                      signal: 'something signalling', growth: 'a mass of growth',
                      opening: 'a sinkhole', chasm: 'a chasm', base: 'your own station' };
 function prizesInSight(q, r, d) {

@@ -733,7 +733,10 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     if (!L || L.kind !== 'cavern') continue;
     cavs++;
     const poi = sandbox.__poiAt(L.q, L.r);
-    if (poi === 'ruin' || poi === 'opening' || poi === 'salvage') honest++;
+    // `hull` joined this list when a wrecked boat became a place you can walk.
+    // It had been excluded by omission, which meant a lead promising "a place
+    // worth exploring" could never point at the newest content in the game.
+    if (poi === 'ruin' || poi === 'hull' || poi === 'opening' || poi === 'salvage') honest++;
   }
   // Soft quality bar, not an invariant — the exact hold rate moves whenever
   // world generation does. The INVARIANT is the next check: of the ones that
