@@ -6312,8 +6312,12 @@ function syncFootControls(inside) {
   // teach the difference between the two kinds of place, without a word of
   // instruction: in a ruin you have a door, and here you do not.
   const inCave = inside && state.foot && caveSeg(state.foot.kind) >= 0;
+  // ...AND ONLY WHERE THERE IS ONE TO SEAL. Shown for the whole of any non-cave
+  // interior, it answers "No bulkhead within reach" from every tile that has no
+  // door beside it — which is most of them. `bulkheadNear()` is the same
+  // four-neighbour walk `noteBulkheadNear` already does for the tip.
   const seal = document.getElementById('btn-seal');
-  if (seal) seal.style.display = (inside && !inCave) ? '' : 'none';
+  if (seal) seal.style.display = (inside && !inCave && bulkheadNear()) ? '' : 'none';
   // Boat controls are dead weight while the captain is off the boat — they do
   // nothing but scold. Hide them rather than leave the row full of refusals.
   // The rule applies to EVERY boat-scale control, not just the first three:
@@ -6321,7 +6325,7 @@ function syncFootControls(inside) {
   // aboard" from inside a ruin, while the controls you need are clipped.
   const dec = document.getElementById('btn-launch');
   if (dec) dec.textContent = `Decoy (${state.decoys || 0})`;
-  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface']) {
+  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto']) {
     const el = document.getElementById(id);
     if (el) el.style.display = inside ? 'none' : '';
   }
@@ -6333,10 +6337,19 @@ function syncFootControls(inside) {
   // advise you to buy a weapon. It costs a button's width to say so, forever.
   const fireBtn = document.getElementById('btn-fire');
   if (fireBtn && !inside) fireBtn.style.display = (state.armament || state.torpedoes > 0) ? '' : 'none';
+  // A DEAD CONTROL IS WORSE THAN NO CONTROL. `claimOrStore` can never succeed
+  // in a hull (she is already full of the sea and there is nothing to pump out
+  // to) or in a deepruin or a deeper cave link (the boat cannot reach it). The
+  // button was shown in all of them, labelled "Claim Deck", and it is the
+  // widest control in the row — promising precisely what the code forbids.
+  const f0 = state.foot;
+  const claimable = inside && f0 &&
+    (isBaseDeck(f0.q, f0.r, f0.d, f0.kind) ||
+     (f0.kind !== 'hull' && f0.kind !== 'deepruin' && caveSeg(f0.kind) <= 0));
   const claim = document.getElementById('btn-claim');
   if (!claim) return;
-  claim.style.display = inside ? '' : 'none';
-  if (!inside) return;
+  claim.style.display = claimable ? '' : 'none';
+  if (!claimable) return;
   const f = state.foot;
   if (!f) return;
   // One control, four meanings, chosen by where you stand and what you hold.
@@ -8767,11 +8780,28 @@ function interiorAt(q, r, d, kind) {
     const seg = caveSeg(kind);
     const hasWay = seg >= 0 && (seg < plan.segs - 1 || plan.ruin);
     if (hasWay && rooms.length > 1) {
+      // FURTHEST FROM THE ENTRY *AND* NOT WHERE THE TENANT IS. These were the
+      // same search, so the thing stood on the way in 38 of 38 caves that had
+      // both — and it is drawn on top of it, so the only route deeper was
+      // hidden behind the monster, every time.
       let best = null, bestD = -1;
       for (const rm of rooms) {
         const c = mid(rm);
+        if (dweller && c.x === dweller.x && c.y === dweller.y) continue;
         const dd = Math.abs(c.x - ex) + Math.abs(c.y - ey);
         if (dd > bestD) { bestD = dd; best = c; }
+      }
+      // If every pocket is the tenant's, take the furthest carved tile instead
+      // — a way on that does not exist is worse than one guarded.
+      if (!best) {
+        for (const k of tiles.keys()) {
+          const c2 = k.indexOf(','), x2 = +k.slice(0, c2), y2 = +k.slice(c2 + 1);
+          if (dweller && x2 === dweller.x && y2 === dweller.y) continue;
+          const t2 = tiles.get(k);
+          if (!t2 || t2.t === 'entry') continue;
+          const dd2 = Math.abs(x2 - ex) + Math.abs(y2 - ey);
+          if (dd2 > bestD) { bestD = dd2; best = { x: x2, y: y2 }; }
+        }
       }
       const t = best && tiles.get(best.x + ',' + best.y);
       // THE WAY ON IS DRY. Not a rule about caves — a rule about `retreatWay`,
@@ -9737,6 +9767,18 @@ function stepFoot(x, y) {
 // Dog the bulkhead beside you shut, or haul it open again. The whole tactical
 // question of this stage is which side of it you want to be on.
 // A bulkhead within reach is the moment the verb means something.
+// Is there a door within reach of the captain? The question `sealDoor` answers
+// after the fact, asked before the button is drawn.
+function bulkheadNear() {
+  const f = state.foot, ch = footChunk();
+  if (!f || !ch) return false;
+  for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const t = ch.tiles.get((f.x + dx) + ',' + (f.y + dy));
+    if (t && t.t === 'door') return true;
+  }
+  return false;
+}
+
 function noteBulkheadNear() {
   const f = state.foot, ch = footChunk();
   if (!f || !ch) return;
@@ -10108,8 +10150,11 @@ function renderInterior() {
     else
     if (t.t === 'way') {
       // The way on. It reads as a mouth in the rock, not a door.
-      box(x, y, '#2a2136', dim);
-      glyph(x, y, '◈', '#b09ae0', 15, dim);
+      // A hole in the rock: near-black box, bright chevron. Distinct from the
+      // exit (teal ≈), a bulkhead (╪), and — the one that mattered — from a
+      // relic (violet ✦), which it used to sit 1.02:1 against.
+      box(x, y, '#0e1114', dim);
+      glyph(x, y, '»', '#e8e4d0', 16, dim);
     } else if (t.t === 'entry') {
       // Armed to leave: the breach lights up so the confirming tap is a
       // deliberate act rather than a repeat of the accident.
