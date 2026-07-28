@@ -3404,8 +3404,29 @@ function sceneForNow() {
   // there — while the SOUNDING line one inch below it said the opposite.
   const above = runHere ? state.currentDepth - runHere.ceiling : 999;
   const below = runHere ? runHere.floor - state.currentDepth : 999;
-  const nearRoof  = above <= DEPTH_GRID;
   const nearFloor = below <= DEPTH_GRID;
+  // A ROOF IS ONLY A ROOF IF THE ROCK CARRIES ON SIDEWAYS.
+  //
+  // Sean, on my reasoning generally: "it's terrifying to me that you're still
+  // thinking in terms of columns. that's been a source of endless grief."
+  // Measuring it split the warning in two, and this is the half he is right
+  // about. A hex's own vertical extent is a fact about a DRILL CORE, not about
+  // a room — and this test read one and called it the world. Measured: 20 of
+  // 576 roof pictures were drawn while the water rose 240-420 m one hex away.
+  // Three per cent, and it is exactly the three per cent where a cathedral
+  // gets described as a lid.
+  //
+  // (The other half — where a wreck comes to rest — genuinely IS a column
+  // question. Gravity is vertical; a hull falls until it meets rock. That fix
+  // stands, though not for the reason I first gave: there is no "floor of the
+  // room". A flood fill from a prize reaches 400-900 hexes whose floors spread
+  // over 1,500 m. This is a branching network, not a chamber with a bottom.)
+  let openestAbove = above;
+  for (const n of hexNeighbors(state.q, state.r)) {
+    const nr = cellRun(n.q, n.r, state.currentDepth);
+    if (nr) openestAbove = Math.max(openestAbove, state.currentDepth - nr.ceiling);
+  }
+  const nearRoof = above <= DEPTH_GRID && openestAbove <= 2 * DEPTH_GRID;
   if (nearRoof && !nearFloor) return 'roof';       // stone over the sail, water under the keel
   if (!nearRoof && !nearFloor) return 'column';    // suspended, neither in reach
 
