@@ -2878,6 +2878,236 @@ const VP_SCENES = {
     ] },
 
 
+  // ---- THE PLACES YOU GO ASHORE, DRAWN. Three hulls and three ruins, and
+  // a site always looks like itself because the scene is picked by a hash of
+  // its own coordinates. A drowned boat and a drowned building are not the
+  // same thing to look at, and until now the game drew one picture for both.
+
+  hullbreak: { cap: 'her back is broken', hold: 5, wet: 1,
+    key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7' },
+    frames: [
+      ['                        ',
+       '   ·                    ',
+       '   ▓▓▓▓▓▓▓   ▓▓▓▓▓▓▓▓   ',
+       '  ▓████████  █████████▓ ',
+       ' ▓█████████    ████████▓',
+       '  ▓███████      ███████ ',
+       '   ▓▓▓▓▓▓        ▓▓▓▓▓▓ ',
+       '▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+      ['                        ',
+       '      ·                 ',
+       '   ▓▓▓▓▓▓▓   ▓▓▓▓▓▓▓▓   ',
+       '  ▓████████  █████████▓ ',
+       ' ▓█████████    ████████▓',
+       '  ▓███████      ███████ ',
+       '   ▓▓▓▓▓▓        ▓▓▓▓▓▓ ',
+       '▒▒▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+      ['                        ',
+       '         ·              ',
+       '   ▓▓▓▓▓▓▓   ▓▓▓▓▓▓▓▓   ',
+       '  ▓████████  █████████▓ ',
+       ' ▓█████████    ████████▓',
+       '  ▓███████      ███████ ',
+       '   ▓▓▓▓▓▓        ▓▓▓▓▓▓ ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+      ['                        ',
+       '            ·           ',
+       '   ▓▓▓▓▓▓▓   ▓▓▓▓▓▓▓▓   ',
+       '  ▓████████  █████████▓ ',
+       ' ▓█████████    ████████▓',
+       '  ▓███████      ███████ ',
+       '   ▓▓▓▓▓▓        ▓▓▓▓▓▓ ',
+       '▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+    ] },
+
+  hullup: { cap: 'standing on her nose', hold: 5, wet: 1,
+    key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7' },
+    frames: [
+      ['   ·    ▓▓▓▓▓           ',
+       '        ▓███▓    ·      ',
+       '        ▓███▓       ·   ',
+       '       ▓████▓           ',
+       '       ▓████▓           ',
+       '       ▓████▓           ',
+       '      ▓█████▓           ',
+       '      ▓▓▓▓▓▓▓▓▓         ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+      ['        ▓▓▓▓▓           ',
+       '   ·    ▓███▓           ',
+       '        ▓███▓    ·      ',
+       '       ▓████▓       ·   ',
+       '       ▓████▓           ',
+       '       ▓████▓           ',
+       '      ▓█████▓           ',
+       '      ▓▓▓▓▓▓▓▓▓         ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+      ['        ▓▓▓▓▓           ',
+       '        ▓███▓           ',
+       '   ·    ▓███▓           ',
+       '       ▓████▓    ·      ',
+       '       ▓████▓       ·   ',
+       '       ▓████▓           ',
+       '      ▓█████▓           ',
+       '      ▓▓▓▓▓▓▓▓▓         ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+      ['        ▓▓▓▓▓       ·   ',
+       '        ▓███▓           ',
+       '        ▓███▓           ',
+       '   ·   ▓████▓           ',
+       '       ▓████▓    ·      ',
+       '       ▓████▓           ',
+       '      ▓█████▓           ',
+       '      ▓▓▓▓▓▓▓▓▓         ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+    ] },
+
+  hullside: { cap: 'a row of ports, all dark', hold: 5, wet: 1,
+    key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7', '○': '0' },
+    frames: [
+      ['     ·                  ',
+       '              ·         ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       ' ▓○██○██○██○██○██○██▓   ',
+       '▓██████████████████████▓',
+       ' ▓████████████████████▓ ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+      ['              ·         ',
+       '     ·                  ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       ' ▓○██○██○██○██○██○██▓   ',
+       '▓██████████████████████▓',
+       ' ▓████████████████████▓ ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+      ['     ·                  ',
+       '              ·         ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       ' ▓○██○██○██○██○██○██▓   ',
+       '▓██████████████████████▓',
+       ' ▓████████████████████▓ ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+      ['              ·         ',
+       '     ·                  ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       ' ▓○██○██○██○██○██○██▓   ',
+       '▓██████████████████████▓',
+       ' ▓████████████████████▓ ',
+       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '                        '],
+    ] },
+
+  ruintower: { cap: 'a tower, still standing', hold: 5, wet: 1,
+    key: { '█': '6', '▓': '6', '▒': '1', '·': '7' },
+    frames: [
+      ['  ·    ▓▓▓▓▓▓           ',
+       '      ▓██████▓          ',
+       '      ▓██████▓     ·    ',
+       '      ▓██▒▒██▓          ',
+       '      ▓██████▓          ',
+       '      ▓████▒▒▓          ',
+       '      ▓██████▓          ',
+       '      ▓██████▓          ',
+       '    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓      ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
+      ['       ▓▓▓▓▓▓           ',
+       '  ·   ▓██████▓          ',
+       '      ▓██████▓          ',
+       '      ▓██▒▒██▓     ·    ',
+       '      ▓██████▓          ',
+       '      ▓████▒▒▓          ',
+       '      ▓██████▓          ',
+       '      ▓██████▓          ',
+       '    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓      ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
+      ['       ▓▓▓▓▓▓           ',
+       '      ▓██████▓          ',
+       '  ·   ▓██████▓          ',
+       '      ▓██▒▒██▓          ',
+       '      ▓██████▓     ·    ',
+       '      ▓████▒▒▓          ',
+       '      ▓██████▓          ',
+       '      ▓██████▓          ',
+       '    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓      ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
+      ['       ▓▓▓▓▓▓           ',
+       '      ▓██████▓          ',
+       '      ▓██████▓          ',
+       '  ·   ▓██▒▒██▓          ',
+       '      ▓██████▓          ',
+       '      ▓████▒▒▓     ·    ',
+       '      ▓██████▓          ',
+       '      ▓██████▓          ',
+       '    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓      ',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
+    ] },
+
+  ruinwall: { cap: 'a door, and dark past it', hold: 5, wet: 1,
+    key: { '▓': '6', '▒': '1', '░': '1', '·': '7', '▄': '6' },
+    frames: [
+      ['                        ',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▄▄▄▄▄▄▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓ ·    ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓    · ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+      ['                        ',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▄▄▄▄▄▄▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓ ·    ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓    · ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+      ['                        ',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▄▄▄▄▄▄▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓    · ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓ ·    ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+      ['                        ',
+       '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓▄▄▄▄▄▄▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓ ·    ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓    · ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓',
+       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+       '░░░░░░░░░░░░░░░░░░░░░░░░'],
+    ] },
+
   // ---- THE VERTICAL SITUATION. A window that shows a seabed while the
   // sounder says the ceiling is just above is worse than no window: it
   // contradicts the instrument the player is being asked to trust.
@@ -3415,7 +3645,11 @@ function showScene(key) {
 // What the boat is looking at right now, from state alone — so the viewport can
 // never disagree with the prose, which would be worse than having no viewport.
 function sceneForNow() {
-  if (state.foot) return 'ruin';
+  if (state.foot) {
+    const face = state.foot.kind === 'hull' ? ['hullbreak', 'hullup', 'hullside']
+                                            : ['ruin', 'ruintower', 'ruinwall'];
+    return face[hashStr('face:' + state.foot.q + ',' + state.foot.r) % face.length];
+  }
   // ADJACENCY FIRST: something alongside outranks everything, including the
   // surface. Any creature with a scene now shows it — this used to be the
   // angler alone, because the angler was the only creature ever drawn.
@@ -3455,7 +3689,12 @@ function sceneForNow() {
   const hasAir = (t && t.poi === 'air') || (cellHere && cellHere.kind === 'beach');
   if (atTop && runHere.ceiling > 0 && hasAir) return 'cavernlake';
 
-  if (t && (t.poi === 'ruin' || t.poi === 'salvage') && atReachableBottom(t)) return 'ruin';
+  if (t && atReachableBottom(t)) {
+    const face = t.poi === 'hull' ? ['hullbreak', 'hullup', 'hullside']
+               : (t.poi === 'ruin' || t.poi === 'salvage') ? ['ruin', 'ruintower', 'ruinwall']
+               : null;
+    if (face) return face[hashStr('face:' + t.q + ',' + t.r) % face.length];
+  }
   const L = layerAt(state.q, state.r);
   if (L && layerKnown(state.q, state.r, state.currentDepth)
       && Math.abs(state.currentDepth - L.depth) <= DEPTH_GRID) return 'layer';
@@ -4835,6 +5074,13 @@ const TILES = {
   chasm:    { name: 'a chasm',             char: '▼',  cost: 1,  color: '#000408', poi: 'chasm' },
   opening:  { name: 'a sinkhole',          char: 'O',  cost: 1,  color: '#0a1622', poi: 'opening' },
   ruin:     { name: 'a sunken ruin',       char: '◙',  cost: 2,  color: '#1a1410', poi: 'ruin' },
+  // A SUNKEN VESSEL IS NOT A SUNKEN BUILDING. `ruin` was doing both jobs, and
+  // walking a hull is not walking a tower: a boat is a spine with compartments
+  // off it and a bulkhead at every mouth, which is why "seal bulkhead" is a
+  // verb at all. Sean, having explored one: "there should be sunken vessels,
+  // submarines, and it should be clear we're exploring aboard the decks of a
+  // wrecked submarine."
+  hull:     { name: 'a wrecked boat',      char: '⊟',  cost: 2,  color: '#141a1c', poi: 'hull' },
   signal:   { name: 'something signaling', char: '◉',  cost: 1,  color: '#0a1622', poi: 'signal' },
   growth:   { name: 'unnatural growth',    char: '✺',  cost: 2,  color: '#180818', poi: 'growth' },
   air:      { name: 'an air pocket',       char: '○',  cost: 1,  color: '#1c2820', poi: 'air' },
@@ -5233,7 +5479,7 @@ function carveChamber(node) {
       let stack = cellPois.get(hk);
       if (!stack) { stack = []; cellPois.set(hk, stack); }
       if (stack.some(pp => pp.d === node.depth)) break;       // already ours
-      const types = ['ruin', 'signal', 'growth', 'growth', 'chasm', 'air', 'salvage'];
+      const types = PRIZE_TYPES;
       stack.push({ d: node.depth,
                    type: types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr + ':' + node.depth) % types.length] });
       stack.sort((a, b) => a.d - b.d);
@@ -5489,6 +5735,12 @@ function addVolume(q, r, type, kind, ceiling, floor) {
   const chosenType = isExistingPoi ? existing.type : kindToType(PRIO_TO_KIND[newPrio]);
   world.set(k, makeTile(chosenType, q, r, newCeiling, newFloor, newPrio));
 }
+// EVERY KIND OF THING THE DEEP CAN PUT IN A CHAMBER, in one place. The roll
+// draws from this directly and the battery reads it rather than keeping a
+// second copy — which is how `chasm` went months without the `poi` field that
+// keeps a carve from overwriting it.
+const PRIZE_TYPES = ['ruin', 'signal', 'growth', 'hull', 'chasm', 'air', 'salvage'];
+
 const PRIO_TO_KIND = ['water', 'passage', 'chamber', 'sea', 'beach'];
 
 function kindPriority(kind) {
@@ -8054,8 +8306,11 @@ function tenantTough(kind, seedStr) {
 // off room 0. The chaining is what GUARANTEES every carved tile is reachable
 // from the entry — the battery asserts it by flood fill, because loot stranded
 // behind solid rock is the one failure the player can never diagnose.
-function interiorAt(q, r, d) {
-  const key = q + ',' + r + ',' + d;
+function interiorAt(q, r, d, kind) {
+  kind = (kind === 'hull') ? 'hull' : 'ruin';
+  // The kind is part of the key: a hull and a tower at the same coordinates
+  // are different places and must not share a cached layout.
+  const key = q + ',' + r + ',' + d + (kind === 'hull' ? ':h' : '');
   const hit = interiorCache.get(key);
   if (hit) return hit;
 
@@ -8070,17 +8325,46 @@ function interiorAt(q, r, d) {
   };
 
   const rooms = [];
-  const want = 4 + Math.floor(rnd() * 3);          // 4-6 chambers
-  for (let tries = 0; tries < want * 8 && rooms.length < want; tries++) {
-    const w = 3 + Math.floor(rnd() * 4);
-    const h = 3 + Math.floor(rnd() * 4);
-    const x = 1 + Math.floor(rnd() * (INT_SIZE - 2 - w));
-    const y = 1 + Math.floor(rnd() * (INT_SIZE - 2 - h));
-    if (rooms.some(o => x < o.x + o.w + 1 && x + w + 1 > o.x &&
-                        y < o.y + o.h + 1 && y + h + 1 > o.y)) continue;
-    rooms.push({ x, y, w, h });
+  let hullSpine = 10, hullUpended = false;
+  if (kind === 'hull') {
+    // A HULL: one spine the length of the boat, compartments off it in a row,
+    // and a bulkhead at every mouth. Half of them lie on their side, because
+    // a boat that sank is rarely sitting level — the spine runs across the
+    // deck instead of along it and the whole place reads wrong on purpose.
+    hullUpended = rnd() < 0.5;
+    hullSpine = 8 + Math.floor(rnd() * 4);
+    const upended = hullUpended, spineAt = hullSpine;
+    const n = 5 + Math.floor(rnd() * 3);             // 5-7 compartments
+    const step = Math.floor((INT_SIZE - 4) / n);
+    for (let i = 0; i < n; i++) {
+      const along = 2 + i * step + Math.floor(rnd() * Math.max(1, step - 2));
+      const depth = 2 + Math.floor(rnd() * 2);       // how far off the spine
+      const width = 2 + Math.floor(rnd() * 2);
+      const offAbove = (i % 2 === 0);
+      const off = offAbove ? -(depth + 1) : 2;
+      const rx = upended ? spineAt + off : along;
+      const ry = upended ? along : spineAt + off;
+      const rw = upended ? depth : width;
+      const rh = upended ? width : depth;
+      if (rx < 1 || ry < 1 || rx + rw > INT_SIZE - 1 || ry + rh > INT_SIZE - 1) continue;
+      rooms.push({ x: rx, y: ry, w: rw, h: rh });
+    }
+    // The spine itself, carved end to end so every compartment hangs off it.
+    for (let a = 2; a < INT_SIZE - 2; a++) carve(upended ? spineAt : a, upended ? a : spineAt);
+    if (!rooms.length) rooms.push({ x: 8, y: 8, w: 3, h: 3 });
+  } else {
+    const want = 4 + Math.floor(rnd() * 3);          // 4-6 chambers
+    for (let tries = 0; tries < want * 8 && rooms.length < want; tries++) {
+      const w = 3 + Math.floor(rnd() * 4);
+      const h = 3 + Math.floor(rnd() * 4);
+      const x = 1 + Math.floor(rnd() * (INT_SIZE - 2 - w));
+      const y = 1 + Math.floor(rnd() * (INT_SIZE - 2 - h));
+      if (rooms.some(o => x < o.x + o.w + 1 && x + w + 1 > o.x &&
+                          y < o.y + o.h + 1 && y + h + 1 > o.y)) continue;
+      rooms.push({ x, y, w, h });
+    }
+    if (!rooms.length) rooms.push({ x: 8, y: 8, w: 4, h: 4 });
   }
-  if (!rooms.length) rooms.push({ x: 8, y: 8, w: 4, h: 4 });
   for (const rm of rooms)
     for (let y = rm.y; y < rm.y + rm.h; y++)
       for (let x = rm.x; x < rm.x + rm.w; x++) carve(x, y);
@@ -8095,7 +8379,17 @@ function interiorAt(q, r, d) {
     while (y !== b.y) { carve(x, y); corridorKeys.push(x + ',' + y); y += y < b.y ? 1 : -1; }
     carve(x, y); corridorKeys.push(x + ',' + y);
   };
-  for (let i = 1; i < rooms.length; i++) corridor(mid(rooms[i - 1]), mid(rooms[i]));
+  if (kind === 'hull') {
+    // Ribs off a spine. Each compartment gets one short throat to the
+    // centreline and nothing else, so the only way fore-and-aft is the spine
+    // and every mouth is a place a bulkhead means something.
+    for (const rm of rooms) {
+      const c = mid(rm);
+      corridor(c, hullUpended ? { x: hullSpine, y: c.y } : { x: c.x, y: hullSpine });
+    }
+  } else {
+    for (let i = 1; i < rooms.length; i++) corridor(mid(rooms[i - 1]), mid(rooms[i]));
+  }
 
   const c0 = mid(rooms[0]);
   const side = Math.floor(rnd() * 4);
@@ -8205,7 +8499,7 @@ function interiorAt(q, r, d) {
 
 function footChunk() {
   const f = state.foot;
-  return f ? interiorAt(f.q, f.r, f.d) : null;
+  return f ? interiorAt(f.q, f.r, f.d, f.kind) : null;
 }
 
 // null means solid — the same "absent = stone" reading the boat obeys.
@@ -8306,7 +8600,8 @@ function enterInterior(tile) {
   // three separate cleared-deck records to go with them. A ruin is one place.
   const anchor = poiAtDepth(tile, state.currentDepth);
   const d = anchor ? anchor.d : state.currentDepth;
-  const ch = interiorAt(tile.q, tile.r, d);
+  const deckKind = (anchor && anchor.type === 'hull') ? 'hull' : (tile.poi === 'hull' ? 'hull' : 'ruin');
+  const ch = interiorAt(tile.q, tile.r, d, deckKind);
   const claimed = stationSecure(tile.q, tile.r, d);
   const own = isBaseDeck(tile.q, tile.r, d);
   // A station deck was stripped when you cleared it — its loot does not grow
@@ -8338,6 +8633,7 @@ function enterInterior(tile) {
   }
 
   state.foot = {
+    kind: deckKind,          // a hull and a tower behave differently ashore
     q: tile.q, r: tile.r, d: d,
     x: ch.entry.x, y: ch.entry.y,
     crates: 0, relics: 0, steps: 0, tick: 0,
@@ -8378,6 +8674,14 @@ function claimOrStore() {
   }
   if (state.base) {
     log('You already hold a station, and the Erebus can only supply the one.', 'warn', 'STATION');
+    return;
+  }
+  // A DROWNED BOAT IS NOT A HOUSE. Sean: "it would be strange to make a base
+  // out of a wrecked submarine." He is right, and the reason is mechanical as
+  // well as fictional — a hull is one spine with the sea already through every
+  // compartment, and there is nothing to pump out to.
+  if (f.kind === 'hull') {
+    log('She is a boat, and she is already full of the sea. There is nothing here to pump out to — every compartment opens on the next one and the last one opens on the water.', 'warn', 'STATION');
     return;
   }
   // Ask the LIVE tenant, not the generator — a deck you drove something off
@@ -11738,20 +12042,25 @@ function handleTile(tile) {
   // gating it on firstVisit meant a captain who came back to a wreck got a
   // brown hex, a picture of a hull, and no verb.
   const unworked = tile.poi && !state.poisFound.includes(poiKey)
-                && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'air');
+                && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'hull' || tile.poi === 'air');
   // A WORKED RUIN IS STILL A PLACE. Re-entry used to be barred with the
   // announcement, because loot lived only for the length of a visit and an
   // open door meant a restocking room. `deckTook` remembers, so the door can
   // stand open: you may go back into somewhere you have stripped, which is
   // what a station, or a cave that leads on from it, is going to need.
-  if (!unworked && tile.poi === 'ruin' && atReachableBottom(tile)
+  if (!unworked && (tile.poi === 'ruin' || tile.poi === 'hull') && atReachableBottom(tile)
       && !state.expedition && !state.foot && !state.autoTarget) {
-    log('The breach in the ruin is where you left it. Whatever you took is still taken.', '', 'FOUND');
+    log(tile.poi === 'hull'
+      ? 'The hole you cut in her side is where you left it. Whatever you took is still taken.'
+      : 'The breach in the ruin is where you left it. Whatever you took is still taken.', '', 'FOUND');
     enterInterior(tile);
     return;
   }
   if (unworked) {
-    const noun = tile.poi === 'air' ? 'A pocket of trapped gas' : tile.poi === 'ruin' ? 'A sunken ruin' : 'Wreckage';
+    const noun = tile.poi === 'air' ? 'A pocket of trapped gas'
+               : tile.poi === 'ruin' ? 'A sunken ruin'
+               : tile.poi === 'hull' ? 'A boat, on the bottom and open to the sea'
+               : 'Wreckage';
     if (tile.poi === 'air') {
       if (Math.abs(state.currentDepth - tile.ceiling) > DEPTH_GRID) {
         log(`${noun}, caught against the roof ${Math.max(1, Math.round(state.currentDepth - tile.ceiling))} m above. Rise to it and the boat can vent its scrubbers.`, 'warn', 'AIR');
@@ -11768,8 +12077,9 @@ function handleTile(tile) {
       // Say what working it MEANS, so the two kinds of prize read as the two
       // different jobs they are: a wreck is a hold to empty from the boat, a
       // ruin is a place you go into on foot.
-      const what = tile.poi === 'ruin' ? 'Put the boat on the floor and the divers go over.'
-                                       : 'Take her down onto it and the crew work her over.';
+      const what = (tile.poi === 'ruin' || tile.poi === 'hull')
+        ? 'Put the boat on the floor and the divers go over.'
+        : 'Take her down onto it and the crew work her over.';
       log(dz >= 0
         ? `${noun}, ${Math.max(1, dz)} m below the keel. ${what}`
         : `${noun}, ${-dz} m above the keel. Rise to it.`,
@@ -11784,7 +12094,7 @@ function handleTile(tile) {
   // the cave/passage/chamber vocabulary, regardless of tile type.
   // ...and if there IS something workable here and now, the switch below must
   // get its turn — ambient flavour never outranks a prize under the keel.
-  const workableHere = tile.poi && ['salvage', 'ruin', 'air', 'signal', 'growth', 'opening'].includes(tile.poi);
+  const workableHere = tile.poi && ['salvage', 'ruin', 'hull', 'air', 'signal', 'growth', 'opening'].includes(tile.poi);
   if (atSurface && !workableHere && (firstVisit || rand() < 0.18)) {
     log(pickFlavor(FLAVOR.surface));
     // Adjacent-dock prose: fires when neighboring a dock from the surface
@@ -11884,6 +12194,18 @@ function handleTile(tile) {
         // Ruins are no longer worked by dice: you go down there yourself.
         if (!state.expedition && !state.foot) {
           log(pickFlavor(FLAVOR.ruin), '', 'FOUND');
+          enterInterior(tile);
+        }
+      }
+      break;
+    case 'hull':
+      if (firstVisit) {
+        if (!atReachableBottom(tile)) {
+          log(`She lies ${Math.round(tile.floor - state.currentDepth)} m below. Put the boat on the bottom beside her.`, 'warn', 'FOUND');
+          break;
+        }
+        if (!state.expedition && !state.foot) {
+          log(pickFlavor(FLAVOR.hull), '', 'FOUND');
           enterInterior(tile);
         }
       }
@@ -12013,6 +12335,12 @@ const FLAVOR = {
   chasm: [
     'A chasm opens beneath you. The depth gauge stops being useful.',
     'Down. Just down. You cannot see a bottom.',
+  ],
+  hull: [
+    'A boat, on the bottom. She is longer than the Erebus and she is not a shape any yard would recognise now.',
+    'Plating, and a line of ports along it, and every one of them dark. Somebody rode this down.',
+    'She lies over on her side with her screws in the silt, and the sea has been inside her a long time.',
+    'A hull, split along a seam, and the split is wide enough to take a diver.',
   ],
   ruin: [
     'A doorway, half-buried. Someone built down here once.',

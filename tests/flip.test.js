@@ -39,7 +39,7 @@ function freshContext() {
     '\nfunction __cells(){ return cells; }\nfunction __world(){ return world; }' +
     '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
     '\nfunction __tileSpec(t){ return TILES[t]; }' +
-    '\nfunction __prizeTypes(){ return ["ruin","signal","growth","chasm","air","salvage","opening"]; }' +
+    '\nfunction __prizeTypes(){ return PRIZE_TYPES.slice(); }' +
     '\nfunction __poiSig(){ var o=[]; for (var e of cellPois) o.push(e[0]+"="+e[1].map(function(p){return p.d+":"+p.type;}).join(",")); return o.sort().join("|"); }';
   try { vm.runInContext(injected, sandbox, { timeout: 15000 }); } catch (e) { /* DOM init throw expected */ }
   return sandbox;

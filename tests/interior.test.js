@@ -48,7 +48,7 @@ const sandbox = { console, Math, JSON, Date, Array, Object, Map, Set, String, Nu
 sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
 vm.createContext(sandbox);
 try { vm.runInContext(script +
-  '\nfunction __int(q,r,d){ return interiorAt(q,r,d); }' +
+  '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
   '\nfunction __clearInt(){ interiorCache.clear(); }' +
   '\nfunction __enter(q,r,d){ state.currentDepth=d; tileAt(q,r); enterInterior({q:q,r:r}); }' +
   '\nfunction __step(x,y){ stepFoot(x,y); }' +
@@ -1046,6 +1046,84 @@ sandbox.__st().crew = []; sandbox.__resume();
 const rell = sandbox.__st().crew[0];
 check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s position and orders survive a reload',
   rell ? 'at ' + rell.fx + ',' + rell.fy + (rell.hold ? ' holding' : '') : 'lost');
+}
+
+//--- A HULL IS A BOAT, AND EVERY COMPARTMENT MUST OPEN ---------------------
+//
+// A sunken vessel is not a sunken building: a hull is one spine with
+// compartments off it and a bulkhead at every mouth, which is the whole reason
+// "seal bulkhead" is a verb. The generator branches on that, and the branch
+// has one failure mode that matters — a compartment whose throat did not carve
+// is loot behind stone, and loot behind stone is the one bug a player can
+// never diagnose.
+{
+  console.log('\n--- HULLS ---');
+  sandbox.__seed(31337);
+  const stH = sandbox.__st();
+  let checked = 0, unreachable = 0, firstBad = null;
+  let packHull = [], packRuin = [];
+
+  const reach = (ch) => {
+    // Flood from the entry across walkable tiles.
+    const start = ch.entry.x + ',' + ch.entry.y;
+    const seen = new Set([start]);
+    let fr = [[ch.entry.x, ch.entry.y]];
+    while (fr.length) {
+      const next = [];
+      for (const [x, y] of fr) {
+        for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+          const k = (x+dx) + ',' + (y+dy);
+          if (seen.has(k) || !ch.tiles.has(k)) continue;
+          seen.add(k); next.push([x+dx, y+dy]);
+        }
+      }
+      fr = next;
+    }
+    return seen;
+  };
+  const packing = (ch) => {
+    const rowN = {}, colN = {}; let n = 0;
+    for (const [k, tt] of ch.tiles) {
+      if (tt.t === 'entry') continue;
+      const p = k.split(',').map(Number);
+      rowN[p[1]] = (rowN[p[1]]||0)+1; colN[p[0]] = (colN[p[0]]||0)+1; n++;
+    }
+    const t3 = a => a.slice().sort((x,y)=>y-x).slice(0,3).reduce((s,x)=>s+x,0);
+    return n ? Math.max(t3(Object.values(rowN)), t3(Object.values(colN))) / n : 0;
+  };
+
+  for (let q = -20; q <= 20; q++) for (let r = -20; r <= 20; r++) {
+    const t = sandbox.__tileAt(q, r);
+    if (!t || t.wall || t.land) continue;
+    for (const kind of ['hull', 'ruin']) {
+      if (t.poi !== kind) continue;
+      for (let d = 0; d < 4000; d += 60) {
+        if (!sandbox.__openCell(q, r, d)) continue;
+        stH.q = q; stH.r = r; stH.currentDepth = d;
+        if (sandbox.__prizeDepth(t) == null) continue;
+        const ch = sandbox.__int(q, r, d, kind);
+        if (!ch || !ch.entry) break;
+        const seen = reach(ch);
+        let orphan = 0;
+        for (const k of ch.tiles.keys()) if (!seen.has(k)) orphan++;
+        checked++;
+        if (orphan) { unreachable++; if (!firstBad) firstBad = kind + ' at ' + q + ',' + r + ': ' + orphan + ' tiles walled off'; }
+        (kind === 'hull' ? packHull : packRuin).push(packing(ch));
+        break;
+      }
+    }
+  }
+  check(checked >= 4, 'the hull check is actually finding decks', checked + ' decks walked');
+  check(unreachable === 0, 'every tile on every deck is reachable from the breach',
+    unreachable ? unreachable + '/' + checked + ' — ' + firstBad : 'no loot behind stone');
+
+  // ...and the two kinds must actually LOOK different, or the split bought
+  // nothing. A hull packs itself against its spine; a tower sprawls.
+  const med = a => a.length ? a.slice().sort((x,y)=>x-y)[Math.floor(a.length/2)] : 0;
+  const h = med(packHull), ru = med(packRuin);
+  check(packHull.length > 0 && h > ru + 0.08,
+    'a hull is built along a spine and a ruin is not',
+    'hull packs ' + Math.round(h*100) + '% into three lines vs ruin ' + Math.round(ru*100) + '%');
 }
 
 //--- REVISITABLE RUINS, AND THE FAUCET THAT MUST NOT COME BACK --------------
