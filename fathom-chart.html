@@ -1799,14 +1799,17 @@ const CULTURES = {
   // (`state.enclaves[].culture`) and into item `sig` fields; renaming it would
   // orphan both for no gain. What the player reads is `name` and `short`.
   //
-  // Sean named them: "let's call them the Confederation or Con-Fed Seas."
-  // Con-Fed is the sailors' clipping and it is what goes in a sentence — the
-  // one place `short` appears is "...count it out and hand it over", and a SEA
-  // does not count out coins. "the Con-Fed Seas" is being kept for their WATERS,
-  // which is a thing the game will need the moment factions hold territory
-  // instead of depth bands.
+  // THE NAME IS BACK WHERE IT BELONGS. "The Confluence" was this people's name
+  // before I moved it, and it is the right one: a confluence is where waters
+  // meet, which is exactly what a federation of boats that keep one another
+  // afloat is. It went only because Sean disliked a SHORT name I invented for
+  // it ("the federated boats"), and the replacement he offered turned out to
+  // describe the other people.
+  //
+  // Sean is still choosing their final name. This is the original, restored,
+  // and it is one line to change.
   confluence: {
-    name: 'the Confederation', short: 'the Con-Fed', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    name: 'the Confluence', short: 'the Confluence', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
     buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
             kinds: ['chart'], mult: 2.1 },
@@ -1850,9 +1853,16 @@ const CULTURES = {
     sells: ['rations', 'freshwater', 'patchkit', 'flare', 'oxygen'],
     markup: 2.0, danger: false,
   },
+  // THE CON-FED. Sean: "based on modern US libertarian ideals, hence they are
+  // essentially gun-heavy preppers who like their leadership local and their
+  // socialism minimal. That's why their guns are best." Which is what this
+  // people's creed and stat line have always said — only the name was wrong.
+  //
+  // "the Con-Fed Seas" stays reserved for their WATERS, for when factions hold
+  // territory instead of depth bands.
   libertines: {
-    name: 'the Libertines', short: 'the free yards', glyph: '⚙', col: '#e0a05a', depthBand: 'mid',
-    creed: 'Every hand for itself and proud of it — patriots of nothing but their own deck, and no love at all for outsiders. But nobody alive makes a better weapon or a better boat-part, and they will sell to anyone whose crates ring true.',
+    name: 'the Confederation', short: 'the Con-Fed', glyph: '✶', col: '#e0a05a', depthBand: 'mid',
+    creed: 'Every deck its own republic, and proud of it — leadership no further away than the man at the next bench, and no love at all for outsiders telling them how to live. Nobody alive makes a better weapon, and they will sell to anyone whose crates ring true.',
     buys: { sigs: ['libertines'], keys: ['ingot', 'scrimshaw', 'idol', 'blackpearl', 'effigy', 'specimenjar'],
             kinds: ['valuable', 'fit'], relics: true, mult: 1.8 },
     sells: ['torpedo', 'warhead', 'sonararray', 'bafflegear', 'trimtanks', 'flare', 'lumen'],
@@ -6806,8 +6816,13 @@ function generateChunk(cq, cr) {
 // somewhere you meant to go back to rather than a hex you happened past.
 const PORT_HEAD = ['Black', 'Salt', 'Cold', 'Long', 'Grey', 'Deep', 'Wreck', 'Gull',
                    'Iron', 'Storm', 'Kelp', 'Bone', 'Low', 'Far', 'Dead', 'Quiet'];
+// A people names its landfalls after what it thinks a landfall is FOR. The
+// Confluence make harbours and havens — places to arrive and be taken in. The
+// Con-Fed make holds and stands and batteries — positions, held locally, by
+// whoever is standing on them. The carrying trade works out of whatever is
+// there: a bar, a hook, a hole in the rock.
 const PORT_TAIL = { confluence: ['Harbour', 'Haven', 'Landing', 'Anchorage', 'Roads'],
-                    libertines: ['Yard', 'Slip', 'Works', 'Berth', 'Hard'],
+                    libertines: ['Hold', 'Stand', 'Post', 'Battery', 'Rock', 'Yard'],
                     mariners:   ['Bar', 'Reach', 'Hook', 'Bight', 'Stair', 'Hole'] };
 function portName(port) {
   const rr = mulberry32(hashStr('portname:' + worldSeed + ':' + port.q + ',' + port.r));
@@ -6851,10 +6866,12 @@ const HULLS = {
 // free-yard water is dangerous, and Mariner water is full of fat unescorted
 // cargo. Where you are changes what the sea contains.
 const FLEETS = {
-  // "patient hands with a hull and a wound, and poor ones with a gun"
+  // THE CONFLUENCE — "patient hands with a hull and a wound, and poor ones with
+  // a gun". Tough boats, weak guns, the biggest merchants afloat.
   confluence: { hull: 1.4, guns: 0.6, speed: 0.95, cargo: 1.25,
                 mix: { merchant: 0.40, destroyer: 0.25, naval: 0.20, courier: 0.15 } },
-  // "nobody alive makes a better weapon or a better boat-part"
+  // THE CON-FED — "nobody alive makes a better weapon". Hard-hitting, quick,
+  // and thin-skinned, because a gun is where the money went.
   libertines: { hull: 0.75, guns: 1.5, speed: 1.15, cargo: 0.8,
                 mix: { naval: 0.35, destroyer: 0.30, merchant: 0.20, courier: 0.15 } },
   // "they carry what nobody else will" — and they carry it unarmed
