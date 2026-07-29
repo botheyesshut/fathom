@@ -1795,18 +1795,55 @@ const CULTURES = {
     markup: 2.6, danger: true,
   },
   confluence: {
-    name: 'the Confluence', short: 'the federated mariners', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    name: 'the Confluence', short: 'the federated boats', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
     buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
-            kinds: ['fit', 'chart'], mult: 2.1 },
+            kinds: ['chart'], mult: 2.1 },
     sells: ['patchkit', 'weldkit', 'oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still', 'pressurehull', 'hydrophone', 'inertiallog'],
     markup: 1.8, danger: false,
+  },
+  // THE MARINERS. Sean's fourth people, and the one that makes the trade triad
+  // a square: "the neutral name given to all NPC boats and subs that do not
+  // belong to a faction, as well as to the PCs once we have them."
+  //
+  // So a Mariner is not a member of anything — that is the whole point. The
+  // Confluence hold together by mutual aid and the Libertines hold nothing but
+  // their own deck; between those sits the one job neither will do, which is
+  // carry other people's cargo through other people's water.
+  //
+  // Mechanically they are the market-maker this economy has never had. `floor`
+  // is the thing to understand: they will take ANYTHING, badly. The economy
+  // audit found 20 of 35 findable items with no buyer at any culture, and the
+  // port buys no items at all — so most of what you can find could never
+  // become money. A factor by definition takes what others will not. And they
+  // pay properly for exactly one thing: knowledge of where the water goes.
+  mariners: {
+    name: 'the Mariners', short: 'the carrying trade', glyph: '⚓', col: '#c8b88a', depthBand: 'any',
+    creed: 'No people at all, and they will tell you so themselves — every boat that never signed anything, working the water between those who did. They carry what nobody else will through water nobody else will cross, and they take their cut of all of it. Everyone despises them. Everyone needs them.',
+    // NOT `inertiallog`: the Confluence SELL it at 1.8, and a named want here
+    // pays 2.4 — buy from one, sell to the other, +3 a turn, forever. The
+    // battery caught it on the first run. It is still saleable to them; it just
+    // goes through `floor` like anything else, at a price below what it cost.
+    //
+    // AND THEY DO NOT SELL CHARTS. `buyMult` voids any appetite for a people's
+    // own stock, so listing seachart in both was a want dead in the data — the
+    // exact trap the Dagon comment three entries up was written about. A factor
+    // might plausibly deal charts both ways, but the one that matters is that
+    // they BUY them: that is what makes charting a living.
+    buys: { sigs: ['mariners'], kinds: ['chart'],
+            keys: ['seachart', 'logbook', 'hatchkey'], mult: 2.4,
+            // ...and a poor price for absolutely anything else. Safe against
+            // arbitrage because 0.9 is below every people's markup, so nothing
+            // bought anywhere can be sold on to them for a gain.
+            floor: 0.9 },
+    sells: ['rations', 'freshwater', 'patchkit', 'flare', 'oxygen'],
+    markup: 2.0, danger: false,
   },
   libertines: {
     name: 'the Libertines', short: 'the free yards', glyph: '⚙', col: '#e0a05a', depthBand: 'mid',
     creed: 'Every hand for itself and proud of it — patriots of nothing but their own deck, and no love at all for outsiders. But nobody alive makes a better weapon or a better boat-part, and they will sell to anyone whose crates ring true.',
     buys: { sigs: ['libertines'], keys: ['ingot', 'scrimshaw', 'idol', 'blackpearl', 'effigy', 'specimenjar'],
-            kinds: ['valuable'], relics: true, mult: 1.8 },
+            kinds: ['valuable', 'fit'], relics: true, mult: 1.8 },
     sells: ['torpedo', 'warhead', 'sonararray', 'bafflegear', 'trimtanks', 'flare', 'lumen'],
     markup: 2.2, danger: false,
   },
@@ -1827,6 +1864,11 @@ function buyMult(cultureKey, itemKey) {
   if (b.keys && b.keys.indexOf(itemKey) >= 0) m = Math.max(m, b.mult);
   if (b.kinds && b.kinds.indexOf(it.kind) >= 0) m = Math.max(m, b.mult * 0.7);
   if (b.props && it.props) for (const p of b.props) if (it.props.indexOf(p) >= 0) m = Math.max(m, b.mult);
+  // A FACTOR TAKES WHAT NOBODY ELSE WILL. `floor` is a want with no shape to
+  // it — they will buy the thing because it can be sold to somebody, somewhere,
+  // eventually, and they will price it accordingly. It is the structural answer
+  // to 20 of 35 findable items having no buyer anywhere in the world.
+  if (m === 0 && b.floor) m = b.floor;
   return m;
 }
 function sellPriceTo(cultureKey, itemKey) { return Math.round((ITEMS[itemKey].val || 1) * buyMult(cultureKey, itemKey)); }   // crates you receive
