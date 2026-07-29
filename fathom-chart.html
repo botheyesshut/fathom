@@ -5742,6 +5742,19 @@ function carveEdge(edge) {
 // water, gently sloping down then plunging at the shelf break. East/west of
 // the bay channel are mountains (impassable stone).
 function shelfSeafloorDepth(q, r) {
+  // AN ISLAND OVERRIDES THE SHELF. It is the top of a mountain that got there
+  // first — the water shallows toward it and then stops being water.
+  const lift = islandLift(q, r);
+  if (lift && lift.land) return null;               // land: the generator leaves stone
+  const base = baseSeafloorDepth(q, r);
+  if (base == null) return null;
+  return lift ? Math.min(base, lift.floor) : base;  // the shoal wins where it is shallower
+}
+
+// The world before any island: the coast, the bay, the shelf, the break, the
+// deep. Kept separate so `islandRoll` can ask whether there is sea at a spot
+// without asking about islands and recursing into itself.
+function baseSeafloorDepth(q, r) {
   // North distance from the coast line. Positive = water; <= 0 means land.
   const northDist = 1.5 - r;
   if (northDist <= 0) return null;
@@ -5768,6 +5781,114 @@ function shelfSeafloorDepth(q, r) {
     depth = 2325 + (northDist - 32) * 80;
   }
   return depth;
+}
+
+//=============================================================================
+// ISLANDS — the world above the water
+//=============================================================================
+// Sean: "we have this one dock in a valley and then basically an eternal
+// underwater world. why not have the dock be just one side of a small island?
+// why not have other islands with docks and towns there?"
+//
+// He was describing the generator exactly. Past the bay walls
+// (`northDist > 32`) `shelfSeafloorDepth` returns open water in every
+// direction, forever, and there is precisely one piece of land in the world —
+// the coast you start on.
+//
+// An island is a SEAMOUNT that broke the surface. It is not a disc floating on
+// the sea: the floor rises to meet it, so it is ringed by a shoal you can read
+// on the sounder before you can see it, and the caves underneath it are the
+// caves inside a mountain. Same infinite-lattice idiom as the cave nodes —
+// one candidate per lattice cell, hash-derived, so the world stays a pure
+// function of the seed and generates locally forever.
+// Tuned by measurement, not by feel. Across 6 seeds, islands within 60 hexes
+// of the dock and the average gap between neighbours:
+//
+//     cell 26  0-3 islands   gap 34   <- ONE SEED HAD NONE AT ALL
+//     cell 20  2-4           gap 22
+//     cell 16  4-8           gap 14   <- here
+//     cell 13  9-12          gap 10
+//     cell 11  12-16         gap  9
+//
+// A gap of 14 hexes is a real crossing without being a slog, and no world is
+// left empty — the same failure the beach rate had, where one world in five
+// had nowhere to put a station.
+const ISLE_CELL = 16;          // one candidate island per 16x16 hexes
+const ISLE_CHANCE = 0.7;       // ...and not every candidate becomes one
+
+// Same discipline as `nodeCache`: the lattice roll is a hash, and this is asked
+// once per hex of every chunk generated. Uncached it froze the battery outright.
+const isleCache = new Map();
+function islandAt(icq, icr) {
+  const ck = icq + '|' + icr;
+  if (isleCache.has(ck)) return isleCache.get(ck);
+  const isle = islandRoll(icq, icr);
+  isleCache.set(ck, isle);
+  return isle;
+}
+function islandRoll(icq, icr) {
+  const seedStr = 'isle:' + worldSeed + ':' + icq + ',' + icr;
+  const rr = mulberry32(hashStr(seedStr));
+  if (rr() > ISLE_CHANCE) return null;
+  // Jittered inside its cell so the chain of islands never reads as a grid.
+  const q = icq * ISLE_CELL + Math.floor(rr() * ISLE_CELL);
+  const r = icr * ISLE_CELL + Math.floor(rr() * ISLE_CELL);
+  // AN ISLAND NEEDS SEA UNDER IT. Without this they rolled onto the southern
+  // landmass and into the mountain walls — measured one at r=4, two and a half
+  // hexes INLAND of the coast, generating a shoal through solid rock.
+  if (baseSeafloorDepth(q, r) == null) return null;
+  // ...and deep water around it, or it is a bump on the shelf, not an island.
+  for (const [dq, dr] of [[3, 0], [-3, 0], [0, 3], [0, -3]]) {
+    if (baseSeafloorDepth(q + dq, r + dr) == null) return null;
+  }
+  // Nothing in the home bay — that geography is the tutorial and it is tested.
+  const northDist = 1.5 - r;
+  if (northDist > 0 && northDist < 36 && Math.abs(q + r * 0.5) < 12) return null;
+  const roll = rr();
+  // Most are rocks with a few huts. A few are big enough to hold a town.
+  const size = roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3;   // land radius, in hexes
+  return { id: icq + ',' + icr, q, r, size, shoal: size + 3 + Math.floor(rr() * 3) };
+}
+
+function islandsInRegion(qMin, qMax, rMin, rMax) {
+  const out = [];
+  const c0 = Math.floor(qMin / ISLE_CELL), c1 = Math.floor(qMax / ISLE_CELL);
+  const d0 = Math.floor(rMin / ISLE_CELL), d1 = Math.floor(rMax / ISLE_CELL);
+  for (let icq = c0; icq <= c1; icq++) {
+    for (let icr = d0; icr <= d1; icr++) {
+      const isle = islandAt(icq, icr);
+      if (isle) out.push(isle);
+    }
+  }
+  return out;
+}
+
+// How much this hex is lifted by any island near it. Returns null for open
+// water, a number for the depth the floor rises TO, and 0 for land itself.
+const liftCache = new Map();
+function islandLift(q, r) {
+  const lk = q + ',' + r;
+  if (liftCache.has(lk)) return liftCache.get(lk);
+  const out = islandLiftRaw(q, r);
+  liftCache.set(lk, out);
+  return out;
+}
+function islandLiftRaw(q, r) {
+  // The shoal never reaches beyond one lattice cell, so a 3x3 sweep of cells
+  // around this hex is the whole of what can possibly touch it.
+  const isles = islandsInRegion(q - ISLE_CELL, q + ISLE_CELL, r - ISLE_CELL, r + ISLE_CELL);
+  let best = null;
+  for (const isle of isles) {
+    const dq = q - isle.q, dr = r - isle.r;
+    const hd = (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+    if (hd > isle.shoal) continue;
+    if (hd <= isle.size) return { land: true, isle: isle, dist: hd };
+    // The shoal: the floor climbs steeply toward the shore.
+    const t = (hd - isle.size) / Math.max(1, isle.shoal - isle.size);
+    const floor = 20 + t * t * 900;      // 20 m at the shore, ~920 m at the rim
+    if (best === null || floor < best.floor) best = { land: false, floor, isle: isle, dist: hd };
+  }
+  return best;
 }
 
 // Mountain check: any hex that's not shelf water, not south of coast, but
@@ -5966,6 +6087,16 @@ function generateChunk(cq, cr) {
       const seafloor = shelfSeafloorDepth(q, r);
       if (seafloor != null) {
         addVolume(q, r, 'water', 'water', 0, seafloor);
+      } else {
+        // AN ISLAND HAS TO BE MARKED AS LAND, not merely left without water.
+        // Suppressing the water column made the surface impassable but left
+        // the hex an ordinary un-typed tile: the chart drew it as sea, nothing
+        // reported a coastline, and the caves were free to hollow it out. The
+        // home shore has always been explicit `setTile(..., 'shore')`; an
+        // island is a shore too. This runs BEFORE the caves are carved, and
+        // carveChamber refuses to touch land, so the island keeps its top.
+        const lift = islandLift(q, r);
+        if (lift && lift.land) setTile(q, r, 'shore', true);
       }
     }
   }
@@ -12860,6 +12991,8 @@ function resetWorldCaches() {
   cells.clear();
   generatedChunks.clear();
   nodeCache.clear();
+  isleCache.clear();   // where the land is belongs to this ocean
+  liftCache.clear();
   edgeCache.clear();
   carvedFeatures.clear();
   cellPois.clear();
