@@ -1,5 +1,120 @@
 # FATHOM — START HERE (last updated 2026-07-28)
 
+## THE SURFACE ARC (2026-07-28, in progress) — READ BEFORE TOUCHING GEOGRAPHY
+
+Sean opened a new front: *"why not have stuff at the surface, too? we have this
+one dock in a valley and then basically an eternal underwater world. why not
+have the dock be just one side of a small island? why not have other islands
+with docks and towns there? ... a whole water world full of islands at war."*
+
+He was describing the generator exactly. Past the bay walls
+`shelfSeafloorDepth` returned open water in every direction forever, and there
+was **one piece of land in the world**.
+
+### His two structural corrections, both of which fix more than they look like
+
+**1. Factions must not be banded by depth.** *"I'm not sure the factions should
+be decided by depth. that would mean very little interaction, logically, right?
+... they should all be at the surface and with diminishing resources as one
+goes deeper."*
+
+This fixes the ECONOMY, not just the fiction. The old
+`depth >= 2400 ? dagon : depth >= 900 ? libertines : confluence` meant **two
+buyers were never in reach at once**, so they could never bid against each
+other. That is why the economy audit found the Libertines top payer for
+nothing. A market needs competition and depth bands make competition
+impossible by construction. **Not yet built** — this is the next structural
+piece.
+
+**2. The world does NOT run out, and I said it did.** I conflated two things
+across two messages and he pushed until it was straight. Measured, 3 seeds,
+rings out from the dock:
+
+```
+ring      0-10   10-20   20-30   30-40   60-70   120-130
+prizes/100 hex    1.1     1.5     1.2     1.1     1.2      1.1
+```
+
+Flat to 7.8 km. **What runs out is REASONS, not world.** A bot sweeping radius
+14 finds ~3 reachable sites, works them, and then has no basis for preferring
+any direction over any other. An infinite world with no signposts is
+*experienced* as a small one.
+
+### THE SINGLE DOOR — still the biggest open thing in this file
+
+`makeLead()` has six call sites. Five are a lead spawning the next lead in its
+own chain. **There is exactly one entrance: `readChart()`**, which needs a
+`kind:'chart'` item, and those turn up ~0.05 times per session. One session in
+twenty. Behind that shut door sit `word` leads (the mechanic that makes
+charting pay — Sean's own ruling), `cavern` leads, `quarry` leads, and all
+fourteen pages of THE ACCOUNT.
+
+Sean's answer: **"yes, charting should earn leads."** Not built yet. The
+intended shape is a second entrance that costs something other than luck —
+reveal enough new water and the survey itself suggests somewhere.
+
+### Built so far
+
+- **Islands** (`cd0d40c`). Seamounts that broke the surface, on the same
+  infinite-lattice idiom as the cave nodes. Density tuned by measurement: 4–8
+  within 60 hexes, average gap 14, and **no seed left empty** (sparser settings
+  had one world in six with no land at all — the beach-rate failure again).
+- **Island shape** (`c13025f`). Three harmonics of the bearing, and **one
+  function draws both the coastline and the shoal contour**, so the mountain
+  underwater is the same shape as the land above. 1.32× the coastline of a disc,
+  measured against the same generator with harmonics switched off. 131 islands,
+  0 fragmented.
+- **The Mariners** (`c79cdad`). The fourth people, and the neutral name for
+  every boat that belongs to no faction — NPC and, later, PC. `floor: 0.9` makes
+  them the buyer of last resort: **items with no buyer anywhere went 21/36 →
+  5/36**. The Confluence's short name moved off "the federated mariners" to
+  avoid the collision. The Libertines now want worked boat-parts, which their
+  creed always implied, and are top payer for something at last.
+
+### Sean's spec for what remains, in his words
+
+- **Valleys and trenches**: *"we can put some valleys and trenches down there
+  which intersect and give access to and egress from the caves beneath."* This
+  is the biggest generator change in the arc — it touches how the seafloor is
+  built everywhere, so it needs its own battery section proving the caves stay
+  reachable and nothing gets sealed.
+- **Towns are just a dock**: adjacent to it (and not being fired on by that
+  faction's guns) a **DOCK** button appears; DOCK opens a town window *"basically
+  stolen from Pirates! but must be made our own"*. Surface towns are **basic
+  trade only** — for getting started, learning, and building a chart.
+- **NO diplomacy at the surface.** *"treaties and missions and alliances are all
+  made at the major cities underwater."* This is a good structure: the surface
+  is the shallow end, and the deep is where the politics are.
+- **Ships**: traders running port to port, some hunting subs like destroyers.
+  Wartime later, *"like in Sid Meier's Pirates!"*. And: *"in TW2002 FOLLOWING
+  ships was fruitful"* — following a trader should be a lead, diegetic and
+  needing no chart item.
+- **Populated caves and cities**: Dagon holding ruins, cities deep down.
+
+### THE HOME ISLAND — next, and the most delicate change in the project
+
+Sean: *"when we started much was made about that opening cove and it facing
+north and having a continental shelf that drops off and all... that's all fine,
+but let's draw the rest of the island behind it, too, with the same randomness
+as everything else. The dock was never intended to be at the bottom of an
+endless map anyhow."*
+
+Right, and it makes the world coherent. **But read this before starting:**
+
+- `baseSeafloorDepth` returns null for ALL `r >= 1.5`. The southern landmass is
+  infinite. Making it finite is one function's logic, but it is the function
+  every other piece of geography is built on.
+- The home shore is **hardcoded**: a literal list of hexes at r=1..5, q=-5..3,
+  set to `'shore'` with force. The dock is at (1,1). Every one of those must
+  still land inside the new island's outline.
+- `isMountainHex` runs the bay walls **32 hexes north**. On a finite island
+  those become two absurd peninsulas. The cove almost certainly has to shorten,
+  and that changes the opening's feel — which Sean said he liked.
+- `flip.test` asserts dock connectivity by BFS. `tests/firsthour.js` measures
+  the opening. Both will move.
+
+Do it as its own stage, with the measurements decided before the code.
+
 ## FIVE TESTERS ON THE ON-FOOT LAYER (2026-07-28) — read this first
 
 Five agents audited the finished three-kinds-of-place feature: adversarial
