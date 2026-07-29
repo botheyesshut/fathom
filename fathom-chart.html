@@ -1289,6 +1289,7 @@
     <button class="btn" id="btn-auto" title="Retrace the way you came, a hex a second - to the surface, to the last air you breathed, or to your station. Tap again to change the mark, or to take the helm back. Anything in the water stops it.">AUTO</button>
     <button class="btn primary" id="btn-surface" title="Take her up to the air. Do it within sight of the dock and the hold goes ashore, onto the ledger, where it finally counts">Surface</button>
     <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
+    <button class="btn primary" id="btn-sail" title="Close on the sail you have sighted to read her colours, then hail her for news. Holding your course lets her go - unless somebody out here is already hunting you" style="display:none">Close</button>
     <button class="btn" id="btn-options" title="Sound, the porthole, and starting over">Options</button>
   </div>
 </div>
@@ -1889,6 +1890,77 @@ const CULTURES = {
     markup: 2.2, danger: false,
   },
 };
+
+//=============================================================================
+// STANDING — what each people thinks of you
+//=============================================================================
+// Sean: "combat against factions will obviously detract from our faction score,
+// while trading with them and having any other friendly discourse will also have
+// mild positives, and after a certain point the user would need to do something
+// remarkable to regain their trust."
+//
+// One number per people, and the player never sees the number — they see the
+// WORD. A reputation the player cannot read is bookkeeping, and a reputation
+// shown as an integer is a spreadsheet; a people who will "trade, and watch you
+// do it" is neither.
+//
+// The scale runs -100..100 and starts at 0, because nobody has heard of you.
+const STANDING_BANDS = [
+  { at:  60, key: 'trusted',  word: 'trusted' },
+  { at:  25, key: 'welcome',  word: 'welcome' },
+  { at:   5, key: 'known',    word: 'known to them' },
+  { at:  -5, key: 'nobody',   word: 'nobody to them' },
+  { at: -25, key: 'watched',  word: 'watched' },
+  { at: -60, key: 'unwanted', word: 'unwanted' },
+  { at:-999, key: 'hunted',   word: 'hunted' },
+];
+// BELOW THIS, ORDINARY DECENCY WILL NOT DO IT. Sean's "something remarkable" —
+// trade and small courtesies stop moving the needle, and the only way back is a
+// deed the game has yet to define. That hook is NOT faked here: standing simply
+// will not rise past the floor by ordinary means, and the prose says so.
+const STANDING_FLOOR = -60;
+
+function standingOf(culture) {
+  if (!state.standing) state.standing = {};
+  return state.standing[culture] || 0;
+}
+function standingBand(culture) {
+  const v = standingOf(culture);
+  for (const b of STANDING_BANDS) if (v >= b.at) return b;
+  return STANDING_BANDS[STANDING_BANDS.length - 1];
+}
+function standingHostile(culture) {
+  const k = standingBand(culture).key;
+  return k === 'unwanted' || k === 'hunted';
+}
+function standingFriendly(culture) {
+  const k = standingBand(culture).key;
+  return k === 'trusted' || k === 'welcome';
+}
+
+// Move it, and SAY SO. A change the log does not report is a change the player
+// cannot learn from, and this whole system exists to be learned from.
+function nudgeStanding(culture, by, why) {
+  if (!CULTURES[culture]) return;
+  if (!state.standing) state.standing = {};
+  const before = standingBand(culture).key;
+  let v = standingOf(culture);
+  // The floor bites only on the way UP. You can always fall further; climbing
+  // back out of contempt is what needs the remarkable deed.
+  if (by > 0 && v <= STANDING_FLOOR) {
+    state.standing[culture] = v;
+    log(`${CULTURES[culture].short} take the ${why} and give nothing back. It will take more than courtesy now.`, 'warn', 'STANDING');
+    return;
+  }
+  v = Math.max(-100, Math.min(100, v + by));
+  state.standing[culture] = v;
+  const after = standingBand(culture).key;
+  if (after !== before) {
+    const cu = CULTURES[culture];
+    log(`Word travels. To ${cu.short} you are ${standingBand(culture).word} — ${why}.`,
+        by > 0 ? 'good' : 'warn', 'STANDING');
+  }
+}
 
 // What a culture will pay for a given item (0 = they do not want it). By sig,
 // specific key, kind, or property — the union, best match wins.
@@ -5410,6 +5482,181 @@ function dockHere() {
   updateHUD(); render(); scheduleSave();
 }
 
+//=============================================================================
+// THE ENCOUNTER
+//=============================================================================
+// Sean's flow, out of Pirates!: "first, the player or their first mate if they
+// had one would sight a vessel. They would either decide to sail away or look
+// closer. If they decided to sail away, that was that, unless they had an enemy
+// faction so upset at them that they were actively hunting them, in which case
+// the other ship might give chase anyhow just in case the player might be their
+// intended quarry. If the player decided to look closer, it was revealed what
+// faction that ship belonged to, at which point the enemy might open fire."
+//
+// IT IS OFFERED, NEVER FORCED. Nothing interrupts in this game, and there are
+// seven hulls afloat at once — a modal every time one came within two hexes
+// would be unbearable. So a sighting puts a button on the row, exactly the way
+// a harbour does, and the button is the only thing that ever happens by itself.
+function shipInReach() {
+  if (state.foot || !state.alive || state.currentDepth !== 0) return null;
+  let best = null, bd = 99;
+  for (const sh of (state.ships || [])) {
+    const d = hexDistance(sh, { q: state.q, r: state.r });
+    if (d <= 2 && d < bd) { bd = d; best = sh; }
+  }
+  return best;
+}
+
+function syncSailBtn() {
+  const b = document.getElementById('btn-sail');
+  if (!b) return;
+  const sh = shipInReach();
+  b.style.display = sh ? '' : 'none';
+  if (sh) b.textContent = sh.known ? 'Hail' : 'Close';
+}
+
+// CLOSE ON HER. Her colours become readable, and whoever hates you acts on it.
+function closeOnShip() {
+  const sh = shipInReach();
+  if (!sh) return;
+  if (!sh.known) {
+    sh.known = true;
+    const cu = CULTURES[sh.culture], H = HULLS[sh.hull];
+    const whose = cu.short + (/s$/.test(cu.short) ? "'" : "'s");
+    log(`You close the range. ${whose} colours, and ${H.name} by her lines.`, '', 'SAIL');
+    // AND NOW THEY DECIDE. A people that wants you dead does not wait to be
+    // hailed — and one that is merely watching you will let you speak.
+    if (standingHostile(sh.culture)) {
+      const st2 = shipStats(sh.culture, sh.hull);
+      if (st2.guns > 0) {
+        log(`They know the boat. ${cu.motto || 'They do not hail.'} The first round goes over the sail before you have finished reading the flag.`, 'danger', 'SAIL');
+        shipOpensFire(sh);
+        updateHUD(); render(); scheduleSave();
+        return;
+      }
+      log('They know the boat, and they have nothing to shoot with. She puts her helm over and runs.', 'warn', 'SAIL');
+      sh.fleeing = true;
+      updateHUD(); render(); scheduleSave();
+      return;
+    }
+    log('No gun ports opening. You are near enough to hail.', '', 'SAIL');
+    updateHUD(); render(); scheduleSave();
+    return;
+  }
+  hailShip(sh);
+}
+
+// She fires. Ships are not creatures and this is not the deep's hunting model —
+// a gun crew has a range and a rate and that is all.
+function shipOpensFire(sh) {
+  const st2 = shipStats(sh.culture, sh.hull);
+  const hit = Math.max(2, Math.round(st2.guns * (0.7 + rand() * 0.6)));
+  state.hull = Math.max(0, state.hull - hit);
+  log(pickLoose([
+    `A shell throws water over the casing and something in the pressure hull rings like a struck bell. ${hit} taken.`,
+    `They are shooting well. The boat takes ${hit} and the deck plates jump under you.`,
+    `Close aboard, and then not close — ${hit} off the hull and a smell of burning insulation.`,
+  ]), 'danger', 'HULL');
+  sh.hostileTo = true;
+  checkDeath();
+}
+
+// HAILING. Sean: "hail for news (of war or other things relevant to that
+// faction, in our case maybe hints about sinkholes or ruins or sunken vessels
+// or available missions from that faction or of course which factions they have
+// currently made peace with or declared war against."
+//
+// One hull, one hail. A ship that has already told you what it knows has
+// nothing left, which is what stops this becoming a news vending machine.
+function hailShip(sh) {
+  if (!sh) return;
+  if (!state.hailed) state.hailed = [];
+  const cu = CULTURES[sh.culture];
+  if (state.hailed.indexOf(sh.id) >= 0) {
+    log('You have had everything off this one already. They wave you off.', '', 'SAIL');
+    render();
+    return;
+  }
+  state.hailed.push(sh.id);
+  log(`You come up on her beam and the loud-hailer squalls. ${cu.short} answer — grudgingly, and then at length, because a boat that has been at sea is a boat that wants to talk.`, '', 'HAIL');
+  nudgeStanding(sh.culture, 2, 'you hailed rather than shot');
+  shipNews(sh);
+  updateHUD(); render(); scheduleSave();
+}
+
+// WHAT SHE KNOWS. Sean's list: "hints about sinkholes or ruins or sunken vessels
+// or available missions from that faction or of course which factions they have
+// currently made peace with or declared war against."
+//
+// AND THIS IS THE SECOND DOOR. `makeLead()` has had exactly one player-reachable
+// entrance for its whole life — `readChart()`, which needs a chart item, and
+// those turn up about 0.05 times a session. One session in twenty. Behind that
+// shut door sit word leads, cavern leads, quarry leads and all fourteen pages of
+// THE ACCOUNT. A hull that has been at sea and will talk to you is a door that
+// costs a courtesy instead of a lottery ticket.
+function shipNews(sh) {
+  const cu = CULTURES[sh.culture];
+  const rr = mulberry32(hashStr('news:' + worldSeed + ':' + sh.id));
+  const roll = rr();
+
+  // A courier is carrying somebody's word, and that is the whole point of her.
+  const isCourier = sh.hull === 'courier';
+
+  if (roll < 0.34 || isCourier) {
+    // SOMEWHERE WORTH GOING. The lead system's second entrance.
+    const before = (state.leads || []).length;
+    if (typeof makeLead === 'function') {
+      makeLead(1, state.q, state.r, 'hail:' + sh.id);
+    }
+    const after = (state.leads || []).length;
+    if (after > before) {
+      log(isCourier
+        ? 'She is a courier and she is carrying paper. For the price of not sinking her, the mate reads you a bearing off it and swears it is nothing important.'
+        : 'The mate leans over the rail with a chart he should not have and gives you a bearing off it.', 'good', 'HAIL');
+      return;
+    }
+    // makeLead can honestly decline. Fall through rather than say nothing.
+  }
+
+  if (roll < 0.62) {
+    // WHO IS AT WAR WITH WHOM. Standing is the war: they tell you how the other
+    // peoples regard you, which is intelligence you cannot otherwise get.
+    const others = Object.keys(CULTURES).filter(k => k !== sh.culture);
+    const who = others[Math.floor(rr() * others.length)];
+    const b = standingBand(who);
+    log(`On the politics: ${CULTURES[who].short} are asking after boats like yours. Word is you are ${b.word} there.`,
+        standingHostile(who) ? 'warn' : '', 'HAIL');
+    if (standingHostile(who)) {
+      log(`"If you are going that way," the mate says, "go deep and go quiet."`, 'warn', 'HAIL');
+    }
+    return;
+  }
+
+  if (roll < 0.82) {
+    // THE TRADE. Where their people are paying, which is worth real crates.
+    const wants = Object.keys(cu.buys && cu.buys.keys ? {} : {});
+    const keys = (cu.buys && cu.buys.keys) || [];
+    if (keys.length) {
+      const k = keys[Math.floor(rr() * keys.length)];
+      const it = ITEMS[k];
+      if (it) {
+        log(`"If you come across ${it.name}," the mate says, "bring it to one of ours. We are short and we are paying."`, '', 'HAIL');
+        return;
+      }
+    }
+  }
+
+  // AND SOMETIMES SHE JUST TALKS. A hull that has been out a long time has
+  // weather and rumour and nothing you can spend, and that has to be a real
+  // outcome or every hail becomes a slot machine that always pays.
+  log(pickLoose([
+    'Nothing but weather and a complaint about the last port. They have been out eleven weeks and it shows.',
+    'The mate talks for a while about a sound they have been hearing at night, three hundred miles from here, and asks whether you have heard it. You have.',
+    'They have seen nothing, met nobody, and lost a man over the side a fortnight back. They ask you to remember the name and you do.',
+    'A long complaint about the price of oil, and then a longer one about the peace.',
+  ]), '', 'HAIL');
+}
+
 // The button only when there is something to tie up to.
 function syncDockBtn() {
   const b = document.getElementById('btn-dock');
@@ -5479,6 +5726,7 @@ function tradeBuy(e, key) {
   if (state.cargo < p) { log('Not crates enough for that.', 'warn', 'TRADE'); return; }
   state.cargo -= p; giveItem(key, 1);
   log(`Bought: ${ITEMS[key].name}, ${p} crates. ${CULTURES[e.culture].short} count it out and hand it over.`, '', 'TRADE');
+  nudgeStanding(e.culture, 1, 'you deal fairly with them');
   sfx('bell'); renderTrade(e); updateHUD(); render(); scheduleSave();
 }
 function tradeSell(e, key) {
@@ -7744,11 +7992,12 @@ function shipsTick() {
     sh.seen = true;
     const H = HULLS[sh.hull], cu = CULTURES[sh.culture];
     if (state.currentDepth === 0) {
-      // "the free yards's colours" — two of the four peoples' names end in s,
-      // so the possessive has to be built and not concatenated.
-      const whose = cu.short + (/s$/.test(cu.short) ? "'" : "'s");
-      log(`${H.name.charAt(0).toUpperCase() + H.name.slice(1)}, ${bearing(state.q, state.r, sh.q, sh.r)} of you, under ${whose} colours. ${H.flavor}`,
-          sh.hull === 'destroyer' ? 'warn' : '', 'CONTACT');
+      // A SIGHTING DOES NOT NAME HER. Sean's flow, out of Pirates!: you sight a
+      // vessel, and only if you close on her do her colours become readable.
+      // Hull shape carries at distance; a flag does not.
+      log(`Sail, ${bearing(state.q, state.r, sh.q, sh.r)} of you. ${H.flavor}`,
+          '', 'SAIL');
+      log('Close on her to read her colours, or hold your course and let her go.', '', 'SAIL');
     } else {
       log(`Screws on the surface, ${bearing(state.q, state.r, sh.q, sh.r)} — fast and shallow. Something is crossing up there.`, '', 'SONAR');
     }
@@ -7850,6 +8099,8 @@ const state = {
   deckDead: {},   // and who is lying on it
   beachDrawn: {}, // when each trapped pocket was last drawn down
   ships: [],      // traffic on the surface. NOT saved — weather, not landmarks
+  standing: {},   // what each people thinks of you. Saved: it is the campaign.
+  hailed: [],     // ships already spoken to, so a hail is worth something once
   // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
   // on its own. Depletes away from port/base, tops up at either.
   stores: 100,
@@ -7931,7 +8182,7 @@ function syncFootControls(inside) {
   // aboard" from inside a ruin, while the controls you need are clipped.
   const dec = document.getElementById('btn-launch');
   if (dec) dec.textContent = `Decoy (${state.decoys || 0})`;
-  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto', 'btn-dock']) {
+  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto', 'btn-dock', 'btn-sail']) {
     const el = document.getElementById(id);
     if (el) el.style.display = inside ? 'none' : '';
   }
@@ -15140,9 +15391,10 @@ function syncDiveControls() {
 }
 
 function updateHUD() {
-  // A harbour appears and disappears as the boat moves, so the button that
-  // offers it has to be re-asked every time anything changes.
+  // A harbour or a sail appears and disappears as the boat moves, so the buttons
+  // that offer them have to be re-asked every time anything changes.
   syncDockBtn();
+  syncSailBtn();
   const sub = activeSub();
   syncDiveControls();
   document.getElementById('air-val').textContent = state.air;
@@ -15299,6 +15551,7 @@ function restart() {
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
   state.clearedDecks = []; state.deckTook = {}; state.deckHurt = {}; state.deckDead = {}; state.beachDrawn = {};
+  state.standing = {}; state.hailed = [];   // a new ocean has never heard of you
   state.stores = 100;
   state.lostCrew = [];
   state.items = {};
@@ -15514,6 +15767,7 @@ function doSave(force) {
       deckHurt: state.deckHurt,      // ...what its tenant is still bleeding from
       deckDead: state.deckDead,      // ...and who is lying on it
       beachDrawn: state.beachDrawn,  // ...and when each pocket was last drawn
+      standing: state.standing,      // what the peoples think of you
       stores: state.stores,
       lostCrew: state.lostCrew,
       items: state.items,
@@ -15680,6 +15934,8 @@ function resumeGame(save) {
   state.deckHurt = obj(save.deckHurt);
   state.deckDead = obj(save.deckDead);
   state.beachDrawn = obj(save.beachDrawn);
+  state.standing = obj(save.standing);
+  state.hailed = [];   // a new session may hail the same hull again
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
   state.items = save.items || {};
@@ -15960,6 +16216,7 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 })();
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('btn-dock').addEventListener('click', dockHere);
+document.getElementById('btn-sail').addEventListener('click', closeOnShip);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', anotherBoat);
