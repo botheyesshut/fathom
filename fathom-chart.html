@@ -1778,6 +1778,9 @@ function rollItem(depth, rng) {
 const CULTURES = {
   dagon: {
     name: 'the Children of Dagon', short: 'the Deep Ones', glyph: 'ᛝ', col: '#6fae72', depthBand: 'deep',
+    // PROPOSED. Not a rallying cry — they are not rallying. It is a statement
+    // of fact about the arrangement, and they are patient about it.
+    motto: 'It sleeps. We wait.',
     creed: 'They breathe the black water and worship what sleeps under it, and they are wretched and conniving and eat men with a terrible relish. But bring them a relic of their god, or flesh brought fresh, and even they will trade.',
     buys: { sigs: ['dagon'], props: ['cursed', 'living'], relics: true, flesh: true,
             // NOT ingot: worked pre-Fall metal is the mariners' business, and
@@ -1799,17 +1802,21 @@ const CULTURES = {
   // (`state.enclaves[].culture`) and into item `sig` fields; renaming it would
   // orphan both for no gain. What the player reads is `name` and `short`.
   //
-  // THE NAME IS BACK WHERE IT BELONGS. "The Confluence" was this people's name
-  // before I moved it, and it is the right one: a confluence is where waters
-  // meet, which is exactly what a federation of boats that keep one another
-  // afloat is. It went only because Sean disliked a SHORT name I invented for
-  // it ("the federated boats"), and the replacement he offered turned out to
-  // describe the other people.
+  // THE LONG LINE. Sean named them: "Let's rename the Confluence to the Long
+  // Line, and they can be called Liners, and their motto and battle cry can be
+  // Hold the Line!"
   //
-  // Sean is still choosing their final name. This is the original, restored,
-  // and it is one line to change.
+  // It is better than anything I offered. A long line is a tow, a picket, a
+  // washing line, and a queue for something scarce — every one of which is a
+  // people who hold each other up. And "Hold the Line" is both what you shout
+  // in a fight and what the whole federation is FOR.
+  //
+  // The KEY stays `confluence`. It is written into every save
+  // (`state.enclaves[].culture`) and onto the ingot and the scrimshaw as
+  // `sig`, and rekeying would orphan both for nothing.
   confluence: {
-    name: 'the Confluence', short: 'the Confluence', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    name: 'the Long Line', short: 'the Liners', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    motto: 'Hold the Line!',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
     buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
             kinds: ['chart'], mult: 2.1 },
@@ -1833,6 +1840,10 @@ const CULTURES = {
   // pay properly for exactly one thing: knowledge of where the water goes.
   mariners: {
     name: 'the Mariners', short: 'the carrying trade', glyph: '⚓', col: '#c8b88a', depthBand: 'any',
+    // PROPOSED, not ratified. Sean named the Long Line and the Con-Fed; these
+    // two are mine and are meant to be argued with. A people with no politics
+    // has no battle cry, only terms — so the Mariners' is a price.
+    motto: 'Freight, and no flag.',
     creed: 'No people at all, and they will tell you so themselves — every boat that never signed anything, working the water between those who did. They carry what nobody else will through water nobody else will cross, and they take their cut of all of it. Everyone despises them. Everyone needs them.',
     // NOT `inertiallog`: the Confluence SELL it at 1.8, and a named want here
     // pays 2.4 — buy from one, sell to the other, +3 a turn, forever. The
@@ -1861,7 +1872,8 @@ const CULTURES = {
   // "the Con-Fed Seas" stays reserved for their WATERS, for when factions hold
   // territory instead of depth bands.
   libertines: {
-    name: 'the Confederation', short: 'the Con-Fed', glyph: '✶', col: '#e0a05a', depthBand: 'mid',
+    name: 'the Confederation', short: 'the Con-Fed', glyph: '✶', col: '#c8624a', depthBand: 'mid',
+    motto: 'Life! Liberty! Open seas!',
     creed: 'Every deck its own republic, and proud of it — leadership no further away than the man at the next bench, and no love at all for outsiders telling them how to live. Nobody alive makes a better weapon, and they will sell to anyone whose crates ring true.',
     buys: { sigs: ['libertines'], keys: ['ingot', 'scrimshaw', 'idol', 'blackpearl', 'effigy', 'specimenjar'],
             kinds: ['valuable', 'fit'], relics: true, mult: 1.8 },
@@ -4660,6 +4672,10 @@ function dockHere() {
   if (!state.poisFound.includes(k)) {
     state.poisFound.push(k);
     log(`${nm}. ${cu.name} hold it — a dozen roofs, a crane that still turns, and a bar for boats that have somewhere to be.`, 'good', 'PORT');
+    // A PEOPLE PUTS ITS WORDS WHERE ITS BOATS COME IN. The motto is over the
+    // gate of every town they hold — which is the first place you would ever
+    // read it, and the last thing you would hear from one of their decks.
+    if (cu.motto) log(`Over the gate, in letters somebody keeps painting: ${cu.motto}`, '', 'PORT');
   } else {
     log(`${nm} again. They know the boat now.`, '', 'PORT');
   }
