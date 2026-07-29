@@ -5947,10 +5947,18 @@ function islandPort(isle) {
       const r = Math.round(isle.r + Math.sin(ang) * d * 1.1547);
       const lift = islandLift(q, r);
       if (!lift || !lift.land) continue;          // want the LAST land hex
-      // ...with water on at least one side of it.
+      // ...WITH WATER BESIDE IT, AND `shelfSeafloorDepth` IS THE AUTHORITY.
+      //
+      // The first version asked `islandLift` whether the neighbour was land,
+      // which is only ONE of the reasons a hex has no sea in it — the home
+      // island and plain stone are others, and islandLift knows about neither.
+      // Measured: 5 of 12 harbours had no surface water beside them at all, so
+      // 42% of the world's ports could never have shown a DOCK button. A berth
+      // is where the boat floats, so ask the thing that decides that.
       for (const [dq, dr] of [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]) {
-        const nl2 = islandLift(q + dq, r + dr);
-        if (!nl2 || !nl2.land) return { q, r, holder: islandHolder(isle), isle: isle.id };
+        if (shelfSeafloorDepth(q + dq, r + dr) != null) {
+          return { q, r, holder: islandHolder(isle), isle: isle.id };
+        }
       }
     }
   }
@@ -6162,9 +6170,28 @@ function addVolume(q, r, type, kind, ceiling, floor) {
   if (TILES[type].wall) return;
   // Snap to grid: ceiling rounds UP (so we don't claim space that doesn't
   // exist), floor rounds DOWN. Every bound is then reachable by 60-m moves.
-  ceiling = snapDepth(Math.max(0, ceiling), 'ceiling');
-  floor   = snapDepth(floor, 'floor');
-  if (floor <= ceiling) return; // degenerate after snapping
+  const rawCeil = Math.max(0, ceiling), rawFloor = floor;
+  ceiling = snapDepth(rawCeil, 'ceiling');
+  floor   = snapDepth(rawFloor, 'floor');
+  if (floor <= ceiling) {
+    // A SHOAL IS STILL WATER.
+    //
+    // The floor snaps DOWN to the 60 m grid, so any hex holding less than one
+    // grid step of water snapped to nothing and returned here — no cells, and
+    // the hex fell through to stone. That is EVERY SHOAL EDGE IN THE WORLD:
+    // the shallowest water there is, the water right against every shore, and
+    // exactly where a harbour has to be. Measured: a hex with 46 m of water
+    // generated no cells at all, and 5 of 12 harbours had nowhere for a boat
+    // to lie alongside.
+    //
+    // It has always been true — which is why the origin carries a hand-written
+    // `addVolume(0, 0, 'water', 'water', 0, 100)` to force the spawn hex into
+    // existence. Islands are simply the first thing to make shallows common.
+    //
+    // A hex open at the SURFACE with any water at all keeps its surface cell.
+    if (ceiling === 0 && rawFloor > rawCeil) floor = 0;
+    else return;                        // genuinely degenerate: no space here
+  }
   const k = hexKey(q, r);
   const existing = world.get(k);
   if (existing && existing.land) return; // shore/dock inviolable — never carve them
