@@ -5911,6 +5911,52 @@ function islandRoll(icq, icr) {
            shoal: size + 3 + Math.floor(rr() * 3) };
 }
 
+// WHO HOLDS IT. Sean: "I'm not sure the factions should be decided by depth.
+// that would mean very little interaction, logically, right? ... they should all
+// be at the surface and with diminishing resources as one goes deeper."
+//
+// He is right, and it fixes the ECONOMY as much as the fiction. Under the old
+// depth bands two buyers were NEVER in reach at once, so they could never bid
+// against each other — which is why the economy audit found the Libertines top
+// payer for nothing. A market needs competition and depth bands made
+// competition impossible by construction.
+//
+// The Deep Ones hold no island. They have no use for air.
+const SURFACE_PEOPLES = ['confluence', 'libertines', 'mariners'];
+
+// A rock with a few huts is a Mariner anchorage more often than not — the
+// carrying trade takes what nobody has bothered to claim. The bigger the
+// island, the likelier a real people holds it.
+function islandHolder(isle) {
+  const rr = mulberry32(hashStr('holder:' + worldSeed + ':' + isle.id));
+  if (isle.size === 1) return rr() < 0.72 ? 'mariners' : SURFACE_PEOPLES[Math.floor(rr() * 3)];
+  return SURFACE_PEOPLES[Math.floor(rr() * SURFACE_PEOPLES.length)];
+}
+
+// The harbour: a shore hex with open water beside it, so a boat can lie
+// alongside. Deterministic — the same island always builds on the same side.
+function islandPort(isle) {
+  const rr = mulberry32(hashStr('port:' + worldSeed + ':' + isle.id));
+  const start = Math.floor(rr() * 6);
+  for (let step = 0; step < 24; step++) {
+    const ang = ((start + step) / 24) * Math.PI * 2;
+    const shore = isleRadius(isle, ang, isle.size);
+    // Walk outward along this bearing to the first hex that is NOT land.
+    for (let d = Math.max(1, Math.floor(shore) - 1); d <= Math.ceil(shore) + 2; d++) {
+      const q = Math.round(isle.q + Math.cos(ang) * d);
+      const r = Math.round(isle.r + Math.sin(ang) * d * 1.1547);
+      const lift = islandLift(q, r);
+      if (!lift || !lift.land) continue;          // want the LAST land hex
+      // ...with water on at least one side of it.
+      for (const [dq, dr] of [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]) {
+        const nl2 = islandLift(q + dq, r + dr);
+        if (!nl2 || !nl2.land) return { q, r, holder: islandHolder(isle), isle: isle.id };
+      }
+    }
+  }
+  return null;
+}
+
 function islandsInRegion(qMin, qMax, rMin, rMax) {
   const out = [];
   const c0 = Math.floor(qMin / ISLE_CELL), c1 = Math.floor(qMax / ISLE_CELL);
@@ -6226,7 +6272,18 @@ function generateChunk(cq, cr) {
         // island is a shore too. This runs BEFORE the caves are carved, and
         // carveChamber refuses to touch land, so the island keeps its top.
         const lift = islandLift(q, r);
-        if (lift && lift.land) setTile(q, r, 'shore', true);
+        if (lift && lift.land) {
+          // A HARBOUR IS A DOCK, NOT A SHORE. Without this an island is bare
+          // rock: nothing on the whole of one could be visited, and the only
+          // code reading the island generator was the seafloor formula.
+          const port = islandPort(lift.isle);
+          if (port && port.q === q && port.r === r) {
+            setTile(q, r, 'dock', true);
+            notePort(port);
+          } else {
+            setTile(q, r, 'shore', true);
+          }
+        }
       }
     }
   }
@@ -6403,7 +6460,16 @@ function generateChunk(cq, cr) {
         const opts = caveDepthsAt(h);
         if (opts.length) {
           const depth = opts[Math.floor(crand() * opts.length)];
-          const culture = depth >= 2400 ? 'dagon' : depth >= 900 ? 'libertines' : 'confluence';
+          // NOT A DEPTH LOOKUP ANY MORE. Humans work down from the surface
+          // and their hold thins as they go; below the crush depth of anything
+          // they can build, the water belongs to the Deep Ones alone. So depth
+          // is a PRESSURE on who is there, not a switch that decides it — and
+          // in the band where they overlap you can reach two buyers at once,
+          // which is the thing this economy has never had.
+          const pick = crand();
+          const humanOdds = depth >= 3000 ? 0 : depth >= 1800 ? 0.25 : depth >= 900 ? 0.6 : 0.9;
+          const culture = pick > humanOdds ? 'dagon'
+            : SURFACE_PEOPLES[Math.floor(crand() * SURFACE_PEOPLES.length)];
           spawnEnclave(culture, h.q, h.r, depth);
         }
       }
@@ -6413,6 +6479,20 @@ function generateChunk(cq, cr) {
 
 // A settlement of one of the peoples. Overlay, like creatures — rolled once per
 // chunk (spawnedChunks saved), fixed in place, and saved as state.enclaves.
+// Every harbour the world has generated, so a port can be named, drawn on the
+// chart, and later sailed between. Overlay-free: it is a pure function of the
+// seed, rebuilt as chunks generate, so it never goes in a save.
+const ports = new Map();
+function notePort(port) { ports.set(port.q + ',' + port.r, port); }
+function portAt(q, r) { return ports.get(q + ',' + r) || null; }
+function portNear(q, r) {
+  for (const [dq, dr] of [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]) {
+    const p = portAt(q + dq, r + dr);
+    if (p) return p;
+  }
+  return null;
+}
+
 function spawnEnclave(culture, q, r, depth) {
   if (!state.enclaves) state.enclaves = [];
   state.enclaves.push({ id: 'enclave:' + q + ',' + r + ',' + depth, culture: culture, q: q, r: r, depth: depth });
@@ -13122,6 +13202,7 @@ function resetWorldCaches() {
   generatedChunks.clear();
   nodeCache.clear();
   isleCache.clear();   // where the land is belongs to this ocean
+  ports.clear();
   homeIsleCache = null;
   liftCache.clear();
   edgeCache.clear();
