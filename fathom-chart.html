@@ -1815,7 +1815,10 @@ const CULTURES = {
   // (`state.enclaves[].culture`) and onto the ingot and the scrimshaw as
   // `sig`, and rekeying would orphan both for nothing.
   confluence: {
-    name: 'the Long Line', short: 'the Liners', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    // RUST RED, Sean's call: "that's the color of socialism." Obviously right,
+    // and it is the international convention rather than the American one — the
+    // colour of a banner, and of a hull that has been held together a long time.
+    name: 'the Long Line', short: 'the Liners', glyph: '⎈', col: '#c8624a', depthBand: 'shelf',
     motto: 'Hold the Line!',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
     buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
@@ -1872,7 +1875,12 @@ const CULTURES = {
   // "the Con-Fed Seas" stays reserved for their WATERS, for when factions hold
   // territory instead of depth bands.
   libertines: {
-    name: 'the Confederation', short: 'the Con-Fed', glyph: '✶', col: '#c8624a', depthBand: 'mid',
+    // OPEN-SEA BLUE, and their own motto chose it: "Life! Liberty! Open seas!"
+    // Sky and horizon rather than the industrial amber they started with, which
+    // read as a foundry and sat too close to Dagon's green to separate at a
+    // glance. Hues across the four peoples now sit at roughly 14, 204, 44 and
+    // 123 degrees — no two of them collide on a phone in a dark room.
+    name: 'the Confederation', short: 'the Con-Fed', glyph: '✶', col: '#58a8e0', depthBand: 'mid',
     motto: 'Life! Liberty! Open seas!',
     creed: 'Every deck its own republic, and proud of it — leadership no further away than the man at the next bench, and no love at all for outsiders telling them how to live. Nobody alive makes a better weapon, and they will sell to anyone whose crates ring true.',
     buys: { sigs: ['libertines'], keys: ['ingot', 'scrimshaw', 'idol', 'blackpearl', 'effigy', 'specimenjar'],
@@ -3511,6 +3519,200 @@ const VP_SCENES = {
        '≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
+  // ---- FOUR HULLS, SEEN FROM THE WATER.
+  //
+  // ONE silhouette per hull, not one per hull per people. Twelve drawings
+  // would cost 1.6% of the file and nothing at all at runtime — vpDraw
+  // renders exactly one scene — so the price is not the machine's. The price
+  // is that a 24x10 silhouette carries three or four distinguishing features,
+  // and asking a shape to say both "destroyer" and "Con-Fed" spends the same
+  // few cells twice and blurs both readings.
+  //
+  // Colour is a PARALLEL channel and costs none of those features. So the
+  // owner supplies the plating colour (`▓`) and the device at the masthead
+  // (`¦`), both swapped in at draw time — see CULT_INK and CULT_MARK. Four
+  // drawings, sixteen ships a player can tell apart at a glance.
+
+  shipcourier: { cap: 'low, long, and going', hold: 4, wet: 0,
+    key: { '░': '4', '≈': '0', '▓': '7', '▄': '7', '¦': 'f', '~': '0' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░▄▓▓▄░░░░░░░░░░░',
+       '░░░░░░▓▓▓▓▓▓▓▓▓░░░░░░░░░',
+       '~~~~~~≈≈≈≈≈≈≈≈≈~~~~≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░▄▓▓▄░░░░░░░░░░░',
+       '░░░░░░▓▓▓▓▓▓▓▓▓░░░░░░░░░',
+       '≈≈~~~~~~≈≈≈≈≈≈≈≈~~~~≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░▄▓▓▄░░░░░░░░░░░',
+       '░░░░░░▓▓▓▓▓▓▓▓▓░░░░░░░░░',
+       '~~~~~~≈≈≈≈≈≈≈≈≈≈≈~~~~≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░▄▓▓▄░░░░░░░░░░░',
+       '░░░░░░▓▓▓▓▓▓▓▓▓░░░░░░░░░',
+       '≈≈~~~~~~≈≈≈≈≈≈≈~~~~≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+    ] },
+
+  shipmerchant: { cap: 'deep, and in no hurry', hold: 6, wet: 0,
+    key: { '░': '4', '≈': '0', '▓': '7', '▀': '7', '¦': 'f', '│': '8', '┬': '8', '─': '8', '~': '0' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░¦░░░░░░░░░░░',
+       '░░░░░░░░│    │░░░░░░░░░░',
+       '░░░░░░░░┬────┬░░░░░░░░░░',
+       '░░░░░▀▀▀▀▀▀▀▀▀▀▀▀▀▀░░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈',
+       '≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░¦░░░░░░░░░░░',
+       '░░░░░░░░│    │░░░░░░░░░░',
+       '░░░░░░░░┬────┬░░░░░░░░░░',
+       '░░░░░▀▀▀▀▀▀▀▀▀▀▀▀▀▀░░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈',
+       '≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░¦░░░░░░░░░░░',
+       '░░░░░░░░│    │░░░░░░░░░░',
+       '░░░░░░░░┬────┬░░░░░░░░░░',
+       '░░░░░▀▀▀▀▀▀▀▀▀▀▀▀▀▀░░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░¦░░░░░░░░░░░',
+       '░░░░░░░░│    │░░░░░░░░░░',
+       '░░░░░░░░┬────┬░░░░░░░░░░',
+       '░░░░░▀▀▀▀▀▀▀▀▀▀▀▀▀▀░░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+    ] },
+
+  shipnaval: { cap: 'guns fore and aft', hold: 5, wet: 0,
+    key: { '░': '4', '≈': '0', '▓': '7', '▀': '7', '¦': 'f', '│': '8', '┼': '8', '┬': '8', '●': 'f', '~': '0' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░░░│░░░░░░░░░░░░',
+       '░░░░░░░░░░░┼░░░░░░░░░░░░',
+       '░░░░░░░●▀▀▀┬▀▀▀●░░░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈',
+       '≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░░░│░░░░░░░░░░░░',
+       '░░░░░░░░░░░┼░░░░░░░░░░░░',
+       '░░░░░░░●▀▀▀┬▀▀▀●░░░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈',
+       '≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░░░│░░░░░░░░░░░░',
+       '░░░░░░░░░░░┼░░░░░░░░░░░░',
+       '░░░░░░░●▀▀▀┬▀▀▀●░░░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░¦░░░░░░░░░░░░',
+       '░░░░░░░░░░░│░░░░░░░░░░░░',
+       '░░░░░░░░░░░┼░░░░░░░░░░░░',
+       '░░░░░░░●▀▀▀┬▀▀▀●░░░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+    ] },
+
+  shipdestroyer: { cap: 'racks along her stern', hold: 5, wet: 0,
+    key: { '░': '4', '≈': '0', '▓': '7', '▀': '7', '¦': 'f', '│': '8', '┴': '8', '●': 'f', '○': 'c', '~': '0', '·': 'f' },
+    frames: [
+      ['░░░░░░░░░¦░░░░░░░░░░░░░░',
+       '░░░░░░░░░│░░░░░░░░░░░░░░',
+       '░░░░░░░░░┴░░░░░░░░░░░░░░',
+       '░░░░░░░░▀▀▀▀░░░░░░░░░░░░',
+       '░░░░░●▀▀▀▀▀▀▀▀▀○○○░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈≈',
+       '≈~~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈·≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░¦░░░░░░░░░░░░░░',
+       '░░░░░░░░░│░░░░░░░░░░░░░░',
+       '░░░░░░░░░┴░░░░░░░░░░░░░░',
+       '░░░░░░░░▀▀▀▀░░░░░░░░░░░░',
+       '░░░░░●▀▀▀▀▀▀▀▀▀○○○░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈≈',
+       '≈≈≈≈≈≈~~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈·≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░¦░░░░░░░░░░░░░░',
+       '░░░░░░░░░│░░░░░░░░░░░░░░',
+       '░░░░░░░░░┴░░░░░░░░░░░░░░',
+       '░░░░░░░░▀▀▀▀░░░░░░░░░░░░',
+       '░░░░░●▀▀▀▀▀▀▀▀▀○○○░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈~~~~≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈·≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░¦░░░░░░░░░░░░░░',
+       '░░░░░░░░░│░░░░░░░░░░░░░░',
+       '░░░░░░░░░┴░░░░░░░░░░░░░░',
+       '░░░░░░░░▀▀▀▀░░░░░░░░░░░░',
+       '░░░░░●▀▀▀▀▀▀▀▀▀○○○░░░░░░',
+       '░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░',
+       '░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░',
+       '≈≈≈≈≈▓▓▓▓▓▓▓▓▓▓▓▓▓≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~~≈≈≈≈',
+       '≈≈≈≈≈≈·≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+    ] },
+
   // ---- THE VERTICAL SITUATION. A window that shows a seabed while the
   // sounder says the ceiling is just above is worse than no window: it
   // contradicts the instrument the player is being asked to trust.
@@ -3901,6 +4103,22 @@ const VP_SCENES = {
 
 let vpScene = 'deep', vpTick = 0, vpSnow = [], vpOn = true, vpTimer = null;
 
+// WHOSE SHIP IS IN THE WINDOW. Set by the scene picker, read by vpDraw, and
+// null for everything that is not a ship.
+let vpFlag = null;
+
+// A PEOPLE'S PLATING, in the DOS palette this art is drawn in. The four hex
+// colours the rest of the UI uses are not in ANSI16, so each people maps to its
+// nearest palette digit — which keeps the porthole honestly 16-colour instead of
+// smuggling true colour into one scene.
+const CULT_INK = { confluence: 'c', libertines: '9', mariners: '7', dagon: 'a' };
+
+// AND A PEOPLE'S DEVICE. The culture glyphs (⎈ ✶ ⚓ ᛝ) are NOT on VP_SAFE — they
+// would break the grid, which is the exact bug the battery caught an hour ago —
+// so each gets a stand-in from the measured set. The Con-Fed's is a star, which
+// is what their emblem is anyway.
+const CULT_MARK = { confluence: '=', libertines: '*', mariners: '¤', dagon: '†' };
+
 function vpInitSnow() {
   vpSnow = [];
   const rng = mulberry32(hashStr('snow:' + worldSeed));
@@ -3925,6 +4143,14 @@ function vpDraw() {
   // of every single art bug in the first cut, because two hand-typed rows have
   // to stay the same length forever and they never do. A key cannot go ragged.
   const key = S.key ? Object.assign({}, VP_KEY, S.key) : VP_KEY;
+  // THE OWNER'S COLOURS, painted on at draw time. This is why there are four
+  // hull scenes and not twelve: the key is rebuilt every frame anyway, so the
+  // plating and the masthead device cost nothing to swap.
+  const flagMark = vpFlag ? (CULT_MARK[vpFlag] || '¦') : null;
+  if (vpFlag && CULT_INK[vpFlag]) {
+    key['▓'] = CULT_INK[vpFlag];
+    if (flagMark) key[flagMark] = CULT_INK[vpFlag];
+  }
 
   // FRAMES, the TW2002 way. A scene may be a single drawing (`art`) or a short
   // loop of them (`frames`) — three or four, with only a few cells differing:
@@ -3934,7 +4160,10 @@ function vpDraw() {
   // a breathing thing breathes and a warning light blinks.
   const frames = S.frames && S.frames.length ? S.frames : [S.art];
   const hold = S.hold || 2;
-  const A = frames[Math.floor(vpTick / hold) % frames.length];
+  let A = frames[Math.floor(vpTick / hold) % frames.length];
+  // THE DEVICE AT THE MASTHEAD. `¦` is authored into every hull scene as a bare
+  // mast; a ship with an owner flies that people's mark from it instead.
+  if (flagMark && flagMark !== '¦') A = A.map(row => row.split('¦').join(flagMark));
 
   const ch = [], co = [];
   for (let y = 0; y < VP_H; y++) {
@@ -4048,6 +4277,7 @@ function showScene(key) {
 // What the boat is looking at right now, from state alone — so the viewport can
 // never disagree with the prose, which would be worse than having no viewport.
 function sceneForNow() {
+  vpFlag = null;   // cleared first: nothing but a ship flies anybody's colours
   if (state.foot) {
     // THREE BRANCHES, NOT TWO. This read `hull ? hullFaces : ruinFaces`, so a
     // captain standing on sand in a random-walk rock cavern was shown squared
@@ -4104,6 +4334,19 @@ function sceneForNow() {
       }
       return 'dock';
     }
+    // A SHIP IN THE WINDOW, and it outranks a coastline: a hull crossing your
+    // bow is the most interesting thing on the surface. Nearest wins, so two
+    // ships in sight show you the one you would actually be looking at.
+    let near = null, nd = 99;
+    for (const sh of (state.ships || [])) {
+      const d = hexDistance(sh, { q: state.q, r: state.r });
+      if (d <= 2 && d < nd) { nd = d; near = sh; }
+    }
+    if (near) {
+      vpFlag = near.culture;
+      return 'ship' + near.hull;
+    }
+    vpFlag = null;
     // LAND ON THE WATER. A captain could sail up to an island and never once
     // see it — the porthole had scenes for open water and the deep and nothing
     // at all for a coastline.
