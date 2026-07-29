@@ -3303,6 +3303,192 @@ const VP_SCENES = {
        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
     ] },
 
+  // ---- THE SURFACE, DRAWN. A captain could sail up to an island, tie up at
+  // a town, trade, and never once see it — the porthole had scenes for open
+  // water and the deep and nothing at all for a coastline. A port also has to
+  // look like WHOSE it is, or three peoples holding three kinds of harbour is
+  // a fact in the data and not a thing you can see.
+
+  landfall: { cap: 'land, low on the water', hold: 6, wet: 0,
+    key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', '~': '0' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░▄▄▄░░░░░░░░░',
+       '░░░░░░░░░▄▄▓▓▓▓▄░░░░░░░░',
+       '░░░░░░▄▓▓▓▓▓▓▓▓▓▄░░░░░░░',
+       '░░░░▄▓▓▓▓▓▓▓▓▓▓▓▓▓▄░░░░░',
+       '▄██████████████████████▄',
+       '~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░▄▄▄░░░░░░░░░',
+       '░░░░░░░░░▄▄▓▓▓▓▄░░░░░░░░',
+       '░░░░░░▄▓▓▓▓▓▓▓▓▓▄░░░░░░░',
+       '░░░░▄▓▓▓▓▓▓▓▓▓▓▓▓▓▄░░░░░',
+       '▄██████████████████████▄',
+       '≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░▄▄▄░░░░░░░░░',
+       '░░░░░░░░░▄▄▓▓▓▓▄░░░░░░░░',
+       '░░░░░░▄▓▓▓▓▓▓▓▓▓▄░░░░░░░',
+       '░░░░▄▓▓▓▓▓▓▓▓▓▓▓▓▓▄░░░░░',
+       '▄██████████████████████▄',
+       '≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈',
+       '≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░▄▄▄░░░░░░░░░',
+       '░░░░░░░░░▄▄▓▓▓▓▄░░░░░░░░',
+       '░░░░░░▄▓▓▓▓▓▓▓▓▓▄░░░░░░░',
+       '░░░░▄▓▓▓▓▓▓▓▓▓▓▓▓▓▄░░░░░',
+       '▄██████████████████████▄',
+       '≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~≈≈≈≈≈',
+       '≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+    ] },
+
+  portconfed: { cap: 'a working harbour', hold: 6, wet: 0,
+    key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', '|': '3', '─': '3', 'n': '3', '◘': '8' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░|░░░░░░░░░░░░░░░░░░',
+       '░░░░░|────░░░░░░░▄▄░░░░░',
+       '░░░▄▄▄|▄▄▄▄▄▄▄▄▄▄▄░░░░░░',
+       '▓██████████████████████▓',
+       '████████nnnnnn██████████',
+       '████████████████████████',
+       '────────────────────────',
+       '≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░|░░░░░░░░░░░░░░░░░░',
+       '░░░░░|────░░░░░░░▄▄░░░░░',
+       '░░░▄▄▄|▄▄▄▄▄▄▄▄▄▄▄░░░░░░',
+       '▓██████████████████████▓',
+       '████████nnnnnn██████████',
+       '████████████████████████',
+       '────────────────────────',
+       '≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░|░░░░░░░░░░░░░░░░░░',
+       '░░░░░|────░░░░░░░▄▄░░░░░',
+       '░░░▄▄▄|▄▄▄▄▄▄▄▄▄▄▄░░░░░░',
+       '▓██████████████████████▓',
+       '████████nnnnnn██████████',
+       '████████████████████████',
+       '────────────────────────',
+       '≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░|░░░░░░░░░░░░░░░░░░',
+       '░░░░░|────░░░░░░░▄▄░░░░░',
+       '░░░▄▄▄|▄▄▄▄▄▄▄▄▄▄▄░░░░░░',
+       '▓██████████████████████▓',
+       '████████nnnnnn██████████',
+       '████████████████████████',
+       '────────────────────────',
+       '≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈'],
+    ] },
+
+  portyard: { cap: 'slipways and welding light', hold: 5, wet: 0,
+    key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', '*': '9', '^': '3', 'v': '3', '[': '3', ']': '3', '▒': '3', '─': '3', '~': '0' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░*░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░^^  ^^░░░░░░░░░░░░',
+       '░░▄▄▄▄▄▄▄▄▄▄░░░░░░░░░░░░',
+       '▓██████████████████████▓',
+       '██████[▒▒]  [▒▒]████████',
+       '████████████████████████',
+       '─────────v────v─────────',
+       '~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░*░░░░░░░░░░░░░░',
+       '░░░░░░^^  ^^░░░░░░░░░░░░',
+       '░░▄▄▄▄▄▄▄▄▄▄░░░░░░░░░░░░',
+       '▓██████████████████████▓',
+       '██████[▒▒]  [▒▒]████████',
+       '████████████████████████',
+       '─────────v────v─────────',
+       '≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░*░░░░░░░░░',
+       '░░░░░░^^  ^^░░░░░░░░░░░░',
+       '░░▄▄▄▄▄▄▄▄▄▄░░░░░░░░░░░░',
+       '▓██████████████████████▓',
+       '██████[▒▒]  [▒▒]████████',
+       '████████████████████████',
+       '─────────v────v─────────',
+       '≈≈≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░*░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░^^  ^^░░░░░░░░░░░░',
+       '░░▄▄▄▄▄▄▄▄▄▄░░░░░░░░░░░░',
+       '▓██████████████████████▓',
+       '██████[▒▒]  [▒▒]████████',
+       '████████████████████████',
+       '─────────v────v─────────',
+       '≈≈≈≈≈≈≈≈≈≈≈≈~~≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~≈≈≈≈'],
+    ] },
+
+  portbar: { cap: 'a jetty and what tied up', hold: 6, wet: 0,
+    key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', 'n': '3', '|': '3', '─': '3', '◘': '8' },
+    frames: [
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░▄▄▄░░░░░░░',
+       '░░░░░▄▄▄▄▄▄░░░░░░░░░░░░░',
+       '▓▓████████████████████▓▓',
+       '███████████████nn███████',
+       '████||||████████████████',
+       '≈≈────────≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░▄▄▄░░░░░░░',
+       '░░░░░▄▄▄▄▄▄░░░░░░░░░░░░░',
+       '▓▓████████████████████▓▓',
+       '███████████████nn███████',
+       '████||||████████████████',
+       '≈≈────────≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░▄▄▄░░░░░░░',
+       '░░░░░▄▄▄▄▄▄░░░░░░░░░░░░░',
+       '▓▓████████████████████▓▓',
+       '███████████████nn███████',
+       '████||||████████████████',
+       '≈≈────────≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+      ['░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░░░░░░░░░░░',
+       '░░░░░░░░░░░░░░▄▄▄░░░░░░░',
+       '░░░░░▄▄▄▄▄▄░░░░░░░░░░░░░',
+       '▓▓████████████████████▓▓',
+       '███████████████nn███████',
+       '████||||████████████████',
+       '≈≈────────≈≈≈≈≈≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈',
+       '≈≈≈≈≈≈◘≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
+    ] },
+
   // ---- THE VERTICAL SITUATION. A window that shows a seabed while the
   // sounder says the ceiling is just above is worse than no window: it
   // contradicts the instrument the player is being asked to trust.
@@ -3884,7 +4070,26 @@ function sceneForNow() {
     // with no dock in sight. You see the dock when you could touch it.
     const alongside = hexNeighbors(state.q, state.r).concat([{ q: state.q, r: state.r }])
       .some(n => { const nt = getTile(n.q, n.r); return nt && nt.type === 'dock'; });
-    return alongside ? 'dock' : 'surface';
+    if (alongside) {
+      // WHOSE HARBOUR IS IT. Home is home; every other town belongs to a
+      // people, and three peoples holding three kinds of port is a fact in the
+      // data and nothing you can see unless the window shows it.
+      const port = portNear(state.q, state.r);
+      if (port) {
+        return port.holder === 'confluence' ? 'portconfed'
+             : port.holder === 'libertines' ? 'portyard'
+             : 'portbar';
+      }
+      return 'dock';
+    }
+    // LAND ON THE WATER. A captain could sail up to an island and never once
+    // see it — the porthole had scenes for open water and the deep and nothing
+    // at all for a coastline.
+    for (const n of hexNeighbors(state.q, state.r)) {
+      const nt = getTile(n.q, n.r);
+      if (nt && nt.land) return 'landfall';
+    }
+    return 'surface';
   }
   // ...and a cavern LAKE needs air over the water, not merely rock over your
   // head. Being pressed against a chamber roof is not a surface, it is a
@@ -5853,7 +6058,26 @@ function shelfSeafloorDepth(q, r) {
 // The world before any of the scattered islands: the home island, its shelf,
 // the break, and the deep. Kept separate so `islandRoll` can ask whether there
 // is sea at a spot without asking about islands and recursing into itself.
+// MEMOISED, because making the shelf radial made it expensive. It now runs an
+// atan2 and three sines per hex, and it is asked once per hex of every chunk
+// AND five times for every island candidate. Measured across the surface arc:
+//
+//     before islands      26.4 ms/chunk
+//     islands added       27.8          (cheap: the lattice was cached at birth)
+//     home island         45.8          <- this line's doing, +18 ms
+//     shoal fix           47.1
+//
+// The threshold is 60 and Android runs 3-4x slower, so 46 ms here is most of a
+// phone's frame budget per chunk, and chunks generate as you sail.
+const baseSeaCache = new Map();
 function baseSeafloorDepth(q, r) {
+  const bk = q + ',' + r;
+  if (baseSeaCache.has(bk)) return baseSeaCache.get(bk);
+  const v = baseSeafloorRaw(q, r);
+  baseSeaCache.set(bk, v);
+  return v;
+}
+function baseSeafloorRaw(q, r) {
   // OFF THE HOME SHORE, IN EVERY DIRECTION. This used to be `1.5 - r` — the
   // distance north of one straight coast that ran east and west forever, which
   // is why land was infinite and why the shelf only existed to the north. It is
@@ -6030,9 +6254,29 @@ function islandsInRegion(qMin, qMax, rMin, rMax) {
 // shape as the land above rather than a cone wearing a lumpy hat. Sean: "an
 // island should have a geographical shape and the mountain underwater should be
 // consistent."
+// QUANTISED TO 64 BEARINGS AND CACHED PER ISLAND.
+//
+// This is three sines, and it is asked for every hex of every chunk — twice for
+// a scattered island (coast and shoal) and once more for the home island, whose
+// shelf is now radial. Measured: making the home island a plain circle cut
+// chunk generation 178 -> 155 ms in a synthetic sweep, so the trig is about a
+// seventh of the whole cost of building the world.
+//
+// 64 buckets is 5.6 degrees. The shore is quantised to whole hexes anyway, so
+// the outline this produces is indistinguishable from the exact one, and after
+// the first sixty-four asks an island's shape costs a Map lookup.
+const RAD_BUCKETS = 64;
 function isleRadius(isle, ang, at) {
-  let f = 1;
-  for (const h of isle.harm) f += h.a * Math.sin(h.k * ang + h.p);
+  if (!isle._rad) isle._rad = new Map();
+  let b = Math.round(ang / (Math.PI * 2) * RAD_BUCKETS) % RAD_BUCKETS;
+  if (b < 0) b += RAD_BUCKETS;
+  let f = isle._rad.get(b);
+  if (f === undefined) {
+    const a2 = (b / RAD_BUCKETS) * Math.PI * 2;
+    f = 1;
+    for (const h of isle.harm) f += h.a * Math.sin(h.k * a2 + h.p);
+    isle._rad.set(b, f);
+  }
   return Math.max(0.6, at * f);
 }
 
@@ -13291,6 +13535,7 @@ function resetWorldCaches() {
   generatedChunks.clear();
   nodeCache.clear();
   isleCache.clear();   // where the land is belongs to this ocean
+  baseSeaCache.clear();
   ports.clear();
   homeIsleCache = null;
   liftCache.clear();
