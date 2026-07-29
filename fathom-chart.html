@@ -5846,8 +5846,19 @@ function islandRoll(icq, icr) {
   if (northDist > 0 && northDist < 36 && Math.abs(q + r * 0.5) < 12) return null;
   const roll = rr();
   // Most are rocks with a few huts. A few are big enough to hold a town.
-  const size = roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3;   // land radius, in hexes
-  return { id: icq + ',' + icr, q, r, size, shoal: size + 3 + Math.floor(rr() * 3) };
+  const size = roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3;   // mean land radius, in hexes
+  // THE OUTLINE. Three harmonics of the bearing, which is enough to give bays,
+  // headlands and the odd spit without any noise field to sample. A rock stays
+  // nearly round; the big ones get properly ragged, because a rock IS round and
+  // an island is not.
+  const wob = size === 1 ? 0.18 : size === 2 ? 0.30 : 0.38;
+  const harm = [
+    { k: 1, a: wob * (0.6 + rr() * 0.8), p: rr() * Math.PI * 2 },
+    { k: 2, a: wob * (0.4 + rr() * 0.6), p: rr() * Math.PI * 2 },
+    { k: 3, a: wob * (0.2 + rr() * 0.5), p: rr() * Math.PI * 2 },
+  ];
+  return { id: icq + ',' + icr, q, r, size, harm,
+           shoal: size + 3 + Math.floor(rr() * 3) };
 }
 
 function islandsInRegion(qMin, qMax, rMin, rMax) {
@@ -5861,6 +5872,23 @@ function islandsInRegion(qMin, qMax, rMin, rMax) {
     }
   }
   return out;
+}
+
+// The island's radius on a given bearing. ONE function, used for the coastline
+// AND for the shoal contour beneath it — so the mountain underwater is the same
+// shape as the land above rather than a cone wearing a lumpy hat. Sean: "an
+// island should have a geographical shape and the mountain underwater should be
+// consistent."
+function isleRadius(isle, ang, at) {
+  let f = 1;
+  for (const h of isle.harm) f += h.a * Math.sin(h.k * ang + h.p);
+  return Math.max(0.6, at * f);
+}
+
+// Bearing from an island's centre to a hex, in real space — axial coordinates
+// are sheared, so atan2 on (dq, dr) would twist every outline the same way.
+function hexBearing(dq, dr) {
+  return Math.atan2(dr * 0.8660254, dq + dr * 0.5);
 }
 
 // How much this hex is lifted by any island near it. Returns null for open
@@ -5881,10 +5909,16 @@ function islandLiftRaw(q, r) {
   for (const isle of isles) {
     const dq = q - isle.q, dr = r - isle.r;
     const hd = (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
-    if (hd > isle.shoal) continue;
-    if (hd <= isle.size) return { land: true, isle: isle, dist: hd };
-    // The shoal: the floor climbs steeply toward the shore.
-    const t = (hd - isle.size) / Math.max(1, isle.shoal - isle.size);
+    if (hd > isle.shoal + 2) continue;
+    const ang = hexBearing(dq, dr);
+    const shore = isleRadius(isle, ang, isle.size);
+    const rim = isleRadius(isle, ang, isle.shoal);
+    if (hd <= shore) return { land: true, isle: isle, dist: hd };
+    if (hd > rim) continue;
+    // The shoal: the floor climbs steeply toward the shore, along the same
+    // outline — so a bay in the coast is a bay in the seabed too, and a
+    // headland runs out underwater as a ridge.
+    const t = (hd - shore) / Math.max(1, rim - shore);
     const floor = 20 + t * t * 900;      // 20 m at the shore, ~920 m at the rim
     if (best === null || floor < best.floor) best = { land: false, floor, isle: isle, dist: hd };
   }
