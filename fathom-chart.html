@@ -8559,6 +8559,59 @@ function caveSeg(kind) { const p = caveParts(kind); return p ? p.seg : -1; }
 function inGrotto(kind) { return kind === 'beach' || caveSeg(kind) >= 0; }
 function caveKind(letter, seg) { return 'cave' + letter + (seg ? seg : ''); }
 
+// WHERE A PASSAGE COMES OUT. Computed lazily, at the moment the captain
+// reaches the far end, because a pure function cannot scan a world that has
+// not been generated yet — and generating twenty hexes of ocean is a fine
+// price to pay once, at the one moment it matters.
+//
+// A passage that finds nothing simply pinches out. Seed 1 has one beach in 817
+// hexes, so "there is no other landfall in reach" has to be an ordinary
+// outcome and not a broken feature.
+// 14, not 20. This generates the neighbourhood it searches, and a radius-20
+// sweep is 1,261 hexes of ocean built in one frame on a phone. Measured far
+// ends sat at 9-18 hexes, so 14 keeps most of them and halves the work.
+const PASSAGE_REACH = 14;
+// A CAVE SYSTEM IS ROUGHLY LEVEL. The first version scored on hex distance and
+// barely weighted depth, so a passage off a beach at 420 m came out at 7,740 m
+// — seven kilometres down, on foot, in one walk. It can climb or fall, but it
+// climbs like rock, not like a lift shaft.
+const PASSAGE_RISE = 480;
+const passageFarCache = new Map();
+function passageFar(q, r, d) {
+  const ck = q + ',' + r + ',' + d;
+  if (passageFarCache.has(ck)) return passageFarCache.get(ck);
+  // GENERATE THE NEIGHBOURHOOD FIRST, THEN LOOK ONCE.
+  //
+  // The first version generated a hex and then scanned the whole `cells` map
+  // looking for it — 1,681 full passes over a map with tens of thousands of
+  // entries. It did not just make the battery time out; it would have locked a
+  // phone solid at the one dramatic moment this feature has.
+  for (let dq = -PASSAGE_REACH; dq <= PASSAGE_REACH; dq++) {
+    for (let dr = -PASSAGE_REACH; dr <= PASSAGE_REACH; dr++) {
+      const hd = (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+      if (hd < 3 || hd > PASSAGE_REACH) continue;
+      tileAt(q + dq, r + dr);
+    }
+  }
+  let best = null, bestD = Infinity;
+  for (const [k, c] of cells) {
+    if (!c || c.kind !== 'beach') continue;
+    const p1 = k.indexOf(','), p2 = k.indexOf(',', p1 + 1);
+    const nq = +k.slice(0, p1), nr = +k.slice(p1 + 1, p2), nd = +k.slice(p2 + 1);
+    const dq = nq - q, dr = nr - r;
+    const hd = (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+    if (hd < 3 || hd > PASSAGE_REACH) continue;   // never come out where you went in
+    const rise = Math.abs(nd - d);
+    if (rise > PASSAGE_RISE) continue;
+    // Deterministic tie-break, so the same passage always comes out in the same
+    // place whatever order the world happened to be generated in.
+    const score = hd * 1000 + rise / 60 + (nq * 0.001 + nr * 0.0001);
+    if (score < bestD) { bestD = score; best = { q: nq, r: nr, d: nd }; }
+  }
+  passageFarCache.set(ck, best);
+  return best;
+}
+
 // The plan for the system behind ONE mouth.
 function mouthPlan(q, r, d, letter) {
   const all = beachMouths(q, r, d);
@@ -8923,6 +8976,20 @@ function interiorAt(q, r, d, kind) {
     const parts = caveParts(kind);
     const plan = mouthPlan(q, r, d, parts.letter);
     const hasWay = !!plan && parts.seg < plan.segs - 1;
+    // THE FAR END OF A PASSAGE. Marked in the substrate; where it actually
+    // comes out is worked out when somebody stands on it.
+    const isFarEnd = !!plan && plan.type === 'passage' && parts.seg === plan.segs - 1;
+    if (isFarEnd && rooms.length > 1) {
+      let far = null, farD = -1;
+      for (const rm of rooms) {
+        const c = mid(rm);
+        if (dweller && c.x === dweller.x && c.y === dweller.y) continue;
+        const dd = Math.abs(c.x - ex) + Math.abs(c.y - ey);
+        if (dd > farD) { farD = dd; far = c; }
+      }
+      const t = far && tiles.get(far.x + ',' + far.y);
+      if (t && t.t !== 'entry') { t.t = 'far'; t.loot = null; t.wet = null; t.fall = false; }
+    }
     if (hasWay && rooms.length > 1) {
       // FURTHEST FROM THE ENTRY *AND* NOT WHERE THE TENANT IS. These were the
       // same search, so the thing stood on the way in 38 of 38 caves that had
@@ -9315,6 +9382,55 @@ function followWay(named) {
     ? 'The passage narrows, turns, and the wall under your hand stops being rock. It is dressed stone, and it is laid in courses, and somebody cut it.'
     : 'The way goes on, down and back, and opens into another chamber the lamps cannot find the end of.', 'strange', 'GROTTO');
   sfx('bell');
+  updateHUD(); render(); scheduleSave();
+}
+
+// THE WAY THROUGH THE WORLD. Sean, on what this should pay: the map, not the
+// boat. You come out of the rock onto sand you have never stood on, look at
+// black water the Erebus is not riding, and walk back. What you keep is the
+// chart — and a landfall is otherwise found only by swimming into an exact
+// 60 m cell, which is why more than half of them are never found at all.
+function followFar() {
+  const f = state.foot;
+  if (!f) return;
+  const far = passageFar(f.q, f.r, f.d);
+  if (!far) {
+    log('The passage narrows, and narrows, and ends in a face of wet rock. Whatever it was going towards, it never got there.', '', 'GROTTO');
+    render(); return;
+  }
+  state.air = Math.max(0, state.air - FOOT_AIR * 4);   // a long way through
+  stashDeck(f);
+  const ch = interiorAt(far.q, far.r, far.d, 'beach');
+  if (!ch || !ch.entry) return;
+  const carried = carryOver(f);
+  const back = { q: f.q, r: f.r, d: f.d, kind: f.kind };
+  footInto(far.q, far.r, far.d, 'beach', ch, carried);
+  // You came out of the rock, not up out of the water — stand at a mouth.
+  state.foot.backTo = back;
+  lampSweep();
+  // THE CHART IS THE PAYMENT. This is the only mechanism in the game that
+  // finds a beach for you.
+  revealAt(far.q, far.r, far.d);
+  const known = state.poisFound.includes('beach:' + hexKey(far.q, far.r));
+  const km = (hexDistance({ q: far.q, r: far.r }, { q: f.q, r: f.r }) * 60 / 1000).toFixed(1);
+  log('The rock opens, and there is sand under your boots that no one has walked on. Black water beyond it, and no boat on it — the Erebus is a system of caves behind you.', 'strange', 'GROTTO');
+  log(`${known ? 'You know this beach. You have put in here.' : 'A landfall you have never found from the water.'} ${bearing(f.q, f.r, far.q, far.r)}, ${km} km through the rock — and it is on your chart now.`, 'good', 'CHART');
+  sfx('bell');
+  updateHUD(); render(); scheduleSave();
+}
+
+// Home the long way: back into the rock and along the passage you came out of.
+function returnThroughPassage() {
+  const f = state.foot;
+  if (!f || !f.backTo) return;
+  const b = f.backTo;
+  const ch = interiorAt(b.q, b.r, b.d, b.kind);
+  if (!ch || !ch.entry) return;
+  state.air = Math.max(0, state.air - FOOT_AIR * 4);
+  stashDeck(f);
+  const carried = carryOver(f);
+  footInto(b.q, b.r, b.d, b.kind, ch, carried);
+  log('You go back into the rock and walk it the other way. It is no shorter for knowing where it goes.', '', 'GROTTO');
   updateHUD(); render(); scheduleSave();
 }
 
@@ -9777,8 +9893,12 @@ function stepFoot(x, y) {
   // A WAY ON is not a decision that costs anything, so it does not arm — you
   // walk into the next chamber the way you walked into this one.
   if (t.t === 'way') { f.x = x; f.y = y; followWay(t.to); return; }
+  if (t.t === 'far') { f.x = x; f.y = y; followFar(); return; }
   // The mouth of a link deeper in the system takes you back one chamber, not
   // out to the water — so it must not ask the leaving question.
+  if (t.t === 'entry' && f.backTo && (f.q !== state.q || f.r !== state.r)) {
+    f.x = x; f.y = y; returnThroughPassage(); return;
+  }
   if (t.t === 'entry' && caveBack(f)) { f.x = x; f.y = y; retreatWay(); return; }
   if (t.t === 'entry') {
     if (f.leaveArmed !== nk) {
@@ -10193,6 +10313,20 @@ function fightTenant() {
 function leaveInterior(prefix) {
   const f = state.foot;
   if (!f) return;
+  // You can only step off onto the boat where the boat actually is. Coming out
+  // of a passage puts you on somebody else's landfall, and the water there is
+  // just water.
+  //
+  // THE HEX, NOT THE DEPTH. A ruin's anchor depth legitimately differs from the
+  // boat's — that is the whole point of generating a deck from the PRIZE's
+  // depth rather than wherever you happened to stop — so comparing depth here
+  // barred every ordinary ruin dive from ending. Only a passage moves you to a
+  // different hex.
+  if (f.q !== state.q || f.r !== state.r) {
+    log('Black water, and nothing on it. The Erebus is where you left her, and the only road back to her is the one you came by.', 'warn', 'BEACH');
+    render();
+    return;
+  }
   // WHAT THIS DECK HAS GIVEN UP, remembered past the visit. Without this the
   // room refills the moment you surface, which is the restock faucet twice
   // over — and WITH it, re-entering is free to allow, because the deck simply
@@ -10314,7 +10448,12 @@ function renderInterior() {
     if (!t) { box(x, y, '#1b1712', dim * 0.95); continue; }
     if (t.t === 'carved') { box(x, y, '#2c2a20', dim); glyph(x, y, '·', '#5f6a4e', 12, dim * 0.8); }
     else
-    if (t.t === 'way') {
+    if (t.t === 'far') {
+      // Not a way on — a way THROUGH. It reads brighter than an ordinary mouth
+      // because something is coming from the other side of it: moving air.
+      box(x, y, '#101c14', dim);
+      glyph(x, y, '≡', '#8fe0b0', 16, dim);
+    } else if (t.t === 'way') {
       // The way on. It reads as a mouth in the rock, not a door.
       // A hole in the rock: near-black box, bright chevron. Distinct from the
       // exit (teal ≈), a bulkhead (╪), and — the one that mattered — from a
@@ -12715,6 +12854,7 @@ let cellsEpoch = 0;
 // this function. `flip.test.js` asserts that reseeding and regenerating
 // reproduces a world exactly, which is what catches a cache you forgot.
 function resetWorldCaches() {
+  passageFarCache.clear();   // where a passage comes out belongs to this ocean
   cellsEpoch++;
   world.clear();
   cells.clear();

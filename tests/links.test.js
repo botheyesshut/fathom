@@ -57,6 +57,9 @@ vm.runInContext(script +
   '\nfunction __step(x,y){ stepFoot(x,y); }' +
   '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
   '\nfunction __mouths(q,r,d){ return beachMouths(q,r,d); }' +
+  '\nfunction __far(q,r,d){ return passageFar(q,r,d); }' +
+  '\nfunction __revealed(q,r){ const v = revealed.get(hexKey(q,r)); return v ? [...v] : null; }' +
+  '\nfunction __leave(p){ leaveInterior(p); }' +
   '\nfunction __party(){ return partyBodies(); }' +
   '\nfunction __hire(n){ for(let i=0;i<n;i++) state.crew.push({name:"Hand"+i,role:"diver",xp:0,nerve:100,cond:null,ashore:false,fx:null,fy:null}); }',
   sandbox, { timeout: 20000 });
@@ -254,6 +257,133 @@ console.log('\n--- 4. A DECK REMEMBERS ITS OWN DEAD ---');
   must(tried >= 5, 'the probe actually left bodies behind', tried + ' trials');
   must(kept === tried, 'a body you were told to come back for is still there',
     kept + '/' + tried);
+}
+
+//--- 5. THE WAY THROUGH THE WORLD -------------------------------------------
+// Sean asked for a quarter of mouths to be "very large and complex and connect
+// to a different beach ... akin to the wormhole mechanic in TW2002", and chose
+// what it pays: the map, not the boat. You come out of the rock onto sand you
+// have never stood on, look at black water the Erebus is not riding, and walk
+// back. What you keep is the chart — and a landfall is otherwise found only by
+// swimming into an exact 60 m cell, which is why most are never found at all.
+console.log('\n--- 5. A PASSAGE COMES OUT SOMEWHERE ELSE ---');
+{
+  let passages = 0, withFar = 0, pinched = 0, badRise = 0, tooClose = 0;
+  const rises = [];
+  for (const seed of [1, 77, 512, 9001, 20260728, 424242]) {
+    sandbox.__seed(seed);
+    for (let q = -14; q <= 14; q++) for (let r = -14; r <= 14; r++) {
+      if (Math.abs(q + r) > 14) continue;
+      sandbox.__ensure(q, r);
+    }
+    // SNAPSHOT FIRST. `passageFar` GENERATES world, so asking it while walking
+    // `cells` adds entries to the very Map being iterated - which generates
+    // more, until the Map hits its 16.7M ceiling and throws. It did, twice.
+    const beaches = [];
+    for (const [k, c] of sandbox.__cells()) {
+      if (c && c.kind === 'beach') beaches.push(k.split(',').map(Number));
+    }
+    for (const b of beaches) {
+      for (const m of sandbox.__mouths(b[0], b[1], b[2])) {
+        if (m.type !== 'passage') continue;
+        passages++;
+        const far = sandbox.__far(b[0], b[1], b[2]);
+        if (!far) { pinched++; continue; }
+        withFar++;
+        const hd = (Math.abs(far.q - b[0]) + Math.abs(far.r - b[1]) + Math.abs(far.q - b[0] + far.r - b[1])) / 2;
+        if (hd < 3) tooClose++;
+        const rise = Math.abs(far.d - b[2]);
+        rises.push(rise);
+        if (rise > 480) badRise++;
+      }
+    }
+  }
+  say('passage mouths across 6 seeds', passages);
+  say('...that find a far landfall', withFar + ' (' + (withFar / Math.max(1, passages) * 100).toFixed(0) + '%)');
+  say('...that pinch out', pinched);
+  say('deepest climb or fall through the rock', (rises.length ? Math.max.apply(null, rises) : 0) + ' m');
+  must(passages >= 5, 'the world actually contains passages to test', passages + ' found');
+  must(withFar > 0 && pinched > 0,
+    'a passage sometimes goes through and sometimes pinches out',
+    withFar + ' through, ' + pinched + ' blind');
+  // A cave system is roughly level. The first version scored on hex distance
+  // and barely weighted depth, so a passage off a beach at 420 m came out at
+  // 7,740 m — seven kilometres down, on foot, in one walk.
+  must(badRise === 0, 'and it climbs like rock, not like a lift shaft',
+    badRise + ' exceeded 480 m');
+  must(tooClose === 0, 'and never comes out where it went in', tooClose + ' too close');
+
+  // Walk one, for real, and check what it pays.
+  let walked = 0, revealedFar = 0, refusedToLeave = 0, gotHome = 0;
+  for (const seed of [77, 9001, 424242]) {
+    sandbox.__seed(seed);
+    for (let q = -14; q <= 14; q++) for (let r = -14; r <= 14; r++) {
+      if (Math.abs(q + r) > 14) continue;
+      sandbox.__ensure(q, r);
+    }
+    const beaches2 = [];
+    for (const [k, c] of sandbox.__cells()) {
+      if (c && c.kind === 'beach') beaches2.push(k.split(',').map(Number));
+    }
+    for (const b of beaches2) {
+      const m = sandbox.__mouths(b[0], b[1], b[2]).find(x => x.type === 'passage');
+      if (!m || !sandbox.__far(b[0], b[1], b[2])) continue;
+      if (!goAshore(b)) continue;
+      // beach -> the passage mouth -> along it -> through
+      const hop = (want) => {
+        const f = sandbox.__foot(); if (!f) return false;
+        const ch = sandbox.__int(f.q, f.r, f.d, f.kind);
+        for (const [tk, t] of ch.tiles) {
+          if (t.t !== want) continue;
+          if (want === 'way' && f.kind === 'beach' && t.to !== 'cave' + m.letter) continue;
+          const ci = tk.indexOf(','), wx = +tk.slice(0, ci), wy = +tk.slice(ci + 1);
+          for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+            if (ch.tiles.has((wx+dx) + ',' + (wy+dy))) {
+              f.x = wx + dx; f.y = wy + dy; sandbox.__step(wx, wy); return true;
+            }
+          }
+        }
+        return false;
+      };
+      let through = false;
+      for (let i = 0; i < 8; i++) {
+        if (hop('far')) { through = true; break; }
+        if (!hop('way')) break;
+      }
+      if (!through) continue;
+      const f2 = sandbox.__foot();
+      if (!f2 || f2.kind !== 'beach') continue;
+      walked++;
+      if (f2.q !== b[0] || f2.r !== b[1]) {
+        if (sandbox.__revealed(f2.q, f2.r)) revealedFar++;
+        // The water here is just water — there is no boat on it.
+        sandbox.__leave('test');
+        if (sandbox.__foot()) refusedToLeave++;
+        // ...but the way you came is still open.
+        const ch3 = sandbox.__int(f2.q, f2.r, f2.d, 'beach');
+        const f3 = sandbox.__foot();
+        if (f3) {
+          for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+            if (ch3.tiles.has((ch3.entry.x+dx) + ',' + (ch3.entry.y+dy))) {
+              f3.x = ch3.entry.x + dx; f3.y = ch3.entry.y + dy;
+              sandbox.__step(ch3.entry.x, ch3.entry.y); break;
+            }
+          }
+        }
+        const f4 = sandbox.__foot();
+        if (f4 && f4.q === b[0] && f4.r === b[1]) gotHome++;
+      }
+      break;   // one per seed is enough
+    }
+  }
+  say('passages walked end to end', walked);
+  must(walked >= 2, 'the probe actually walked a passage through', walked + ' walked');
+  must(revealedFar === walked, 'coming out puts the far landfall on your chart',
+    revealedFar + '/' + walked);
+  must(refusedToLeave === walked, 'and there is no boat on that water to step onto',
+    refusedToLeave + '/' + walked + ' refused');
+  must(gotHome === walked, 'but the road you came by is still open',
+    gotHome + '/' + walked + ' walked home');
 }
 
 console.log(bad ? '\n' + bad + ' LINK CHECK(S) FAILED' : '\nALL LINK CHECKS PASSED');

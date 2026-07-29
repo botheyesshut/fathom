@@ -2,12 +2,13 @@
 // are the ones that decide whether "small or medium or large and complex" is a
 // description of the game or a description of my intentions.
 //
-// What it asks:
-//   1. Can a captain ever FIND a beach? (the old answer was 4 in 30,097 cells)
-//   2. Is every tile of every cave reachable from its mouth?
-//   3. Are the three sizes actually three different sizes?
-//   4. Does the chain of segments resolve — no dead links, no loops, no orphans?
-//   5. Is there anything in a cave worth the walk?
+// What it asks — and only what the BATTERY does not already answer. Reachability,
+// chain resolution and key collisions moved into interior.test's GROTTOES
+// section and links.test, because an invariant belongs in the gate, not here.
+//   1. Can a captain ever FIND a landfall, and how far is the nearest?
+//   2. What is behind one — how many mouths, and what kind of system in each?
+//   3. Is a big system actually COMPLEX, or only big? (cut vertices)
+//   4. Is there anything down there worth the walk, measured against a ruin?
 const fs = require('fs'); const vm = require('vm');
 const html = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
@@ -41,7 +42,7 @@ sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(script +
   '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
-  '\nfunction __plan(q,r,d){ return grottoPlan(q,r,d); }' +
+  '\nfunction __mouths(q,r,d){ return beachMouths(q,r,d); }' +
   '\nfunction __onward(q,r,d,k){ return caveOnward({q:q,r:r,d:d,kind:k}); }' +
   '\nfunction __back(q,r,d,k){ return caveBack({q:q,r:r,d:d,kind:k}); }' +
   '\nfunction __suffix(k){ return deckSuffix(k); }' +
@@ -103,97 +104,118 @@ console.log('\n--- 1. IS THERE A LANDFALL IN REACH ---');
     'most in any seed: ' + Math.max.apply(null, counts));
 }
 
-//--- 2. REACHABILITY, the one failure a player cannot diagnose ---------------
-console.log('\n--- 2. IS EVERY CAVE ONE CONNECTED SPACE ---');
-const sizes = { small: [], medium: [], large: [] };
-let checked = 0, stranded = 0, doorsInRock = 0, lootTotal = 0, wayless = 0;
-for (let i = 0; i < 400; i++) {
-  const q = (i * 7) % 40 - 20, r = (i * 13) % 40 - 20, d = 60 + (i % 8) * 60;
-  const plan = sandbox.__plan(q, r, d);
-  for (let seg = 0; seg < plan.segs; seg++) {
-    const kind = seg === 0 ? 'cave' : 'cave' + seg;
-    const ch = sandbox.__int(q, r, d, kind);
-    checked++;
-    // Flood fill from the mouth.
-    const seen = new Set([ch.entry.x + ',' + ch.entry.y]);
-    const stack = [[ch.entry.x, ch.entry.y]];
-    while (stack.length) {
-      const [x, y] = stack.pop();
+//--- 2. WHAT IS BEHIND A LANDFALL --------------------------------------------
+// Connectivity, chain resolution and key collisions now live in the battery
+// (interior.test's GROTTOES section and links.test), so this instrument keeps
+// only what the battery does not measure: the SHAPE of the world's landfalls.
+console.log('\n--- 2. THE MIX OF MOUTHS ---');
+{
+  const byN = {}, byType = {};
+  let beaches = 0;
+  for (let i = 0; i < 900; i++) {
+    const q = (i * 7) % 70 - 35, r = (i * 23) % 70 - 35, d = 60 + (i % 9) * 60;
+    const mouths = sandbox.__mouths(q, r, d);
+    beaches++;
+    byN[mouths.length] = (byN[mouths.length] || 0) + 1;
+    for (const m of mouths) byType[m.type] = (byType[m.type] || 0) + 1;
+  }
+  const totalM = Object.values(byType).reduce((a, b) => a + b, 0);
+  say('landfalls sampled', beaches);
+  say('openings per landfall', Object.entries(byN).sort()
+    .map(([k, v]) => k + ': ' + (v / beaches * 100).toFixed(0) + '%').join(', '));
+  say('what is behind them', Object.entries(byType).sort()
+    .map(([k, v]) => k + ' ' + (v / totalM * 100).toFixed(0) + '%').join(', '));
+  // Sean's spec was 25% each. Generation is a hash, not a quota, so allow drift.
+  const share = t => (byType[t] || 0) / totalM;
+  must(['passage', 'hall', 'chamber', 'dead'].every(t => share(t) > 0.18 && share(t) < 0.32),
+    'the four kinds of system are near enough a quarter each',
+    ['passage', 'hall', 'chamber', 'dead'].map(t => t + ' ' + (share(t) * 100).toFixed(0) + '%').join(', '));
+  must((byN[2] || 0) + (byN[3] || 0) > beaches * 0.2,
+    'and a landfall often has more than one way in',
+    (((byN[2] || 0) + (byN[3] || 0)) / beaches * 100).toFixed(0) + '% have 2 or 3');
+}
+
+//--- 3. IS A BIG SYSTEM ACTUALLY COMPLEX -------------------------------------
+// The design audit's finding, kept as a standing measurement: the old carver
+// grew tiles x4.08 and DECISIONS x0.99, and the largest single open lump rose
+// 48% -> 71% -> 84%. Large was large and simple.
+console.log('\n--- 3. LARGE, AND ALSO COMPLEX ---');
+{
+  const cutTiles = (tiles) => {
+    const keys = [...tiles.keys()];
+    if (keys.length < 3) return 0;
+    const idx = new Map(keys.map((k, i) => [k, i]));
+    const adj = keys.map(k => {
+      const c = k.indexOf(','), x = +k.slice(0, c), y = +k.slice(c + 1);
+      const out = [];
       for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
         const nk = (x + dx) + ',' + (y + dy);
-        if (seen.has(nk) || !ch.tiles.has(nk)) continue;
-        seen.add(nk); stack.push([x + dx, y + dy]);
+        if (idx.has(nk)) out.push(idx.get(nk));
+      }
+      return out;
+    });
+    const disc = new Array(keys.length).fill(-1), low = new Array(keys.length).fill(0);
+    const isCut = new Array(keys.length).fill(false);
+    let timer = 0;
+    for (let root = 0; root < keys.length; root++) {
+      if (disc[root] >= 0) continue;
+      const stack = [[root, -1, 0]];
+      let rootKids = 0;
+      while (stack.length) {
+        const fr = stack[stack.length - 1];
+        const u = fr[0], parent = fr[1];
+        if (fr[2] === 0) { disc[u] = low[u] = timer++; }
+        if (fr[2] < adj[u].length) {
+          const v = adj[u][fr[2]++];
+          if (v === parent) continue;
+          if (disc[v] >= 0) low[u] = Math.min(low[u], disc[v]);
+          else { if (u === root) rootKids++; stack.push([v, u, 0]); }
+        } else {
+          stack.pop();
+          if (parent >= 0) {
+            low[parent] = Math.min(low[parent], low[u]);
+            if (parent !== root && low[u] >= disc[parent]) isCut[parent] = true;
+          }
+        }
+      }
+      if (rootKids > 1) isCut[root] = true;
+    }
+    return isCut.filter(Boolean).length;
+  };
+  // CONTROL FIRST: a 5-tile corridor has 3 cut tiles, a 3x3 room has 0.
+  const corridor = new Map([['1,1',{}],['2,1',{}],['3,1',{}],['4,1',{}],['5,1',{}]]);
+  const room = new Map(); for (let y=1;y<=3;y++) for (let x=1;x<=3;x++) room.set(x+','+y,{});
+  must(cutTiles(corridor) === 3 && cutTiles(room) === 0,
+    'the complexity instrument agrees with two shapes it cannot get wrong',
+    'corridor ' + cutTiles(corridor) + ' (want 3), room ' + cutTiles(room) + ' (want 0)');
+
+  const b = {};
+  for (let i = 0; i < 500; i++) {
+    const q = (i * 7) % 70 - 35, r = (i * 23) % 70 - 35, d = 60 + (i % 9) * 60;
+    for (const m of sandbox.__mouths(q, r, d)) {
+      for (let seg = 0; seg < m.segs; seg++) {
+        const ch = sandbox.__int(q, r, d, 'cave' + m.letter + (seg ? seg : ''));
+        const e = b[m.type] || (b[m.type] = { n: 0, tiles: 0, cuts: 0 });
+        e.n++; e.tiles += ch.tiles.size; e.cuts += cutTiles(ch.tiles);
       }
     }
-    if (seen.size !== ch.tiles.size) stranded++;
-    if (ch.size) sizes[ch.size].push(ch.tiles.size);
-    for (const t of ch.tiles.values()) {
-      if (t.t === 'door') doorsInRock++;
-      if (t.loot) lootTotal++;
-    }
-    const wantsWay = seg < plan.segs - 1 || plan.ruin;
-    if (wantsWay && !ch.way) wayless++;
   }
-}
-const avg = a => a.length ? Math.round(a.reduce((s, n) => s + n, 0) / a.length) : 0;
-say('cave decks generated', checked);
-say('small  caves', sizes.small.length + ', avg ' + avg(sizes.small) + ' tiles');
-say('medium caves', sizes.medium.length + ', avg ' + avg(sizes.medium) + ' tiles');
-say('large  caves', sizes.large.length + ', avg ' + avg(sizes.large) + ' tiles');
-say('loot lying in them', lootTotal + '  (' + (lootTotal / checked).toFixed(1) + ' per deck)');
-must(stranded === 0, 'no cave strands a tile behind solid rock', stranded + ' of ' + checked + ' decks');
-must(doorsInRock === 0, 'nobody hung a bulkhead in a cave', doorsInRock + ' doors found');
-must(wayless === 0, 'every deck that should have a way on has one', wayless + ' missing');
-must(avg(sizes.large) > avg(sizes.small) * 1.5,
-  'the three sizes are three different sizes',
-  avg(sizes.small) + ' / ' + avg(sizes.medium) + ' / ' + avg(sizes.large) + ' tiles');
-
-//--- 3. DOES THE CHAIN RESOLVE ----------------------------------------------
-console.log('\n--- 3. THE CHAIN ---');
-let chains = 0, walked = 0, ruins = 0, broken = 0, maxLen = 0;
-for (let i = 0; i < 300; i++) {
-  const q = (i * 11) % 50 - 25, r = (i * 5) % 50 - 25, d = 120 + (i % 6) * 60;
-  chains++;
-  let kind = 'cave', len = 0, guard = 0;
-  const path = ['cave'];
-  while (guard++ < 12) {
-    const on = sandbox.__onward(q, r, d, kind);
-    if (!on) break;
-    if (path.includes(on)) { broken++; break; }   // a loop is a bug
-    path.push(on); kind = on; len++;
-    // and the way back from here must be exactly where we came from
-    const back = sandbox.__back(q, r, d, kind);
-    if (back !== path[path.length - 2]) broken++;
+  for (const t of ['dead', 'chamber', 'hall', 'passage']) {
+    if (!b[t]) continue;
+    say(t, (b[t].tiles / b[t].n).toFixed(0) + ' tiles, ' + (b[t].cuts / b[t].n).toFixed(1) + ' cut tiles');
   }
-  if (sandbox.__back(q, r, d, 'cave') !== null) broken++;   // the mouth is the water
-  if (kind === 'deepruin') ruins++;
-  walked += len;
-  maxLen = Math.max(maxLen, path.length);
+  const cuts = t => b[t] ? b[t].cuts / b[t].n : 0;
+  must(cuts('passage') > cuts('dead') * 2,
+    'a passage is not merely a bigger dead end',
+    cuts('dead').toFixed(1) + ' -> ' + cuts('passage').toFixed(1) + ' cut tiles (was 10.4 -> 10.4)');
 }
-say('grottoes walked end to end', chains);
-say('average links past the mouth', (walked / chains).toFixed(2));
-say('longest system', maxLen + ' decks');
-say('systems that open into worked stone', ruins + '  (' + (ruins / chains * 100).toFixed(0) + '%)');
-must(broken === 0, 'no loop, no dead link, and the mouth is always the water', broken + ' faults');
-must(maxLen >= 4, 'a large system is genuinely a system', maxLen + ' decks deep');
 
-//--- 4. KEYS DO NOT COLLIDE --------------------------------------------------
-console.log('\n--- 4. NOTHING SHARES A KEY WITH ANYTHING ELSE ---');
-const kinds = ['ruin', 'hull', 'cave', 'cave1', 'cave2', 'deepruin'];
-const sufs = kinds.map(k => sandbox.__suffix(k));
-say('suffixes', kinds.map((k, i) => k + '→"' + sufs[i] + '"').join('  '));
-must(new Set(sufs).size === sufs.length, 'every kind of place has its own record',
-  sufs.join(',') );
-const shapes = kinds.map(k => [...sandbox.__int(4, -6, 300, k).tiles.keys()].sort().join('|'));
-must(new Set(shapes).size === shapes.length,
-  'and a different layout to go with it', new Set(shapes).size + ' distinct of ' + shapes.length);
-
-//--- 5. WHAT A GROTTO PAYS ---------------------------------------------------
+//--- 4. WHAT A GROTTO PAYS ---------------------------------------------------
 // Sean's standing ruling: do not buff the economy until progress is reliable.
 // Beaches just got ~3x commoner AND turned from a dice roll into a lootable
 // system of decks. That is an economy change whether I meant it as one or not,
 // so it gets measured against the thing it now sits beside: a ruin.
-console.log('\n--- 5. WHAT IT PAYS, AGAINST A RUIN ---');
+console.log('\n--- 4. WHAT IT PAYS, AGAINST A RUIN ---');
 {
   const yieldOf = ch => {
     let crates = 0, relics = 0, items = 0;
@@ -209,11 +231,15 @@ console.log('\n--- 5. WHAT IT PAYS, AGAINST A RUIN ---');
   let rC = 0, rR = 0, rI = 0, ruinsN = 0;
   for (let i = 0; i < 300; i++) {
     const q = (i * 3) % 60 - 30, r = (i * 17) % 60 - 30, d = 60 + (i % 10) * 60;
-    const plan = sandbox.__plan(q, r, d);
+    // Every mouth of the landfall, and every chamber behind each — because a
+    // captain who works a beach works all of it, and the comparison against a
+    // ruin has to be like for like.
+    const mouths = sandbox.__mouths(q, r, d);
     grottoes++;
-    const chain = [];
-    for (let seg = 0; seg < plan.segs; seg++) chain.push(seg === 0 ? 'cave' : 'cave' + seg);
-    if (plan.ruin) chain.push('deepruin');
+    const chain = ['beach'];
+    for (const m of mouths) {
+      for (let seg = 0; seg < m.segs; seg++) chain.push('cave' + m.letter + (seg ? seg : ''));
+    }
     for (const k of chain) {
       const y = yieldOf(sandbox.__int(q, r, d, k));
       gC += y.crates; gR += y.relics; gI += y.items; gDecks++;
@@ -222,7 +248,7 @@ console.log('\n--- 5. WHAT IT PAYS, AGAINST A RUIN ---');
     rC += y2.crates; rR += y2.relics; rI += y2.items; ruinsN++;
   }
   const per = (n, dd) => (n / dd).toFixed(2);
-  say('a whole grotto, walked to the end', per(gC, grottoes) + ' crates, ' + per(gR, grottoes) + ' relics, ' + per(gI, grottoes) + ' items');
+  say('a whole landfall, every mouth walked', per(gC, grottoes) + ' crates, ' + per(gR, grottoes) + ' relics, ' + per(gI, grottoes) + ' items');
   say('  ...across', per(gDecks, grottoes) + ' decks');
   say('one ruin', per(rC, ruinsN) + ' crates, ' + per(rR, ruinsN) + ' relics, ' + per(rI, ruinsN) + ' items');
   const gTotal = (gC + gR * 3 + gI * 2) / grottoes;      // rough weighting; relics pay most

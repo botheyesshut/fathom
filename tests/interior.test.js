@@ -50,7 +50,10 @@ vm.createContext(sandbox);
 try { vm.runInContext(script +
   '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
   '\nfunction __clearInt(){ interiorCache.clear(); }' +
-  '\nfunction __enter(q,r,d){ state.currentDepth=d; tileAt(q,r); enterInterior({q:q,r:r}); }' +
+  // THE BOAT HAS TO BE THERE. This probe put the captain inside a ruin the
+  // Erebus was never at, which nothing noticed until leaving started asking
+  // whether there was a boat to step onto.
+  '\nfunction __enter(q,r,d){ state.q=q; state.r=r; state.currentDepth=d; tileAt(q,r); enterInterior({q:q,r:r}); }' +
   '\nfunction __step(x,y){ stepFoot(x,y); }' +
   '\nfunction __foot(){ return state.foot; }' +
   '\nfunction __lootAt(x,y){ return footLootAt(x,y); }' +
