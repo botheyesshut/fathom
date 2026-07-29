@@ -1794,8 +1794,18 @@ const CULTURES = {
     sells: ['gillhood', 'saltiron', 'lens', 'ambergris', 'chime'],
     markup: 2.6, danger: true,
   },
+  // THE KEY STAYS `confluence` ON PURPOSE. It is written into every save
+  // (`state.enclaves[].culture`) and into item `sig` fields; renaming it would
+  // orphan both for no gain. What the player reads is `name` and `short`.
+  //
+  // Sean named them: "let's call them the Confederation or Con-Fed Seas."
+  // Con-Fed is the sailors' clipping and it is what goes in a sentence — the
+  // one place `short` appears is "...count it out and hand it over", and a SEA
+  // does not count out coins. "the Con-Fed Seas" is being kept for their WATERS,
+  // which is a thing the game will need the moment factions hold territory
+  // instead of depth bands.
   confluence: {
-    name: 'the Confluence', short: 'the federated boats', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
+    name: 'the Confederation', short: 'the Con-Fed', glyph: '⎈', col: '#6ec8e0', depthBand: 'shelf',
     creed: 'A federation of boats that keep one another afloat — patient hands with a hull and a wound, and poor ones with a gun. They pay fair for salvage and pre-Fall work, and they sell the gear that keeps a crew breathing.',
     buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
             kinds: ['chart'], mult: 2.1 },
@@ -5793,34 +5803,32 @@ function shelfSeafloorDepth(q, r) {
   return lift ? Math.min(base, lift.floor) : base;  // the shoal wins where it is shallower
 }
 
-// The world before any island: the coast, the bay, the shelf, the break, the
-// deep. Kept separate so `islandRoll` can ask whether there is sea at a spot
-// without asking about islands and recursing into itself.
+// The world before any of the scattered islands: the home island, its shelf,
+// the break, and the deep. Kept separate so `islandRoll` can ask whether there
+// is sea at a spot without asking about islands and recursing into itself.
 function baseSeafloorDepth(q, r) {
-  // North distance from the coast line. Positive = water; <= 0 means land.
-  const northDist = 1.5 - r;
-  if (northDist <= 0) return null;
-
-  // East-west offset from the bay centerline. Bay widens slowly going north.
-  const eastWestOffset = Math.abs(q + r * 0.5);
-  const bayWidth = 4 + northDist * 0.12;
-  // Beyond shelf break, no walls — open ocean in all directions
-  if (eastWestOffset > bayWidth && northDist < 32) return null;
+  // OFF THE HOME SHORE, IN EVERY DIRECTION. This used to be `1.5 - r` — the
+  // distance north of one straight coast that ran east and west forever, which
+  // is why land was infinite and why the shelf only existed to the north. It is
+  // now the distance out from the island's own shore on this bearing, so the
+  // shallows wrap it the way a shelf actually wraps land.
+  const off = homeShoreDist(q, r);
+  if (off <= 0) return null;                 // inside the shore: land
 
   let depth;
-  if (northDist < 5) {
+  if (off < 5) {
     // Gentle near-shore decline
-    depth = 50 + northDist * 35;        // 50 → 225
-  } else if (northDist < 25) {
+    depth = 50 + off * 35;                   // 50 → 225
+  } else if (off < 23) {
     // Continental shelf — relatively flat with gentle slope
-    depth = 225 + (northDist - 5) * 5;  // 225 → 325
-  } else if (northDist < 32) {
+    depth = 225 + (off - 5) * 5;             // 225 → 315
+  } else if (off < HOME_SHELF) {
     // Shelf break — drops rapidly into the deep
-    const t = (northDist - 25) / 7;
-    depth = 325 + t * t * 2000;         // 325 → 2325
+    const t = (off - 23) / (HOME_SHELF - 23);
+    depth = 315 + t * t * 2010;              // 315 → 2325
   } else {
-    // Open deep ocean (the player can swim out here but there's nothing yet)
-    depth = 2325 + (northDist - 32) * 80;
+    // Open deep ocean
+    depth = 2325 + (off - HOME_SHELF) * 80;
   }
   return depth;
 }
@@ -5967,15 +5975,61 @@ function islandLiftRaw(q, r) {
   return best;
 }
 
+//=============================================================================
+// THE HOME ISLAND
+//=============================================================================
+// Sean: "The dock was never intended to be at the bottom of an endless map
+// anyhow. that never made any sense." It was: everything at r >= 1.5 was land,
+// forever, and the shelf profile measured its depth from that one straight
+// coast line running east and west without end.
+//
+// So the home landmass becomes an ISLAND, generated with the same harmonics as
+// every other, and the shelf around it becomes RADIAL — the near shallows, the
+// shelf, the break and the deep now measured from the island's own shore in
+// every direction instead of from a line. Which is what a continental shelf is.
+//
+// The dock stays at (1,1). Half the game names that hex — the bearing home, the
+// chart frame, the port panel — and the island is built around it rather than
+// the other way about.
+const HOME_R = 11;             // mean land radius: room for a real place
+const HOME_SHELF = 30;         // how far the shallows reach before the break
+
+let homeIsleCache = null;
+function homeIsle() {
+  if (homeIsleCache) return homeIsleCache;
+  // Seeded like everything else, so each ocean's home island is its own shape —
+  // Sean: "let's draw the rest of the island behind it, too, with the same
+  // randomness as everything else."
+  const rr = mulberry32(hashStr('home:' + worldSeed));
+  homeIsleCache = {
+    q: 0, r: HOME_R + 1,       // centred so the dock sits on the north shore
+    size: HOME_R,
+    harm: [
+      { k: 1, a: 0.22 * (0.6 + rr() * 0.8), p: rr() * Math.PI * 2 },
+      { k: 2, a: 0.16 * (0.4 + rr() * 0.6), p: rr() * Math.PI * 2 },
+      { k: 3, a: 0.12 * (0.2 + rr() * 0.5), p: rr() * Math.PI * 2 },
+    ],
+  };
+  return homeIsleCache;
+}
+
+// Distance from the home island's shore on this bearing. Negative inside.
+function homeShoreDist(q, r) {
+  const h = homeIsle();
+  const dq = q - h.q, dr = r - h.r;
+  const hd = (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+  const shore = isleRadius(h, hexBearing(dq, dr), h.size);
+  return hd - shore;
+}
+
 // Mountain check: any hex that's not shelf water, not south of coast, but
 // beyond the bay walls. Used to leave walls in place during chunk generation.
-function isMountainHex(q, r) {
-  const northDist = 1.5 - r;
-  if (northDist <= 0) return false;
-  const eastWestOffset = Math.abs(q + r * 0.5);
-  const bayWidth = 4 + northDist * 0.12;
-  return eastWestOffset > bayWidth && northDist < 32;
-}
+// THE BAY WALLS ARE GONE. They ran 32 hexes north of a coast line that no
+// longer exists, and on a finite island they would have been two absurd
+// peninsulas reaching out into open ocean. Sean, releasing them: "the starting
+// cove should be fresh of course." The cove is now whatever the island's own
+// outline makes of it.
+function isMountainHex(q, r) { return false; }
 
 const CHUNK = 14; // hex coords per chunk side
 
@@ -13068,6 +13122,7 @@ function resetWorldCaches() {
   generatedChunks.clear();
   nodeCache.clear();
   isleCache.clear();   // where the land is belongs to this ocean
+  homeIsleCache = null;
   liftCache.clear();
   edgeCache.clear();
   carvedFeatures.clear();
