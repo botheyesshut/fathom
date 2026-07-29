@@ -3795,10 +3795,11 @@ function sceneForNow() {
     // was right only by luck: it IS worked stone.
     // ...and the sand is only behind you at the MOUTH. Three chambers in there
     // is no beach and no boat, so `cavebeach` belongs to segment 0 alone.
+    // The boat is only in the picture where the boat actually is: on the sand.
     const seg = caveSeg(state.foot.kind);
     const face = state.foot.kind === 'hull' ? ['hullbreak', 'hullup', 'hullside']
-               : seg === 0 ? ['cavewall', 'cavebeach', 'cavethroat']
-               : seg > 0 ? ['cavewall', 'cavethroat', 'cavewall']
+               : state.foot.kind === 'beach' ? ['cavebeach', 'cavebeach', 'cavewall']
+               : seg >= 0 ? ['cavewall', 'cavethroat', 'cavewall']
                : ['ruin', 'ruintower', 'ruinwall'];
     return face[hashStr('face:' + state.foot.q + ',' + state.foot.r) % face.length];
   }
@@ -6312,7 +6313,7 @@ function syncFootControls(inside) {
   // cave — nobody hung a door in rock. Its absence is also the clearest way to
   // teach the difference between the two kinds of place, without a word of
   // instruction: in a ruin you have a door, and here you do not.
-  const inCave = inside && state.foot && caveSeg(state.foot.kind) >= 0;
+  const inCave = inside && state.foot && inGrotto(state.foot.kind);
   // ...AND ONLY WHERE THERE IS ONE TO SEAL. Shown for the whole of any non-cave
   // interior, it answers "No bulkhead within reach" from every tile that has no
   // door beside it — which is most of them. `bulkheadNear()` is the same
@@ -6346,7 +6347,7 @@ function syncFootControls(inside) {
   const f0 = state.foot;
   const claimable = inside && f0 &&
     (isBaseDeck(f0.q, f0.r, f0.d, f0.kind) ||
-     (f0.kind !== 'hull' && f0.kind !== 'deepruin' && caveSeg(f0.kind) <= 0));
+     (f0.kind === 'beach' || (f0.kind !== 'hull' && f0.kind !== 'deepruin' && caveSeg(f0.kind) <= 0)));
   const claim = document.getElementById('btn-claim');
   if (!claim) return;
   claim.style.display = claimable ? '' : 'none';
@@ -8514,41 +8515,72 @@ function tenantTough(kind, seedStr) {
 // off room 0. The chaining is what GUARANTEES every carved tile is reachable
 // from the entry — the battery asserts it by flood fill, because loot stranded
 // behind solid rock is the one failure the player can never diagnose.
-// How big the whole system is, decided once for the grotto. Every segment asks
-// this, so they all agree on where the chain ends.
-function grottoPlan(q, r, d) {
-  const rr = mulberry32(hashStr('grotto:' + q + ',' + r + ',' + d));
-  const roll = rr();
-  const size = roll < 0.4 ? 'small' : roll < 0.78 ? 'medium' : 'large';
-  const segs = size === 'small' ? 1 : size === 'medium' ? 2 : 3;
-  // Worked stone at the bottom of a big system: you go in for the cave and you
-  // come out into somebody's building. Only the large ones, and not all of them.
-  const ruin = size === 'large' && rr() < 0.55;
-  return { size, segs, ruin };
+// THE MOUTH IS THE UNIT, NOT THE BEACH. Sean: "it makes sense for there to be
+// two or even three cave openings on a single beach sometimes ... maybe 25
+// percent are very large and complex and connect to a different beach ... 25
+// percent are a decent size for a base ... twenty five percent are just single
+// chambers ... and the last 25 percent is just a dead end."
+//
+// So a landfall is a HUB. The sand is a small deck of its own with the water at
+// your back and one to three openings at the rear of it, and each opening rolls
+// its own kind of system. A beach can hold a dead end and a way through the
+// world side by side, and you cannot tell which is which until you walk in.
+//
+//   passage  3-4 chambers, and it comes out at a DIFFERENT BEACH
+//   hall     several rooms and real volume — what makes a beach worth keeping
+//   chamber  one dry room, somewhere to leave air, food, water, ammunition
+//   dead     a pocket; some hold a little, some hold a sentence, some nothing
+const MOUTH_LETTERS = ['', 'B', 'C'];       // '' is mouth A, so old saves still read
+const CAVE_SEGS = { passage: 4, hall: 2, chamber: 1, dead: 1 };
+
+function beachMouths(q, r, d) {
+  const rr = mulberry32(hashStr('mouths:' + q + ',' + r + ',' + d));
+  const n = 1 + Math.floor(rr() * rr() * 3);   // 1 usually, 2 often, 3 sometimes
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const roll = rr();
+    const type = roll < 0.25 ? 'passage' : roll < 0.5 ? 'hall' : roll < 0.75 ? 'chamber' : 'dead';
+    out.push({ letter: MOUTH_LETTERS[i], type: type, segs: CAVE_SEGS[type] });
+  }
+  return out;
 }
 
-// Which segment a foot-kind names. 'cave' is the mouth, 'cave1' the next one in.
-function caveSeg(kind) {
-  const m = /^cave(\d*)$/.exec(kind || '');
-  return m ? (m[1] ? +m[1] : 0) : -1;
+// What a foot-kind names: which mouth, and how far in. Mouth A is the empty
+// letter on purpose — `cave`, `cave1`, `cave2` are exactly what they were
+// before mouths existed, so every save written since Stage 3 still reads.
+function caveParts(kind) {
+  const m = /^cave([BC]?)(\d*)$/.exec(kind || '');
+  if (!m) return null;
+  return { letter: m[1], seg: m[2] ? +m[2] : 0 };
+}
+function caveSeg(kind) { const p = caveParts(kind); return p ? p.seg : -1; }
+// The sand and everything behind it. Used by every rule that distinguishes a
+// grotto from a wreck or a building: no flood, no bulkheads, its own prose.
+function inGrotto(kind) { return kind === 'beach' || caveSeg(kind) >= 0; }
+function caveKind(letter, seg) { return 'cave' + letter + (seg ? seg : ''); }
+
+// The plan for the system behind ONE mouth.
+function mouthPlan(q, r, d, letter) {
+  const all = beachMouths(q, r, d);
+  for (const m of all) if (m.letter === (letter || '')) return m;
+  return null;
 }
 
-// Where a `way` tile goes, and where an entry tile goes BACK to. Null means the
-// water — that is the only place the chain ever surfaces.
+// Where a `way` tile goes, and where an entry goes BACK to. Null onward means
+// the system ends here; null back means the sand.
 function caveOnward(f) {
-  const plan = grottoPlan(f.q, f.r, f.d);
-  const seg = caveSeg(f.kind);
-  if (f.kind === 'deepruin') return null;
-  if (seg < 0) return null;
-  if (seg < plan.segs - 1) return 'cave' + (seg + 1);
-  return plan.ruin ? 'deepruin' : null;
+  const parts = caveParts(f.kind);
+  if (!parts) return null;
+  const plan = mouthPlan(f.q, f.r, f.d, parts.letter);
+  if (!plan) return null;
+  if (parts.seg < plan.segs - 1) return caveKind(parts.letter, parts.seg + 1);
+  return null;
 }
 function caveBack(f) {
-  const plan = grottoPlan(f.q, f.r, f.d);
-  if (f.kind === 'deepruin') return 'cave' + (plan.segs - 1 || '');
-  const seg = caveSeg(f.kind);
-  if (seg <= 0) return null;                       // seg 0's entry is the beach
-  return seg === 1 ? 'cave' : 'cave' + (seg - 1);
+  const parts = caveParts(f.kind);
+  if (!parts) return null;
+  if (parts.seg <= 0) return 'beach';              // every mouth opens on the sand
+  return caveKind(parts.letter, parts.seg - 1);
 }
 
 function interiorAt(q, r, d, kind) {
@@ -8556,7 +8588,8 @@ function interiorAt(q, r, d, kind) {
   // long system can open into, built by the ruin generator but kept on its own
   // key so its loot and its tenant are never confused with a ruin on the floor.
   const isCave = caveSeg(kind) >= 0;
-  if (!isCave && kind !== 'hull' && kind !== 'deepruin') kind = 'ruin';
+  const isBeach = kind === 'beach';
+  if (!isCave && !isBeach && kind !== 'hull' && kind !== 'deepruin') kind = 'ruin';
   // The kind is part of the key: a hull and a tower at the same coordinates
   // are different places and must not share a cached layout.
   const key = q + ',' + r + ',' + d + deckSuffix(kind);
@@ -8576,41 +8609,122 @@ function interiorAt(q, r, d, kind) {
 
   const rooms = [];
   let hullSpine = 10, hullUpended = false;
-  if (isCave) {
-    // A CAVE IS NOT ARCHITECTURE. No rooms, no corridors, no right angles —
-    // it is what the water left behind, so it is carved by wandering. Three
-    // sizes, because Sean asked for "small or medium or large and complex"
-    // and a grotto you can cross in four steps is not somewhere you explore.
-    const size = rnd();
-    const walks = size < 0.34 ? 2 : size < 0.72 ? 4 : 7;      // small / medium / large
-    const lenEach = size < 0.34 ? 14 : size < 0.72 ? 26 : 40;
-    caveSize = size < 0.34 ? 'small' : size < 0.72 ? 'medium' : 'large';
-    let wx = Math.floor(INT_SIZE / 2), wy = Math.floor(INT_SIZE / 2);
-    for (let w = 0; w < walks; w++) {
-      // Every wander starts from somewhere already carved, so the cave is
-      // always one connected space — a chamber sealed behind stone is the
-      // one failure a player cannot diagnose.
-      if (w > 0) {
-        const open = [...tiles.keys()];
-        const pick = open[Math.floor(rnd() * open.length)].split(',').map(Number);
-        wx = pick[0]; wy = pick[1];
-      }
+  if (isBeach) {
+    // THE SAND ITSELF. Sean: "it makes sense for there to be two or even three
+    // cave openings on a single beach sometimes." So a landfall is not one hole
+    // in the rock, it is a SHORE — you come up out of the water onto it, and the
+    // back of it has one to three ways into the hill. Which of them is a dead
+    // end and which goes through the world is not knowable until you walk in.
+    //
+    // It is deliberately small and open. This is the hub, not the dungeon: the
+    // interesting decision is which mouth, not how to cross the sand.
+    const mouths = beachMouths(q, r, d);
+    const w = 14, h = 7;
+    const x0 = Math.floor((INT_SIZE - w) / 2), y0 = Math.floor((INT_SIZE - h) / 2);
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) carve(x, y);
+    // Ragged at the edges — nobody laid this out.
+    for (let i = 0; i < 10; i++) {
+      const ex2 = x0 + Math.floor(rnd() * w), ey2 = y0 + (rnd() < 0.5 ? -1 : h);
+      carve(ex2, ey2);
+    }
+    // The water's edge, along the bottom, is where the boat lies.
+    for (let x = x0 + 1; x < x0 + w - 1; x++) {
+      const t = tiles.get(x + ',' + (y0 + h - 1));
+      if (t) t.wet = 'shallow';
+    }
+    // THE MOUTHS, spaced along the back wall. Each is a `way` that names where
+    // it goes, because a beach's ways lead to different systems — unlike a
+    // cave's single way on, which the chain can work out for itself.
+    const step = Math.floor(w / (mouths.length + 1));
+    mouths.forEach((m, i) => {
+      const mx = x0 + step * (i + 1), my = y0;
+      carve(mx, my); carve(mx, my - 1);
+      const t = tiles.get(mx + ',' + (my - 1)) || tiles.get(mx + ',' + my);
+      if (t) { t.t = 'way'; t.loot = null; t.wet = null; t.to = caveKind(m.letter, 0); }
+    });
+    rooms.push({ x: x0 + 1, y: y0 + h - 2, w: 2, h: 1 });   // where the boat noses in
+    caveSize = 'beach';
+  } else if (isCave) {
+    // A CAVE IS NOT ARCHITECTURE. No rooms, no corridors, no right angles — it
+    // is what the water left behind, so it is carved by wandering.
+    //
+    // BUT LOBES, NOT ONE BLOB. The first version ran N random walks all seeded
+    // off already-carved ground, and the design audit measured what that
+    // actually produces: from small to large, tiles went x4.08 and DECISIONS
+    // went x0.99. Cut tiles 10.49 / 10.41 / 10.38, and the largest single open
+    // lump rose 48% -> 71% -> 84%. Large was large and SIMPLE — a small cave
+    // was the most maze-like thing this generator made, which is exactly
+    // backwards from what Sean asked for.
+    //
+    // The cause was saturation: 280 carve-steps with a 40% widen inside an
+    // 18x18 box fills it. So a big cave now spends its budget on SEPARATE
+    // LOBES joined by single-tile THROATS. A throat is a decision; a bigger
+    // blob is not.
+    const plan = mouthPlan(q, r, d, (caveParts(kind) || {}).letter) || { type: 'chamber' };
+    const shape = { passage: 'large', hall: 'medium', chamber: 'small', dead: 'tiny' }[plan.type];
+    caveSize = shape;
+    // LOBES, NOT LENGTH. The first pass used 4/3/2/1 lobes and the cut-tile
+    // count plateaued at ~20 while tiles kept climbing — decisions x1.03
+    // against tiles x2.3. Complexity lives in the THROAT COUNT, so that is the
+    // number that has to scale with the size of the system.
+    const lobes = shape === 'large' ? 7 : shape === 'medium' ? 4 : shape === 'small' ? 2 : 1;
+    const lenEach = shape === 'large' ? 15 : shape === 'medium' ? 16 : shape === 'small' ? 12 : 7;
+    const leash = lobes > 4 ? 2 : lobes > 2 ? 3 : 5;
+    const centres = [];
+    for (let w = 0; w < lobes; w++) {
+      // Each lobe starts somewhere of its OWN, spread around the box, so the
+      // wanders do not simply pile into one another.
+      const ang = (w / lobes) * Math.PI * 2 + rnd() * 0.8;
+      const rad = lobes === 1 ? 0 : (lobes > 4 ? 6 : 4) + rnd() * 2;
+      let wx = Math.round(INT_SIZE / 2 + Math.cos(ang) * rad);
+      let wy = Math.round(INT_SIZE / 2 + Math.sin(ang) * rad);
+      wx = Math.max(2, Math.min(INT_SIZE - 3, wx));
+      wy = Math.max(2, Math.min(INT_SIZE - 3, wy));
+      centres.push({ x: wx, y: wy });
       for (let step = 0; step < lenEach; step++) {
         carve(wx, wy);
-        // Widen sometimes: a passage that pinches and opens reads like rock.
-        if (rnd() < 0.4) { carve(wx + 1, wy); carve(wx, wy + 1); }
+        if (rnd() < 0.35) { carve(wx + 1, wy); carve(wx, wy + 1); }
         const dir = Math.floor(rnd() * 4);
         wx += dir === 1 ? 1 : dir === 3 ? -1 : 0;
         wy += dir === 0 ? -1 : dir === 2 ? 1 : 0;
+        // A lobe stays near its own centre. Without this leash every walk
+        // drifts to the middle and the lobes become one lump again.
+        // THE LEASH TIGHTENS AS THE LOBES MULTIPLY. Seven lobes each free to
+        // roam five tiles fills an 18x18 box and they merge back into the one
+        // blob this was written to break up — measured: cut tiles fell from
+        // 20.4 to 15.9 when the count went 4 -> 7 at a fixed leash. Each lobe
+        // gets roughly its own share of the deck and no more.
+        const c = centres[w];
+        if (Math.abs(wx - c.x) > leash) wx += wx > c.x ? -1 : 1;
+        if (Math.abs(wy - c.y) > leash) wy += wy > c.y ? -1 : 1;
         wx = Math.max(1, Math.min(INT_SIZE - 2, wx));
         wy = Math.max(1, Math.min(INT_SIZE - 2, wy));
       }
+    }
+    // THE THROATS. One tile wide, joining lobe to lobe in a chain, so the whole
+    // cave is connected and every join is a place the rock pinches. This is
+    // what a cut vertex IS, and it is the number the audit says must scale.
+    for (let i = 1; i < centres.length; i++) {
+      let x = centres[i - 1].x, y = centres[i - 1].y;
+      const b = centres[i];
+      let guard = 0;
+      while ((x !== b.x || y !== b.y) && guard++ < 60) {
+        carve(x, y);
+        if (x !== b.x) x += x < b.x ? 1 : -1;
+        else if (y !== b.y) y += y < b.y ? 1 : -1;
+      }
+      carve(b.x, b.y);
     }
     // The rest of the generator works off `rooms` — for loot, water and the
     // tenant — so hand it a few pockets of the cave to treat as chambers. More
     // pockets in a bigger cave, or a long walk would pay the same as a short one.
     const open = [...tiles.keys()];
-    const pockets = caveSize === 'small' ? 3 : caveSize === 'medium' ? 5 : 8;
+    // A DEAD END GETS TWO POCKETS, NOT ONE. Loot is placed by
+    // `for (let i = 1; i < rooms.length; i++)`, so a single-pocket deck could
+    // never hold anything at all — and Sean's spec for dead ends is "some with
+    // a little loot like air and some with just flavor text and some with
+    // nothing at all", which is three outcomes, not one.
+    const pockets = shape === 'large' ? 8 : shape === 'medium' ? 5 : shape === 'small' ? 3 : 2;
     for (let i = 0; i < pockets && open.length; i++) {
       const pk = open[Math.floor(rnd() * open.length)].split(',').map(Number);
       rooms.push({ x: pk[0], y: pk[1], w: 1, h: 1 });
@@ -8684,7 +8798,10 @@ function interiorAt(q, r, d, kind) {
   }
 
   const c0 = mid(rooms[0]);
-  const side = Math.floor(rnd() * 4);
+  // A BEACH IS ENTERED FROM THE WATER, at the bottom, always — you come up the
+  // sand off the boat. Punching its entry through a random side of the ring
+  // would put the sea behind the hill.
+  const side = isBeach ? 1 : Math.floor(rnd() * 4);
   const ex = side === 2 ? 0 : side === 3 ? INT_SIZE - 1 : c0.x;
   const ey = side === 0 ? 0 : side === 1 ? INT_SIZE - 1 : c0.y;
   corridor({ x: Math.min(INT_SIZE - 2, Math.max(1, ex)),
@@ -8701,7 +8818,7 @@ function interiorAt(q, r, d, kind) {
   // that a ruin offers — get on the right side of a bulkhead and dog it — is
   // simply not available here. In a cave the only answers are distance and the
   // mouth you came in by.
-  for (const k of (isCave ? [] : corridorKeys)) {
+  for (const k of ((isCave || isBeach) ? [] : corridorKeys)) {
     if (doors.length >= 3) break;
     if (doors.includes(k)) continue;
     const c = k.indexOf(',');
@@ -8720,7 +8837,7 @@ function interiorAt(q, r, d, kind) {
   // Something already lives here, and it spawns as far from the breach as the
   // deck allows — so the place has time to feel merely empty first.
   let dweller = null;
-  if (rooms.length > 1 && rnd() < 0.55) {
+  if (!isBeach && rooms.length > 1 && rnd() < 0.55) {
     let best = null, bestD = -1;
     for (const rm of rooms) {
       const c = mid(rm);
@@ -8783,9 +8900,17 @@ function interiorAt(q, r, d, kind) {
       const x = rm.x + Math.floor(rnd() * rm.w), y = rm.y + Math.floor(rnd() * rm.h);
       const t = tiles.get(x + ',' + y);
       if (t && t.t !== 'entry' && !t.loot) {
+        // A DEAD END PAYS IN BREATH, NOT IN CARGO. Sean: "some with a little
+        // loot like air". A pocket at the end of a blind passage holding a
+        // crate of salvage makes no sense — nobody carried it there. A flask,
+        // a case of rations, a patch kit: things a body left behind.
+        if (caveSize === 'tiny') {
+          if (rnd() < 0.34) continue;           // and a third of them hold nothing
+          t.loot = ['airflask', 'rations', 'patchkit', 'dressing'][Math.floor(rnd() * 4)];
+        }
         // Sometimes a deck holds a real thing, not just another crate — rarer
         // and better the deeper you have come to find it.
-        if (rnd() < 0.16) { t.loot = rollItem(d, rnd) || 'crate'; }
+        else if (rnd() < 0.16) { t.loot = rollItem(d, rnd) || 'crate'; }
         else t.loot = rnd() < 0.22 ? 'relic' : 'crate';
       }
     }
@@ -8794,10 +8919,10 @@ function interiorAt(q, r, d, kind) {
   // THE WAY ON, at the far end of the cave from the mouth — and if something
   // lives here it is standing on it, because of course it is.
   let way = null;
-  if (isCave || kind === 'deepruin') {
-    const plan = grottoPlan(q, r, d);
-    const seg = caveSeg(kind);
-    const hasWay = seg >= 0 && (seg < plan.segs - 1 || plan.ruin);
+  if (isCave) {
+    const parts = caveParts(kind);
+    const plan = mouthPlan(q, r, d, parts.letter);
+    const hasWay = !!plan && parts.seg < plan.segs - 1;
     if (hasWay && rooms.length > 1) {
       // FURTHEST FROM THE ENTRY *AND* NOT WHERE THE TENANT IS. These were the
       // same search, so the thing stood on the way in 38 of 38 caves that had
@@ -8948,7 +9073,10 @@ function resolveBaseKind() {
   const b = state.base;
   if (!b || b.kind != null) return b ? b.kind : null;
   const cell = cells.get(cellKey(b.q, b.r, b.d));
-  if (cell && cell.kind === 'beach') b.kind = 'cave';
+  // A station in a grotto sits on the SAND, where the boat can lie alongside —
+  // which is also where a save from before mouths existed must have put it,
+  // since the sand was the only deck a grotto had.
+  if (cell && cell.kind === 'beach') b.kind = 'beach';
   else {
     const t = getTile(b.q, b.r);
     const anchor = t ? poiAtDepth(t, b.d) : null;
@@ -8971,8 +9099,11 @@ function deckKey(q, r, d) { return q + ',' + r + ',' + d; }
 function deckSuffix(kind) {
   if (kind === 'hull') return ':h';
   if (kind === 'deepruin') return ':dr';
-  const seg = caveSeg(kind);
-  return seg >= 0 ? ':c' + seg : '';
+  if (kind === 'beach') return ':b';
+  const p = caveParts(kind);
+  // Mouth A keeps the bare ':c0' / ':c1' it has always had, so no save written
+  // since grottoes shipped needs migrating.
+  return p ? ':c' + p.letter + p.seg : '';
 }
 
 // Yours AND still sealed. A station whose lock has been forced is your deck in
@@ -9083,10 +9214,11 @@ function enterInterior(tile) {
 function enterGrotto(kind) {
   if (!state.alive || state.foot) return;
   const d = state.currentDepth;
-  kind = kind || 'cave';
+  kind = kind || 'beach';
   const ch = interiorAt(state.q, state.r, d, kind);
   if (!ch || !ch.entry) return;
   const own = isBaseDeck(state.q, state.r, d, kind);
+  const mouths = beachMouths(state.q, state.r, d);
   footInto(state.q, state.r, d, kind, ch);
   if (own) {
     // Coming home. The lamps are already up and the stores are where you left
@@ -9100,10 +9232,10 @@ function enterGrotto(kind) {
   // independent rolls, so this sentence was wrong 64.5% of the time. It told
   // one captain "a pocket in the rock, and an end to it" and set them down in
   // 128 tiles. The deck is standing right there; ask it.
-  const what = ch.size === 'large' ? 'It goes back a long way, and the lamps do not find the end of it.'
-             : ch.size === 'medium' ? 'It goes back further than the lamps reach.'
-             : 'It is not deep. A pocket in the rock, and an end to it.';
-  log('Sand, and then rock, and a way in at the back of the beach. ' + what, 'strange', 'GROTTO');
+  const n = mouths.length;
+  log('Pale sand going up out of the water, and the boat riding black behind you. At the back of it the rock is broken open — '
+    + (n === 1 ? 'one way in' : n === 2 ? 'two ways in, and no telling which is the better' : 'three ways in')
+    + '.', 'strange', 'GROTTO');
   log('Nothing is coming in after you here. The rock is dry and the roof holds — but there is not a door in the whole of it, either.', '', 'GROTTO');
   sfx('bell');
   updateHUD(); render(); scheduleSave();
@@ -9163,10 +9295,12 @@ function footInto(q, r, d, kind, ch, carried) {
 
 // A way on: further in, deeper under, and eventually out of the rock and into
 // something that was built. The deck you leave keeps what you took off it.
-function followWay() {
+function followWay(named) {
   const f = state.foot;
   if (!f) return;
-  const onward = caveOnward(f);
+  // A cave has ONE way on and the chain knows where it goes. A beach has one to
+  // three, and each names its own, so the tile has to be asked.
+  const onward = named || caveOnward(f);
   if (!onward) return;
   const ch = interiorAt(f.q, f.r, f.d, onward);
   if (!ch || !ch.entry) return;
@@ -9284,7 +9418,7 @@ function claimOrStore() {
   // A GROTTO IS THE OBVIOUS PLACE FOR A STATION and the one the game never
   // offered: air already trapped over the water, sand to stand on, one mouth to
   // watch and rock on every other side. There is nothing to pump — it is dry.
-  log(caveSeg(f.kind) >= 0
+  log(inGrotto(f.kind)
     ? 'You run a line to the rock and warp her in against the sand. Lamps up the beach, the stores off her back, a watch on the mouth. Nothing needs pumping out. It was dry before you got here and it is yours now.'
     : 'You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
   sfx('bell');
@@ -9625,7 +9759,7 @@ function stepFoot(x, y) {
 
   const t = footTile(x, y);
   if (!t) {
-    log(caveSeg(f.kind) >= 0 ? 'Rock. No way through there.'   // there was never any plate
+    log(inGrotto(f.kind) ? 'Rock. No way through there.'   // there was never any plate
       : 'Rock, or plate rusted to rock. No way through there.', '', 'DARK');
     return;
   }
@@ -9642,7 +9776,7 @@ function stepFoot(x, y) {
   // as Jettison: the first tap asks, any other move cancels.
   // A WAY ON is not a decision that costs anything, so it does not arm — you
   // walk into the next chamber the way you walked into this one.
-  if (t.t === 'way') { f.x = x; f.y = y; followWay(); return; }
+  if (t.t === 'way') { f.x = x; f.y = y; followWay(t.to); return; }
   // The mouth of a link deeper in the system takes you back one chamber, not
   // out to the water — so it must not ask the leaving question.
   if (t.t === 'entry' && caveBack(f)) { f.x = x; f.y = y; retreatWay(); return; }
@@ -9655,7 +9789,7 @@ function stepFoot(x, y) {
       const deck = footChunk();
       if (deck) for (const [k, tt] of deck.tiles) if (tt.loot && !f.took.includes(k)) left++;
       const carrying = (f.crates || 0) + (f.relics || 0);
-      const grotto = caveSeg(f.kind) >= 0;
+      const grotto = inGrotto(f.kind);
       const behind = left
         ? ` ${left} thing${left > 1 ? 's' : ''} still lie${left > 1 ? '' : 's'} in here${grotto ? ', and they will still be here when you come back' : ', and the ruin is worked out once you are through'}.`
         : ' Nothing is left down here that you have not already got.';
@@ -9678,7 +9812,7 @@ function stepFoot(x, y) {
   // Two kinds of place, two things the same button means — and the tip has to
   // describe the one you are standing in, not the other one.
   if (!state.foot.dweller && !state.base)
-    tip(caveSeg(state.foot.kind) >= 0 ? 'anchorhere' : 'claimdeck');
+    tip(inGrotto(state.foot.kind) ? 'anchorhere' : 'claimdeck');
 
   // DROWNED WATER. A flooded passage is a wall to a body that breathes air —
   // and no wall at all to something that does not. Going under costs dearly and
@@ -9689,7 +9823,7 @@ function stepFoot(x, y) {
       f.warnedDrown = true;
       // A deckhead is a submarine's overhead. 216 of 507 caves carry drowned
       // water, and not one of them has one.
-      log((caveSeg(f.kind) >= 0 ? 'The way ahead is drowned to the rock above'
+      log((inGrotto(f.kind) ? 'The way ahead is drowned to the rock above'
          : f.kind === 'deepruin' ? 'The passage ahead is drowned to the vault'
          : 'The passage ahead is drowned to the deckhead')
         + ' — black water, no air above it at all. You can go under and swim it, and it will cost you, or you can find another way. Whatever lives down here swims it without a thought.', 'warn', 'DROWNED');
@@ -9721,7 +9855,7 @@ function stepFoot(x, y) {
     }
   } else if (t.wet === 'shallow') {
     if (rand() < 0.35) log(t.fall
-      ? (caveSeg(f.kind) >= 0
+      ? (inGrotto(f.kind)
           // There is no deck above a grotto. 150 of 507 caves carry a fall.
           ? 'Water comes down off the rock above in a cold, steady roar. You wade under it.'
           : 'Water comes down through the broken deck above in a cold, steady roar. You wade under it.')
@@ -9760,7 +9894,7 @@ function stepFoot(x, y) {
       else { f.crates++; log(`${sc.name} works a sound crate out from under the collapse.`, '', 'SALVAGE'); }
     } else {
       // Nobody built a cave, so nothing structural fell in one. 480 of 507.
-      log(caveSeg(f.kind) >= 0
+      log(inGrotto(f.kind)
         ? 'You pick a way over fallen rock. It shifts under the weight.'
         : 'You pick a way over fallen structure. It shifts under the weight.', '', 'DARK');
     }
@@ -9845,7 +9979,7 @@ function sealDoor() {
     scheduleSave();
     return;
   }
-  log(caveSeg(f.kind) >= 0
+  log(inGrotto(f.kind)
     ? 'This is rock. Nobody hung a door in it, and there is nothing here to close.'
     : 'No bulkhead within reach.', 'warn', 'BULKHEAD');
 }
@@ -10081,7 +10215,7 @@ function leaveInterior(prefix) {
   // A GROTTO IS NOT A PRIZE SITE. It is not a poi, it does not get worked out,
   // and it must not be written into poisFound or painted over on the chart —
   // it is a beach you can put in at again, which is the whole point of it.
-  if (caveSeg(f.kind) >= 0 || f.kind === 'deepruin') {
+  if (inGrotto(f.kind) || f.kind === 'deepruin') {
     const hauls2 = [];
     if (f.crates) hauls2.push(`${f.crates} crate${f.crates > 1 ? 's' : ''}`);
     if (f.relics) hauls2.push(`${f.relics} relic${f.relics > 1 ? 's' : ''}`);
@@ -12288,7 +12422,26 @@ function describeDeck() {
   // it working somewhere behind you" — in a cave, where `footInto` sets water
   // to [] and stepFoot skips floodAdvance outright. Nothing is coming. The
   // whole point of a cave is that nothing is coming.
-  const cave = caveSeg(f.kind) >= 0;
+  // THE SAND IS NOT A CAVE EITHER. It is a shore with the water at your back
+  // and the hill in front, and it was reading "a blind end, wet stone" because
+  // it inherited the rock's lines. It is also the one deck where the useful
+  // thing to say is HOW MANY WAYS THERE ARE, since that is the whole decision.
+  if (f.kind === 'beach') {
+    const ch2 = footChunk();
+    let mouths = 0;
+    if (ch2) for (const t of ch2.tiles.values()) if (t.t === 'way') mouths++;
+    const shore = pickLoose([
+      'Sand, and the lamps not reaching the far end of it.',
+      'You stand on dry sand with black water at your back.',
+      'The shore goes up out of the water and stops against the hill.',
+      'Cold, still air, and sand that has never been rained on.',
+    ]);
+    const back = mouths === 0 ? 'The rock at the back of it is solid the whole way along.'
+      : mouths === 1 ? 'One opening at the back of it, and dark past that.'
+      : mouths + ' openings at the back of it, and no telling one from another until you are in.';
+    return shore + ' ' + back;
+  }
+  const cave = inGrotto(f.kind);
   const boat = f.kind === 'hull';
   const lead = open <= 1
     ? pickLoose(cave
@@ -12696,12 +12849,12 @@ function handleTile(tile) {
   if (!state.foot && isBaseDeck(tile.q, tile.r, state.currentDepth)) {
     // A grotto has no lock and was never wet, so the ruin's homecoming lines
     // are a lie there.
-    log(caveSeg(resolveBaseKind()) >= 0 ? pickLoose(GROTTO_ARRIVE) : pickLoose(STATION_ARRIVE), '', 'STATION');
+    log(inGrotto(resolveBaseKind()) ? pickLoose(GROTTO_ARRIVE) : pickLoose(STATION_ARRIVE), '', 'STATION');
     // OPEN THE DOOR THAT IS ACTUALLY THERE. `enterInterior` can only build a
     // ruin or a hull, so a station kept in a grotto used to open as a phantom
     // ruin at the same coordinates — a different layout, a different entry, and
     // its loot marked taken on the way out. 94 of 94 returns, across 6 seeds.
-    if (caveSeg(resolveBaseKind()) >= 0) enterGrotto(state.base.kind);
+    if (inGrotto(resolveBaseKind())) enterGrotto(state.base.kind);
     else enterInterior(tile);
     return;
   }

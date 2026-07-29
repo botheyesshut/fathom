@@ -86,7 +86,7 @@ try { vm.runInContext(script +
   '\nfunction __tileAt(q,r){ return tileAt(q,r); }' +
   '\nfunction __prizeDepth(t){ return prizeDepthHere(t); }' +
   '\nfunction __openCell(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
-  '\nfunction __plan(q,r,d){ return grottoPlan(q,r,d); }' +
+  '\nfunction __mouths(q,r,d){ return beachMouths(q,r,d); }' +
   '\nfunction __onward(q,r,d,k){ return caveOnward({q:q,r:r,d:d,kind:k}); }' +
   '\nfunction __back(q,r,d,k){ return caveBack({q:q,r:r,d:d,kind:k}); }' +
   '\nfunction __suffix(k){ return deckSuffix(k); }' +
@@ -1222,12 +1222,18 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
 console.log('\n--- GROTTOES ---');
 {
   let stranded = 0, doors = 0, decks = 0, wayless = 0;
-  const tileCount = { small: [], medium: [], large: [] };
+  const tileCount = { tiny: [], small: [], medium: [], large: [], beach: [] };
   for (let i = 0; i < 120; i++) {
     const q = (i * 7) % 40 - 20, r = (i * 13) % 40 - 20, d = 60 + (i % 8) * 60;
-    const plan = sandbox.__plan(q, r, d);
-    for (let seg = 0; seg < plan.segs; seg++) {
-      const kind = seg === 0 ? 'cave' : 'cave' + seg;
+    // The sand itself is a deck now, and it must be as reachable as the rest.
+    const decksHere = [{ kind: 'beach', segs: 1, last: true }];
+    for (const m of sandbox.__mouths(q, r, d)) {
+      for (let sg = 0; sg < m.segs; sg++) {
+        decksHere.push({ kind: 'cave' + m.letter + (sg ? sg : ''), segs: m.segs, last: sg === m.segs - 1 });
+      }
+    }
+    for (const spec of decksHere) {
+      const kind = spec.kind;
       const ch = sandbox.__int(q, r, d, kind);
       decks++;
       const seen = new Set([ch.entry.x + ',' + ch.entry.y]);
@@ -1242,8 +1248,8 @@ console.log('\n--- GROTTOES ---');
       }
       if (seen.size !== ch.tiles.size) stranded++;
       for (const t of ch.tiles.values()) if (t.t === 'door') doors++;
-      if (ch.size) tileCount[ch.size].push(ch.tiles.size);
-      if ((seg < plan.segs - 1 || plan.ruin) && !ch.way) wayless++;
+      if (ch.size && tileCount[ch.size]) tileCount[ch.size].push(ch.tiles.size);
+      if (kind !== 'beach' && !spec.last && !ch.way) wayless++;
     }
   }
   const avgN = a => a.length ? Math.round(a.reduce((x, n) => x + n, 0) / a.length) : 0;
@@ -1252,45 +1258,68 @@ console.log('\n--- GROTTOES ---');
   check(doors === 0, 'and nobody hung a bulkhead in one', doors + ' doors in rock');
   check(wayless === 0, 'every deck that promises a way on has one', wayless + ' missing');
   check(avgN(tileCount.large) > avgN(tileCount.small) * 1.5,
-    'small, medium and large are three different sizes',
-    avgN(tileCount.small) + ' / ' + avgN(tileCount.medium) + ' / ' + avgN(tileCount.large) + ' tiles');
+    'a dead end, a chamber, a hall and a passage are four different sizes',
+    avgN(tileCount.tiny) + ' / ' + avgN(tileCount.small) + ' / ' + avgN(tileCount.medium)
+      + ' / ' + avgN(tileCount.large) + ' tiles');
 
   // The chain: it has to end, it must not loop, and its mouth is the water.
-  let faults = 0, longest = 0, ruinExits = 0;
+  let faults = 0, longest = 0, mouthsSeen = 0;
   for (let i = 0; i < 200; i++) {
     const q = (i * 11) % 50 - 25, r = (i * 5) % 50 - 25, d = 120 + (i % 6) * 60;
-    let kind = 'cave', guard = 0; const path = ['cave'];
-    while (guard++ < 12) {
-      const on = sandbox.__onward(q, r, d, kind);
-      if (!on) break;
-      if (path.includes(on)) { faults++; break; }
-      path.push(on); kind = on;
-      if (sandbox.__back(q, r, d, kind) !== path[path.length - 2]) faults++;
+    for (const m of sandbox.__mouths(q, r, d)) {
+      mouthsSeen++;
+      const first = 'cave' + m.letter;
+      let kind = first, guard = 0; const path = [first];
+      while (guard++ < 12) {
+        const on = sandbox.__onward(q, r, d, kind);
+        if (!on) break;
+        if (path.includes(on)) { faults++; break; }
+        path.push(on); kind = on;
+        if (sandbox.__back(q, r, d, kind) !== path[path.length - 2]) faults++;
+      }
+      if (guard >= 12) faults++;                                    // never terminated
+      // EVERY MOUTH OPENS ON THE SAND. That is what makes the beach the hub:
+      // however deep you go, walking back out lands you where the boat is.
+      if (sandbox.__back(q, r, d, first) !== 'beach') faults++;
+      longest = Math.max(longest, path.length);
     }
-    if (guard >= 12) faults++;                                  // never terminated
-    if (sandbox.__back(q, r, d, 'cave') !== null) faults++;      // seg 0 exits to water
-    if (kind === 'deepruin') ruinExits++;
-    longest = Math.max(longest, path.length);
   }
-  check(faults === 0, 'the chain resolves: no loop, no dead link, mouth is the water', faults + ' faults');
-  check(longest >= 3, 'and a large system is genuinely a system', longest + ' decks deep');
-  check(ruinExits > 0, 'some systems open into worked stone', ruinExits + ' of 200');
+  check(mouthsSeen >= 200, 'the chain check is walking real mouths', mouthsSeen + ' mouths off 200 beaches');
+  check(faults === 0, 'every chain resolves and every mouth opens on the sand', faults + ' faults');
+  check(longest >= 3, 'and a passage is genuinely a system', longest + ' decks deep');
 
   // Records must not collide. A hull, a tower and three cave links can all sit
   // on one set of coordinates; if they share a key they share stripped loot.
-  const gKinds = ['ruin', 'hull', 'cave', 'cave1', 'cave2', 'deepruin'];
+  const gKinds = ['ruin', 'hull', 'beach', 'cave', 'cave1', 'caveB', 'caveB1', 'caveC', 'deepruin'];
   const sufs = gKinds.map(k => sandbox.__suffix(k));
   check(new Set(sufs).size === sufs.length,
     'every kind of place keeps its own record', sufs.join(' '));
 
   // Going ashore on the sand, and the rules that follow from it.
   const stG = sandbox.__st();
-  sandbox.__setCell(2, -11, 120, 'beach');
-  stG.q = 2; stG.r = -11; stG.currentDepth = 120; stG.air = 200;
+  // FIND A LANDFALL WITH SOMETHING BEHIND IT. A beach whose only mouth is an
+  // empty dead end is a legitimate outcome — 47% of dead ends hold nothing, by
+  // design — but it cannot test whether loot stays lifted. Search for one that
+  // can, and say how far it looked.
+  let site = null, looked = 0;
+  for (let i = 0; i < 40 && !site; i++) {
+    const bq = 2 + i, br = -11 - i, bd = 120 + (i % 5) * 60;
+    looked++;
+    for (const m of sandbox.__mouths(bq, br, bd)) {
+      const chM = sandbox.__int(bq, br, bd, 'cave' + m.letter);
+      let n = 0; for (const e of chM.tiles) if (e[1].loot) n++;
+      if (n > 0) { site = [bq, br, bd]; break; }
+    }
+  }
+  check(!!site, 'the probe found a landfall with something behind it',
+    site ? site.join(',') + ' after ' + looked + ' looks' : 'NONE IN 40');
+  if (!site) site = [2, -11, 120];
+  sandbox.__setCell(site[0], site[1], site[2], 'beach');
+  stG.q = site[0]; stG.r = site[1]; stG.currentDepth = site[2]; stG.air = 200;
   stG.expedition = null; stG.foot = null; stG.alive = true;
   sandbox.__beach();
   const gf = sandbox.__foot();
-  check(!!gf && gf.kind === 'cave', 'a beach puts the captain on the sand',
+  check(!!gf && gf.kind === 'beach', 'a beach puts the captain on the sand',
     gf ? 'ashore in a ' + gf.kind : 'NOBODY WENT ASHORE');
   if (gf) {
     check(gf.water.length === 0, 'a cave does not flood — you walked in above the waterline',
@@ -1301,8 +1330,26 @@ console.log('\n--- GROTTOES ---');
     check(!!sandbox.__foot(), 'asking for a bulkhead in rock is answered, not fatal');
     // Take everything, leave, come back: the grotto is a place, not a prize.
     const ch0 = sandbox.__int(gf.q, gf.r, gf.d, gf.kind);
+    // STRIP A MOUTH, NOT THE SAND. The beach deck carries no loot — it is the
+    // doorstep — so counting piles on it made "nothing grew back" trivially
+    // true, which is precisely the vacuous shape this suite has shipped twice
+    // before. Walk into the first mouth and strip THAT.
     let piles = 0;
-    for (const entry of ch0.tiles) if (entry[1].loot) { piles++; gf.took.push(entry[0]); }
+    let stripped = null;
+    // ...and a mouth with something IN it. A dead end can legitimately hold
+    // nothing, and stripping nothing proves nothing.
+    for (const entry of ch0.tiles) {
+      if (entry[1].t !== 'way' || !entry[1].to) continue;
+      const chM = sandbox.__int(gf.q, gf.r, gf.d, entry[1].to);
+      let n = 0;
+      for (const e2 of chM.tiles) if (e2[1].loot) n++;
+      if (!n) continue;
+      stripped = entry[1].to;
+      for (const e2 of chM.tiles) if (e2[1].loot) { piles++; gf.took.push(e2[0]); }
+      break;
+    }
+    check(!!stripped && piles > 0, 'the beach has a mouth with something in it',
+      stripped ? stripped + ', ' + piles + ' piles' : 'NOTHING TO STRIP');
     const poisPre = stG.poisFound.slice().sort().join('|');
     sandbox.__leave();
     check(stG.poisFound.slice().sort().join('|') === poisPre,
@@ -1317,21 +1364,22 @@ console.log('\n--- GROTTOES ---');
     stG.air = sandbox.__subAir();
     sandbox.__beach();
     const gfFull = sandbox.__foot();
-    check(!!gfFull && gfFull.kind === 'cave',
+    check(!!gfFull && gfFull.kind === 'beach',
       'full tanks do not lock you out of your own grotto',
       gfFull ? 'ashore with the tanks full' : 'LOCKED OUT — the air gate swallowed the beach');
     if (gfFull) sandbox.__leave();
     stG.air = 200;
     sandbox.__beach();
     const gf2 = sandbox.__foot();
-    check(!!gf2 && gf2.kind === 'cave', 'and you can walk back in tomorrow',
+    check(!!gf2 && gf2.kind === 'beach', 'and you can walk back in tomorrow',
       gf2 ? 'ashore again' : 'THE BEACH CLOSED');
     let regrew = 0;
-    if (gf2) {
-      const ch2 = sandbox.__int(gf2.q, gf2.r, gf2.d, gf2.kind);
+    if (gf2 && stripped) {
+      // ...and check the SAME mouth you stripped, not the sand.
+      const ch2 = sandbox.__int(gf2.q, gf2.r, gf2.d, stripped);
       for (const entry of ch2.tiles) if (entry[1].loot && gf2.took.indexOf(entry[0]) < 0) regrew++;
     }
-    check(regrew === 0, 'with nothing grown back in it',
+    check(piles > 0 && regrew === 0, 'with nothing grown back in it',
       regrew ? regrew + ' piles REGREW' : piles + ' piles stayed lifted');
     // A grotto is where a station belongs — the one thing a wreck can never be.
     if (gf2) {

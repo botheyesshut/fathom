@@ -98,7 +98,7 @@ console.log('\n--- 1. AN OLD STATION STILL OPENS ---');
   must(!!site, 'the probe found a grotto to make a station of', site ? site.join(',') : 'NO BEACH IN RANGE');
   if (site) {
     const [q, r, d] = site;
-    const realTiles = sb.__int(q, r, d, 'cave').tiles.size;
+    const realTiles = sb.__int(q, r, d, 'beach').tiles.size;
     // The old shape: coordinates, no kind.
     st.base = { q, r, d, stores: { crates: 14, relics: 5, items: {} },
                 defence: 0, threat: 0, siege: null, breached: false, boarder: null, carved: [] };
@@ -116,12 +116,12 @@ console.log('\n--- 1. AN OLD STATION STILL OPENS ---');
     sb.__handle(tile);
     const f = sb.__foot();
     say('sailed home, and arrived in', f ? f.kind + ' / ' + sb.__int(q, r, d, f.kind).tiles.size + ' tiles' : 'NOWHERE');
-    must(!!f && f.kind === 'cave' && sb.__int(q, r, d, f.kind).tiles.size === realTiles,
+    must(!!f && f.kind === 'beach' && sb.__int(q, r, d, f.kind).tiles.size === realTiles,
       'sailing home opens the grotto, not a phantom ruin',
-      f ? f.kind + '/' + sb.__int(q, r, d, f.kind).tiles.size + ' vs cave/' + realTiles : 'no body');
+      f ? f.kind + '/' + sb.__int(q, r, d, f.kind).tiles.size + ' vs beach/' + realTiles : 'no body');
 
     // (c) And the save heals: the kind is settled and written back.
-    must(sb.__base() && sb.__base().kind === 'cave',
+    must(sb.__base() && sb.__base().kind === 'beach',
       'and the save heals itself so it only ever guesses once',
       'base.kind = ' + (sb.__base() && sb.__base().kind));
   }

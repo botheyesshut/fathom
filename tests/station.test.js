@@ -86,7 +86,7 @@ for (const seed of [1, 77, 512, 9001, 20260728, 424242]) {
     st.poisFound = st.poisFound.filter(x => typeof x === 'string' && !x.startsWith('beach:'));
     sandbox.__beach();
     const f1 = sandbox.__foot();
-    if (!f1 || f1.kind !== 'cave') continue;
+    if (!f1 || f1.kind !== 'beach') continue;
     const before = { kind: f1.kind, tiles: sandbox.__int(q, r, d, f1.kind).tiles.size,
                      entry: f1.x + ',' + f1.y };
     f1.dweller = null;
@@ -118,7 +118,7 @@ console.log('\n--- 2. CLAIMING THE MOUTH CLAIMS THE MOUTH ---');
 {
   const b = sandbox.__base();
   if (b) {
-    const kinds = ['cave', 'cave1', 'cave2', 'deepruin', 'ruin', 'hull'];
+    const kinds = ['beach', 'cave', 'cave1', 'caveB', 'deepruin', 'ruin', 'hull'];
     const owned = kinds.filter(k => sandbox.__isBase(b.q, b.r, b.d, k));
     const secure = kinds.filter(k => sandbox.__secure(b.q, b.r, b.d, k));
     say('station claimed as', b.kind);
@@ -139,7 +139,7 @@ console.log('\n--- 2. CLAIMING THE MOUTH CLAIMS THE MOUTH ---');
 console.log('\n--- 3. ONLY THE MOUTH CAN BE A STATION ---');
 {
   let refused = 0, tried = 0;
-  for (const k of ['cave1', 'cave2', 'deepruin']) {
+  for (const k of ['cave1', 'caveB1', 'deepruin']) {
     const b0 = sandbox.__base();
     st.base = null;
     st.foot = { kind: k, q: 3, r: -4, d: 300, x: 5, y: 5, crates: 0, relics: 0,

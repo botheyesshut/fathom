@@ -163,7 +163,7 @@ st.q = 0; st.r = -8; st.currentDepth = 60; st.air = 100; st.expedition = null;
 if (st.crew[0]) { st.crew[0].role = 'diver'; st.crew[0].xp = 0; }
 sb.maybeBeach();
 check(st.air > 100, 'first landfall: air off the pocket', 'air=' + st.air);
-check(!!st.foot && st.foot.kind === 'cave' && !st.expedition,
+check(!!st.foot && st.foot.kind === 'beach' && !st.expedition,
   'the beach puts the captain on the sand, not dice',
   st.foot ? 'ashore in a ' + st.foot.kind : 'no body');
 st.foot.crates = 1;
@@ -189,7 +189,7 @@ if (st.foot) sb.leaveInterior('You wade out');
 st.moves += 60; st.air = 200; st.expedition = null; st.foot = null;
 sb.maybeBeach();
 check(st.air > 200, 'and it is worth coming back to once it has recovered', 'air=' + st.air);
-check(!!st.foot && st.foot.kind === 'cave', 'and it is still a place you can walk back into');
+check(!!st.foot && st.foot.kind === 'beach', 'and it is still a place you can walk back into');
 sb.leaveInterior('You wade out');
 
 // relics go ashore under guard

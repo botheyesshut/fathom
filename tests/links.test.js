@@ -56,7 +56,7 @@ vm.runInContext(script +
   '\nfunction __beach(){ maybeBeach(); }' +
   '\nfunction __step(x,y){ stepFoot(x,y); }' +
   '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
-  '\nfunction __plan(q,r,d){ return grottoPlan(q,r,d); }' +
+  '\nfunction __mouths(q,r,d){ return beachMouths(q,r,d); }' +
   '\nfunction __party(){ return partyBodies(); }' +
   '\nfunction __hire(n){ for(let i=0;i<n;i++) state.crew.push({name:"Hand"+i,role:"diver",xp:0,nerve:100,cond:null,ashore:false,fx:null,fy:null}); }',
   sandbox, { timeout: 20000 });
@@ -81,17 +81,38 @@ function grottoes(limit) {
     for (const [k, c] of sandbox.__cells()) {
       if (!c || c.kind !== 'beach') continue;
       const p = k.split(',').map(Number);
-      if (sandbox.__plan(p[0], p[1], p[2]).segs < 2) continue;
+      // Only landfalls with a system worth walking: a mouth with a way on.
+      if (!sandbox.__mouths(p[0], p[1], p[2]).some(m => m.segs >= 2)) continue;
       out.push(p);
       if (out.length >= limit) return out;
     }
   }
   return out;
 }
-// Walk onto the way tile for real — stand beside it, then step.
+// Walk onto a way tile for real — stand beside it, then step. On the SAND
+// there are one to three of them and each names its own system, so take the
+// first that leads somewhere with more than one chamber.
 function stepOntoWay() {
   const f = sandbox.__foot();
   const ch = sandbox.__int(f.q, f.r, f.d, f.kind);
+  if (f.kind === 'beach') {
+    const plans = sandbox.__mouths(f.q, f.r, f.d);
+    for (const [k, t] of ch.tiles) {
+      if (t.t !== 'way') continue;
+      const letter = (/^cave([BC]?)/.exec(t.to) || [])[1] || '';
+      const plan = plans.find(m => m.letter === letter);
+      if (!plan || plan.segs < 2) continue;
+      const c = k.indexOf(','), wx = +k.slice(0, c), wy = +k.slice(c + 1);
+      for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+        if (ch.tiles.has((wx+dx) + ',' + (wy+dy))) {
+          f.x = wx + dx; f.y = wy + dy;
+          sandbox.__step(wx, wy);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
   if (!ch.way) return false;
   for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
     if (ch.tiles.has((ch.way.x+dx) + ',' + (ch.way.y+dy))) {
@@ -147,6 +168,8 @@ console.log('\n--- 2. A STEP THROUGH THE ROCK DOES NOT HEAL IT ---');
   let tried = 0, healed = 0, kept = 0;
   for (const site of sites) {
     if (!goAshore(site)) continue;
+    // Nothing lives on the sand — it is the doorstep. Step into a mouth first.
+    if (!stepOntoWay() || !sandbox.__foot()) continue;
     const f = sandbox.__foot();
     if (!f.dweller) continue;
     f.dweller.hurt = Math.max(1, (f.dweller.tough || 4) - 1);
