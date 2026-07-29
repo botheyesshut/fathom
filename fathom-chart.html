@@ -1288,6 +1288,7 @@
     <button class="btn" id="btn-dig" style="display:none" title="Cut the rock of your station outward into new rooms — a bigger warren is harder to take. Dig too near the hull and the sea comes in.">Dig</button>
     <button class="btn" id="btn-auto" title="Retrace the way you came, a hex a second - to the surface, to the last air you breathed, or to your station. Tap again to change the mark, or to take the helm back. Anything in the water stops it.">AUTO</button>
     <button class="btn primary" id="btn-surface" title="Take her up to the air. Do it within sight of the dock and the hold goes ashore, onto the ledger, where it finally counts">Surface</button>
+    <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
     <button class="btn" id="btn-options" title="Sound, the porthole, and starting over">Options</button>
   </div>
 </div>
@@ -4420,11 +4421,57 @@ function checkEnclave() {
     openTrade(e);
   }
 }
+// A TOWN IS A DOCK AND NOT MUCH MORE. Sean, deliberately keeping it small:
+// "the towns on the islands can just be a dock ... the town window ... is
+// basically stolen from Pirates! but must be made our own. we would not get to
+// handle diplomatic business there ... the towns at the surface are only for
+// basic trade when just getting started and learning, building up a chart and
+// such." Treaties, missions and alliances belong to the cities underwater.
+//
+// So it reuses the trade panel rather than inventing a fifth modal. What makes
+// it a town and not a hole in a rock is the name, the greeting, and that it is
+// on the surface where you can find it again.
+function dockHere() {
+  if (!state.alive || ashore()) return;
+  const port = portNear(state.q, state.r);
+  if (!port) return;
+  if (state.currentDepth !== 0) {
+    log('You would have to be on the surface to come alongside.', 'warn', 'PORT');
+    return;
+  }
+  const cu = CULTURES[port.holder];
+  const nm = portName(port);
+  const k = 'port:' + port.q + ',' + port.r;
+  if (!state.poisFound.includes(k)) {
+    state.poisFound.push(k);
+    log(`${nm}. ${cu.name} hold it — a dozen roofs, a crane that still turns, and a bar for boats that have somewhere to be.`, 'good', 'PORT');
+  } else {
+    log(`${nm} again. They know the boat now.`, '', 'PORT');
+  }
+  // A town is somewhere to put in: the crew get air and something hot.
+  const sub = activeSub();
+  if (state.air < sub.air) { state.air = sub.air; log('The tanks go on the town\'s compressor and come back full.', '', 'AIR'); }
+  if (state.stores < 100) { state.stores = Math.min(100, state.stores + 35); log('Stores off the quay — bread, water, oil.', '', 'STORES'); }
+  sfx('bell');
+  openTrade({ id: k, culture: port.holder, q: port.q, r: port.r, depth: 0, port: nm });
+  updateHUD(); render(); scheduleSave();
+}
+
+// The button only when there is something to tie up to.
+function syncDockBtn() {
+  const b = document.getElementById('btn-dock');
+  if (!b) return;
+  const near = (!state.foot && state.alive && state.currentDepth === 0)
+    ? portNear(state.q, state.r) : null;
+  b.style.display = near ? '' : 'none';
+  if (near) b.textContent = 'Dock';
+}
+
 function relicCrates(cultureKey) { return Math.round(4 * (CULTURES[cultureKey].buys.mult || 1)); }
 
 function renderTrade(e) {
   const cu = CULTURES[e.culture];
-  document.getElementById('trade-name').textContent = cu.name;
+  document.getElementById('trade-name').textContent = e.port ? e.port : cu.name;
   document.getElementById('trade-creed').textContent = cu.creed;
   document.getElementById('trade-crates').textContent = state.cargo + ' crates aboard' + (state.relics ? ` · ${state.relics} relics` : '');
   const buyEl = document.getElementById('trade-buy'), sellEl = document.getElementById('trade-sell');
@@ -6509,6 +6556,21 @@ function generateChunk(cq, cr) {
 // Every harbour the world has generated, so a port can be named, drawn on the
 // chart, and later sailed between. Overlay-free: it is a pure function of the
 // seed, rebuilt as chunks generate, so it never goes in a save.
+// A TOWN NEEDS A NAME. Sean's reason for these places is "getting started and
+// learning, building up a chart" — and a chart of unnamed dots is not a chart.
+// A name is the cheapest landmark there is, and it is what makes a port
+// somewhere you meant to go back to rather than a hex you happened past.
+const PORT_HEAD = ['Black', 'Salt', 'Cold', 'Long', 'Grey', 'Deep', 'Wreck', 'Gull',
+                   'Iron', 'Storm', 'Kelp', 'Bone', 'Low', 'Far', 'Dead', 'Quiet'];
+const PORT_TAIL = { confluence: ['Harbour', 'Haven', 'Landing', 'Anchorage', 'Roads'],
+                    libertines: ['Yard', 'Slip', 'Works', 'Berth', 'Hard'],
+                    mariners:   ['Bar', 'Reach', 'Hook', 'Bight', 'Stair', 'Hole'] };
+function portName(port) {
+  const rr = mulberry32(hashStr('portname:' + worldSeed + ':' + port.q + ',' + port.r));
+  const tails = PORT_TAIL[port.holder] || PORT_TAIL.mariners;
+  return PORT_HEAD[Math.floor(rr() * PORT_HEAD.length)] + ' ' + tails[Math.floor(rr() * tails.length)];
+}
+
 const ports = new Map();
 function notePort(port) { ports.set(port.q + ',' + port.r, port); }
 function portAt(q, r) { return ports.get(q + ',' + r) || null; }
@@ -6695,7 +6757,7 @@ function syncFootControls(inside) {
   // aboard" from inside a ruin, while the controls you need are clipped.
   const dec = document.getElementById('btn-launch');
   if (dec) dec.textContent = `Decoy (${state.decoys || 0})`;
-  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto']) {
+  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto', 'btn-dock']) {
     const el = document.getElementById(id);
     if (el) el.style.display = inside ? 'none' : '';
   }
@@ -13881,6 +13943,9 @@ function syncDiveControls() {
 }
 
 function updateHUD() {
+  // A harbour appears and disappears as the boat moves, so the button that
+  // offers it has to be re-asked every time anything changes.
+  syncDockBtn();
   const sub = activeSub();
   syncDiveControls();
   document.getElementById('air-val').textContent = state.air;
@@ -14697,6 +14762,7 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
   });
 })();
 document.getElementById('btn-surface').addEventListener('click', surface);
+document.getElementById('btn-dock').addEventListener('click', dockHere);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', anotherBoat);
