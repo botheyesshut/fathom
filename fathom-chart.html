@@ -6815,6 +6815,73 @@ function portName(port) {
   return PORT_HEAD[Math.floor(rr() * PORT_HEAD.length)] + ' ' + tails[Math.floor(rr() * tails.length)];
 }
 
+//=============================================================================
+// SHIPS — the traffic on the surface
+//=============================================================================
+// Sean's spec: "destroyer class for hunting subs, naval class for hunting other
+// surface ships, merchant class for trade, and swift little boats for swiftly
+// communicating govt intel (because this would be fastest at the surface, see?
+// so interrupting or guarding these can have political effects, giving users
+// another reason to surface later)."
+//
+// They are NOT creatures. A creature is an appetite — a thing that wants you.
+// A ship's whole existence is a route between two harbours, which shares
+// nothing with that model, so it lives in its own array rather than forcing an
+// `if (c.ship) continue;` into every predator loop in the file.
+//
+// FOUR HULLS, and the numbers are relative to each other, not absolute:
+//   speed  hexes per turn (fractional; a courier outruns everything afloat)
+//   guns   what it can do to a boat on the surface
+//   depth  what it can do to a boat that is under — only a destroyer can
+//   cargo  what is aboard if you take it
+//   ear    how far off it notices you
+const HULLS = {
+  courier:   { name: 'a courier',   glyph: '‡', speed: 1.6, guns: 0, depthCharge: 0, cargo: 0, ear: 7,
+               flavor: 'Low, narrow and all engine. Nothing aboard but somebody\'s word, going somewhere it matters.' },
+  merchant:  { name: 'a merchant',  glyph: '◘', speed: 0.55, guns: 1, depthCharge: 0, cargo: 6, ear: 4,
+               flavor: 'Deep in the water and in no hurry about it. Whatever she is carrying, she is carrying a lot of it.' },
+  naval:     { name: 'a warship',   glyph: '◙', speed: 0.9, guns: 5, depthCharge: 0, cargo: 0, ear: 8,
+               flavor: 'Guns fore and aft and a lookout who is paid to be bored. She is not hunting you. She is hunting somebody.' },
+  destroyer: { name: 'a destroyer', glyph: '◈', speed: 1.15, guns: 3, depthCharge: 4, cargo: 0, ear: 10,
+               flavor: 'She runs a listening pattern and she has racks along her stern. She is out here for boats exactly like yours.' },
+};
+
+// THREE FLEETS, and each people's creed made mechanical. A faction LACKING a
+// hull type says more than a stat penalty does: Con-Fed water is patrolled,
+// free-yard water is dangerous, and Mariner water is full of fat unescorted
+// cargo. Where you are changes what the sea contains.
+const FLEETS = {
+  // "patient hands with a hull and a wound, and poor ones with a gun"
+  confluence: { hull: 1.4, guns: 0.6, speed: 0.95, cargo: 1.25,
+                mix: { merchant: 0.40, destroyer: 0.25, naval: 0.20, courier: 0.15 } },
+  // "nobody alive makes a better weapon or a better boat-part"
+  libertines: { hull: 0.75, guns: 1.5, speed: 1.15, cargo: 0.8,
+                mix: { naval: 0.35, destroyer: 0.30, merchant: 0.20, courier: 0.15 } },
+  // "they carry what nobody else will" — and they carry it unarmed
+  mariners:   { hull: 0.9, guns: 0, speed: 1.2, cargo: 1.5,
+                mix: { merchant: 0.62, courier: 0.38 } },
+};
+
+function fleetPick(culture, rr) {
+  const mix = (FLEETS[culture] || FLEETS.mariners).mix;
+  let roll = rr(), acc = 0;
+  for (const k in mix) { acc += mix[k]; if (roll <= acc) return k; }
+  return 'merchant';
+}
+
+// What a ship of this people, of this hull, actually is.
+function shipStats(culture, hull) {
+  const H = HULLS[hull], F = FLEETS[culture] || FLEETS.mariners;
+  return {
+    speed: H.speed * F.speed,
+    guns: Math.round(H.guns * F.guns),
+    depthCharge: Math.round(H.depthCharge * F.guns),
+    cargo: Math.round(H.cargo * F.cargo),
+    hull: Math.round((8 + H.guns * 3 + H.cargo) * F.hull),
+    ear: H.ear,
+  };
+}
+
 const ports = new Map();
 function notePort(port) { ports.set(port.q + ',' + port.r, port); }
 function portAt(q, r) { return ports.get(q + ',' + r) || null; }
@@ -6824,6 +6891,113 @@ function portNear(q, r) {
     if (p) return p;
   }
   return null;
+}
+
+// TRAFFIC. Ships are not saved and are not landmarks — they are what the sea
+// is DOING while you are in it. They are made near the boat, they run their
+// route, and they are forgotten when they are far enough away that nobody
+// could tell. What persists is the ports; the ships between them are weather.
+//
+// PRE-MORTEM SAID: a ship whose destination is in an ungenerated chunk sails
+// to nowhere. So a route is only ever drawn between two harbours ALREADY on
+// the map, and a ship with no second harbour to make for simply never exists.
+const SHIP_CAP = 7;          // how many are afloat near you at once
+const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
+
+function shipsTick() {
+  if (!state.alive) return;
+  if (!state.ships) state.ships = [];
+  const here = { q: state.q, r: state.r };
+
+  // Forget the ones that have sailed out of the world you can perceive —
+  // unless you are following one, which is the whole point of following one.
+  state.ships = state.ships.filter(sh =>
+    sh.followed || hexDistance(sh, here) <= SHIP_RANGE + 6);
+
+  // ...and put out new ones, from harbours near enough to have done so.
+  //
+  // FILL TO THE CAP, not one a turn. With one creation per tick and voyages
+  // averaging 19 turns, the cap could never fill and the sea stayed empty —
+  // measured at 49 voyages across 5 seeds and 400 turns each, where the
+  // arithmetic wanted about 750. A harbour does not despatch one hull a day
+  // and then close.
+  const near = [];
+  for (const p of ports.values()) {
+    if (hexDistance(p, here) <= SHIP_RANGE) near.push(p);
+  }
+  for (let attempt = 0; state.ships.length < SHIP_CAP && attempt < SHIP_CAP * 2; attempt++) {
+    if (near.length >= 2) {
+      const rr = mulberry32(hashStr('ship:' + worldSeed + ':' + state.moves + ':' + attempt + ':' + state.ships.length));
+      const from = near[Math.floor(rr() * near.length)];
+      const to = near[Math.floor(rr() * near.length)];
+      if (from !== to) {
+        const hull = fleetPick(from.holder, rr);
+        const st2 = shipStats(from.holder, hull);
+        state.ships.push({
+          id: 'sh' + state.moves + ':' + state.ships.length,
+          hull: hull, culture: from.holder,
+          q: from.q, r: from.r, toQ: to.q, toR: to.r,
+          fromName: portName(from), toName: portName(to),
+          hp: st2.hull, prog: 0, seen: false, followed: false,
+        });
+      }
+    } else break;
+  }
+
+  // And they sail. A straight bearing across open water — the pre-mortem said
+  // per-turn pathfinding for every ship would eat a budget that is already
+  // most spent, and a ship on the open sea has nothing to path around.
+  for (const sh of state.ships) {
+    const st2 = shipStats(sh.culture, sh.hull);
+    sh.prog += st2.speed;
+    while (sh.prog >= 1) {
+      sh.prog -= 1;
+      const d = hexDistance(sh, { q: sh.toQ, r: sh.toR });
+      if (d <= 0) { sh.arrived = true; break; }
+      // one hex toward the destination, by the cube-coordinate difference
+      const dq = sh.toQ - sh.q, dr = sh.toR - sh.r, ds = -dq - dr;
+      const aq = Math.abs(dq), ar = Math.abs(dr), as = Math.abs(ds);
+      let mq = 0, mr = 0;
+      if (aq >= ar && aq >= as) { mq = dq > 0 ? 1 : -1; mr = dr > 0 && ar >= as ? 1 : (dr < 0 && ar >= as ? -1 : 0); }
+      else if (ar >= as) { mr = dr > 0 ? 1 : -1; mq = dq > 0 && aq >= as ? 1 : (dq < 0 && aq >= as ? -1 : 0); }
+      else { mq = dq > 0 ? 1 : -1; mr = dr > 0 ? 1 : -1; }
+      if (mq === 0 && mr === 0) { sh.arrived = true; break; }
+      const nt = getTile(sh.q + mq, sh.r + mr);
+      if (nt && nt.wall && nt.type !== 'dock') {
+        // A headland in the way. Ships are not clever; they shoulder round it.
+        const alt = [[mq, 0], [0, mr], [mq, -mr], [-mq, mr]];
+        let moved = false;
+        for (const [xq, xr] of alt) {
+          if (!xq && !xr) continue;
+          const t2 = getTile(sh.q + xq, sh.r + xr);
+          if (t2 && (!t2.wall || t2.type === 'dock')) { sh.q += xq; sh.r += xr; moved = true; break; }
+        }
+        if (!moved) { sh.arrived = true; break; }
+      } else { sh.q += mq; sh.r += mr; }
+    }
+    if (sh.arrived) sh.gone = true;
+  }
+  state.ships = state.ships.filter(sh => !sh.gone);
+
+  // WHAT YOU CAN TELL. On the surface you SEE them. Under it you HEAR them —
+  // surface screws are the loudest thing in this ocean — but a bearing is not
+  // an identification, which is the epistemic law this whole game runs on.
+  for (const sh of state.ships) {
+    const d = hexDistance(sh, here);
+    if (d > 9) { sh.seen = false; continue; }
+    if (sh.seen) continue;
+    sh.seen = true;
+    const H = HULLS[sh.hull], cu = CULTURES[sh.culture];
+    if (state.currentDepth === 0) {
+      // "the free yards's colours" — two of the four peoples' names end in s,
+      // so the possessive has to be built and not concatenated.
+      const whose = cu.short + (/s$/.test(cu.short) ? "'" : "'s");
+      log(`${H.name.charAt(0).toUpperCase() + H.name.slice(1)}, ${bearing(state.q, state.r, sh.q, sh.r)} of you, under ${whose} colours. ${H.flavor}`,
+          sh.hull === 'destroyer' ? 'warn' : '', 'CONTACT');
+    } else {
+      log(`Screws on the surface, ${bearing(state.q, state.r, sh.q, sh.r)} — fast and shallow. Something is crossing up there.`, '', 'SONAR');
+    }
+  }
 }
 
 function spawnEnclave(culture, q, r, depth) {
@@ -6920,6 +7094,7 @@ const state = {
   deckHurt: {},   // what each deck's tenant is still bleeding from
   deckDead: {},   // and who is lying on it
   beachDrawn: {}, // when each trapped pocket was last drawn down
+  ships: [],      // traffic on the surface. NOT saved — weather, not landmarks
   // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
   // on its own. Depletes away from port/base, tops up at either.
   stores: 100,
@@ -7672,6 +7847,26 @@ function render() {
   // Creatures — drawn between fills and edge lines. Only what shares the
   // sub's depth slice, close enough to see; a sleeping lurker is never drawn.
   // Everything else is passive sonar's business.
+  // SHIPS, drawn under the same epistemic law as everything else: on the
+  // surface you see them, and from under it you do not — you HEARD them, and
+  // a bearing in the log is not a glyph on the chart. Nothing floats in water
+  // the boat has never looked at.
+  for (const sh of (state.ships || [])) {
+    if (state.currentDepth !== 0) continue;
+    const dS = hexDistance(sh, playerHex);
+    if (dS > 9) continue;
+    if (dS > 1 && revealFade(sh.q, sh.r, 0) <= 0) continue;
+    const spx = hexToPixel(sh.q, sh.r);
+    const sg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    sg.setAttribute('x', spx.x); sg.setAttribute('y', spx.y + 5);
+    sg.setAttribute('text-anchor', 'middle');
+    sg.setAttribute('font-size', '15');
+    sg.setAttribute('fill', CULTURES[sh.culture] ? CULTURES[sh.culture].col : '#c8b88a');
+    sg.setAttribute('opacity', sh.followed ? '1' : '0.92');
+    sg.textContent = HULLS[sh.hull].glyph;
+    g.appendChild(sg);
+  }
+
   for (const c of state.creatures) {
     if (c.depth !== state.currentDepth) continue;
     if (c.type === 'lurker' && (c.interest || 0) < LURK_STALK && !c.fleeing) continue;
@@ -8724,6 +8919,7 @@ function move(q, r) {
 
   // The water answers: landfall, creatures, then death checks.
   maybeBeach();
+  shipsTick();
   creatureTick();
   checkLeads();
   checkEnclave();  // have we come upon one of the peoples?
@@ -12532,6 +12728,7 @@ function changeDepth(deltaMeters) {
   logZContext(tile, cur);
 
   maybeBeach();
+  shipsTick();
   creatureTick();
   checkDeath();
   updateHUD();
