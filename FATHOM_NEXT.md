@@ -91,7 +91,29 @@ reveal enough new water and the survey itself suggests somewhere.
   needing no chart item.
 - **Populated caves and cities**: Dagon holding ruins, cities deep down.
 
-### THE HOME ISLAND — next, and the most delicate change in the project
+### THE HOME ISLAND — DONE (`9defaac`)
+
+Built. The warning list below was written before it and is kept because it is
+still the map of what that code touches.
+
+**The shelf is RADIAL now** — that is the whole change. `1.5 - r`, the distance
+north of a line, became the distance out from the island's own shore on this
+bearing. The depth profile is preserved (102 m at one hex off the pier, 303 at
+twenty, 2,376 by thirty). The bay walls are deleted; Sean released the cove.
+The dock stays at (1,1) because half the game names that hex.
+
+Measured: finite in all six directions (9–14 hexes), 1,581 water hexes in one
+connected ring so you can sail around it, ~370 land hexes, battery green,
+firsthour unchanged (0 hull lost to land in 40 cold boots, 0 deaths).
+
+**And the first finiteness check was VACUOUS** — it walked outward from (0,0)
+looking for water, and (0,0) is the spawn, which is water. It passed while
+proving nothing. The rewrite starts at the island's centre and asserts the
+centre is land before it walks.
+
+### The warning list, as written before the change
+
+
 
 Sean: *"when we started much was made about that opening cove and it facing
 north and having a continental shelf that drops off and all... that's all fine,
