@@ -1,5 +1,28 @@
 # FATHOM — START HERE (last updated 2026-07-30)
 
+## HOW SEAN SHOULD TEST — the settled answer (2026-07-30)
+
+He asked directly, having been startled that his phone offered to *install* the game.
+It offered because **Fathom is a real PWA**: `manifest.json`, `sw.js`, standalone display,
+its own icon. Nobody had told him.
+
+**Play it at `https://botheyesshut.github.io/fathom/fathom-chart.html`, and install THAT
+if he wants an icon.** Installing from the URL is completely safe: the service worker is
+**network-first for the HTML** with `cache: 'reload'` to bypass the browser's own
+ten-minute HTTP cache, so a push reaches him the next time he opens it. A past session
+already fixed exactly that trap and left the reasoning in `sw.js`.
+
+**What freezes is a file saved to the device** — the copies delivered by `SendUserFile`.
+Those never update, they cannot register a service worker (`file://` fails the protocol
+guard), and one of them is what produced the three-commit-stale screenshot. **Stop sending
+files unless he asks; send the URL.**
+
+**And the game now says which build it is.** Options → *This build* shows
+`document.lastModified`, which on Pages is the deploy time — no build step, no constant to
+bump, nothing that can drift. It exists because a stale build cost a round trip twice in
+one morning: once on his phone, once when the local preview server handed *me* a
+three-commit-old copy through three separate checks.
+
 ## IT IS ALREADY HOSTED. READ THIS BEFORE ANSWERING A QUESTION ABOUT DELIVERY.
 
 **`https://botheyesshut.github.io/fathom/fathom-chart.html`** — live, and every push to

@@ -5827,6 +5827,20 @@ function tip(key) {
 let musicGain = 1;
 try { const g = parseFloat(localStorage.getItem('fathom-musicvol')); if (!isNaN(g)) musicGain = g; } catch (e) {}
 
+// THE BUILD STAMP. `document.lastModified` is a local-time string in the host's own
+// format; this normalises it to something short and unambiguous, and says so plainly when
+// the browser will not give a date at all (a `file://` copy reports the moment you opened
+// it, which would be a lie worth not telling).
+function buildStamp() {
+  try {
+    const d = new Date(document.lastModified);
+    if (isNaN(d.getTime())) return 'unknown';
+    const p2 = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate())
+         + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+  } catch (e) { return 'unknown'; }
+}
+
 function renderOptions() {
   const el = document.getElementById('options-list');
   if (!el) return;
@@ -5851,6 +5865,17 @@ function renderOptions() {
     + '<button class="opt-b' + (tipsOn ? '' : ' off') + '" data-opt="tips">'
     + (tipsOn ? 'On' : 'Off') + '</button></div>'
     + '<div class="opt-d">A line of explanation the first time something happens to you — the sounder, a thermocline, a hunter fixing on your noise. Each fires once, ever. Nothing interrupts and nothing repeats.</div></div>'
+
+    // WHICH BUILD AM I PLAYING? Sean sent a screenshot of a build three commits old and
+    // neither of us could tell — I spotted it only because a button I had deleted was
+    // still in the picture. `document.lastModified` is the served file's own timestamp,
+    // which on GitHub Pages is the moment of the deploy: no build step, no constant to
+    // remember to bump, nothing that can drift out of date.
+    + '<div class="opt"><div class="opt-h"><div class="opt-n">This build</div>'
+    + '<span class="opt-b off" style="cursor:default">' + buildStamp() + '</span></div>'
+    + '<div class="opt-d">When the copy you are playing was published. If it is older than a fix you are '
+    + 'expecting, pull down to refresh — the game is at <em>botheyesshut.github.io/fathom/fathom-chart.html</em> '
+    + 'and always updates itself. A copy saved to the device does not.</div></div>'
 
     + '<div class="opt"><div class="opt-h"><div class="opt-n">New world</div>'
     + '<button class="opt-b danger" data-opt="newworld">Abandon</button></div>'
