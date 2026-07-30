@@ -1,4 +1,34 @@
-# FATHOM — START HERE (last updated 2026-07-29)
+# FATHOM — START HERE (last updated 2026-07-30)
+
+## IT IS ALREADY HOSTED. READ THIS BEFORE ANSWERING A QUESTION ABOUT DELIVERY.
+
+**`https://botheyesshut.github.io/fathom/fathom-chart.html`** — live, and every push to
+`main` deploys there in a minute or two. Sean asked on 2026-07-30 whether it "may make
+more sense to host it online", having installed a file on his phone. It has been hosted
+since 2026-07-07; what he installed was the copy delivered by `SendUserFile`, which is a
+snapshot and does not update.
+
+**So the delivery advice is: send him the URL, not the file.** A file sent at 3am is a
+fossil by breakfast. The URL is always the current build, Chrome on Android will "Add to
+Home screen" it as an app, and it keeps its own `localStorage` save either way. The only
+thing a downloaded copy buys is working with no signal.
+
+**And a caution learned the hard way the same morning:** the local preview server served
+a THREE-COMMIT-STALE build through three separate browser checks, including one where I
+read a measurement off it. `?v=` did not bust it. Before trusting anything read out of
+the Browser pane, check a symbol that only exists in the current build — e.g.
+`typeof spaceSpoken === 'function'` — or verify headlessly against the file on disk.
+
+## FIRST PHONE TEST, AND WHAT IT FOUND (2026-07-30)
+
+Sean played the real thing on an Android phone for the first time since the surface arc
+landed. Three findings, all of them right, and two of them one bug.
+
+| what he said | what it was |
+|---|---|
+| *"there was a sail southwest, but all that was southwest was the starting island"* | Ships spawned ON the harbour tile, which is a `dock`, which is LAND. Fixed: she casts off into the water beside her port before you ever see her. |
+| *"the boat doesn't seem to actually be moving from one port to another. it's just kinda sitting there"* | The same bug's other half — see the steering entry below. **4 voyages completed in 1,200 ship-turns; now 70.** |
+| *"there's too much text going past the text window... impossible to know the chronology"* | See THE BOAT TALKS TOO MUCH below. His proposed design was better than what was there and is what got built. |
 
 ## THE OVERNIGHT CLEANUP (2026-07-29, `0aea1b3`..`HEAD`)
 
@@ -228,6 +258,46 @@ entries left are the two he set aside.
 | **Diplomacy underwater** | Same. |
 | **Wartime** | BUILT — see below. He deferred it; then: *"I don't want deferrals."* |
 | **PCs** | BUILT as far as it honestly goes — see below, including what it is **not**. |
+
+## THE BOAT TALKS TOO MUCH (2026-07-30)
+
+Sean, on the phone: *"we should only be getting a single description of our situation per
+hex and depth and egress information if we ask for it somehow. if the boat has a first
+mate, we could have him tell us. if we don't, we need to check ourselves. it might be
+possible to buy an artificial intelligence first mate that would to do the job, too."*
+
+That is the whole design and it is better than what was there. Built as stated:
+
+| | |
+|---|---|
+| **One description per hex AND depth** | `move()` described the water on arrival *and again at `rand() < 0.4`*, and a depth change described it again at `rand() < 0.55`. Four hexes of one passage could produce four paragraphs about that passage. Now a `(hex, depth)` memo, session-scoped, capped at 4,000, **and no dice anywhere in the decision**. Measured on a 24-arrival round trip — twelve hexes out and the same twelve back — **13 descriptions**: the return leg over known water is silent. |
+| **Egress on request** | `describeSpace` bolted exits, current, layer, trace and sounder onto *every* arrival — a paragraph where a sentence would do, which on a two-line log window is the entire problem. Arrival now gets the sentence; Look gets the paragraph. **1,104 characters against 3,187** over the same trip. |
+| **A first mate** | Your **longest-serving able hand** — no new role, no new system, and it makes keeping a crew alive worth something, which is what the crew system was for. With one aboard you get the full account unasked, so a captain with crew loses nothing. A wounded man is not a mate. |
+| **A calculating engine** | 60 crates at the Yard, for a boat with no crew or one that has just buried its. Deliberately **worse than a person**: a hand grows knacks by staying alive, this thing does one job for ever and will never learn another. It is also the only large sink in the economy, which the economy audit said there was nothing to save for. |
+
+**Still open, and it is a taste call I did not want to make for him:** the log window on
+his phone shows about two lines of a fairly large serif. Fewer messages helps; so would a
+smaller face or a taller box, and both cost something. Ask before changing it.
+
+## SHIPS THAT COULD NOT STEER (2026-07-30)
+
+Three attempts, and the first two each fixed half of it. Kept because the *shape* of the
+mistake recurs: each fix was locally correct and globally wrong.
+
+1. The original shoulder-round list included the **reverse heading**, so a hull pressed
+   against a headland stepped back the way she came and then forward again, for ever —
+   measured `-12,22 → -12,23 → -12,22 → -12,23`, four hexes short of a port she never
+   reached, with **0 of 7 hulls moving in 60 turns**.
+2. Forward-only detours stopped the reversing and left a **two-hex ping-pong**.
+3. Committing to a detour for four hexes stopped the ping-pong and walked her **round
+   the island the long way** — distance to port 4, then 5, then 6.
+4. What works is the standard rule: **try the direct hex every step**, and follow the
+   coast only while the direct hex is shut. `skirtSense` remembers which way round she
+   turned so she does not flip-flop alongside, chosen by which side leaves her nearer
+   her port, and dropped the moment open water lets her resume.
+
+**4 voyages ended in 1,200 ship-turns before; 70 after.** The hull count trebles because
+the sea now turns over instead of clogging with ships milling against a coast.
 
 ## WARTIME, AND ANOTHER BOAT IS SOMEBODY (2026-07-29)
 
