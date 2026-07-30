@@ -216,6 +216,11 @@
     text-overflow: ellipsis;
   }
 
+  /* DEPTH IS NOT ONE STAT AMONG FOUR. It is the number that decides whether the
+     next move kills you, and it was sharing a size with Hold. Ashore, the big
+     1.5rem dive-row readout is hidden entirely, so this was the only depth on
+     the screen at 15.68 px. */
+  #depth-val { font-size: 1.34rem; letter-spacing: 0.04em; }
   .stat-value.warn { color: var(--lantern); }
   .stat-value.danger { color: var(--blood); animation: pulse-danger 1s ease-in-out infinite; }
 
@@ -320,8 +325,10 @@
     position: absolute;
     bottom: 0.6rem;
     right: 3rem; /* clear of the depth strip on the right */
-    width: 36px;
-    height: 36px;
+    /* 44, not 36. It was the only control in the whole game under 40x40, on a
+       phone, and a thumb is not a mouse pointer. */
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     border: 1px solid var(--sonar-dim);
     background: rgba(8, 20, 32, 0.7);
@@ -531,11 +538,11 @@
        never widens the tile, which floats over the chart and owns no layout. */
     overflow-wrap: break-word;
   }
-  #vp-x {
-    position: absolute; top: 1px; right: 3px;
-    font-size: 9px; line-height: 1; color: rgba(150, 180, 200, 0.45);
-    pointer-events: none;   /* the whole tile is the target; this only marks it */
-  }
+  /* The ✕ that used to sit here is gone. It measured 7.4x9 px, drew as a close
+     button, and could never be one — this tile is click-through on purpose (see
+     above), so the tap fell straight through to the chart and MOVED THE BOAT.
+     A decoration does not get to wear a button's clothes. The switch that
+     actually hides the porthole is in Options. */
 
   /* O4: the long-press explanation. Sits above everything, ignores pointers so
      it can never eat the tap it is explaining, and reads as the boat talking
@@ -579,7 +586,11 @@
     /* Was 6rem — two lines — for a game whose voice IS its prose. A room
        description carrying the set, the layer and the sounder runs to four, so
        most of the writing scrolled past before it could be read. */
-    height: 7.2rem;
+    /* WAS a hard 7.2rem — 115 px on every screen, so a shorter phone paid for it
+       out of the chart. Measured at 360x700: chart 279 px against log+controls
+       334. It now yields on short screens only; at 360x800 and above this
+       resolves to the same 7.2rem it always was. */
+    height: clamp(5.4rem, 13.5vh, 7.2rem);
     /* SCROLLABLE, by finger or wheel. It used to be overflow:hidden with the
        content pinned to the bottom, so anything that had gone past was simply
        unreachable without opening the full transcript. */
@@ -661,8 +672,12 @@
   #ping-power-row {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
-    padding: 0.15rem 0.6rem 0;
+    /* Sean: "everything under the log I think it can be smaller." This row was
+       the fattest thing under it at 62 px, and the only part of that a thumb
+       needs is the slider itself — the label above it can sit closer. The
+       slider's own 44 px target is untouched. */
+    gap: 0;
+    padding: 0.05rem 0.6rem 0;
     border: 1px solid var(--sonar-dim);
     border-radius: 2px;
     background: rgba(94, 184, 154, 0.03);
@@ -1230,7 +1245,6 @@
     <!-- Tapping the tile has always dismissed it, but an invisible affordance
          is not an affordance. Sean asked for "a way to turn it off" for a
          feature that already had one, which is the answer. -->
-    <span id="vp-x" title="Hide the illustration window">✕</span>
   </div>
   <!-- Vertical depth strip overlay -->
   <div id="depth-strip">
@@ -8299,6 +8313,11 @@ function syncFootControls(inside) {
   const claimable = inside && f0 &&
     (isBaseDeck(f0.q, f0.r, f0.d, f0.kind) ||
      (f0.kind === 'beach' || (f0.kind !== 'hull' && f0.kind !== 'deepruin' && caveSeg(f0.kind) <= 0)));
+  // RECENTRE is mute ashore. Its handler zeroes state.panX/panY, and
+  // renderInterior computes its camera from f.x/f.y and never reads pan.
+  const rc = document.getElementById('recenter-btn');
+  if (rc) rc.style.display = inside ? 'none' : '';
+
   const claim = document.getElementById('btn-claim');
   if (!claim) return;
   claim.style.display = claimable ? '' : 'none';
@@ -8364,6 +8383,19 @@ function render() {
   // disagree with the prose — a wrong illustration is worse than none.
   if (typeof syncScene === 'function') syncScene();
   if (typeof musicSync === 'function') musicSync();
+  // THE VIEWPORT MOVED AND NOTHING TOLD IT. Going ashore grows #chart-container
+  // by 115.6 px as the control stack shrinks, and `setViewport` is wired to
+  // `window.resize` alone — so viewW/viewH went stale and the lamplight vignette
+  // stopped 57.8 px short at top and bottom.
+  //
+  // ABOVE THE EARLY RETURN, and that is the whole point. My first attempt called
+  // setViewport from syncFootControls and measured a layout mid-reflow; the
+  // second put this check further down in render() — which returns on the very
+  // next line when you are ashore, so the fix sat on the one path the failure
+  // never takes. Self-healing is only self-healing if it runs.
+  const liveBox = svg.getBoundingClientRect();
+  if (liveBox.height > 1 && Math.abs(liveBox.height - (viewH || 0)) > 2) setViewport();
+
   // One rung down the resolution ladder the chart is a different world: square
   // tiles, lamplight, a body instead of a boat.
   if (state.foot) { syncFootControls(true); renderInterior(); return; }
