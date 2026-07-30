@@ -2509,29 +2509,183 @@ const VP_KEY = { '█':'8', '▓':'8', '▒':'1', '░':'1', '▄':'8', '▀':'8
 // that breathe.  Both grids are VP_W x VP_H and the battery enforces it.
 const VP_SCENES = {
 
-  deep: { cap: 'the weight of the water', wet: true,
-    art: ['█████▓▒░        ░▒▓█████',
-           '████▓▒░          ░▒▓████',
-           '███▓▒░            ░▒▓███',
-           '██▓▒                ▒▓██',
-           '█▓                    ▓█',
-           '▓                      ▓',
-           '                        ',
-           '▒                      ▒',
-           '███▓▒░            ░▒▓███',
-           '█████▓▓▒▒░░░░░░▒▒▓▓█████'] },
+  // THE WATER PRESSES. This was a still, and it is the second-most-seen picture
+  // in the game — the walls of a scene about pressure never moved. Now they
+  // breathe by one cell on a slow eight-beat, and motes fall through the clear
+  // middle of it, which is what a porthole actually shows you down there.
+  deep: { cap: 'the weight of the water', wet: true, hold: 5,
+    key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7' },
+    frames: [
+       ['█████▓▒░        ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒      ·         ▒▓██',
+        '█▓                    ▓█',
+        '▓                      ▓',
+        '                        ',
+        '▒             ·        ▒',
+        '███▓▒░            ░▒▓███',
+        '█████▓▓▒▒░░░░░░▒▒▓▓█████'],
+       ['█████▓▒░        ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒                ▒▓██',
+        '█▓ ▒      ·         ▒ ▓█',
+        '▓ ░                  ░ ▓',
+        '  ░                  ░  ',
+        '▒ ░                  ░ ▒',
+        '███▓▒░        ·   ░▒▓███',
+        '█████▓▓▒▒░░░░░░▒▒▓▓█████'],
+       ['█████▓▒░        ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒                ▒▓██',
+        '█▓ ▒                ▒ ▓█',
+        '▓ ░       ·          ░ ▓',
+        '  ░                  ░  ',
+        '▒ ░                  ░ ▒',
+        '███▓▒░            ░▒▓███',
+        '█████▓▓▒▒░░░░░·▒▒▓▓█████'],
+       ['█████▓▒░      · ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒                ▒▓██',
+        '█▓                    ▓█',
+        '▓                      ▓',
+        '          ·             ',
+        '▒                      ▒',
+        '███▓▒░            ░▒▓███',
+        '█████▓▓▒▒░░░░░░▒▒▓▓█████'],
+       ['█████▓▒░        ░▒▓█████',
+        '████▓▒░       ·  ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒                ▒▓██',
+        '█▓                    ▓█',
+        '▓                      ▓',
+        '                        ',
+        '▒         ·            ▒',
+        '███▓▒░            ░▒▓███',
+        '█████▓▓▒▒░░░░░░▒▒▓▓█████'],
+       ['█████▓▒░        ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░        ·   ░▒▓███',
+        '██▓▒                ▒▓██',
+        '█░                    ░█',
+        '░                      ░',
+        '                        ',
+        '░                      ░',
+        '███▓▒░    ·       ░▒▓███',
+        '█████▓▓▒▒░░░░░░▒▒▓▓█████'],
+       ['█████▓▒░        ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒          ·     ▒▓██',
+        '█░                    ░█',
+        '░                      ░',
+        '                        ',
+        '░                      ░',
+        '███▓▒░            ░▒▓███',
+        '█████▓▓▒▒░·░░░░▒▒▓▓█████'],
+       ['█████▓▒░  ·     ░▒▓█████',
+        '████▓▒░          ░▒▓████',
+        '███▓▒░            ░▒▓███',
+        '██▓▒                ▒▓██',
+        '█▓            ·       ▓█',
+        '▓                      ▓',
+        '                        ',
+        '▒                      ▒',
+        '███▓▒░            ░▒▓███',
+        '█████▓▓▒▒░░░░░░▒▒▓▓█████'],
+    ] },
 
-  open: { cap: 'open water, nothing in it', wet: true,
-    art: ['                        ',
-           '        ░               ',
-           '                        ',
-           '                 ░      ',
-           '                        ',
-           '    ░                   ',
-           '                        ',
-           '             ░          ',
-           '                    ░   ',
-           '                        '] },
+  // OPEN WATER, AND IT IS MOVING. The most-drawn scene in the whole game was
+  // five specks that never went anywhere, so the ocean read as a photograph of
+  // an ocean. Five tracks, drifting down and aft, eight frames at hold 4 — long
+  // enough that you never catch the loop.
+  open: { cap: 'open water, nothing in it', wet: true, hold: 4,
+    key: { '░': '1', '·': '7' },
+    frames: [
+       ['                        ',
+        '        ·               ',
+        '                        ',
+        '                 ░      ',
+        '                        ',
+        '    ░                   ',
+        '                        ',
+        '            ·           ',
+        '                   ░    ',
+        '                        '],
+       ['                        ',
+        '                        ',
+        '        ░               ',
+        '                        ',
+        '                 ░      ',
+        '                        ',
+        '   ·                    ',
+        '                        ',
+        '            ░           ',
+        '                   ░    '],
+       ['                  ·     ',
+        '                        ',
+        '                        ',
+        '        ░               ',
+        '                        ',
+        '                ·       ',
+        '                        ',
+        '   ░                    ',
+        '                        ',
+        '            ░           '],
+       ['           ·            ',
+        '                  ░     ',
+        '                        ',
+        '                        ',
+        '       ·                ',
+        '                        ',
+        '                ░       ',
+        '                        ',
+        '   ░                    ',
+        '                        '],
+       ['                        ',
+        '           ░            ',
+        '                  ░     ',
+        '                        ',
+        '                        ',
+        '       ░                ',
+        '                        ',
+        '                ░       ',
+        '                        ',
+        '  ·                     '],
+       ['  ░                     ',
+        '                        ',
+        '           ░            ',
+        '                 ·      ',
+        '                        ',
+        '                        ',
+        '       ░                ',
+        '                        ',
+        '               ·        ',
+        '                        '],
+       ['                        ',
+        '  ░                     ',
+        '                        ',
+        '          ·             ',
+        '                 ░      ',
+        '                        ',
+        '                        ',
+        '      ·                 ',
+        '                        ',
+        '               ░        '],
+       ['               ░        ',
+        '                        ',
+        ' ·                      ',
+        '                        ',
+        '          ░             ',
+        '                 ░      ',
+        '                        ',
+        '                        ',
+        '      ░                 ',
+        '                        '],
+    ] },
 
   layer: { cap: 'the thermometer drops away', wet: true, hold: 3,
     // FIRST PERSON. This used to draw the Erebus in profile with her name
@@ -2604,18 +2758,76 @@ const VP_SCENES = {
        '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓'],
     ] },
 
-  ruin: { cap: 'squared off by hands',
-    key: { '█': '8', '▄': '6', '▀': '6', '▓': '8', '▒': '1' },
-    art: ['                        ',
-           '    ▄▄▄▄▄▄▄▄▄           ',
-           '  ▄███████████▄         ',
-           '  ███▀███▀███▄▄         ',
-           '  ███▄███▄███████▄      ',
-           '  ████████████████▄     ',
-           '  ███ ▀ ███ ███████     ',
-           ' ▄███▄▄▄███▄███████▄    ',
-           '▒█████████████████████▒ ',
-           '▒▓███████████████████▓▒ '] },
+  // ONE OF THE THREE RUINS, AND IT WAS A PHOTOGRAPH. Sean asked for three ruin
+  // animations and got two animations and a still. The masonry does not move —
+  // it has stood there a long time and will go on standing, and that is the
+  // point of it. The silt going past moves, and a drift of it crosses the one
+  // gap in the frontage, which is the only thing that tells you the gap is a
+  // hole and not a shadow.
+  ruin: { cap: 'squared off by hands', hold: 5,
+    key: { '█': '8', '▄': '6', '▀': '6', '▓': '8', '▒': '1', '░': '1', '·': '7' },
+    frames: [
+       ['                     ░  ',
+        '    ▄▄▄▄▄▄▄▄▄           ',
+        '  ▄███████████▄   ·     ',
+        '  ███▀███▀███▄▄         ',
+        '  ███▄███▄███████▄      ',
+        '  ████████████████▄ ░   ',
+        '  ███ ▀ ███ ███████     ',
+        ' ▄███▄▄▄███▄███████▄    ',
+        '▒█████████████████████▒ ',
+        '▒▓███████████████████▓▒ '],
+       ['                    ░   ',
+        '    ▄▄▄▄▄▄▄▄▄           ',
+        '  ▄███████████▄  ·      ',
+        '  ███▀███▀███▄▄         ',
+        '  ███▄███▄███████▄      ',
+        '  ████████████████▄     ',
+        '  ███ ▀ ███ ███████░    ',
+        ' ▄███▄▄▄███▄███████▄    ',
+        '▒█████████████████████▒ ',
+        '▒▓███████████████████▓▒ '],
+       ['                   ░    ',
+        '    ▄▄▄▄▄▄▄▄▄           ',
+        '  ▄███████████▄         ',
+        '  ███▀███▀███▄▄ ·       ',
+        '  ███▄███▄███████▄      ',
+        '  ████████████████▄     ',
+        '  ███ ░ ███ ███████     ',
+        ' ▄███▄▄▄███▄███████▄    ',
+        '▒█████████████████████▒ ',
+        '▒▓███████████████████▓▒ '],
+       ['                        ',
+        '    ▄▄▄▄▄▄▄▄▄     ░     ',
+        '  ▄███████████▄         ',
+        '  ███▀███▀███▄▄·        ',
+        '  ███▄███▄███████▄      ',
+        '  ████████████████▄     ',
+        '  ███ ░ ███ ███████     ',
+        ' ▄███▄▄▄███▄███████▄    ',
+        '▒█████████████████████▒ ',
+        '▒▓███████████████████▓▒ '],
+       ['                        ',
+        '    ▄▄▄▄▄▄▄▄▄    ░      ',
+        '  ▄███████████▄         ',
+        '  ███▀███▀███▄▄         ',
+        '  ███▄███▄███████▄      ',
+        '  ████████████████▄     ',
+        '  ███ ▀ ███ ███████     ',
+        ' ▄███▄▄▄███▄███████▄    ',
+        '▒█████████████████████▒ ',
+        '▒▓███████████████████▓▒ '],
+       ['                        ',
+        '    ▄▄▄▄▄▄▄▄▄   ░       ',
+        '  ▄███████████▄         ',
+        '  ███▀███▀███▄▄         ',
+        '  ███▄███▄███████▄      ',
+        '  ████████████████▄     ',
+        '  ███ ▀ ███ ███████     ',
+        ' ▄███▄▄▄███▄███████▄    ',
+        '▒█████████████████████▒ ',
+        '▒▓███████████████████▓▒ '],
+    ] },
 
 
 
@@ -3144,49 +3356,73 @@ const VP_SCENES = {
        '░░░░░░░░░░░░░░░░░░░░░░░░'],
     ] },
 
+  // TWO FRAMES IN FOUR FRAMES' CLOTHES: one and three were byte for byte the
+  // same here, and so were two and four. The ports stay dark — a light in one
+  // of them would be a story beat, and a false one. What moves is silt on two
+  // tracks at different speeds, and the muck she has settled into stirring.
   hullside: { cap: 'a row of ports, all dark', hold: 5, wet: 1,
     key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7', '○': '0' },
     frames: [
-      ['     ·                  ',
-       '              ·         ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       ' ▓○██○██○██○██○██○██▓   ',
-       '▓██████████████████████▓',
-       ' ▓████████████████████▓ ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
-       '░░░░░░░░░░░░░░░░░░░░░░░░',
-       '                        '],
-      ['              ·         ',
-       '     ·                  ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       ' ▓○██○██○██○██○██○██▓   ',
-       '▓██████████████████████▓',
-       ' ▓████████████████████▓ ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
-       '░░░░░░░░░░░░░░░░░░░░░░░░',
-       '                        '],
-      ['     ·                  ',
-       '              ·         ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       ' ▓○██○██○██○██○██○██▓   ',
-       '▓██████████████████████▓',
-       ' ▓████████████████████▓ ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
-       '░░░░░░░░░░░░░░░░░░░░░░░░',
-       '                        '],
-      ['              ·         ',
-       '     ·                  ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       ' ▓○██○██○██○██○██○██▓   ',
-       '▓██████████████████████▓',
-       ' ▓████████████████████▓ ',
-       '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
-       '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
-       '░░░░░░░░░░░░░░░░░░░░░░░░',
-       '                        '],
+       ['     ·                  ',
+        '              ·         ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        ' ▓○██○██○██○██○██○██▓   ',
+        '▓██████████████████████▓',
+        ' ▓████████████████████▓ ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+        '▒░░░░▒░░░░▒░░░░▒░░░░▒░░░',
+        '░      ░      ░      ░  '],
+       ['               ·        ',
+        '    ·                   ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        ' ▓○██○██○██○██○██○██▓   ',
+        '▓██████████████████████▓',
+        ' ▓████████████████████▓ ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+        '░░░▒░░░░▒░░░░▒░░░░▒░░░░▒',
+        '    ░      ░      ░     '],
+       ['   ·                    ',
+        '                ·       ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        ' ▓○██○██○██○██○██○██▓   ',
+        '▓██████████████████████▓',
+        ' ▓████████████████████▓ ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+        '░▒░░░░▒░░░░▒░░░░▒░░░░▒░░',
+        ' ░      ░      ░      ░ '],
+       ['                 ·      ',
+        '  ·                     ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        ' ▓○██○██○██○██○██○██▓   ',
+        '▓██████████████████████▓',
+        ' ▓████████████████████▓ ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+        '░░░░▒░░░░▒░░░░▒░░░░▒░░░░',
+        '     ░      ░      ░    '],
+       [' ·                      ',
+        '                  ·     ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        ' ▓○██○██○██○██○██○██▓   ',
+        '▓██████████████████████▓',
+        ' ▓████████████████████▓ ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+        '░░▒░░░░▒░░░░▒░░░░▒░░░░▒░',
+        '  ░      ░      ░      ░'],
+       ['                   ·    ',
+        '·                       ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        ' ▓○██○██○██○██○██○██▓   ',
+        '▓██████████████████████▓',
+        ' ▓████████████████████▓ ',
+        '  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ',
+        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒',
+        '▒░░░░▒░░░░▒░░░░▒░░░░▒░░░',
+        '      ░      ░      ░   '],
     ] },
 
   ruintower: { cap: 'a tower, still standing', hold: 5, wet: 1,
@@ -5084,6 +5320,24 @@ function portRows() {
     return bits.join(' and ');
   };
 
+  // ---- THE CHANDLER. The dock banked crates and vaulted relics and would not
+  // look at anything else, so twenty of the thirty-five findable items could
+  // only ever become money at an enclave you had to find first. A working port
+  // has somebody who buys odds and ends. He pays badly, which is the point: he
+  // is the floor under the market, not the best price for anything.
+  const sellable = Object.keys(state.items || {}).filter(k => state.items[k] > 0 && ITEMS[k]);
+
+  if (sellable.length) {
+    rows.push({ head: 'The Chandler', note: 'Buys odds and ends off a boat. Badly.' });
+    for (const k of sellable) {
+      const it = ITEMS[k];
+      const pay = Math.max(1, Math.round((it.val || 1) * 0.8));
+      rows.push({ label: it.name + ' \u00d7' + state.items[k],
+                  cost: 'pays ' + pay + ' crate' + (pay === 1 ? '' : 's'),
+                  ok: true, act: 'chandler:' + k });
+    }
+  }
+
   // ---- THE YARD
   rows.push({ head: 'The Yard', note: 'Hulls and hull work.' });
   if (state.hull < sub.hull) {
@@ -5183,6 +5437,17 @@ function renderPort() {
 
 function portBuy(act) {
   const sub = activeSub();
+  if (act && act.indexOf('chandler:') === 0) {
+    const k = act.slice(9), it = ITEMS[k];
+    if (!it || !itemCount(k)) return;
+    const pay = Math.max(1, Math.round((it.val || 1) * 0.8));
+    takeItem(k, 1);
+    state.cargoBanked += pay;
+    log(`The chandler turns ${it.name} over twice, names a price you do not like, and pays it. ${pay} crate${pay === 1 ? '' : 's'} on the ledger.`, '', 'PORT');
+    sfx('bell');
+    updateHUD(); renderPort(); scheduleSave();
+    return;
+  }
   if (act === 'repair') {
     const missing = sub.hull - state.hull;
     // E8: THE ENGINEER NOW ACTUALLY DOES SOMETHING. The multiplier was computed
@@ -9591,12 +9856,12 @@ function fireWeapon() {
     if (inR) { key = 'torpedo'; target = inR.c; state.torpedoes--; }
   }
   if (!key) {
-    if (!state.armament && state.torpedoes <= 0) { log('You carry no weapon. Buy an armament at the dock.', 'warn'); return; }
+    if (!state.armament && state.torpedoes <= 0) { log('You carry no weapon. Buy an armament at the dock.', 'warn', 'ARMS'); return; }
     // If a boat is out there but not yet placed, say so — that is the whole game.
     const ghost = state.creatures.find(c => c.type === 'rival' && !c.gone && !c.crippled
       && hexDistance({q: c.q, r: c.r}, {q: state.q, r: state.r}) <= passiveContactR(c.depth, c.q, c.r) + 2 && !rivalLocalized(c));
     if (ghost) log('You can hear a boat out there, but you cannot place it well enough to shoot. Ping to fix it — and hand it your own position — or wait for it to move under power.', 'warn', 'FIRE');
-    else log('Nothing in your sights.', 'warn');
+    else log('Nothing in your sights.', 'warn', 'ARMS');
     return;
   }
   log(key === 'torpedo' ? 'A torpedo runs hot into the dark.' : 'The harpoon gun fires.', '', 'FIRE');
@@ -9626,7 +9891,7 @@ function launchDecoy() {
     log('The buoy racks are empty. They restock at the dock.', 'warn', 'DECOY');
     return;
   }
-  if (state.air < 6) { log('Not enough air to charge a decoy.', 'warn'); return; }
+  if (state.air < 6) { log('Not enough air to charge a decoy.', 'warn', 'DECOY'); return; }
   state.decoys--;
   state.air -= 6;
   state.buoys.push({ q: state.q, r: state.r, depth: state.currentDepth, turns: 10 });
@@ -9642,12 +9907,12 @@ function ping() {
   if (ashore()) return;
   const power = pingPower();
   if (power === 0) {
-    log('Sonar is silent.', 'warn');
+    log('Sonar is silent.', 'warn', 'SONAR');
     return;
   }
   const lvl = PING_LEVELS[power];
   if (state.air < lvl.activeCost) {
-    log(`Not enough air for a power-${power} ping. Needs ${lvl.activeCost}.`, 'warn');
+    log(`Not enough air for a power-${power} ping. Needs ${lvl.activeCost}.`, 'warn', 'SONAR');
     return;
   }
   state.air = Math.max(0, state.air - lvl.activeCost);
@@ -10957,6 +11222,16 @@ function interiorAt(q, r, d, kind) {
       const x = rm.x + Math.floor(rnd() * rm.w), y = rm.y + Math.floor(rnd() * rm.h);
       const t = tiles.get(x + ',' + y);
       if (t && t.t !== 'entry' && !t.loot) {
+        // A WRECKED BOAT IS FULL OF BOAT. Sean asked whether claiming and
+        // repairing a wreck could make sense; the honest version is that you do
+        // not get a second home out of a drowned submarine, you get YOUR boat
+        // back. `rollItem` is depth-gated only, so a natural rock cave was
+        // exactly as likely to hold plates of pressure-hull as a submarine —
+        // which is absurd twice over. Half of what a hull gives up is fittings.
+        if (kind === 'hull' && rnd() < 0.5) {
+          const fits = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'fit' && ITEMS[k].depth <= d);
+          if (fits.length) { t.loot = fits[Math.floor(rnd() * fits.length)]; continue; }
+        }
         // A DEAD END PAYS IN BREATH, NOT IN CARGO. Sean: "some with a little
         // loot like air". A pocket at the end of a blind passage holding a
         // crate of salvage makes no sense — nobody carried it there. A flask,
@@ -13774,7 +14049,7 @@ function changeDepth(deltaMeters) {
     } else {
       // Ceiling: surface is soft, chamber ceiling and shallow-water cap are rock
       if (state.currentDepth <= 0) {
-        log('You are at the surface.', 'warn');
+        log('You are at the surface.', 'warn', 'HELM');
       } else {
         const dmg = 4 + Math.floor(rand() * 5);
         state.hull = Math.max(0, state.hull - dmg);
@@ -13828,7 +14103,7 @@ function changeDepth(deltaMeters) {
   if (Math.abs(deltaMeters) > sub.diveStep) {
     noiseMade(state.q, state.r, 2);
     sfx('ballast');
-    if (rand() < 0.25) log('The ballast tanks roar. The sound carries.', 'warn');
+    if (rand() < 0.25) log('The ballast tanks roar. The sound carries.', 'warn', 'BALLAST');
   }
 
   if (state.currentDepth > safeDepthNow() || crushPenalty()) {
@@ -15820,7 +16095,7 @@ function surface() {
     if (atPort) openPort();
 
     if (state.air >= sub.air) {
-      log('Already at full air. The hatch is sealed and the boat waits.', 'warn');
+      log('Already at full air. The hatch is sealed and the boat waits.', 'warn', 'AIR');
       return;
     }
     state.air = sub.air;
@@ -15834,14 +16109,14 @@ function surface() {
   // Otherwise, rise within the current volume — ascend toward its ceiling.
   const vol = volumeContaining(tile, state.currentDepth);
   if (!vol) {
-    log('No volume here to rise within.', 'warn');
+    log('No volume here to rise within.', 'warn', 'HELM');
     return;
   }
   if (state.currentDepth > vol.ceiling) {
     const delta = state.currentDepth - vol.ceiling;
     changeDepth(-Math.min(delta, sub.diveStepFast));
   } else {
-    log('Already at the top of this space.', 'warn');
+    log('Already at the top of this space.', 'warn', 'HELM');
   }
 }
 
