@@ -94,6 +94,9 @@ try { vm.runInContext(script +
   '\nfunction __clearLeads(){ state.leads = []; }' +
   '\nfunction __resolve(L){ resolveLead(L); }' +
   '\nfunction __poiAt(q,r){ var t=tileAt(q,r); return t?(t.poi||null):null; }' +
+  // ONE definition of what a way in is, and the game holds it. See the cavern-mark
+  // check below for what happened when this file kept a second copy.
+  '\nfunction __isWayIn(q,r){ tileAt(q,r); return isWayIn(q,r); }' +
   '\nfunction __revealedCount(){ var n=0; for (var e of revealed) n+=e[1].size; return n; }' +
   '\nfunction __cargo(){ return state.cargo; }' +
   '\nfunction __creatureCount(){ return state.creatures.length; }' +
@@ -738,11 +741,12 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     const L = sandbox.__mkLead(1, i * 7, -i * 5, 'cav-probe-' + i, 'cavern');
     if (!L || L.kind !== 'cavern') continue;
     cavs++;
-    const poi = sandbox.__poiAt(L.q, L.r);
-    // `hull` joined this list when a wrecked boat became a place you can walk.
-    // It had been excluded by omission, which meant a lead promising "a place
-    // worth exploring" could never point at the newest content in the game.
-    if (poi === 'ruin' || poi === 'hull' || poi === 'opening' || poi === 'salvage') honest++;
+    // ASK THE GAME WHAT A WAY IN IS. This used to carry its own list — ruin, hull,
+    // opening, salvage — and the day a BEACH became a way in (which it plainly is:
+    // a mouth in the rock with rooms behind it) this check went to 38 of 58 and
+    // accused the chart of lying about something true. A test holding a second copy
+    // of a definition will eventually disagree with the first copy, and be wrong.
+    if (sandbox.__isWayIn(L.q, L.r)) honest++;
   }
   // Soft quality bar, not an invariant — the exact hold rate moves whenever
   // world generation does. The INVARIANT is the next check: of the ones that

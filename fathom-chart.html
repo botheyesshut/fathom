@@ -1192,6 +1192,8 @@
       <div id="trade-buy"></div>
       <div class="trade-sect">They will take</div>
       <div id="trade-sell"></div>
+      <!-- Cities only. A dock and a trading post both leave this empty. -->
+      <div id="trade-diplo"></div>
     </div>
   </div>
 </div>
@@ -2372,6 +2374,24 @@ function drawSeaChart() {
     g.font = `${Math.max(7, Math.round(s * 0.85))}px "JetBrains Mono", monospace`;
     g.fillText(mk[0], p.x, p.y);
   }
+  // AND EVERY BEACH YOU HAVE STOOD ON. `maybeBeach` files one under
+  // `beach:<hexKey>` in poisFound the moment the boat noses up to the sand, and
+  // until now that record was used for nothing you could see. 55% of beaches have no
+  // lateral water neighbour at their depth, so the only approach is straight down —
+  // which makes a mark on the chart the difference between a place you can return to
+  // and a place you found once.
+  for (const key of (state.poisFound || [])) {
+    if (typeof key !== 'string' || key.indexOf('beach:') !== 0) continue;
+    const hk = key.slice(6), ci = hk.indexOf(',');
+    if (ci < 0) continue;
+    const bq = +hk.slice(0, ci), br = +hk.slice(ci + 1);
+    if (!isFinite(bq) || !isFinite(br)) continue;
+    const p = P(bq, br);
+    g.fillStyle = '#8a7448';
+    g.font = `${Math.max(8, Math.round(s * 0.9))}px "JetBrains Mono", monospace`;
+    g.fillText('\u25e0', p.x, p.y);      // ◠ — a shore, seen from above
+  }
+
   // YOUR OWN STATION. The comment above says this pass draws "your station, the
   // peoples, the prizes you know of", and it drew two of those three: the `t.poi
   // === 'base'` branch up there can never fire, because nothing in the game has
@@ -2388,6 +2408,19 @@ function drawSeaChart() {
   for (const e of (state.enclaves || [])) {
     if (!visited.has(hexKey(e.q, e.r)) && !revealed.has(hexKey(e.q, e.r))) continue;
     const p = P(e.q, e.r), cu = CULTURES[e.culture];
+    // A CITY IS NOT A TRADING POST and must not draw like one. Bigger, in their own
+    // colour, and named — a place you can find again is a place worth naming.
+    if (e.city) {
+      g.fillStyle = cu ? cu.col : '#2f2a1a';
+      g.font = `${Math.max(11, Math.round(s * 1.5))}px "JetBrains Mono", monospace`;
+      g.fillText(cu ? cu.glyph : '?', p.x, p.y);
+      if (s >= 14 && e.name) {
+        g.fillStyle = 'rgba(47,42,26,0.85)';
+        g.font = `${Math.max(6, Math.round(s * 0.42))}px "JetBrains Mono", monospace`;
+        g.fillText(e.name, p.x, p.y + s * 0.85);
+      }
+      continue;
+    }
     g.fillStyle = '#2f2a1a';
     g.font = `${Math.max(8, Math.round(s * 1.0))}px "JetBrains Mono", monospace`;
     g.fillText(cu ? cu.glyph : '?', p.x, p.y);
@@ -5610,6 +5643,9 @@ const TIPS = {
   port:    'That is in the hold, not on the ledger. Lose the boat and you lose the hold with her. Surface within sight of the dock and it goes ashore — the Port sells hull work, hands, gear and the next boat.',
   pages:   'Somebody went down before you and wrote it down. The marks that pay in knowledge rather than cargo are how you recover the rest of it.',
   jettison:'Anything you are carrying can go over the side. Some of it will insist, eventually.',
+  // The one place in the world where anything but trade happens. Sean drew that line
+  // himself: the surface towns are for basic trade and nothing else.
+  city:    'A city is not a trading post. This is the only place any arrangement can be made — they will name something they are short of, and if they come to trust you they will treat. No dock on the surface will do any of it.',
   // THE ONE THAT DECIDES WHETHER THERE IS A SECOND SESSION. A first captain
   // dives, hits 60 m of shelf, is told "the sounder has nothing more to say"
   // a dozen times, and closes the tab — never learning that the shelf floor
@@ -5733,8 +5769,23 @@ function checkEnclave() {
   state._atEnclave = id;
   if (e) {
     const cu = CULTURES[e.culture];
-    log(`You come upon ${cu.name}. ${cu.creed}`, cu.danger ? 'danger' : 'strange', 'ENCLAVE');
-    sfx('bell');
+    const city = cityHere();
+    if (city) {
+      // A CITY IS NOT A POST, and it must not arrive like one. This is the biggest
+      // thing in the world and the reason a trench is worth going down.
+      log(`Lights. Not one light — a field of them, going away below you further than the ping will carry, in courses and terraces and something that has to be streets. ${city.name}.`,
+          'strange', 'CITY');
+      log(`${cu.name} live here, in numbers, and have for longer than there has been anybody to count. This is where arrangements are made.`,
+          'strange', 'CITY');
+      sfx('relic');
+      if (!state.poisFound.includes('city:' + city.id)) {
+        state.poisFound.push('city:' + city.id);
+        tip('city');
+      }
+    } else {
+      log(`You come upon ${cu.name}. ${cu.creed}`, cu.danger ? 'danger' : 'strange', 'ENCLAVE');
+      sfx('bell');
+    }
     openTrade(e);
   }
 }
@@ -5926,6 +5977,17 @@ function attackShip() {
   if (!sh.attacked) {
     sh.attacked = true;
     nudgeStanding(sh.culture, -35, 'you fired on their flag');
+    // AND IF SHE WAS ALREADY FIGHTING SOMEBODY, you have just come in on the other
+    // side. This is Sean's "the player can choose to interject one way or another",
+    // and it wants no control of its own: firing on one of two hulls IS the choice,
+    // and the credit lands once, with the opening shot.
+    if (sh.duelWith) {
+      const ally = (state.ships || []).find(x => x.id === sh.duelWith && !x.gone);
+      if (ally) {
+        nudgeStanding(ally.culture, 18, 'you came in on their side of a gun action');
+        log(`${CULTURES[ally.culture].short} saw whose side you came in on. That will be remembered, for as long as they remember anything.`, 'good', 'STANDING');
+      }
+    }
   } else {
     nudgeStanding(sh.culture, -3, 'you are still firing');
   }
@@ -6084,6 +6146,62 @@ function renderTrade(e) {
     const rp = relicCrates(e.culture);
     sellRows += `<div class="inv-row"><div class="ig" style="color:#c88ce8">✦</div><div class="in"><b>a relic</b> <span class="ct">×${state.relics}</span><span class="fl">they hoard these — ${rp} crates apiece</span></div><button class="act warn" data-sellrelic="1">Sell · ${rp} cr</button></div>`;
   }
+  // ---- WHAT ONLY A CITY DOES. A trading post is a few people holding a cave and it
+  // has nothing to say about the world. A city has a name, a memory, and an opinion,
+  // and it is the only place any arrangement can be made — which is Sean's line, not
+  // a limitation: "we would not get to handle diplomatic business there."
+  const diploEl = document.getElementById('trade-diplo');
+  if (diploEl) {
+    if (!e.city) diploEl.innerHTML = '';
+    else {
+      const band = standingBand(e.culture);
+      let h = `<div class="trade-sect">${e.name} \u2014 you are ${band.word} here</div>`;
+      // THEIR READ ON EVERYBODY ELSE. Intelligence you cannot get at a dock.
+      const others = Object.keys(CULTURES).filter(k => k !== e.culture);
+      h += '<div class="inv-row"><div class="ig" style="color:#6fae72">\u16dd</div><div class="in"><b>What they will tell you</b><span class="fl">' +
+        others.map(k => CULTURES[k].short + ': you are ' + standingBand(k).word +
+          (FLEET_RIVALS[e.culture] === k ? ' \u2014 and they are at war with this city' : '')).join('. ') +
+        '.</span></div></div>';
+      // A MISSION.
+      const m = state.mission && state.mission.culture === e.culture && state.mission.cityId === e.id
+        ? state.mission : null;
+      if (m) {
+        const it = ITEMS[m.item];
+        h += `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
+          `<div class="in"><b>Owed: ${m.n === 1 ? '' : m.n + ' \u00d7 '}${it.name}</b>` +
+          `<span class="fl">${m.done || 0} of ${m.n} handed over. Sell it to them here \u2014 ${m.pay} crates and their memory of it.</span></div></div>`;
+      } else if (!state.mission) {
+        const off = missionOffer(e);
+        if (off) {
+          const it = ITEMS[off.item];
+          h += `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
+            `<div class="in"><b>They are short of ${it.name}</b><span class="fl">${off.n === 1 ? 'One' : off.n} of them, brought here. ${off.pay} crates, and it would be remembered.</span></div>` +
+            `<button class="act" data-mission="1">Agree</button></div>`;
+        }
+      } else {
+        h += '<div class="inv-row"><div class="ig">\u2014</div><div class="in"><b>You are already carrying an arrangement</b>' +
+          `<span class="fl">With ${CULTURES[state.mission.culture].short}. Finish it, or it stays unfinished.</span></div></div>`;
+      }
+      // AN ALLIANCE.
+      if (alliedWith(e.culture)) {
+        h += '<div class="inv-row"><div class="ig" style="color:#8fd0a8">\u203b</div><div class="in"><b>Allied</b>' +
+          '<span class="fl">Their hulls do not hunt you. It holds as long as you give them no reason.</span></div></div>';
+      } else if (canAlly(e.culture)) {
+        h += '<div class="inv-row"><div class="ig" style="color:#8fd0a8">\u203b</div><div class="in"><b>They would put it in writing</b>' +
+          '<span class="fl">Trusted is far enough down that they will treat. Their hulls would leave you alone.</span></div>' +
+          '<button class="act" data-ally="1">Treat</button></div>';
+      } else {
+        h += `<div class="inv-row"><div class="ig">\u203b</div><div class="in"><b>No treaty yet</b>` +
+          `<span class="fl">They treat with the trusted and nobody else. You are ${band.word}.</span></div></div>`;
+      }
+      diploEl.innerHTML = h;
+      const mb = diploEl.querySelector('.act[data-mission]');
+      if (mb) mb.addEventListener('click', () => takeMission(e));
+      const ab = diploEl.querySelector('.act[data-ally]');
+      if (ab) ab.addEventListener('click', () => makeAlliance(e));
+    }
+  }
+
   // The other trade. They want it more than they want the relics, and they do
   // not pretend otherwise. Fresh is worth most, which is its own horror.
   if (cu.buys.flesh && (state.corpses || []).length) {
@@ -6116,6 +6234,10 @@ function tradeSell(e, key) {
   const p = sellPriceTo(e.culture, key);
   takeItem(key, 1); state.cargo += p;
   log(`Sold: ${ITEMS[key].name}, ${p} crates. It was worth more to them than to anyone.`, '', 'TRADE');
+  // AND HANDING IT OVER IS HOW AN ARRANGEMENT IS KEPT. No separate verb for
+  // completing a mission — trade is the verb this game already has for giving
+  // somebody a thing, and a mission is only a shortage somebody named out loud.
+  missionProgress(e, key);
   sfx('bell'); renderTrade(e); updateHUD(); render(); scheduleSave();
 }
 // The worst thing you can do in this game, and it is available, and it pays.
@@ -6323,14 +6445,37 @@ function leadTarget(seedStr, fromQ, fromR) {
 // lies is worse than no clue. So it snaps to an actual POI near the drawn
 // position rather than inventing one, which also means the person who drew the
 // mark was telling the truth about a place that was already there.
+// A BEACH IS A CELL, NOT A POI, which is why every scan in the game has been blind
+// to one — the same blindness the sounder had until tonight. So a `cavern` lead
+// ("a way in. Open plates, or a mouth in the rock, and rooms behind it") could never
+// point at the only place in the game that is literally that.
+function hexHoldsBeach(q, r) {
+  for (let d = 0; d <= 11040; d += DEPTH_GRID) {
+    const c = cells.get(cellKey(q, r, d));
+    if (c && c.kind === 'beach') return d;
+  }
+  return null;
+}
+
+// WHAT COUNTS AS A WAY IN — ONE DEFINITION, and the battery reads this one too.
+// `tests/items.test.js` kept its own copy of the list, and the moment a beach joined
+// it here "every cavern mark points at a real way in" went to 38 of 58: the test was
+// right that the chart must not lie and wrong about what a way in is. Two copies of
+// one definition is the actual bug.
+function isWayIn(q, r) {
+  const t = getTile(q, r);
+  if (!t || t.wall) return false;
+  if (t.poi === 'ruin' || t.poi === 'hull' || t.poi === 'opening' || t.poi === 'salvage') return true;
+  return hexHoldsBeach(q, r) != null;
+}
+
 function nearestWayIn(q, r, R) {
   let best = null, bd = 99;
   for (let dq = -R; dq <= R; dq++) for (let dr = -R; dr <= R; dr++) {
-    const t = tileAt(q + dq, r + dr);
-    if (!t || t.wall) continue;
-    if (t.poi !== 'ruin' && t.poi !== 'hull' && t.poi !== 'opening' && t.poi !== 'salvage') continue;
+    tileAt(q + dq, r + dr);                     // it has to exist before it can be judged
+    if (!isWayIn(q + dq, r + dr)) continue;
     const d = hexDistance({ q: q + dq, r: r + dr }, { q, r });
-    if (d < bd) { bd = d; best = t; }
+    if (d < bd) { bd = d; best = getTile(q + dq, r + dr); }
   }
   return best;
 }
@@ -8521,6 +8666,28 @@ function portNear(q, r) {
 const SHIP_CAP = 7;          // how many are afloat near you at once
 const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
 
+// WHO IS AT EACH OTHER. Not a standing model — a fact about the setting. The two
+// human powers are rivals; the carrying trade is nobody's enemy and that is what
+// makes it the carrying trade.
+const FLEET_RIVALS = { confluence: 'libertines', libertines: 'confluence' };
+
+// Two rivals within reach of each other. Returns the pair, nearest first, or null.
+// O(n^2) over at most SHIP_CAP hulls — 21 comparisons at the cap.
+function shipDuel() {
+  const ships = state.ships || [];
+  for (let i = 0; i < ships.length; i++) {
+    for (let j = i + 1; j < ships.length; j++) {
+      const a = ships[i], b = ships[j];
+      if (a.gone || b.gone) continue;
+      if (FLEET_RIVALS[a.culture] !== b.culture) continue;
+      if (hexDistance(a, b) > 2) continue;
+      if (shipStats(a.culture, a.hull).guns <= 0 && shipStats(b.culture, b.hull).guns <= 0) continue;
+      return [a, b];
+    }
+  }
+  return null;
+}
+
 // IS SHE AFTER YOU? Standing off from somebody who is hunting you was a free
 // action: the steering below aimed every hull at her destination and nothing
 // else, so a ship that had every reason to run you down sailed placidly past.
@@ -8530,10 +8697,38 @@ const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
 // GUNS — the carrying trade chases nobody, which is the whole character of the
 // Mariners. And you must be genuinely unwelcome, not merely watched: `unwanted`
 // or `hunted`, the bottom two bands, which you reach by doing something.
+// WHAT ARE YOU CARRYING, AND DOES SHE WANT IT? Sean: "If a user is hauling
+// something a hostile faction wants, that faction might come after it." Relics are
+// the universal want — every people hoards them — and a named item counts when THIS
+// people pays a premium for it. Deliberately not crates: salvage is anonymous, and
+// a world where a full hold makes you prey would make trading impossible.
+function cargoWanted(culture) {
+  if ((state.relics || 0) > 0) return 'relics';
+  for (const k in (state.items || {})) {
+    if (!state.items[k]) continue;
+    if (buyMult(culture, k) >= 1.6) return ITEMS[k] ? ITEMS[k].name : k;
+  }
+  return null;
+}
+
 function shipHunting(sh) {
   if (!sh || sh.gone || sh.fleeing) return false;
   if (state.currentDepth > 0) return false;
-  if (!standingHostile(sh.culture)) return false;
+  // A TREATY IS WORTH SOMETHING OR IT IS WORTH NOTHING. This is the whole of what an
+  // alliance buys, and it is enough: their hulls leave you alone, greed and all.
+  if (alliedWith(sh.culture)) return false;
+  // HOSTILE, OR SIMPLY GREEDY. A people you have never wronged will still come for
+  // a relic in your hold, and once she has decided that, she is decided: `sh.greed`
+  // latches so a fit of avarice does not switch off between one hex and the next.
+  if (!standingHostile(sh.culture)) {
+    if (sh.greed === undefined) {
+      const want = cargoWanted(sh.culture);
+      sh.greed = !!want && (hashStr('greed:' + worldSeed + ':' + sh.id) % 100) < 35;
+      sh.greedFor = want;
+    }
+    if (!sh.greed) return false;
+    if (!cargoWanted(sh.culture)) { sh.greed = false; return false; }   // hold is empty now
+  }
   if (shipStats(sh.culture, sh.hull).guns <= 0) return false;
   // A CHASE THAT GIVES UP BECAUSE YOU ARE FAST IS NOT A CHASE. Nine hexes to
   // START one — that is sighting range — but once she has put her head round she
@@ -8594,7 +8789,10 @@ function shipsTick() {
     const hunt = shipHunting(sh);
     if (hunt && !sh.chasing) {
       sh.chasing = true;
-      log(`She has put her head round and she is coming for you. ${CULTURES[sh.culture].short} know your boat.`, 'danger', 'SAIL');
+      log(sh.greed && !standingHostile(sh.culture)
+        ? `She has put her head round and she is coming for you — and it is not personal. ${CULTURES[sh.culture].short} want what you are carrying${sh.greedFor ? ' (' + sh.greedFor + ')' : ''}.`
+        : `She has put her head round and she is coming for you. ${CULTURES[sh.culture].short} know your boat.`,
+        'danger', 'SAIL');
       sfx('contact');
     } else if (!hunt && sh.chasing) {
       sh.chasing = false;
@@ -8642,6 +8840,35 @@ function shipsTick() {
   }
   state.ships = state.ships.filter(sh => !sh.gone);
 
+  // AND SOMETIMES THEY FIND EACH OTHER. A Line hull and a Con-Fed hull within two
+  // hexes is an action, and it goes on whether or not you are watching — which is
+  // the point of it. If you ARE watching, firing on one of them is how you take a
+  // side, and the other people will hear about it.
+  const duel = shipDuel();
+  if (duel) {
+    const [a, b] = duel;
+    a.duelWith = b.id; b.duelWith = a.id;
+    const seen = state.currentDepth === 0 &&
+      Math.min(hexDistance(a, { q: state.q, r: state.r }), hexDistance(b, { q: state.q, r: state.r })) <= 9;
+    const hitA = Math.max(1, Math.round(shipStats(b.culture, b.hull).guns * 0.8));
+    const hitB = Math.max(1, Math.round(shipStats(a.culture, a.hull).guns * 0.8));
+    a.hp = (a.hp == null ? shipStats(a.culture, a.hull).hull : a.hp) - hitA;
+    b.hp = (b.hp == null ? shipStats(b.culture, b.hull).hull : b.hp) - hitB;
+    if (seen && !state._duelTold) {
+      state._duelTold = a.id + '|' + b.id;
+      log(`Gunfire, ${bearing(state.q, state.r, a.q, a.r)} — two hulls at it, ${CULTURES[a.culture].short} and ${CULTURES[b.culture].short}. Neither of them is looking at you.`, 'strange', 'ACTION');
+      log('Put a shot into one of them and the other will remember it. Or leave them to it.', '', 'ACTION');
+      sfx('contact');
+    }
+    for (const sh of [a, b]) {
+      if (sh.hp > 0) continue;
+      sh.gone = true;
+      if (seen) log(`${HULLS[sh.hull].name.charAt(0).toUpperCase() + HULLS[sh.hull].name.slice(1)} of ${CULTURES[sh.culture].short} goes down, and the other one does not stay to look.`, 'warn', 'ACTION');
+    }
+    state.ships = state.ships.filter(sh => !sh.gone);
+    if (!state.ships.some(sh => sh.id === a.id) || !state.ships.some(sh => sh.id === b.id)) state._duelTold = null;
+  } else state._duelTold = null;
+
   // WHAT YOU CAN TELL. On the surface you SEE them. Under it you HEAR them —
   // surface screws are the loudest thing in this ocean — but a bearing is not
   // an identification, which is the epistemic law this whole game runs on.
@@ -8664,10 +8891,136 @@ function shipsTick() {
   }
 }
 
+// WHERE IT IS DEEP ENOUGH. Sean: "the fish people can populate a few ruins and have
+// cities when one goes deep enough." A city is the Deep Ones' alone — below this
+// there is nothing any human yard can float, so there is nobody else to build one —
+// and it is the only place in the world where anything but trade happens.
+//
+// This became reachable when the abyssal plain got a floor. While the seafloor sank
+// 80 m a hex forever, 4,000 m was a depth you drifted into by sailing far enough; now
+// it is somewhere you go, down a trench, on purpose.
+const CITY_DEPTH = 3600;
+const CITY_CHANCE = 0.35;      // of deep Dagon enclaves. Rare: a few in a world.
+
 function spawnEnclave(culture, q, r, depth) {
   if (!state.enclaves) state.enclaves = [];
-  state.enclaves.push({ id: 'enclave:' + q + ',' + r + ',' + depth, culture: culture, q: q, r: r, depth: depth });
+  const city = culture === 'dagon' && depth >= CITY_DEPTH
+    && (hashStr('city:' + worldSeed + ':' + q + ':' + r + ':' + depth) % 100) < CITY_CHANCE * 100;
+  const e = { id: 'enclave:' + q + ',' + r + ',' + depth, culture: culture, q: q, r: r, depth: depth };
+  if (city) { e.city = true; e.name = cityName(q, r); }
+  state.enclaves.push(e);
 }
+
+// A city has a name, because a place you make treaties in is not "the Deep Ones".
+const CITY_FIRST = ['Y\u2019', 'R\u2019', 'Gl', 'Ph', 'Kh', 'Zan', 'Tsa', 'Ngu', 'Oth', 'Vul'];
+const CITY_LAST  = ['hanthlei', 'lyeh', 'goroth', 'antha', 'oggua', 'thulu', 'nagath', 'sereth', 'moloch', 'quath'];
+function cityName(q, r) {
+  const h = hashStr('cityname:' + worldSeed + ':' + q + ':' + r);
+  // `>>>`, NOT `>>`. hashStr returns unsigned 32-bit and the signed shift turns
+  // half of those negative, which indexes off the end of the array: the first city
+  // this generated was called Glundefined.
+  return CITY_FIRST[h % CITY_FIRST.length] + CITY_LAST[(h >>> 7) % CITY_LAST.length];
+}
+function cityHere() {
+  const e = enclaveHere();
+  return e && e.city ? e : null;
+}
+
+// IS THIS DECK LIVED IN? The other half of Sean's sentence — "the fish people can
+// populate a few ruins and have cities when one goes deep enough". A ruin in the
+// shadow of a city belongs to somebody, which changes two things and no more: who is
+// standing in it, and what taking things out of it means. A house is not a prize.
+// A CITY'S HINTERLAND. 40 hexes is 2.4 km, which is a plausible reach for a place
+// with terraces and streets; and the DEPTH window matters more than the plan
+// distance, because a city at 5,280 m with a household four kilometres above it is
+// not a suburb. Tuned over four seeds and 81 real ruins: reach 20 put 1% of ruins in
+// somebody's hands, reach 30 put 4%, reach 40 puts 5% — which is Sean's "a few
+// ruins", about one in twenty. At 12 it was 1%, a feature that never fires, which is
+// the `deepruin` mistake wearing a different hat.
+const INHABITED_REACH = 40;
+const INHABITED_WINDOW = 3000;   // metres above or below the city itself
+const INHABITED_FLOOR = 1500;    // above this, nothing down there is theirs
+function inhabitedBy(q, r, d, kind) {
+  if (kind !== 'ruin' && kind !== 'deepruin') return null;
+  if (d < INHABITED_FLOOR) return null;
+  for (const e of (state.enclaves || [])) {
+    if (!e.city) continue;
+    if (Math.abs(e.depth - d) > INHABITED_WINDOW) continue;
+    if (hexDistance({ q: e.q, r: e.r }, { q: q, r: r }) > INHABITED_REACH) continue;
+    return e;
+  }
+  return null;
+}
+
+//=============================================================================
+// DIPLOMACY — and only in the cities
+//=============================================================================
+// Sean drew this line himself: the surface towns are "only for basic trade" and
+// "treaties and missions and alliances are all made at the major cities underwater".
+// So none of the below is reachable from a dock, on purpose. If you want to make an
+// arrangement with a people you go down to where they live.
+
+// A MISSION IS A SHORTAGE. They name something they are short of; you bring it here.
+// No new resolution machinery — selling it to them IS completing it, because trade is
+// already the verb this game has for handing something over.
+function missionOffer(e) {
+  if (state.mission && state.mission.culture === e.culture) return state.mission;
+  const cu = CULTURES[e.culture];
+  const keys = (cu.buys && cu.buys.keys) || [];
+  const pool = keys.length ? keys : Object.keys(ITEMS).filter(k => buyMult(e.culture, k) >= 1.2);
+  if (!pool.length) return null;
+  // Stable per city per standing band, so a captain cannot reroll the offer by
+  // leaving the room and coming back.
+  const rr = mulberry32(hashStr('mission:' + worldSeed + ':' + e.id + ':' + standingBand(e.culture).key));
+  const item = pool[Math.floor(rr() * pool.length)];
+  const n = 1 + Math.floor(rr() * 2);
+  return { culture: e.culture, cityId: e.id, item: item, n: n, done: 0,
+           pay: Math.max(3, Math.round((ITEMS[item].val || 1) * 1.6)) * n, standing: 12 };
+}
+function takeMission(e) {
+  const m = missionOffer(e);
+  if (!m) return;
+  state.mission = m;
+  const it = ITEMS[m.item];
+  log(`It is agreed. ${CULTURES[e.culture].short} want ${m.n === 1 ? '' : m.n + ' of '}${it.name}, brought here to ${e.name}. They will not put a time on it. They do not think in times.`,
+      'strange', 'MISSION');
+  sfx('bell');
+  renderTrade(e);
+  scheduleSave();
+}
+// Called from tradeSell: handing over the named thing at the named city.
+function missionProgress(e, key) {
+  const m = state.mission;
+  if (!m || m.culture !== e.culture || m.cityId !== e.id || m.item !== key) return;
+  m.done = (m.done || 0) + 1;
+  if (m.done < m.n) {
+    log(`${m.done} of ${m.n}. They take it without a word and wait for the rest.`, '', 'MISSION');
+    return;
+  }
+  state.cargo += m.pay;
+  nudgeStanding(m.culture, m.standing, 'you kept an arrangement');
+  log(`The arrangement is kept. ${m.pay} crates, and something that is not payment: they will remember you asked what they needed.`, 'good', 'MISSION');
+  state.mission = null;
+  sfx('bell');
+}
+
+// AN ALLIANCE. At `trusted` they will put it in writing, and the only thing it buys
+// is the one thing worth buying: their hulls stop hunting you. It costs them nothing
+// to promise and it costs you the standing you spent getting here.
+function canAlly(culture) {
+  return standingBand(culture).key === 'trusted' && !((state.allies || []).includes(culture));
+}
+function makeAlliance(e) {
+  if (!canAlly(e.culture)) return;
+  if (!state.allies) state.allies = [];
+  state.allies.push(e.culture);
+  log(`It is written, in a hand that is not writing, on something that is not paper. ${CULTURES[e.culture].short} will not hunt you again while it holds.`,
+      'good', 'TREATY');
+  sfx('bell');
+  renderTrade(e);
+  scheduleSave();
+}
+function alliedWith(culture) { return (state.allies || []).includes(culture); }
 function enclaveHere() {
   for (const e of (state.enclaves || [])) {
     if (hexDistance({ q: e.q, r: e.r }, { q: state.q, r: state.r }) <= 1 && Math.abs(e.depth - state.currentDepth) <= DEPTH_GRID) return e;
@@ -9830,11 +10183,37 @@ function render() {
 //=============================================================================
 
 // Store a depth-tagged reveal event. depth is snapped to DEPTH_GRID.
+const SURVEY_PER_LEAD = 400;   // new (hex, depth) pairs per lead. Measured: ~3.5/move.
 function revealAt(q, r, depth) {
   const k = hexKey(q, r);
   const snapped = Math.round(depth / DEPTH_GRID) * DEPTH_GRID;
   if (!revealed.has(k)) revealed.set(k, new Set());
-  revealed.get(k).add(snapped);
+  const set = revealed.get(k);
+  if (set.has(snapped)) return;                 // already charted; costs nothing, pays nothing
+  set.add(snapped);
+  // THE SURVEY ITSELF IS WORTH SOMETHING. Sean said charting should earn leads and
+  // it never did — `makeLead` had two entrances, a chart item that turns up about
+  // once in twenty sessions and a hail. Water you have already been over does not
+  // count, which is the whole point: this rewards going somewhere new.
+  state.survey = (state.survey || 0) + 1;
+  if (state.survey < SURVEY_PER_LEAD) return;
+  state.survey = 0;
+  if (!gameStarted || !state.alive || state.foot) return;
+  // Knowledge, not cargo. `word` is a position somebody thought worth the ink and
+  // `cavern` is a way into the rock; neither is a purse.
+  //
+  // AND `word` IS THE FALLBACK, not `cache`. `makeLead` refuses to promise a way in
+  // where there is none and degrades a `cavern` to a `cache` instead — the right
+  // instinct with the wrong landing for this caller, because a cache is cargo.
+  // Measured one slipping through in 500 moves. So ask first, here, and if the rock
+  // has nothing to offer, pay in ink.
+  let kind = (hashStr('surveykind:' + worldSeed + ':' + state.moves + ':' + k) % 2) ? 'word' : 'cavern';
+  if (kind === 'cavern') {
+    const t = leadTarget('survey:' + worldSeed + ':' + state.moves + ':' + k, state.q, state.r);
+    if (!nearestWayIn(t.q, t.r, 7)) kind = 'word';
+  }
+  log('You spend a watch putting the loose sheets in order, and the shape of something shows up in the gaps between them.', '', 'CHART');
+  makeLead(1, state.q, state.r, 'survey:' + worldSeed + ':' + state.moves + ':' + k, kind);
 }
 
 // Returns 0..1 alpha factor for a water tile at (q,r) viewed from currentDepth.
@@ -11844,6 +12223,11 @@ function enterInterior(tile) {
   // back just because the substrate still remembers where it was.
   if (own) for (const [k, t] of ch.tiles) if (t.loot && took.indexOf(k) < 0) took.push(k);
 
+  // A HOUSE HAS PEOPLE IN IT, NOT A MONSTER. A ruin under a city is somebody's, and
+  // whether that is a fight depends entirely on you: hostile to them and they resist
+  // with what they have; otherwise they stand aside and let you look, which is worse
+  // in its way, because everything in here belongs to somebody who is watching.
+  const household = inhabitedBy(tile.q, tile.r, d, deckKind);
   // Who is on the deck. A breached station holds whatever forced the lock, in
   // residence at the breach until you clear it — that overrides the substrate's
   // own tenant. Otherwise it is the deck's generated tenant, unless cleared.
@@ -11851,8 +12235,16 @@ function enterInterior(tile) {
   if (own && state.base.boarder) {
     const bd = state.base.boarder;
     dweller = { x: ch.entry.x, y: ch.entry.y, kind: bd.kind, tough: bd.tough, hurt: bd.hurt || 0, boarder: true };
+  } else if (household && !standingHostile('dagon')) {
+    // THEY STAND ASIDE. No tenant at all: the house is open and everything in it
+    // belongs to somebody who is watching you look at it.
+    dweller = null;
   } else if (!claimed && !own && ch.dweller && !isDeckCleared(tile.q, tile.r, d, deckKind)) {
     dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 };
+    // A HOUSE UNDER A CITY RESISTS WITH ITS OWN. If you are unwelcome among the
+    // Deep Ones then this is their house and they are in it — the tenant is theirs,
+    // not something that crawled in.
+    if (household) dweller.household = household.name;
     // The loop closes here — OVERLAY, never the substrate, so determinism holds.
     // A hollow man on a strange deck may be one of your own, come back wearing
     // the uniform you issued. It reads as a hollow man until the lamp is on it.
@@ -11863,6 +12255,7 @@ function enterInterior(tile) {
   }
 
   state.foot = {
+    household: household ? household.name : null,
     kind: deckKind,          // a hull and a tower behave differently ashore
     q: tile.q, r: tile.r, d: d,
     x: ch.entry.x, y: ch.entry.y,
@@ -12621,6 +13014,15 @@ function stepFoot(x, y) {
   const loot = footLootAt(x, y);
   if (loot) {
     f.took.push(x + ',' + y);
+    // A HOUSE IS NOT A PRIZE. Sean's fish people "populate a few ruins"; a populated
+    // ruin is somebody's home, and carrying things out of somebody's home while they
+    // watch you do it is exactly what it sounds like. Once per deck, not once per
+    // armful — the crime is robbing the place, and the rest is it continuing.
+    if (f.household && !f.stole) {
+      f.stole = true;
+      nudgeStanding('dagon', -22, 'you robbed a house in ' + f.household);
+      log(`Nobody stops you. Nobody looks away either. Whatever this was worth, it was worth it to somebody in ${f.household}.`, 'warn', 'THEFT');
+    }
     if (loot === 'relic') { f.relics++; log('Something the Fall did not manage to eat. You work it free and stow it.', 'strange', 'RELIC'); }
     else if (loot === 'crate') { f.crates++; log('A crate, still sound. You sling it and go on.', '', 'SALVAGE'); }
     else if (ITEMS[loot]) { giveItem(loot, 1); const it = ITEMS[loot]; log(`${it.name.charAt(0).toUpperCase() + it.name.slice(1)}. ${it.flavor}`, it.strange ? 'strange' : '', 'HOLD'); }
@@ -15499,6 +15901,7 @@ function resetWorldCaches() {
   baseSeaCache.clear();
   ports.clear();
   homeIsleCache = null;
+  homeDockCache = null;   // a new ocean puts its harbour somewhere else
   liftCache.clear();
   edgeCache.clear();
   carvedFeatures.clear();
@@ -16359,6 +16762,9 @@ function restart() {
   state.items = {};
   state.fits = {};
   state.leads = [];
+  state.survey = 0;      // a new ocean has been charted by nobody
+  state.mission = null;  // ...and owes nobody anything
+  state.allies = [];     // ...and has never met them
   state.enclaves = [];
   state.corpses = [];
   state.crew = [];
@@ -16430,6 +16836,23 @@ function restart() {
 // SURFACE BUTTON — return to origin if you have a path
 //=============================================================================
 
+// WHERE HOME IS. The dock tile nearest the origin, memoised for the session — the
+// generator decides it, and nothing else should be guessing.
+let homeDockCache = null;
+function homeDock() {
+  if (homeDockCache) return homeDockCache;
+  let best = null, bd = 999;
+  for (const t of world.values()) {
+    if (t.type !== 'dock') continue;
+    const d = hexDistance({ q: t.q, r: t.r }, { q: 0, r: 0 });
+    if (d < bd) { bd = d; best = { q: t.q, r: t.r }; }
+  }
+  // Before the origin chunk exists there is nothing to find; fall back to where the
+  // pier has always been rather than return null into arithmetic.
+  homeDockCache = best || { q: 1, r: 0 };
+  return homeDockCache;
+}
+
 function surface() {
   if (!state.alive || ashore()) return;
   const sub = activeSub();
@@ -16440,11 +16863,19 @@ function surface() {
   const onSurface = state.currentDepth <= 0.5 && volumeContaining(tile, 0);
   if (onSurface) {
     // Make port: within hailing distance of the dock, cargo goes ashore.
-    const atPort = hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) <= 4;
+    //
+    // ASK THE WORLD WHERE THE HARBOUR IS. This was `{q: 1, r: 1}`, a constant from
+    // before the home island had an outline — the generator places the harbour now,
+    // and it lands at (1,0). Still inside the 4-hex tolerance, so nothing was broken;
+    // but I only found that out while chasing "crates banked: MAX 0" through 24 bot
+    // runs, and one change to the island's shape would have made the ledger silently
+    // unreachable. `homeDock()` reads the tile the generator actually wrote.
+    const hd = homeDock();
+    const atPort = hexDistance({q: state.q, r: state.r}, hd) <= 4;
     // Far from home, surfacing is how you find it: a bearing off the sun.
     if (!atPort) {
-      const km = (hexDistance({q: state.q, r: state.r}, {q: 1, r: 1}) * 60 / 1000).toFixed(1);
-      log(`You take a bearing off the sun. The dock lies ${bearing(state.q, state.r, 1, 1)}, ${km} km as the gull flies.`, '', 'BEARING');
+      const km = (hexDistance({q: state.q, r: state.r}, hd) * 60 / 1000).toFixed(1);
+      log(`You take a bearing off the sun. The dock lies ${bearing(state.q, state.r, hd.q, hd.r)}, ${km} km as the gull flies.`, '', 'BEARING');
     }
     if (atPort && state.cargo > 0) {
       const n = state.cargo;
@@ -16567,6 +16998,9 @@ function doSave(force) {
       base: state.base,
       clearedDecks: state.clearedDecks,
       deckTook: state.deckTook,      // what each deck has already given up
+      survey: state.survey || 0,     // how far toward the next thing the sheets show
+      mission: state.mission || null, // an arrangement outstanding with a city
+      allies: state.allies || [],     // ...and the ones already in writing
       deckHurt: state.deckHurt,      // ...what its tenant is still bleeding from
       deckDead: state.deckDead,      // ...and who is lying on it
       beachDrawn: state.beachDrawn,  // ...and when each pocket was last drawn
@@ -16742,6 +17176,9 @@ function resumeGame(save) {
   }
   state.clearedDecks = save.clearedDecks || [];
   state.deckTook = obj(save.deckTook);
+  state.survey = +save.survey || 0;
+  state.mission = save.mission || null;
+  state.allies = arr(save.allies);
   state.deckHurt = obj(save.deckHurt);
   state.deckDead = obj(save.deckDead);
   state.beachDrawn = obj(save.beachDrawn);

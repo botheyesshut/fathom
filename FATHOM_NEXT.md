@@ -214,18 +214,64 @@ Sean asked for this list explicitly. It is an honest inventory, not a wishlist:
 every item here is something *stated* — by him or by a measurement — and not
 built. Ticked items elsewhere in this file are not repeated.
 
-### A. From Sean's own specs, not built
+### A. From Sean's own specs — ALL BUILT except the two he deferred himself
+
+Everything that was in this table is done. What follows is the record; the only
+entries left are the two he set aside.
+
+| | how it landed |
+|---|---|
+| **Ships see one another** | `FLEET_RIVALS` — a fact about the setting, not a standing model: the Long Line and the Con-Fed are at each other and the carrying trade is nobody's enemy. Two rivals within two hexes fight, damage each other every turn, and one of them sinks; measured 78/54 hp → 42/42 over six turns. **And "interject" needed no control of its own** — firing on one of two ships already fighting IS taking a side, so ATTACK carries it. Measured: fire on the Line hull and confluence goes 0 → −35 while libertines goes 0 → **+18**, and the Con-Fed say so out loud. |
+| **Cargo draws pursuit** | `cargoWanted(culture)` + a `greed` latch in `shipHunting`. Relics are the universal want; a named item counts only where that people pays a premium (measured: an idol draws Dagon and the Con-Fed, nobody else). **Crates deliberately do not count** — salvage is anonymous, and a world where a full hold makes you prey would make trading impossible. Measured over 260 turns at spotless standing: empty hold 0 chases, three relics aboard 1 chase, and it says "it is not personal". |
+| **Charting earns leads** | `SURVEY_PER_LEAD = 400` new (hex, depth) pairs — measured, not guessed, at ~3.5 a move. Pays in **knowledge only**: `word` or `cavern`, never `cache` or `quarry`, because those are cargo and the no-buff ruling stands. Water you have already been over pays nothing (measured: 200 further sweeps of known water moved the counter by 0). One catch found in testing — `makeLead` degrades an unhonourable `cavern` to a `cache`, so the fallback is chosen at the call site and is `word`. |
+| **Populated caves and deep cities** | See THE DEEP IS INHABITED below. |
+| **Diplomacy underwater** | Same. |
+| **Wartime** | *"we could institute a wartime thing later, like in Sid Meier's Pirates!"* — **he deferred this himself.** `FLEET_RIVALS` is now the hook it would hang from. |
+| **PCs** | *"Mariners ... as well as to the PCs once we have them."* Multiplayer-adjacent; **his deferral, not mine.** |
+
+## THE DEEP IS INHABITED (2026-07-29)
+
+Sean: *"the fish people can populate a few ruins and have cities when one goes deep
+enough"*, and *"treaties and missions and alliances are all made at the major cities
+underwater"* — with the line he drew himself about the surface: *"we would not get to
+handle diplomatic business there ... the towns at the surface are only for basic
+trade."* So the town window is untouched and the CITY window carries all of this.
+
+**None of it was possible before the abyssal plain got a floor.** While the seafloor
+sank 80 m a hex forever, 4,000 m was a depth you drifted into by sailing far enough.
+Now it is somewhere you go, down a trench, on purpose.
 
 | | |
 |---|---|
-| **Ships seeing each other** | "These vessels might also see one another and have interactions. If we see them interacting the player can choose to interject one way or another." Nothing. |
-| **Cargo draws pursuit** | "If a user is hauling something a hostile faction wants, that faction might come after it (or send a nearby allied sub after us for it)." Nothing. `shipHunting` is now the hook to hang it on — it already answers "is she after you", and cargo would be a second reason for it to say yes. |
+| **A city** | Dagon's alone, below 3,600 m — there is nothing any human yard can float that deep, so there is nobody else to build one. 35% of deep Dagon enclaves. Measured 5 cities across 4 seeds. It has a **name** (a pure function of place), it draws bigger and in their own colour on the chart with the name under it, and arriving at one reads nothing like arriving at a trading post. |
+| **A mission** | They name something they are short of; bringing it there is completing it, because trade is already this game's verb for handing somebody a thing. Stable per city per standing band, so you cannot reroll the offer by leaving the room. Measured end to end: agreed, wrong item ignored, right item ×2 → 16 crates and +12 standing, arrangement closed. |
+| **A treaty** | At `trusted` they put it in writing, and it buys the one thing worth buying: **their hulls stop hunting you**, greed and all. One clause in `shipHunting`. Measured: refused at nobody-to-them, offered at trusted, and an allied hull declines to hunt even at −80 standing, because a treaty holds until you break it. |
+| **Their read on everyone else** | What they will tell you about the other peoples and where you stand with them — intelligence available nowhere else, and the reason to make the trip even with an empty hold. |
+| **A populated ruin** | A ruin in a city's hinterland is somebody's house. Hostile to Dagon and **they resist with their own** (the existing tenant, with their name on it); otherwise **nobody bars the way**, which is worse — everything in there belongs to somebody who is watching you look at it. Carrying it out is theft: −22 standing, once per house, not once per armful. |
+| **A beach is a way in** | `nearestWayIn` was blind to beaches because a beach is a CELL, not a poi — the same blindness the sounder had. Measured: 0 of 25 before, 25 of 25 after. And every beach you have stood on is now drawn on the sea chart, which matters because 55% of them have no lateral neighbour at their depth and can only be approached straight down. |
 
-| **Populated caves and deep cities** | "the fish people can populate a few ruins and have cities when one goes deep enough." Enclaves are trading posts; no city exists. |
-| **Diplomacy underwater** | "treaties and missions and alliances are all made at the major cities underwater." No missions, no treaties, no alliances, no cities. |
-| **Charting earns leads** | He said yes to it. Hailing became a second door; charting itself still pays nothing but chart. |
-| **Wartime** | "we could institute a wartime thing later, like in Sid Meier's Pirates!" — deferred by him, recorded here. |
-| **PCs** | "Mariners ... as well as to the PCs once we have them." Multiplayer-adjacent; no work started. |
+**Two bugs found while proving it, both mine:**
+- **`cityHere()` was defined and never called** — the `deepruin` bug, one commit after
+  I swept the file for it and left a note telling the next session to look. It now
+  carries the arrival, which was reading "you come upon the Children of Dagon", exactly
+  like a hole in a rock with four people in it.
+- **"Glundefined".** `hashStr` returns unsigned 32-bit and `>>` is the **signed**
+  shift, so half of all hashes went negative, `% 10` gave a negative index, and the
+  first city generated was named after array slot −3. Swept the file: it was the only
+  signed shift in it.
+
+**And the household was tuned by measurement after firing on 0 of 12 real ruins** at
+reach 12 — a feature that never fires, which is the `deepruin` mistake wearing a
+different hat. Swept reach against a depth window over 81 real ruins: reach 20 gave
+1%, reach 30 gave 4%, reach 40 gives **5%**, which is "a few ruins" — about one in
+twenty. The depth window matters more than the plan distance: a city at 5,280 m with
+a household four kilometres above it is not a suburb.
+
+**The probe that found the tuning was itself broken first**, and in the way the
+battery has a named guard for: `resetWorldCaches()` does not clear `spawnedChunks`
+(`restart()` and the loader do it separately), so after the first seed nothing
+re-spawned and every row read 0 cities.
+
 
 **Closed since this list was written:** ATTACK in the encounter (`7a7d310`) —
 which also found that ships were made of paper, a Con-Fed destroyer having 13
@@ -241,9 +287,55 @@ in the ledger at the top with the number that closed it.
 
 | | |
 |---|---|
-| **Hours 2–10 never audited** | The one beat nobody has measured. It owns the income question below. Needs agents and a long run. |
+| **~~Hours 2–10 never audited~~** | **MEASURED 2026-07-29** — see below. |
 | **Ruins are not placed deeper with depth** | *Yield* now scales with depth (see the ledger) but the PRIZE TYPE is still a uniform hash over 7 types with no depth term, so a hull and a ruin have identical depth distributions. Fixing placement is a generator change and belongs beside trenches, not in a cleanup pass. |
-| **A beach still has no lead type** | The sounder can hear one now, but a beach is still not a `cavern` lead target and still not a POI. 55% of beaches have no lateral water neighbour at their depth, so the only approach is vertical. |
+
+
+### B2. HOURS 2–10, MEASURED AT LAST (2026-07-29)
+
+`node tests/playtest.js 24 2500` — 24 bot captains, 2,500 turns each, four
+playstyles. The one beat nobody had ever looked at.
+
+**Read the caveat in that file before reading the numbers.** It says, in its own
+header: *"the bot's playstyle is a GUESS at how a human plays. Read this output as
+'what is reachable and what is broken', never as 'this is correctly tuned'."*
+
+```
+survived all 2500 turns   11/24 (46%)      hull failure 42%   air 13%
+TRAPS (world closed)      0                <- the generator does not seal anybody in
+median max depth          840 m            deepest across all 24 runs: 2,280 m
+runs that ever took cargo 3/24 (13%)       best held 6
+crates banked             median 0, MAX 0
+entered a ruin on foot    4%
+```
+
+**Two findings, and only one of them is about the game.**
+
+**1. The bot cannot dive, so most of the game is unproven rather than unreachable.**
+Median max depth 840 m; the deepest of 24 runs got to 2,280 m. Everything below that
+— grottos, deep ruins, the cities, the trenches, the whole on-foot layer — reads 0%
+in the content table because the bot never arrives, not because it is sealed:
+`tests/trench.js` gate 1 flood-fills to **11,040 m** every run. The 0% list is a
+statement about the harness. It is still worth reading as a list of what a *timid*
+captain never sees, which may be most captains.
+
+**2. `crates banked: median 0, MAX 0` across 24 runs of 2,500 turns.** Three runs
+picked cargo up, all 24 "made it back to port", and nothing was ever banked. That
+looked like a candidate P0, so it was checked rather than reasoned about: put a boat
+with 7 crates in the water beside the dock and surface it, on five seeds. **Banks 7 of
+7, every time.** So the zero is the bot never surfacing beside the dock while holding
+anything — a playstyle artifact, not a broken ledger.
+
+**But the check found something anyway.** `surface()` decided "am I at port" against a
+hardcoded `{q: 1, r: 1}` — a constant from before the home island had an outline. The
+generator places the harbour now and it lands at **(1,0)**. One hex inside the 4-hex
+tolerance, so nothing was broken and nobody would have noticed until the island's
+shape moved and the ledger went silently out of reach. It asks `homeDock()` now, which
+reads the tile the generator actually wrote.
+
+`cautious` survives 0% of the time, against `hoarder` and `pacifist` at 67%. Timidity
+kills, which is either a good design fact or a bot artifact, and it cannot be told
+apart from here.
 
 ### C. Open questions for Sean — decisions, not work
 
