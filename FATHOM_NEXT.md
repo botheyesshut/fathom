@@ -259,6 +259,38 @@ entries left are the two he set aside.
 | **Wartime** | BUILT — see below. He deferred it; then: *"I don't want deferrals."* |
 | **PCs** | BUILT as far as it honestly goes — see below, including what it is **not**. |
 
+## "I'M STILL SEEING HEXES I SHOULDN'T SEE" — FOUND, AND IT WAS NEVER THE SONAR
+
+Sean raised this twice, months apart. The second time he added the detail that solved it:
+*"I was using sonar at medium-high power if that helps."* It did help, by ruling the
+sonar out — because what he was seeing had nothing to do with it.
+
+**It is the sunlight flood.** `sunlitHere` lights any hex the flood reaches at **full
+brightness, whether or not it has ever been revealed** — and the flood ran **ten rings**
+through connected water in a band reaching **300 m down**. Measured in a fresh world with
+no ping and nothing explored, sitting at 240 m where his screenshot was taken:
+
+| depth | rings | band | hexes rendered | furthest |
+|---|---|---|---|---|
+| 60 m | 10 | 300 m | 334 | 11 |
+| 240 m | 10 | 300 m | **284** | **11** |
+| 240 m | 5 | 120 m | **19** | **2** |
+
+**284 hexes, out to eleven, for free** — further than the strongest ping in the game
+reaches, at a depth where there is no daylight to see by.
+
+The *rule* was right and is worth keeping: light travels along water, not through rock,
+and the flood exists because a boat inside a rock chimney could once see the open sea
+through the chimney wall. **The numbers were wrong.** `SUN_BAND` is now 120 m — where
+useful daylight actually stops — and `SUN_REACH` is 5 hexes, which is 300 m of seawater
+and exactly a power-3 ping, so the sonar is worth firing on the shelf instead of being
+redundant. The shelf stays legible: 91 hexes at 60 m, against 334.
+
+`tests/seeing.js` keeps the measurement. **"The player can see something they have not
+earned" is the one class of bug that quietly dissolves the epistemic law the whole game
+runs on, and no other check in the repo can see it.** It reads the constants out of the
+build so it tracks the game rather than anybody's memory of it.
+
 ## SIX MORE OFF THE PHONE (2026-07-30)
 
 | what he said | what was done |

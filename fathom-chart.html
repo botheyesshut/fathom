@@ -9704,10 +9704,18 @@ function render() {
   // boat through open cells AT THIS DEPTH. Anything the flood reaches shares
   // the boat's water and is genuinely lit; anything it does not is behind
   // stone. Bounded, and only computed in the band where the rule applies.
+  // HOW FAR DAYLIGHT REACHES, and how far you can see by it. Both of these were far too
+  // generous and it is what Sean kept catching: at 240 m, with no ping and nothing
+  // explored, 284 hexes rendered out to ELEVEN hexes from the boat — further than the
+  // strongest ping in the game, for free. 120 m is where useful daylight stops; five
+  // hexes is 300 m of seawater, which is still generous and is exactly a power-3 ping,
+  // so the sonar is worth firing in the shallows now instead of being redundant.
+  const SUN_BAND = 2 * DEPTH_GRID;   // 120 m. Below this the sea is dark.
+  const SUN_REACH = 5;               // hexes the flood carries along the water.
   const litKey = state.q + ',' + state.r + ',' + state.currentDepth + ':' + cellsEpoch;
   let litWater;
   if (litCacheKey === litKey) litWater = litCacheSet;
-  else if (state.currentDepth > 5 * DEPTH_GRID) { litWater = new Set(); litCacheKey = litKey; litCacheSet = litWater; }
+  else if (state.currentDepth > SUN_BAND) { litWater = new Set(); litCacheKey = litKey; litCacheSet = litWater; }
   else {
     litWater = new Set();
     const cd0 = state.currentDepth;
@@ -9715,7 +9723,7 @@ function render() {
     litWater.add(startK);
     const seenL = new Set([startK]);
     let frontier = [{ q: state.q, r: state.r }];
-    for (let ring = 0; ring < 10 && frontier.length; ring++) {
+    for (let ring = 0; ring < SUN_REACH && frontier.length; ring++) {
       const next = [];
       for (const cell of frontier) {
         for (const n of hexNeighbors(cell.q, cell.r)) {
@@ -9725,7 +9733,7 @@ function render() {
           if (!nt || nt.wall) continue;
           // Open at THIS depth, or a surface-connected column while we are in
           // the sunlit band — the shelf is one body of water, not a stack.
-          if (!hexAcceptsDepth(nt, cd0) && !(cd0 <= 5 * DEPTH_GRID && hexNearDepth(nt, 0) && hexNearDepth(nt, cd0))) continue;
+          if (!hexAcceptsDepth(nt, cd0) && !(cd0 <= SUN_BAND && hexNearDepth(nt, 0) && hexNearDepth(nt, cd0))) continue;
           seenL.add(nk); litWater.add(nk); next.push(n);
         }
       }
@@ -9734,7 +9742,7 @@ function render() {
     litCacheKey = litKey; litCacheSet = litWater;
   }
   const sunlitHere = (q, r, nt, cd) =>
-    cd <= 5 * DEPTH_GRID && hexNearDepth(nt, 0) && litWater.has(hexKey(q, r));
+    cd <= SUN_BAND && hexNearDepth(nt, 0) && litWater.has(hexKey(q, r));
 
   for (let dr = -rRange; dr <= rRange; dr++) {
     for (let dq = -qRange; dq <= qRange; dq++) {
