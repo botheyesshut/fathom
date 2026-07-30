@@ -6921,6 +6921,19 @@ function mulberry32(a) {
 }
 
 let worldSeed = Date.now() & 0xffffffff;
+// WHICH OCEAN IS THIS DECK IN? `interiorAt` and `beachMouths` hashed nothing but
+// (q, r, d), so measured across 720 decks and 300 beaches, EVERY layout and every
+// mouth set was byte-identical between two different worlds. The exposure to a
+// player today is nil — 0 of 8 wrecks inside 24 hexes of the dock land on the
+// same hex in two games — but it is a straight breach of the rule the whole
+// substrate rests on, and trenches are next on the list and will run on a
+// lattice, which is exactly what turns a coincidence into a system.
+//
+// It is a separate variable rather than `worldSeed` inline because an EXISTING
+// save must keep the buildings it already has: the field is absent from every
+// save written before tonight, absent reads as '', and '' is precisely the old
+// behaviour. Sean's boat wakes up in the same grotto it went to sleep in.
+let interiorSalt = '';
 let rng = mulberry32(worldSeed);
 function rand() { return rng(); }
 function randInt(n) { return Math.floor(rand() * n); }
@@ -10803,7 +10816,7 @@ const MOUTH_LETTERS = ['', 'B', 'C'];       // '' is mouth A, so old saves still
 const CAVE_SEGS = { passage: 4, hall: 2, chamber: 1, dead: 1 };
 
 function beachMouths(q, r, d) {
-  const rr = mulberry32(hashStr('mouths:' + q + ',' + r + ',' + d));
+  const rr = mulberry32(hashStr('mouths:' + q + ',' + r + ',' + d + interiorSalt));
   const n = 1 + Math.floor(rr() * rr() * 3);   // 1 usually, 2 often, 3 sometimes
   const out = [];
   for (let i = 0; i < n; i++) {
@@ -10918,7 +10931,7 @@ function interiorAt(q, r, d, kind) {
   const hit = interiorCache.get(key);
   if (hit) return hit;
 
-  const rnd = mulberry32(hashStr('interior:' + key));
+  const rnd = mulberry32(hashStr('interior:' + key + interiorSalt));
   const tiles = new Map();
   let caveSize = null;
   // The outer ring stays solid — a deck needs a hull. The entry is punched
@@ -15985,6 +15998,7 @@ function restart() {
   visited.clear();
   generatedChunks.clear();
   worldSeed = Date.now() & 0xffffffff;
+  interiorSalt = ':' + worldSeed;   // ...and its buildings are its own
   rng = mulberry32(worldSeed);
   resetWorldCaches();   // lattice, edge memos, carve registry, prizes — all seed-dependent
   interiorCache.clear();   // interiors are substrate — they belong to the old seed
@@ -16156,7 +16170,7 @@ function doSave(force) {
     const rev = {};
     for (const [k, s] of revealed) rev[k] = [...s];
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: SAVE_V, seed: worldSeed,
+      v: SAVE_V, seed: worldSeed, isalt: interiorSalt,
       q: state.q, r: state.r, depth: state.currentDepth,
       air: state.air, hull: state.hull, maxDepth: state.maxDepth,
       moves: state.moves, poisFound: state.poisFound,
@@ -16292,6 +16306,14 @@ function resumeGame(save) {
   state.ping = null; state.pingArrows = null;
   state.pingMemory = new Map();
   revealed.clear(); visited.clear();
+  // WHICH OCEAN, BEFORE ANYTHING ELSE. This used to sit 77 lines further down,
+  // after the caches were emptied, and nothing in between happened to ask the
+  // world a question — but that was luck, not a rule, and one added line would
+  // have quietly generated a chunk of the PREVIOUS world into the fresh cache.
+  worldSeed = save.seed;
+  // `isalt` is absent from every save written before the salt existed, and
+  // absent means the unsalted layouts that save has been looking at all along.
+  interiorSalt = typeof save.isalt === 'string' ? save.isalt : '';
   resetWorldCaches();
   // Creatures + spawn history restore BEFORE generation, so already-rolled
   // chunks don't re-roll their inhabitants into duplicates.
@@ -16369,7 +16391,6 @@ function resumeGame(save) {
   for (const m of state.crew) crewVitals(m);   // AFTER the load, or it vitalises the roster it is about to replace
   state._hireOffer = null;
   state._armoryOffer = null;
-  worldSeed = save.seed;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
   tileAt(0, 0);                 // origin (dock, pier entrance) always exists
