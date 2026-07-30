@@ -1,5 +1,44 @@
 # FATHOM — START HERE (last updated 2026-07-28)
 
+## TRENCHES — the measurements, decided BEFORE the code (2026-07-28)
+
+Sean asked for the thinking to be done up front, so it is here and the baseline
+numbers are captured NOW — the specific way I would get this wrong is to change
+the generator and then take a "baseline" from the already-changed world.
+
+**What a trench is.** A linear depression in the seafloor on the same infinite
+lattice as the cave nodes and the islands: segments between neighbouring lattice
+points, hash-derived, local, a pure function of the seed. Where a trench passes,
+the floor deepens, tapering from the axis so it has walls rather than being a slot.
+
+**Why it connects to the caves for nothing.** `addVolume(q,r,'water','water',0,
+seafloor)` writes cells from 0 down to the floor, and chambers write into the
+same map. A trench deep enough to reach the cave band IS already connected. No
+breaching step, so there is nothing subtle to get wrong.
+
+### The gates, with today's numbers as the baseline
+
+| | must show | why it is load-bearing |
+|---|---|---|
+| 1. nothing sealed | surface BFS >= **458,305 cells / 19,030 hexes**, max depth >= **11,040 m** | trenches only ADD water; if this falls I have misread `addVolume`'s priority rules and am subtracting cave |
+| 2. more ways under | sinkholes within 30 hexes of the dock >= **5**, nearest <= **21** | a trench reaching the cave band is a NEW door. No improvement means they are not intersecting caves and "access and egress" is unbuilt |
+| 3. the shelf survives | off the pier: <= **250 m at 3 hexes**, <= **400 m at 20** (today **173** and **303**) | canyon-country risk. The opening must stay a gentle shelf to learn on |
+| 4. chunk time | < **55 ms** (today **42-47**, ceiling 60, Android 3-4x) | no headroom exists. The memo on `baseSeafloorDepth` should absorb it; if not, the maths is in the wrong place |
+| 5. do they intersect | hexes where two distinct axes cross > 0 | Sean asked for trenches that INTERSECT. Unmeasured, that word is decoration |
+| 6. coverage | 8-20% of open-water hexes touched | too little and nobody meets one; too much and the seafloor is corrugated everywhere and stops meaning anything. Tune by measuring 3-4 settings, as island density was tuned |
+
+### Pre-mortem
+
+- **HIGHEST: a trench cuts through an island's shoal or the home shelf** and puts
+  a canyon where a harbour goes. Mitigation: a trench yields to land — deepen
+  only where `baseSeafloorDepth` already returns water, and never inside any
+  island's shoal radius.
+- **A trench axis test that scans** instead of being O(few) per hex like
+  `islandLift`. Gate 4 catches it.
+- **Breaking the shelf without noticing**, because the battery has never measured
+  a depth profile. Gate 3 is new and must be WRITTEN FIRST — otherwise it checks
+  my work against a baseline taken after the change.
+
 ## THE BACKLOG — everything said and not yet done (audited 2026-07-28)
 
 Sean asked for this list explicitly. It is an honest inventory, not a wishlist:

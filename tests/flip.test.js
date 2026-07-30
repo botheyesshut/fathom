@@ -176,8 +176,31 @@ check(vc.bad === 0, 'verifyCells internal soundness', vc.bad + ' bad tiles, ' + 
   }
   let openings = 0;
   for (const [k, t] of worldMap) if (t.poi === 'opening' && hexes.has(k)) openings++;
-  const pierTile = worldMap.get('3,-1');
-  check(!!pierTile && pierTile.type === 'opening', 'guaranteed pier entrance at (3,-1)', pierTile ? 'type=' + pierTile.type : 'missing');
+  // A WAY UNDER MUST EXIST. It used to be pinned to hex (3,-1) — a sinkhole put
+  // two hexes off the pier so Sean could drop straight into the tunnels and
+  // test that gameplay. He has retired it: "The sinkholes should be discovered
+  // naturally from now on."
+  //
+  // So the assertion moves from a PLACE to the INVARIANT it was standing in
+  // for: there has to be a door into the caves, findable from the dock. Pinning
+  // the hex meant this check would have passed on a world with no other way
+  // under at all, which is the failure that actually ends a campaign.
+  //
+  // Measured after removal, across 6 seeds: nearest opening at 5, 10, 12, 14,
+  // 15 and 21 hexes. That is an opening to be played rather than a hole in the
+  // floor beside the boat.
+  let nearestOpen = 999, openCount = 0;
+  for (const [k, t] of worldMap) {
+    if (t.poi !== 'opening' || !hexes.has(k)) continue;
+    const c = k.indexOf(',');
+    const oq = +k.slice(0, c), orr = +k.slice(c + 1);
+    const d = (Math.abs(oq - 1) + Math.abs(orr - 1) + Math.abs(oq - 1 + orr - 1)) / 2;
+    if (d <= 30) { openCount++; nearestOpen = Math.min(nearestOpen, d); }
+  }
+  check(openCount > 0, 'there is a way under, findable from the dock',
+    openCount ? openCount + ' sinkholes within 30 hexes, nearest at ' + nearestOpen : 'NO WAY INTO THE CAVES AT ALL');
+  check(openCount >= 2, 'and more than one, so the world is not one door wide',
+    openCount + ' within 30 hexes');
   check(seen.size > 20000, 'BFS network size from surface', seen.size + ' cells / ' + hexes.size + ' hexes reachable');
   check(maxDepth >= 480, 'caves reachable from surface (b0+)', 'max depth reached ' + maxDepth + ' m; ' + openings + ' sinkhole openings reachable');
   console.log('      (info) reachable band depths: max ' + maxDepth + ' m — deeper bands need z-tunnels beyond the 7x7 chunk window');

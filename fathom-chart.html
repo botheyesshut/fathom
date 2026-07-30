@@ -7752,16 +7752,21 @@ function generateChunk(cq, cr) {
     ];
     for (const h of shoreHexes) setTile(h.q, h.r, 'shore', true);
 
-    // Guaranteed pier entrance: a sinkhole just NE of the dock dropping into
-    // the nearest top-band chamber, so the player always has a way under —
-    // never at the mercy of whether the lattice happened to open one nearby.
-    const pierEntry = { id: 'pier-entry', q: 3, r: -1, depth: 0, chamberRadius: 0.5, chamberKind: 'antechamber', bandId: 'surface' };
-    const pierTarget = caveNodesInRegion(pierEntry.q - MAX_TUNNEL, pierEntry.q + MAX_TUNNEL,
-                                         pierEntry.r - MAX_TUNNEL, pierEntry.r + MAX_TUNNEL)
-      .filter(n => n.bandIdx === 0)
-      .map(n => ({ n, d: hexDistance({q: pierEntry.q, r: pierEntry.r}, {q: n.q, r: n.r}) }))
-      .sort((x, y) => x.d - y.d || (x.n.id < y.n.id ? -1 : 1))[0];
-    if (pierTarget) carveEdge({ a: pierEntry, b: pierTarget.n, kind: 'sinkhole', width: 1 });
+    // THE TEST SINKHOLE IS GONE. There was a guaranteed sinkhole two hexes off
+    // the pier, put there so Sean could drop straight into the tunnels and play
+    // that part. Sean, retiring it: "I don't intend either of them anymore. The
+    // sinkholes should be discovered naturally from now on."
+    //
+    // (There was only ever ONE stipulated. The "second one" he had been seeing
+    // was the lattice doing its job — measured 4 to 7 natural openings within 26
+    // hexes of the dock in every seed, so a near one turning up was luck, not a
+    // duplicate.)
+    //
+    // What it cost, measured: the nearest way under goes from 2 hexes in every
+    // seed to 5, 10, 12, 14, 15 and 21. That is a real opening to play rather
+    // than a hole in the floor beside the boat — and it is only survivable
+    // because the sounder can now HEAR a sinkhole, which it could not before.
+    // See SOUNDER_PRIZE.
   }
 
   // Step 4: Shelf features — pure hash-of-hex, so every client computes the
@@ -13455,7 +13460,12 @@ function cellRun(q, r, d) {
 // It does not break the epistemic law. A sounder reads straight down, only
 // where you are, and it tells you the DEPTH of the return and how it came back
 // — never what the thing is. You still have to go down and look.
-const SOUNDER_PRIZE = ['salvage', 'ruin', 'hull', 'signal', 'growth', 'air'];
+// `opening` belongs here more than anything else on the list. A sinkhole IS a
+// hole in the seafloor directly beneath the keel, and a sounder reads straight
+// down — it is the most natural return this instrument could possibly get. It
+// was missing for as long as a guaranteed sinkhole sat two hexes off the pier
+// and nobody ever had to go looking. Removing that entrance is what surfaced it.
+const SOUNDER_PRIZE = ['salvage', 'ruin', 'hull', 'opening', 'signal', 'growth', 'air'];
 function soundingBelow() {
   if (state.foot || ashore()) return null;
   const t = getTile(state.q, state.r);
