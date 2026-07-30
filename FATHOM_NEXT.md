@@ -38,7 +38,94 @@ Battery green at every commit. What follows is the honest ledger.
 - **Hours 2–10 audit** — needs agents and a long run.
 - **Income** — untouched, per his ruling.
 
-## TRENCHES — the measurements, decided BEFORE the code (2026-07-28)
+## TRENCHES — BUILT (2026-07-29). The plan below is kept as written; here is what happened.
+
+**Run `node tests/trench.js` before and after any change to world generation.** It
+takes `FATHOM_HTML` so it can be pointed at `git show <sha>:fathom-chart.html`.
+
+### The thing the baseline found, which mattered more than trenches
+
+**The ocean got deeper forever.** `baseSeafloorRaw`'s last branch was
+`2325 + (off - HOME_SHELF) * 80` with no bound on it — 80 m per hex, without end.
+Measured mean seafloor: 5,171 m at the origin, 11,609 m at 224 hexes out,
+**30,229 m at 896**. Six times deeper than any ocean on Earth. That would be merely
+silly except `addVolume` writes one cell per 60 m from the surface to the floor, so
+chunk cost was linear in it:
+
+| hexes out | mean floor | cells/chunk | ms/chunk |
+|---|---|---|---|
+| 0 | 5,171 m | 108k | 54.2 |
+| 112 | 6,670 m | 456k | 83.7 |
+| 448 | 15,218 m | 1.57M | 197.3 |
+| 896 | 30,229 m | 3.35M | 368.1 |
+
+**The game got permanently and unboundedly slower the further you sailed**, and the
+battery's own performance gate only ever sampled chunks 4–8 (56–112 hexes), where it
+read 51.6 against its own limit of 60. Nobody had ever looked further out.
+
+The fix and the feature turned out to be the same thing. Real oceans have an
+abyssal **plain** at three to six kilometres and reserve the deeper water for
+trenches — which is exactly the job Sean gave trenches. `ABYSS_AT = 53`,
+`ABYSS_FLOOR = 4200`, with two slow sines for swells so the plain is not a table.
+The 80-m-a-hex rise runs unchanged onto it, so there is no step at the join
+(verified hex by hex: 4,024 m at off 51, 4,290 at 55, then undulating).
+
+Warm chunk time went **215.5 ms median → 17.4**, p90 **367.8 → 57.0**, and it is now
+flat from the origin to 896 hexes out instead of climbing forever. The battery's own
+gate went 51.6 → 37.7 ms. Gates 1–3 came out bit-identical, which is the proof that
+nothing was subtracted.
+
+### The six gates, after
+
+| | result |
+|---|---|
+| 1. nothing sealed | hexes **bit-identical** (22,276 / 22,214 / 24,249), deepest reachable **unchanged** at 11,160 / 11,040 / 11,040 m. Cells +13%, all of it new water. |
+| 2. ways under | sinkholes near the dock unchanged, **by design** — trenches keep out inside 23 hexes of the home shore so the learner's shelf stays gentle, and that gate could therefore never move. Replaced by 2b. |
+| 2b. into the caves | 71–249 hexes cut into a cave band at 4,200 m or deeper; 8–26 hexes per world whose column **meets worked cave** below the plain; deepest trench floor 6,780–8,940 m. This is "access and egress from the caves beneath", measured. |
+| 3. the shelf survives | **bit-identical**: 120 m at 3 hexes east, 220 m at 20. The keep-out holds. |
+| 4. chunk time | warm median 19 ms, p90 ~57. The p90 outliers are chunks heavy with cave lattice or an island and **predate all of this** — pre-trench p90 was 57.0 too. Trenches cost a few ms; the cap bought two orders of magnitude. |
+| 5. do they intersect | **889 / 1,477 / 889** hexes on two or more axes. Sean's word is honoured and not decoration. |
+| 6. coverage | **15.9% / 18.7% / 16.4%** of eligible water with a floor 300 m+ below the plain — inside the 8–20% band on all three seeds. Tuned by measurement from a first cut at 42–53%. |
+
+### THE OPEN QUESTION A TRENCH LEAVES: is there a reason to go down one?
+
+Measured, and the answer today is **not yet**. Prizes per hex in eligible water:
+**0.006 in a trench against 0.010 on the plain** — no denser, slightly thinner, and
+the whole sample is 10 prizes so it says little beyond "no depth term exists". Which
+is exactly the backlog item *"ruins are not placed deeper with depth"*: the prize
+TYPE is a uniform hash over 7 types with no depth in it, so opening the deep did not
+put anything in it.
+
+What a trench does give you today: the shortest road to cave bands b5 (6,480–8,520 m)
+and b6 (9,480–10,800 m), 8–26 hexes per world where the column meets worked cave, and
+`rollItem`'s depth gate — which does widen its pool with depth, so what you find down
+there is better even though there is no more of it.
+
+**The next piece of generator work is prize placement by depth**, and it is now worth
+much more than it was: before the plain had a floor, "deeper" happened to you as you
+sailed; now it is a place you go on purpose.
+
+### And it announces itself
+
+A generator change the prose never mentions is a change the player experiences as a
+number moving. Crossing a rim measured a **2,520 m drop in one hex**, so the sounder
+now says so — once per trench, latched, clearing when the floor comes back up.
+
+### Four instrument corrections it took to get here
+
+Every one of them would have produced a confident wrong answer:
+
+1. Gate 4 first measured cold chunks from the origin and reported a 330 ms worst
+   case — that is the home shelf being built once, behind the splash screen.
+2. The second attempt timed 90 further chunks on top and **blew `cells` past its
+   16.7M ceiling mid-measurement**, the third time a probe here has done that.
+3. Coverage counted a hex as trenched whenever `trenchAt` returned any hit,
+   including out at the rim where the taper deepens the seabed by 30 m.
+4. Coverage then divided by **all** water while `trenchFloorAt` refuses to cut
+   inside the keep-out — two different populations, which made coverage read a
+   quarter of its real value. Gate 5 read a false zero for the same reason.
+
+## The plan as written BEFORE the code (2026-07-28), kept for the record
 
 Sean asked for the thinking to be done up front, so it is here and the baseline
 numbers are captured NOW — the specific way I would get this wrong is to change
@@ -89,7 +176,7 @@ built. Ticked items elsewhere in this file are not repeated.
 |---|---|
 | **Ships seeing each other** | "These vessels might also see one another and have interactions. If we see them interacting the player can choose to interject one way or another." Nothing. |
 | **Cargo draws pursuit** | "If a user is hauling something a hostile faction wants, that faction might come after it (or send a nearby allied sub after us for it)." Nothing. `shipHunting` is now the hook to hang it on — it already answers "is she after you", and cargo would be a second reason for it to say yes. |
-| **Valleys and trenches** | "we can put some valleys and trenches down there which intersect and give access to and egress from the caves beneath." The biggest generator change still outstanding, and the one he was most interested in. Gates and baseline captured; code not written. |
+
 | **Populated caves and deep cities** | "the fish people can populate a few ruins and have cities when one goes deep enough." Enclaves are trading posts; no city exists. |
 | **Diplomacy underwater** | "treaties and missions and alliances are all made at the major cities underwater." No missions, no treaties, no alliances, no cities. |
 | **Charting earns leads** | He said yes to it. Hailing became a second door; charting itself still pays nothing but chart. |
@@ -776,15 +863,33 @@ suite that spends dice can vary. `tests/interior.test.js` saturated a deck with
 returns at its first guard (`!state.alive`), touches nothing, and the check
 failed while printing the word "reopened", i.e. the opposite of what happened.
 
-Two lessons, and the second is the one that matters:
+**And I got the cause wrong twice before getting it right, which is the part worth
+reading.** First I decided the captain had drowned in the flood, made the walk
+cleaner, saw 14 consecutive passes and called it fixed. It came back — with
+`there is a live crew to work the bulkhead with — aboard, air 340` printed on the
+line directly above, which refutes that theory in one line.
 
-1. Before blaming a code change for a battery failure, **run the suite 15–20
-   times**. One pass and one fail prove nothing about which build is at fault.
-2. **A check that can fail for a reason it does not report is worse than no
-   check.** The fix was not to make the dice deterministic — it was to re-enter
-   the deck clean and state the precondition out loud, so a death is reported as
-   a death. Any suite that spends gameplay dice before an assertion needs the
-   same treatment.
+The actual cause: `doorK` came from `__int(q, 7, 660)`, which forces kind `'ruin'`
+at depth 660, while `__enter` goes through `enterInterior`, which resolves its own
+anchor with `poiAtDepth`. Those two can name **different decks** — and which anchor
+answers depends on `state.poisFound`, which by that point in the suite has grown
+differently depending on gameplay dice. So perhaps one run in seven entered a deck
+on which `doorK` is not a door, `sealDoor` correctly reported "no bulkhead within
+reach", and the check failed while printing the word "reopened".
+
+Four lessons, in order of how much they cost:
+
+1. **A test that reads one deck and drives another cannot be repaired by tidying
+   the walk.** Ask the deck you are standing on — `footChunk()`, now exposed to the
+   harness as `__chunk()`.
+2. **`__int(q,r,d)` and `__enter(q,r,d)` are not the same place.** Anywhere a suite
+   uses both on the same coordinates, check that assumption.
+3. Before blaming a code change for a battery failure, **run the suite 15–20
+   times**, and remember that a clean run of 14 is not proof — it was here, and it
+   was wrong.
+4. **A check that can fail for a reason it does not report is worse than no
+   check.** Both wrong diagnoses came from the check printing "reopened" while
+   something else entirely had happened.
 
 ## THREE MISTAKES WORTH NOT REPEATING (2026-07-26)
 

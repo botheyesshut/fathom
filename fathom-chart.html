@@ -7447,7 +7447,16 @@ function shelfSeafloorDepth(q, r) {
   if (lift && lift.land) return null;               // land: the generator leaves stone
   const base = baseSeafloorDepth(q, r);
   if (base == null) return null;
-  return lift ? Math.min(base, lift.floor) : base;  // the shoal wins where it is shallower
+  if (lift) return Math.min(base, lift.floor);      // the shoal wins where it is shallower
+  // A TRENCH CUTS THE FLOOR, and it yields to land absolutely. The `lift` return
+  // above is the whole mitigation for the worst thing in the pre-mortem — a
+  // canyon opening where a harbour goes — because a hex inside any island's shoal
+  // never reaches this line. It is also what keeps trenches out of a recursion:
+  // `islandRoll` asks `baseSeafloorDepth` to find out whether there is sea under a
+  // candidate island, so anything that asks about islands must live OUTSIDE that
+  // call, which is here.
+  const cut = trenchFloorAt(q, r);
+  return cut != null && cut > base ? cut : base;
 }
 
 // The world before any of the scattered islands: the home island, its shelf,
@@ -7492,9 +7501,27 @@ function baseSeafloorRaw(q, r) {
     // Shelf break — drops rapidly into the deep
     const t = (off - 23) / (HOME_SHELF - 23);
     depth = 315 + t * t * 2010;              // 315 → 2325
-  } else {
-    // Open deep ocean
+  } else if (off < ABYSS_AT) {
+    // The continental rise, down onto the plain. Same 80 m a hex it always was,
+    // so every profile inside this range is exactly what it was before.
     depth = 2325 + (off - HOME_SHELF) * 80;
+  } else {
+    // THE ABYSSAL PLAIN, AND IT IS A PLAIN. This line used to be the one above
+    // with no bound on it, so the floor sank 80 m per hex forever: measured mean
+    // depth 11,609 m at 224 hexes out and 30,229 m at 896, which is six times
+    // deeper than any ocean on Earth. That would be merely silly if `addVolume`
+    // did not write one cell per 60 m from the surface to the floor — so chunk
+    // cost was linear in it, and the game got permanently slower the further you
+    // sailed. 54 ms at the origin, 130 at 224 hexes, 368 at 896, against a 60 ms
+    // budget that Android divides by three.
+    //
+    // A plain is not a table, though. Two slow sines give it swells of a few
+    // hundred metres, on wavelengths long enough that a captain reads them as
+    // country rather than noise. Everything below the plain is now TRENCH, which
+    // is exactly the job Sean gave trenches: the deep is something you find, not
+    // something you drift into.
+    const sw = Math.sin(q * 0.031 + r * 0.017) * 190 + Math.sin(r * 0.023 - q * 0.011) * 130;
+    depth = ABYSS_FLOOR + sw;
   }
   return depth;
 }
@@ -7716,6 +7743,139 @@ function islandLiftRaw(q, r) {
 }
 
 //=============================================================================
+// TRENCHES — THE DEEP IS SOMETHING YOU FIND
+//=============================================================================
+// Sean: "we can put some valleys and trenches down there which intersect and give
+// access to and egress from the caves beneath."
+//
+// This became possible the moment the abyssal plain got a floor. While the
+// seafloor sank 80 m a hex forever, a trench was a hole in a hole: the water was
+// already eleven kilometres deep at 224 hexes out and thirty at 896, so cutting
+// deeper meant nothing and cost everything. With the plain held at ~4,200 m, a
+// trench is the ONLY water below the fourth cave band, which makes it exactly what
+// he asked for — the road down, and the road out.
+//
+// SAME LATTICE IDIOM AS EVERYTHING ELSE LOCAL AND INFINITE: nodes on a coarse
+// grid, edges between neighbouring nodes, both derived from a hash of the seed and
+// the cell. That is how the cave chambers work (`caveNodeAt`/`caveEdgesForNode`)
+// and how the islands work, and it is the reason any hex can be answered in O(few)
+// without a global list. Segments chain end to end because neighbours share
+// endpoints, which is what makes a trench a trench and not a row of gashes — and
+// two chains crossing is an intersection for nothing, which is the word in Sean's
+// sentence I would otherwise have quietly dropped.
+const TRENCH_CELL = 22;        // hexes per lattice cell side
+// TUNED BY MEASUREMENT, not by taste. 0.42 and 5.5 put 42-53% of open water in a
+// trench across three seeds — a corrugated seafloor, and a trench you cannot avoid
+// is terrain rather than a feature. These land it in the 8-20% the gate asks for.
+const TRENCH_LINK = 0.22;      // chance a node reaches its +q or +r neighbour
+const TRENCH_HALF = 3.2;       // hexes from the axis to the rim
+const TRENCH_MIN = 5400;       // the shallowest a trench floor can be
+const TRENCH_MAX = 9600;       // ...and the deepest. Band b6 bottoms at 10,800.
+// NO TRENCH INSIDE THIS. The learner's shelf is the one piece of the world that
+// must stay gentle — Sean's opening is a shelf you can make mistakes on, and
+// canyon country three hexes off the pier would be the failure this whole plan is
+// arranged around. 23 is where the shelf break starts in `baseSeafloorRaw`.
+const TRENCH_KEEP_OUT = 23;
+
+const trenchNodeCache = new Map();
+const trenchSegCache = new Map();
+const trenchFloorCache = new Map();
+
+// A node: one point, jittered inside its cell so the chain never reads as a grid.
+function trenchNode(i, j) {
+  const k = i + '|' + j;
+  if (trenchNodeCache.has(k)) return trenchNodeCache.get(k);
+  const rr = mulberry32(hashStr('trench:' + worldSeed + ':' + i + ':' + j));
+  const n = { q: i * TRENCH_CELL + Math.floor(rr() * TRENCH_CELL),
+              r: j * TRENCH_CELL + Math.floor(rr() * TRENCH_CELL),
+              i: i, j: j };
+  // Cartesian, so a perpendicular distance means something. Same basis as
+  // `hexBearing`: x = q + r/2, y = r * sin(60).
+  n.x = n.q + n.r / 2;
+  n.y = n.r * 0.8660254;
+  trenchNodeCache.set(k, n);
+  return n;
+}
+
+// The two segments a node may own: east and south-east. Owning them in one
+// direction only is what stops a pair of nodes agreeing twice about the same
+// stretch of seabed.
+function trenchSegs(i, j) {
+  const k = i + '|' + j;
+  if (trenchSegCache.has(k)) return trenchSegCache.get(k);
+  const out = [];
+  const a = trenchNode(i, j);
+  for (const [di, dj, tag] of [[1, 0, 'q'], [0, 1, 'r']]) {
+    const rr = mulberry32(hashStr('tseg:' + worldSeed + ':' + i + ':' + j + ':' + tag));
+    if (rr() >= TRENCH_LINK) continue;
+    const b = trenchNode(i + di, j + dj);
+    // How deep this stretch cuts, and how wide it opens. A trench is not one
+    // depth end to end; the floor is drawn from the segment's own hash so a long
+    // chain steps down and up along its length like a real one.
+    const floor = snapDepth(TRENCH_MIN + rr() * (TRENCH_MAX - TRENCH_MIN), 'floor');
+    const half = TRENCH_HALF * (0.6 + rr() * 0.8);
+    out.push({ id: i + ':' + j + ':' + tag, ax: a.x, ay: a.y, bx: b.x, by: b.y,
+               floor: floor, half: half });
+  }
+  trenchSegCache.set(k, out);
+  return out;
+}
+
+// Every segment that could possibly touch this hex. The widest rim is
+// TRENCH_HALF * 1.4, well under one cell, so the 3x3 block of cells around this
+// hex's own cell is the whole of what can reach it — the same argument
+// `islandLiftRaw` makes about shoals, and the reason neither of them scans.
+function trenchAt(q, r) {
+  const ci = Math.floor(q / TRENCH_CELL), cj = Math.floor(r / TRENCH_CELL);
+  const px = q + r / 2, py = r * 0.8660254;
+  const hits = [];
+  for (let di = -1; di <= 1; di++) {
+    for (let dj = -1; dj <= 1; dj++) {
+      for (const sg of trenchSegs(ci + di, cj + dj)) {
+        // Perpendicular distance to the SEGMENT, not to the infinite line: past
+        // an endpoint a trench has already become the next segment's business,
+        // or has ended.
+        const vx = sg.bx - sg.ax, vy = sg.by - sg.ay;
+        const len2 = vx * vx + vy * vy;
+        if (len2 <= 0) continue;
+        let t = ((px - sg.ax) * vx + (py - sg.ay) * vy) / len2;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const dx = px - (sg.ax + t * vx), dy = py - (sg.ay + t * vy);
+        const off = Math.sqrt(dx * dx + dy * dy);
+        if (off > sg.half) continue;
+        hits.push({ id: sg.id, off: off, half: sg.half, floor: sg.floor, along: t });
+      }
+    }
+  }
+  return hits;
+}
+
+// What the floor becomes here, or null for "no trench in this hex". Walls, not a
+// slot: the cut tapers from the axis, so you can read the shape of it on the
+// sounder as you cross and there is a slope to follow down rather than a cliff to
+// fall off. Two axes crossing take the deeper of the two.
+function trenchFloorAt(q, r) {
+  const fk = q + ',' + r;
+  if (trenchFloorCache.has(fk)) return trenchFloorCache.get(fk);
+  let out = null;
+  // THE SHELF IS EXEMPT, and this test comes first because it is the cheapest
+  // and because it is the one that must never be got wrong.
+  if (homeShoreDist(q, r) >= TRENCH_KEEP_OUT) {
+    const hits = trenchAt(q, r);
+    for (const h of hits) {
+      const t = h.off / h.half;
+      // 1 - t*t: full depth on the axis, tapering to nothing at the rim, and the
+      // curve leans outward so the flanks are walls rather than a funnel.
+      const cut = ABYSS_FLOOR + (h.floor - ABYSS_FLOOR) * (1 - t * t);
+      const d = snapDepth(cut, 'floor');
+      if (out === null || d > out) out = d;
+    }
+  }
+  trenchFloorCache.set(fk, out);
+  return out;
+}
+
+//=============================================================================
 // THE HOME ISLAND
 //=============================================================================
 // Sean: "The dock was never intended to be at the bottom of an endless map
@@ -7732,7 +7892,11 @@ function islandLiftRaw(q, r) {
 // chart frame, the port panel — and the island is built around it rather than
 // the other way about.
 const HOME_R = 11;             // mean land radius: room for a real place
-const HOME_SHELF = 30;         // how far the shallows reach before the break
+const HOME_SHELF = 30;
+// WHERE THE RISE ENDS AND THE PLAIN BEGINS, and how deep the plain is. 53 hexes
+// out lands the bottom of the rise on ~4,165 m, so the existing 80-m-a-hex slope
+// runs unchanged all the way onto the plain and there is no step at the join.
+const ABYSS_AT = 53, ABYSS_FLOOR = 4200;         // how far the shallows reach before the break
 
 let homeIsleCache = null;
 function homeIsle() {
@@ -15298,6 +15462,12 @@ function resetWorldCaches() {
   carvedFeatures.clear();
   cellPois.clear();
   if (typeof interiorCache !== 'undefined') interiorCache.clear();
+  // THE TRENCH LATTICE IS SEED-DEPENDENT, so it dies with the world. Forgetting
+  // one of these is the mistake that cost this project a revert and most of a
+  // night, which is why `tests/flip.test.js` has a guard named after it.
+  if (typeof trenchNodeCache !== 'undefined') trenchNodeCache.clear();
+  if (typeof trenchSegCache !== 'undefined') trenchSegCache.clear();
+  if (typeof trenchFloorCache !== 'undefined') trenchFloorCache.clear();
 }
 // Where a thing actually COMES TO REST, as opposed to where the cave graph
 // happened to put a node. Gas is trapped against rock and rises; hulls, ruins,
@@ -15462,6 +15632,27 @@ function handleTile(tile) {
   } else if (snd && snd.under <= 0 && state.currentDepth < 300) {
     tip('shelf');
   }
+  // THE BOTTOM LEAVES. A trench does not need a marker or a glyph — it needs the
+  // one sentence a captain would actually say when the return stops coming back
+  // from where it came back from a minute ago. 900 m is six dive steps: far more
+  // than the plain's own swells, so this fires on a trench and not on country.
+  if (snd && snd.floor != null && !state.foot) {
+    const prevFloor = state._lastFloor;
+    state._lastFloor = snd.floor;
+    // ONCE PER TRENCH, not once per step down into it. Crossing a rim measured
+    // 2,520 m in one hex and then another 960 m at the axis, so the boat said the
+    // same thing twice running. The latch clears when the floor comes back up.
+    if (prevFloor != null && snd.floor - prevFloor >= 900 && !state._inTrench) {
+      state._inTrench = true;
+      log(`The bottom goes out from under the ping — ${snd.floor - prevFloor} m of it, in one hex. There is a trench under you, and it runs off in both directions.`,
+          'strange', 'TRENCH');
+      sfx('contact');
+    } else if (prevFloor != null && prevFloor - snd.floor >= 900 && state._inTrench) {
+      state._inTrench = false;
+      log('The floor comes back up to meet the ping. You are over the plain again.', '', 'TRENCH');
+    }
+  }
+
   // A SHORE IN THIS WATER. Told once per hex per session and not written to the
   // save, because a reading is not a discovery — walking up the sand is, and
   // `maybeBeach` files that under poisFound the moment you do.
@@ -16050,7 +16241,7 @@ function endGame(title, summary) {
   activeSubKey = 'erebus';
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
-  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // and so does a new boat
+  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null; state._lastFloor = null; state._inTrench = false;   // and so does a new boat
   // THE DROWNED JOIN THE POOL. Every hand aboard when she went down is now
   // somebody the deep has a name for, and a deck somewhere may put them in
   // front of you again, wearing what they were wearing.
@@ -16097,7 +16288,7 @@ function restart() {
   const sub = activeSub();
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
-  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // a new sea gets its first reading
+  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null; state._lastFloor = null; state._inTrench = false;   // a new sea gets its first reading
   // A NEW SEA ARRIVES UNREAD. These four are keyed by bare coordinates or by
   // the campaign, not by the seed, so they used to walk into the next world
   // intact: free crates at a hex never visited, thermoclines already felt in
@@ -16487,7 +16678,7 @@ function resumeGame(save) {
   state.refuges = obj(save.refuges);
   state.autoTarget = null;       // never resume under power
   state._airMark = (typeof save.airMark === 'number') ? save.airMark : null;   // null re-derives from the gauge
-  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null;   // dampers are per-session
+  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null; state._lastFloor = null; state._inTrench = false;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';

@@ -80,7 +80,9 @@ function boot(seed) {
     + ' world, cells, cellKey, cellRun, tileAt, getTile, hexKey, hexDistance, DEPTH_GRID,'
     + ' CAVE_BANDS, ensureChunk, hexToChunk, generatedChunks,'
     + ' trenchAt: (typeof trenchAt === "function" ? trenchAt : null),'
-    + ' trenchDrop: (typeof trenchDrop === "function" ? trenchDrop : null),'
+    + ' trenchFloorAt: (typeof trenchFloorAt === "function" ? trenchFloorAt : null),'
+    + ' ABYSS_FLOOR: (typeof ABYSS_FLOOR !== "undefined" ? ABYSS_FLOOR : null),'
+    + ' homeShoreDist: (typeof homeShoreDist === "function" ? homeShoreDist : null),'
     + ' baseSeafloorDepth: (typeof baseSeafloorDepth === "function" ? baseSeafloorDepth : null),'
     + ' shelfSeafloorDepth: (typeof shelfSeafloorDepth === "function" ? shelfSeafloorDepth : null),'
     + '};', sb, { timeout: 120000 });
@@ -135,7 +137,8 @@ say('seeds ' + SEEDS.join(', ') + '\n');
 
 // --------------------------------------------------------- GATES 1, 2, 3, 5, 6
 const agg = { cells: [], hexes: [], maxDepth: [], sinks: [], nearest: [],
-              d3: [], d20: [], cross: [], cover: [] };
+              d3: [], d20: [], cross: [], cover: [], rim: [],
+              band: [], deepest: [], meets: [] };
 for (const seed of SEEDS) {
   const X = boot(seed);
   const R = 30;
@@ -185,21 +188,64 @@ for (const seed of SEEDS) {
   // honestly that they are unbuilt rather than printing a zero that reads as a
   // measurement.
   if (X.trenchAt) {
-    let touched = 0, water = 0, crossings = 0;
-    for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) {
-      const t = X.getTile(q, r);
-      if (!t || t.wall) continue;
-      water++;
+    // OVER WATER WHERE A TRENCH IS ALLOWED, which is not the same as all water.
+    // `trenchAt` answers geometrically and knows nothing about the keep-out;
+    // `trenchFloorAt` refuses to cut inside 23 hexes of the home shore, and most
+    // of a 61x61 box round the origin IS inside that. Dividing hits by all water
+    // mixed the two populations and made coverage look a quarter of what it is.
+    // AND OVER A REAL AREA, not the thin annulus left when the keep-out is
+    // subtracted from a 61x61 box. `trenchAt` and `trenchFloorAt` are pure
+    // functions of position — they generate nothing — so this can sweep four times
+    // wider for free. At R=30 seed 7 reported ZERO crossings and the gate read as
+    // failed, when what had actually happened is that its crossings were outside
+    // the sampled ring.
+    const TR = 120;
+    let real = 0, rim = 0, eligible = 0, crossings = 0;
+    for (let q = -TR; q <= TR; q++) for (let r = -TR; r <= TR; r++) {
+      if (X.homeShoreDist && X.homeShoreDist(q, r) < 23) continue;   // the learner's shelf
+      eligible++;
       const hit = X.trenchAt(q, r);
       if (!hit || !hit.length) continue;
-      touched++;
+      rim++;
       const axes = new Set(hit.map(h => h.id));
       if (axes.size > 1) crossings++;
+      // IN a trench means the seabed dropped. 300 m below the plain is in one;
+      // 30 m below it is beside one, and counting those was the over-count.
+      const f = X.trenchFloorAt ? X.trenchFloorAt(q, r) : null;
+      if (f != null && f >= (X.ABYSS_FLOOR || 4200) + 300) real++;
     }
     agg.cross.push(crossings);
-    agg.cover.push(water ? touched / water : 0);
+    agg.cover.push(eligible ? real / eligible : 0);
+    agg.rim.push(eligible ? rim / eligible : 0);
   } else {
-    agg.cross.push(null); agg.cover.push(null);
+    agg.cross.push(null); agg.cover.push(null); agg.rim.push(null);
+  }
+
+  // 2b. THE THING SEAN ACTUALLY ASKED FOR: "access and egress from the caves
+  // beneath". The sinkhole count above is the wrong proxy for it — trenches keep
+  // out of the learner's shelf on purpose, so they can never move a number
+  // measured within 30 hexes of the dock. What matters is whether a trench cuts
+  // down INTO the cave bands, because that is the door.
+  if (X.trenchFloorAt) {
+    let intoBand = 0, deepest = 0, meets = 0;
+    for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) {
+      const f = X.trenchFloorAt(q, r);
+      if (f == null) continue;
+      if (f > deepest) deepest = f;
+      for (const b of X.CAVE_BANDS) {
+        if (f >= b.minDepth && b.minDepth >= (X.ABYSS_FLOOR || 4200)) { intoBand++; break; }
+      }
+      // and does the column actually open into worked cave down there?
+      const run = X.cellRun(q, r, 0);
+      if (!run) continue;
+      for (let d = (X.ABYSS_FLOOR || 4200); d <= run.floor; d += X.DEPTH_GRID) {
+        const c = X.cells.get(X.cellKey(q, r, d));
+        if (c && (c.kind === 'passage' || c.kind === 'chamber')) { meets++; break; }
+      }
+    }
+    agg.band.push(intoBand); agg.deepest.push(deepest); agg.meets.push(meets);
+  } else {
+    agg.band.push(null); agg.deepest.push(null); agg.meets.push(null);
   }
 }
 
@@ -216,9 +262,14 @@ if (agg.cross[0] == null) {
   say('5. INTERSECTIONS     NOT BUILT — no trenchAt() in this build. Not zero: absent.');
   say('6. COVERAGE          NOT BUILT — same.');
 } else {
+  say('2b. INTO THE CAVES   hexes cut into a band at 4,200 m or deeper ' + fmt(agg.band));
+  say('                     hexes whose column meets worked cave below the plain ' + fmt(agg.meets));
+  say('                     deepest trench floor ' + fmt(agg.deepest) + ' m');
   say('5. INTERSECTIONS     hexes on two or more axes ' + fmt(agg.cross) +
       '   (gate: > 0)');
-  say('6. COVERAGE          open water touched ' + agg.cover.map(v => (v * 100).toFixed(1) + '%').join(' / ') +
+  say('6. COVERAGE          floor 300 m+ below the plain ' + agg.cover.map(v => (v * 100).toFixed(1) + '%').join(' / ') +
+      '   (gate: 8-20%)');
+  say('                     anywhere inside a rim ' + agg.rim.map(v => (v * 100).toFixed(1) + '%').join(' / ') +
       '   (gate: 8-20%)');
 }
 say('\nmeans: cells ' + Math.round(avg(agg.cells)) + '  hexes ' + Math.round(avg(agg.hexes)) +

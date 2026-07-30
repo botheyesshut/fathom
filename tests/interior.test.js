@@ -63,6 +63,10 @@ try { vm.runInContext(script +
   '\nfunction __save(){ doSave(true); }' +
   '\nfunction __flood(){ return floodAdvance(); }' +
   '\nfunction __seal(){ sealDoor(); }' +
+  // THE DECK UNDERFOOT, which is not always the deck a test asked for by
+  // coordinates — `enterInterior` resolves its own anchor depth through
+  // `poiAtDepth`, so the two can disagree.
+  '\nfunction __chunk(){ return footChunk(); }' +
   '\nfunction __dwell(){ dwellerStep(); }' +
   '\nfunction __claim(){ claimOrStore(); }' +
   '\nfunction __base(){ return state.base; }' +
@@ -337,26 +341,60 @@ check(!(f2.dweller.x === doorX && f2.dweller.y === doorY),
 
 // Undogging it with the Seal control puts everything back in play.
 //
-// A CLEAN DECK FOR THIS ONE, and a stated precondition. The saturation loop
-// above spends 600 flood advances and a tenant step on gameplay dice — which are
-// seeded off the clock on purpose — and 3 runs in 20 came out of it with a dead
-// captain. `sealDoor` returns at its first guard (`!state.alive`) without
-// touching anything, so this check failed while printing the word "reopened",
-// which is the opposite of what had happened. A check that can fail for a reason
-// it does not report is worse than no check at all.
+// ON THE DECK THE PARTY IS ACTUALLY STANDING ON. `doorK` above comes from
+// `__int(q, 7, 660)`, which forces kind 'ruin' at depth 660, while `__enter` goes
+// through `enterInterior`, which resolves the anchor with `poiAtDepth` — so the
+// deck underfoot can be a different depth, and a prize already in
+// `state.poisFound` changes which anchor answers. The suite has spent hundreds of
+// steps of gameplay dice by this point, `poisFound` differs run to run, and so
+// perhaps 15% of runs entered a deck on which `doorK` is not a door at all.
+// `sealDoor` then reported "No bulkhead within reach" and this check failed while
+// printing the word "reopened", which is the opposite of what happened.
+//
+// I got this wrong twice: first I decided the captain had drowned and made the
+// walk cleaner, which produced 14 clean runs and no fix. A test that reads one
+// deck and drives another cannot be repaired by tidying the walk.
 sandbox.__st().foot = null;
 sandbox.__enter(site2.q, 7, 660);
 f2 = sandbox.__foot();
-check(!!f2 && sandbox.__st().alive, 'there is a live crew to work the bulkhead with',
-  f2 ? 'aboard, air ' + Math.round(sandbox.__st().air) : 'no party');
-f2.closed.push(doorK);                  // dog it again on the fresh entry
-f2.x = sides[0].x; f2.y = sides[0].y;
+const liveDeck = sandbox.__chunk();
+check(!!f2 && sandbox.__st().alive && !!liveDeck && liveDeck.doors.length > 0,
+  'there is a live crew and a bulkhead on the deck they are on',
+  f2 ? 'air ' + Math.round(sandbox.__st().air) + ', ' + (liveDeck ? liveDeck.doors.length : 0) + ' doors underfoot' : 'no party');
+// AND STAND SOMEWHERE UNAMBIGUOUS. `sealDoor` scans up, right, down, left and
+// toggles the FIRST door it finds, then returns — so if the tile you are standing
+// on touches two bulkheads, the control opens the other one, correctly, and a check
+// naming this one fails. Two throats two tiles apart with your tile between them is
+// all it takes. I dismissed this hours ago after checking a single deck on eight
+// seeds; it is 1 run in 7.
+let liveDoor = null, standAt = null;
+for (const dk of liveDeck.doors) {
+  const c0 = dk.indexOf(',');
+  const dX = +dk.slice(0, c0), dY = +dk.slice(c0 + 1);
+  for (const [ax, ay] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+    const sx = dX + ax, sy = dY + ay;
+    if (!liveDeck.tiles.has(sx + ',' + sy)) continue;
+    let doorsTouching = 0;
+    for (const [bx, by] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+      const t3 = liveDeck.tiles.get((sx + bx) + ',' + (sy + by));
+      if (t3 && t3.t === 'door') doorsTouching++;
+    }
+    if (doorsTouching === 1) { liveDoor = dk; standAt = { x: sx, y: sy }; break; }
+  }
+  if (liveDoor) break;
+}
+check(!!liveDoor, 'there is a bulkhead you can stand beside without touching another',
+  liveDoor ? 'at ' + liveDoor + ', standing ' + standAt.x + ',' + standAt.y
+           : 'every door on this deck shares a tile with another');
+f2.closed.push(liveDoor);               // dog it again on the fresh entry
+f2.x = standAt.x; f2.y = standAt.y;
 sandbox.__seal();                       // adjacent door is closed -> hauls it open
 f2 = sandbox.__foot();
-check(!f2.closed.includes(doorK), 'the Seal control hauls a dogged bulkhead open again', 'reopened');
+check(!f2.closed.includes(liveDoor), 'the Seal control hauls a dogged bulkhead open again',
+  'reopened ' + liveDoor);
 sandbox.__seal();                       // and shuts it again
 f2 = sandbox.__foot();
-check(f2.closed.includes(doorK), 'and dogs it shut again', 'sealed');
+check(f2.closed.includes(liveDoor), 'and dogs it shut again', 'sealed ' + liveDoor);
 
 // The tenant walks the deck for a long stretch and never leaves the floor.
 sandbox.__st().foot = null;
@@ -1144,11 +1182,28 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
 
   // ...and the two kinds must actually LOOK different, or the split bought
   // nothing. A hull packs itself against its spine; a tower sprawls.
+  //
+  // ON ITS OWN SAMPLE, NOT ON THE SIX DECKS ABOVE. This check used to take a
+  // median over whatever hulls and ruins happened to have a reachable prize under
+  // 4,000 m — three of each — so it was measuring the world's prize placement as
+  // much as the generator's shape. Capping the abyssal plain changed which
+  // coordinates qualify and the margin fell from comfortable to 6 points against a
+  // threshold of 8, while the generator had not moved at all: measured over 900
+  // decks per kind, hull 46.2% against ruin 33.3% both before and after. The
+  // reachability walk above still needs real coordinates and a handful is plenty
+  // for it. This is a fact about the generator, so ask the generator, at volume.
   const med = a => a.length ? a.slice().sort((x,y)=>x-y)[Math.floor(a.length/2)] : 0;
-  const h = med(packHull), ru = med(packRuin);
-  check(packHull.length > 0 && h > ru + 0.08,
+  const packA = [], packB = [];
+  for (let i = 0; i < 300; i++) {
+    const pq = (i * 17) % 211 - 105, pr = (i * 53) % 211 - 105, pd = 300 + (i % 9) * 360;
+    packA.push(packing(sandbox.__int(pq, pr, pd, 'hull')));
+    packB.push(packing(sandbox.__int(pq, pr, pd, 'ruin')));
+  }
+  const h = med(packA), ru = med(packB);
+  check(packA.length >= 300 && h > ru + 0.08,
     'a hull is built along a spine and a ruin is not',
-    'hull packs ' + Math.round(h*100) + '% into three lines vs ruin ' + Math.round(ru*100) + '%');
+    'over ' + packA.length + ' decks each: hull packs ' + Math.round(h*100) +
+    '% into three lines vs ruin ' + Math.round(ru*100) + '%');
 }
 
 //--- REVISITABLE RUINS, AND THE FAUCET THAT MUST NOT COME BACK --------------
