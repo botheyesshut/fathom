@@ -270,9 +270,18 @@ entries left are the two he set aside.
 | *"The porthole caption is only partially displaying... two or three words, like a title of a painting"* | Measured: **12 of 48 overflowed the 24-column frame and 40 of 48 ran past three words.** All 48 retitled. The battery check that guarded this enforced an eight-character floor — a fair proxy while captions were prose, and wrong for titles — so it now asserts the real contract: captioned, inside the frame, four words or fewer. |
 | *"I can't read the two words in the upper right, I can't zoom, and I only seem able to move upward through layers"* | The note was 0.58rem uppercase and letter-spaced; it and the sheet label are now legible. **The layer control wrapped**, so the up arrow — "a shallower sheet" — took you from ALL to the DEEPEST sheet on the first press and behaved correctly ever after, which is exactly how you end up unsure what a button does. Clamped now. **Zoom is not done** — see below. |
 
-**Still open from this list:** zooming the sea chart. It auto-fits to the water you have
-charted, which is why it shrinks as you explore. Pinch-zoom plus pan is the right answer
-and it is a real piece of work on a canvas that currently re-projects on every draw.
+**Zoom is now done too.** The fit stays the default and the reset — it is the whole of
+what you know on one sheet, and it is also exactly why a zoom was needed, because the
+more water you chart the smaller all of it gets. On top of the fit: a multiplier (1× to
+10×), a pan, pinch and drag to set them, a wheel for desktops, and a **Fit** button. Zoom
+anchors on the point under your fingers, and the pan is clamped so the paper cannot be
+flicked off the table. Measured through a recording canvas context: the drawn span scales
+linearly with zoom (113 → 206 → 412 → 823 px at 1×/2×/4×/8×), the pan clamps at ±68 px at
+1× and ±536 px at 4×, and Fit returns to 1× and 0,0. The sheet always **opens** flat and
+whole — a chart that opens half-dragged from ten minutes ago is disorienting.
+
+*(The span probe reads `arc()` centres, which is the boat's fix and a few marks rather
+than every hex — enough to prove the projection, not a census of what is drawn.)*
 
 **And one near-miss worth recording.** Deleting the Surface button orphaned `surface()` —
 the only thing that puts the hold ashore — leaving it defined and called by nothing.
@@ -488,6 +497,16 @@ apart from here.
 - **Traffic density.** Earlier probe: a sail in reach 3.1% of turns among the harbours and 13.2% out in open water, which is backwards and was unexplained. The overnight measurement suggests why — despatch depends on two harbours being within `SHIP_RANGE` of **the boat**, not on the boat being near trade, so open water between clusters can see more traffic than a harbour on the edge of the world. Worth one honest look; the fix, if it is one, is to weight despatch by the harbours' business rather than by the player's position.
 
 ### D. Two corrections worth keeping
+
+**THIS KEEPS HAPPENING AND IT IS THE MOST COMMON MISTAKE IN THIS PROJECT.** Since the
+sweep below was written I have shipped or nearly shipped it **four more times** in a
+single day: `cityHere()`, `hailRival()`, `rivalHostile()`, and `wireChartGestures()` were
+each defined and called by nothing. `surface()` was worse — it *had* a caller and I
+deleted it, which would have made the ledger unreachable.
+
+**So make this a habit, not a sweep:** after writing any new function, `grep -c` its name
+before committing. One occurrence means it is dead. It costs five seconds and it has
+caught four bugs that the battery could not.
 
 **Content can be wired at both ends with nothing in the middle, and the battery
 will not notice.** `deepruin` had a kind, a suffix, three porthole scenes, its own
