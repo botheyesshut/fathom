@@ -10974,6 +10974,12 @@ function caveOnward(f) {
   return null;
 }
 function caveBack(f) {
+  // A DEEP RUIN HANGS OFF THE LAST CHAMBER OF A HALL, and `caveParts` cannot read
+  // that out of the kind — so which chamber it was is recorded when you walk in.
+  // Without this the entry tile fell through to `leaveInterior`, which would have
+  // set you on the boat from four chambers down and skipped the whole walk back:
+  // and the walk back IS the price of a deep expedition.
+  if (f.kind === 'deepruin') return f.drFrom || null;
   const parts = caveParts(f.kind);
   if (!parts) return null;
   if (parts.seg <= 0) return 'beach';              // every mouth opens on the sand
@@ -11305,16 +11311,6 @@ function interiorAt(q, r, d, kind) {
           const stock = CACHE_STOCK.filter(k => ITEMS[k] && ITEMS[k].depth <= d);
           if (stock.length) { t.loot = stock[Math.floor(rnd() * stock.length)]; continue; }
         }
-        // A WRECKED BOAT IS FULL OF BOAT. Sean asked whether claiming and
-        // repairing a wreck could make sense; the honest version is that you do
-        // not get a second home out of a drowned submarine, you get YOUR boat
-        // back. `rollItem` is depth-gated only, so a natural rock cave was
-        // exactly as likely to hold plates of pressure-hull as a submarine —
-        // which is absurd twice over. Half of what a hull gives up is fittings.
-        if (kind === 'hull' && rnd() < 0.5) {
-          const fits = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'fit' && ITEMS[k].depth <= d);
-          if (fits.length) { t.loot = fits[Math.floor(rnd() * fits.length)]; continue; }
-        }
         // A DEAD END PAYS IN BREATH, NOT IN CARGO. Sean: "some with a little
         // loot like air". A pocket at the end of a blind passage holding a
         // crate of salvage makes no sense — nobody carried it there. A flask,
@@ -11323,10 +11319,40 @@ function interiorAt(q, r, d, kind) {
           if (rnd() < 0.34) continue;           // and a third of them hold nothing
           t.loot = ['airflask', 'rations', 'patchkit', 'dressing'][Math.floor(rnd() * 4)];
         }
-        // Sometimes a deck holds a real thing, not just another crate — rarer
-        // and better the deeper you have come to find it.
-        else if (rnd() < 0.16) { t.loot = rollItem(d, rnd) || 'crate'; }
-        else t.loot = rnd() < 0.22 ? 'relic' : 'crate';
+        // DEPTH PAYS. It did not: measured across 4,500 decks, a ruin at 300 m
+        // was worth 6.45 and a ruin at 4,800 m was worth 5.91. The shelf rates
+        // below are exactly the rates they have always been — 0.16 and 0.22 — so
+        // the first hour is not made harder, which would run against "do not buff
+        // the economy until progress is reliable" from the wrong side. And the
+        // pile COUNT is untouched, so a deep deck is not a longer walk with more
+        // air spent; it is the same walk, better paid.
+        else {
+          // ZERO AT THE SHELF, and not merely small there. d/3000 put `rich` at
+          // 0.1 in the top 300 m, which measured as a 9% lift on shelf wrecks —
+          // a buff I had just written a comment promising not to make.
+          const rich = Math.min(1, Math.max(0, (d - 300) / 2700));
+          if (rnd() < 0.16 + 0.14 * rich) t.loot = rollItem(d, rnd) || 'crate';
+          else if (rnd() < 0.22 + 0.12 * rich) {
+            // A DROWNED BOAT DOES NOT CONTAIN TEMPLE RELICS. It contains its own
+            // gear — the honest answer to Sean's "claiming one and repairing it
+            // might make sense": you do not get a second home out of a wreck, you
+            // get YOUR boat back. In the RELIC's slot, so a fitting worth 3.8
+            // replaces a relic worth 4 and the yield does not move. Each prize
+            // type now has an economic identity: ruins give up relics, wrecks
+            // give up boat parts.
+            if (kind === 'hull') {
+              const fits = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'fit' && ITEMS[k].depth <= d);
+              t.loot = fits.length ? fits[Math.floor(rnd() * fits.length)] : 'relic';
+            } else t.loot = 'relic';
+          }
+          // NOBODY EVER CARRIED A CRATE DOWN FOUR CHAMBERS OF ROCK. A ruin on
+          // the seabed has had dredges and salvage crews over it for a century
+          // and the crates are what THEY left behind; a worked chamber at the far
+          // end of a cave system has had nobody at all. So it holds no salvage —
+          // only what was in it when the water came. It is the best-paying place
+          // in the game and it is also the hardest to stand in.
+          else t.loot = kind === 'deepruin' ? 'relic' : 'crate';
+        }
       }
     }
   }
@@ -11337,7 +11363,13 @@ function interiorAt(q, r, d, kind) {
   if (isCave) {
     const parts = caveParts(kind);
     const plan = mouthPlan(q, r, d, parts.letter);
-    const hasWay = !!plan && parts.seg < plan.segs - 1;
+    // AND SOMETIMES THE ROCK STOPS BEING ROCK. A hall is "several rooms and real
+    // volume — what makes a beach worth keeping"; this is what makes it worth
+    // keeping. Only a hall, only its last chamber, and not every time.
+    const opensInto = (!!plan && plan.type === 'hall' && parts.seg === plan.segs - 1
+      && mulberry32(hashStr('dr:' + q + ',' + r + ',' + d + ':' + parts.letter + interiorSalt))() < 0.45)
+      ? 'deepruin' : null;
+    const hasWay = !!plan && (parts.seg < plan.segs - 1 || !!opensInto);
     // THE FAR END OF A PASSAGE. Marked in the substrate; where it actually
     // comes out is worked out when somebody stands on it.
     const isFarEnd = !!plan && plan.type === 'passage' && parts.seg === plan.segs - 1;
@@ -11384,6 +11416,7 @@ function interiorAt(q, r, d, kind) {
       // saying a word about it. A passage onward is also just clearer dry.
       if (t && t.t !== 'entry') {
         t.t = 'way'; t.loot = null; t.wet = null; t.fall = false;
+        if (opensInto) t.to = opensInto;
         way = { x: best.x, y: best.y };
       }
     }
@@ -11740,6 +11773,7 @@ function followWay(named) {
   stashDeck(f);
   const carried = carryOver(f);
   footInto(f.q, f.r, f.d, onward, ch, carried);
+  if (onward === 'deepruin') state.foot.drFrom = f.kind;   // the way back out
   log(onward === 'deepruin'
     ? 'The passage narrows, turns, and the wall under your hand stops being rock. It is dressed stone, and it is laid in courses, and somebody cut it.'
     : 'The way goes on, down and back, and opens into another chamber the lamps cannot find the end of.', 'strange', 'GROTTO');

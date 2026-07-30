@@ -1,4 +1,42 @@
-# FATHOM — START HERE (last updated 2026-07-28)
+# FATHOM — START HERE (last updated 2026-07-29)
+
+## THE OVERNIGHT CLEANUP (2026-07-29, `0aea1b3`..`HEAD`)
+
+Sean: *"take your potions, make your plans, then commence to clean all of this
+up. If I can go to sleep and have it all done tomorrow morning, great."* — with
+every remaining C-section call delegated: *"I submit to your recommendations,
+just make sure they make rational sense to the gamer."*
+
+Battery green at every commit. What follows is the honest ledger.
+
+### Closed, with the measurement that closed it
+
+| what | the number |
+|---|---|
+| **The chandler** — the port buys what you find | 20 of 36 items had no buyer outside an enclave you had to find first. He pays 0.8×, and across all 28 (culture, item-for-sale) pairs there is no purchase anywhere you can resell to him at a profit **or at cost**; he is the best price for 0 of 31 items that have a buyer. A floor under the market, not a faucet. |
+| **Three still lifes learn to move** | `deep` and `open` are what open water looks like — most of an ocean — and neither moved. `ruin` was one of the three "ruin animations" Sean asked for and was a photograph. `hullside` had 4 frames of which 1≡3 and 2≡4. Now across all 48 scenes: no stills, no padded cycles, no grid faults, no glyph off `VP_SAFE`, every glyph coloured. Nine scenes repeat a frame and all nine are ping-pongs (ABCB), which is the idiom. |
+| **Interiors forgot which ocean they were in** | `interiorAt` and `beachMouths` hashed only (q,r,d): **1,400 of 1,400** decks and beaches byte-identical between two worlds. Salted via a saved `isalt` field. Proven three ways — HEAD vs salt-empty: 0 differences (an existing save keeps its buildings); two seeds: 1,388 of 1,400 now differ; same seed twice: 1,400 of 1,400 identical. |
+| **World identity now comes first in the load** | `worldSeed = save.seed` sat 77 lines in, after the caches were emptied. Nothing in those lines asks the world anything *today* — that is luck, not a rule, and the last time I trusted an ordering like this it cost a migration that re-filed 0 of 5 wrecks. |
+| **She gives chase** | Standing off was free. Forced every gate: armed + hostile + on the surface chases, closes to 0, fires, takes 18 off the hull, and does **not** vanish on contact (which is how a ship is normally retired). Unarmed never; submerged never; neutral never; beyond sighting never. A slow naval hull chases and cannot close — 6 hexes and no nearer, which is the destroyer earning her speed. |
+| **The sounder learns to hear a shore** | A beach is a CELL, not a poi, so the instrument this game is *named after* was structurally blind to the one thing the on-foot layer hangs off. It only looked down, too — right for a wreck, wrong for a shore. 148 beach cells, 3,187 standing depths, reported every time, including from underneath. |
+| **A dry room with something in it** | `chamber` was the one mouth of four with nothing to distinguish it. 294 chamber decks: 100% survival stock, **0 crates and 0 relics** — breath is range, crates are income, and the no-buff ruling stands. |
+| **Depth pays** | It did not: 4,500 decks measured a ruin at 6.45 at 300 m and 5.91 at 4,800 m. Flat, on the axis the whole game is built on. Now ≤300 m is byte-identical to before (verified at 4,000 decks per cell: **+0.0%**) and 3,000 m is +25%. Pile *count* untouched, so a deep deck is the same walk, better paid. |
+| **A wreck is full of boat** | And my first attempt at it doubled deep-wreck yield — 7.9 below 900 m against 15.9 above — which I shipped while quoting the no-buff ruling in the same commit message. Found by measuring the thing I had just built. The fix was the right *slot*: a fitting (3.8) sits where a relic (4.0) would have, so yield does not move, and each prize type gets an identity — ruins give up relics, wrecks give up boat parts. |
+| **The room nobody had ever stood in** | `deepruin` had its own kind, three porthole scenes, its own suffix, its own prose, its own flood exemption, and a line about dressed stone laid in courses that the battery checked every run — and **nothing in the game ever named it**. `caveOnward` returns the next segment or null; the only `to` written anywhere was on the beach's mouth tiles. Now 46% of hall mouths open into it, and `caveBack` learned the way out (without which the entry tile would have set you on the boat from four chambers down, skipping the walk back — and the walk back *is* the price). |
+| **Ten refusals that would not say who was refusing** | See section C: the audit's "37% untagged" was true of the runtime stream and wrong as a conclusion. |
+
+### Not done, and why
+
+- **Trenches** (next section). The plan and the baseline are captured; the code
+  is not written. This is the biggest generator change outstanding and it lands
+  in the one place with no performance headroom (42–47 ms against a 60 ms
+  ceiling). Rushing it overnight and leaving it subtly wrong would have been
+  worse than leaving it undone with the gates written first.
+- **Populated caves, deep cities, underwater diplomacy** — new systems, not
+  cleanup. Ships seeing each other; cargo drawing pursuit; charting earning
+  leads. All still open in the backlog below.
+- **Hours 2–10 audit** — needs agents and a long run.
+- **Income** — untouched, per his ruling.
 
 ## TRENCHES — the measurements, decided BEFORE the code (2026-07-28)
 
@@ -49,11 +87,9 @@ built. Ticked items elsewhere in this file are not repeated.
 
 | | |
 |---|---|
-| **Give chase anyway** | "unless they had an enemy faction so upset at them that they were actively hunting them, in which case the other ship might give chase anyhow just in case the player might be their intended quarry." Standing off is currently always free. |
 | **Ships seeing each other** | "These vessels might also see one another and have interactions. If we see them interacting the player can choose to interject one way or another." Nothing. |
-| **Cargo draws pursuit** | "If a user is hauling something a hostile faction wants, that faction might come after it (or send a nearby allied sub after us for it)." Nothing. |
-| **Caches in single chambers** | The `chamber` mouth type is "good maybe for storing just a few things such as air food water and ammunition". It generates, holds loot, and cannot store anything. |
-| **Valleys and trenches** | "we can put some valleys and trenches down there which intersect and give access to and egress from the caves beneath." The biggest generator change still outstanding, and the one he was most interested in. |
+| **Cargo draws pursuit** | "If a user is hauling something a hostile faction wants, that faction might come after it (or send a nearby allied sub after us for it)." Nothing. `shipHunting` is now the hook to hang it on — it already answers "is she after you", and cargo would be a second reason for it to say yes. |
+| **Valleys and trenches** | "we can put some valleys and trenches down there which intersect and give access to and egress from the caves beneath." The biggest generator change still outstanding, and the one he was most interested in. Gates and baseline captured; code not written. |
 | **Populated caves and deep cities** | "the fish people can populate a few ruins and have cities when one goes deep enough." Enclaves are trading posts; no city exists. |
 | **Diplomacy underwater** | "treaties and missions and alliances are all made at the major cities underwater." No missions, no treaties, no alliances, no cities. |
 | **Charting earns leads** | He said yes to it. Hailing became a second door; charting itself still pays nothing but chart. |
@@ -62,34 +98,43 @@ built. Ticked items elsewhere in this file are not repeated.
 
 **Closed since this list was written:** ATTACK in the encounter (`7a7d310`) —
 which also found that ships were made of paper, a Con-Fed destroyer having 13
-hull against a 16-damage torpedo. And the test sinkhole is retired (`ca40c06`),
-which found that the sounder was deaf to `opening`, the one thing a
-downward-looking instrument should hear best.
+hull against a 16-damage torpedo. The test sinkhole is retired (`ca40c06`), which
+found that the sounder was deaf to `opening`, the one thing a downward-looking
+instrument should hear best. **Give chase** and **caches in single chambers**
+closed overnight — see the ledger at the top of this file.
 
 ### B. From the five audits, measured and not fixed
 
+Most of this section closed overnight; what remains is here, and what closed is
+in the ledger at the top with the number that closed it.
+
 | | |
 |---|---|
-| **`deepruin` is a reskin** | 114.1 vs 114.2 tiles, 4.78 vs 4.79 rooms, 2.96 vs 2.96 doors against a floor ruin. Its only distinctions are that it does not flood and cannot be claimed. The hardest-to-reach room in the game pays 3.62 against a floor ruin's 3.74. |
-| **A hull should yield boat parts** | The cheap answer to "claiming and repairing a wreck": weight the hull loot roll toward `kind:'fit'`. The Con-Fed now *buy* fit items; wrecks still do not *drop* them. |
-| **"Ruins in deeper waters" is not in the generator** | Prize type is a uniform hash over 7 types with no depth term. Hull and ruin have identical depth distributions across 1,127 prizes in 6 worlds. |
-| **`ruin` is a still, not an animation** | It carries `art`, not `frames`, so one of the three "ruin animations" does not animate. `hullside` has 2 distinct frames of 4. |
-| **Interiors ignore `worldSeed`** | `hashStr('interior:q,r,d')` takes no seed, so 0 of 169 ruins differ between two worlds. `restart()`'s comment that interiors "belong to the old seed" is false. |
-| **The port buys no items** | The dock banks crates and vaults relics and nothing else. An item is only money at an enclave you must first find. |
-| **A beach has no instrument** | Still true, and now the only prize type in that position — `opening` joined `SOUNDER_PRIZE` when the test sinkhole came out. Not soundable, not a `cavern` lead target, not a POI. 55% of beaches have no lateral water neighbour at their depth, so the only approach is vertical. The audit's proposal: have `soundingBelow()` report a beach cell inside the boat's own `cellRun`. |
-| **UI, all measured** | the porthole's ✕ is 7.4×9 px with `pointer-events: none`, so tapping it falls through and **moves the boat**; `recenter-btn` is 36×36, the only control under 40×40, and does nothing ashore; the ashore vignette stops 57.8 px short top and bottom because `setViewport` is wired to `window.resize` only; the depth readout ashore is 15.68 px, which Sean has already called too small; `#log` is a hard `7.2rem`, so at 360×700 the chart (279 px) is smaller than log + controls (334 px). |
-| **Hours 2–10 never audited** | The one beat nobody has measured. It owns the income question below. |
+| **Hours 2–10 never audited** | The one beat nobody has measured. It owns the income question below. Needs agents and a long run. |
+| **Ruins are not placed deeper with depth** | *Yield* now scales with depth (see the ledger) but the PRIZE TYPE is still a uniform hash over 7 types with no depth term, so a hull and a ruin have identical depth distributions. Fixing placement is a generator change and belongs beside trenches, not in a cleanup pass. |
+| **A beach still has no lead type** | The sounder can hear one now, but a beach is still not a `cavern` lead target and still not a POI. 55% of beaches have no lateral water neighbour at their depth, so the only approach is vertical. |
 
 ### C. Open questions for Sean — decisions, not work
 
-- **The income question.** Bots bank ~0–4 crates in 300–400 turns; a hand costs 5. His ruling stands ("do not buff the economy until progress is reliable") and nothing has been touched. What is wanted is one honest 40-minute session and the answer to: did you bank anything, and did it feel earned?
-- **Engagement rate** is 13% of close passes reaching STALK; the combat audit suggested ~33%. Left at 13% because creature aggression should be felt, not computed.
-- **37% of log output carries no tag** — and it is precisely the atmosphere. Tagged reads as "matters", untagged as "skip", which is backwards for a game whose text is the game.
+- **The income question.** Bots bank ~0–4 crates in 300–400 turns; a hand costs 5. His ruling stands ("do not buff the economy until progress is reliable") and total income has NOT been raised — depth pays more only where it costs more, and the shelf is byte-identical to before. What is wanted is one honest 40-minute session and the answer to: did you bank anything, and did it feel earned?
+- **The deep room is 70% richer than a floor ruin, and I decided that on his behalf.** 13.5 against 7–8. Reachable only through a sinkhole, a beach, the right mouth of three, and 2–4 chambers of walking with the air draining, then all of it again on the way out. My reasoning: the hardest place to reach should be the best place to reach, or the cave layer has no economic purpose. If it reads as too generous in play, the one number to move is the `'relic'` in the `kind === 'deepruin'` branch of `interiorAt`.
+- **Engagement rate: measured, and NOT changed.** The audit wanted ship encounters raised from 13% to 33%. Measured instead: **92%** of open water has two harbours in reach, which is the condition for a hull to be despatched at all, and sitting in busy water gave 555 turn-sightings inside nine hexes over 300 turns. The sea is not empty and Sean's worry ran the other way. Left alone. (Creature STALK aggression is a separate 13% and also left alone — aggression should be felt, not computed.)
+- **"37% of log output carries no tag" — true of the runtime stream, wrong as a conclusion.** The call-site figure is 6% (20 of 325), and **11 of those 20 are `pickFlavor`** — ambient prose, which is the *room* talking and correctly wears no instrument label. Both numbers are true at once because flavour fires every single turn. The ten that were genuinely wrong were refusals, and a refusal with no label reads as the narrator sulking; they are tagged now (ARMS, SONAR, DECOY, HELM, BALLAST, AIR). Ambient prose stays untagged deliberately.
 - **The socialists' final name.** "The Long Line" is in and working; he said he would think on it.
 - **Mariner and Dagon mottos** are mine and marked as proposals in the file.
-- **Traffic density.** Measured: a sail is in reach 3.1% of turns among the harbours and 13.2% out in open water, at most 2–3 at once. Open water showing MORE traffic than the harbours is backwards and unexplained — it may be an artifact of the probe's crude wander, or traffic may genuinely not be concentrating where trade is.
+- **Traffic density.** Earlier probe: a sail in reach 3.1% of turns among the harbours and 13.2% out in open water, which is backwards and was unexplained. The overnight measurement suggests why — despatch depends on two harbours being within `SHIP_RANGE` of **the boat**, not on the boat being near trade, so open water between clusters can see more traffic than a harbour on the edge of the world. Worth one honest look; the fix, if it is one, is to weight despatch by the harbours' business rather than by the player's position.
 
-### D. A correction worth keeping
+### D. Two corrections worth keeping
+
+**Content can be wired at both ends with nothing in the middle, and the battery
+will not notice.** `deepruin` had a kind, a suffix, three porthole scenes, its own
+prose, its own flood exemption, and a check in the item suite that verified all
+three of its faces every single run — and no code path in the game ever named it,
+so no player had ever stood in one. The porthole test asked "does this kind draw
+correctly", which was true, and not "can anybody get here", which was false.
+**Nobody has ever swept the file for the general case.** A worthwhile hour: for
+every `kind`, `poi`, `type` and `act` string the game branches on, ask what
+*writes* it, and whether that writer is reachable.
 
 **"Nothing interrupts" was never Sean's ruling.** It appears twice in the repo:
 in a blurb describing the TIPS panel ("Each fires once, ever. Nothing interrupts
@@ -721,6 +766,25 @@ Sean asked why it existed. **Nobody had decided it.** It arrived with the first 
 ## HARNESS NOISE FLOOR — READ BEFORE CHASING A REGRESSION
 
 `tests/playtest.js` is **non-deterministic**. Same build, back to back: **54% / 58% survival, 29% / 23% hull failure.** So the floor is **±4–6 points at n=120**. A 4-point swing is nothing. Run the same build twice before believing any delta, and use `FATHOM_HTML=<path> node tests/playtest.js` with `git show <sha>:fathom-chart.html` to A/B against any prior commit.
+
+**And the BATTERY had a flake too, found 2026-07-29 — the first one ever.** The
+substrate is a pure function of the seed, but *gameplay dice* are seeded off the
+clock on purpose (`rng = mulberry32((worldSeed ^ Date.now()) >>> 0)`), so any
+suite that spends dice can vary. `tests/interior.test.js` saturated a deck with
+600 flood advances and a tenant step before checking the Seal control, and
+**3 runs in 20** came out of that with a dead captain — at which point `sealDoor`
+returns at its first guard (`!state.alive`), touches nothing, and the check
+failed while printing the word "reopened", i.e. the opposite of what happened.
+
+Two lessons, and the second is the one that matters:
+
+1. Before blaming a code change for a battery failure, **run the suite 15–20
+   times**. One pass and one fail prove nothing about which build is at fault.
+2. **A check that can fail for a reason it does not report is worse than no
+   check.** The fix was not to make the dice deterministic — it was to re-enter
+   the deck clean and state the precondition out loud, so a death is reported as
+   a death. Any suite that spends gameplay dice before an assertion needs the
+   same treatment.
 
 ## THREE MISTAKES WORTH NOT REPEATING (2026-07-26)
 

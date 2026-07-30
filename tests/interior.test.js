@@ -336,6 +336,20 @@ check(!(f2.dweller.x === doorX && f2.dweller.y === doorY),
   'it is at ' + f2.dweller.x + ',' + f2.dweller.y);
 
 // Undogging it with the Seal control puts everything back in play.
+//
+// A CLEAN DECK FOR THIS ONE, and a stated precondition. The saturation loop
+// above spends 600 flood advances and a tenant step on gameplay dice — which are
+// seeded off the clock on purpose — and 3 runs in 20 came out of it with a dead
+// captain. `sealDoor` returns at its first guard (`!state.alive`) without
+// touching anything, so this check failed while printing the word "reopened",
+// which is the opposite of what had happened. A check that can fail for a reason
+// it does not report is worse than no check at all.
+sandbox.__st().foot = null;
+sandbox.__enter(site2.q, 7, 660);
+f2 = sandbox.__foot();
+check(!!f2 && sandbox.__st().alive, 'there is a live crew to work the bulkhead with',
+  f2 ? 'aboard, air ' + Math.round(sandbox.__st().air) : 'no party');
+f2.closed.push(doorK);                  // dog it again on the fresh entry
 f2.x = sides[0].x; f2.y = sides[0].y;
 sandbox.__seal();                       // adjacent door is closed -> hauls it open
 f2 = sandbox.__foot();
