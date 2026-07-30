@@ -2359,7 +2359,10 @@ function drawSeaChart() {
   for (const t of tiles) {
     if (!chartKnown(t) || !t.poi) continue;
     const p = P(t.q, t.r);
-    const mk = t.poi === 'base' ? ['⌂', '#1d6b4f'] : t.poi === 'ruin' ? ['◙', '#8a5a1e']
+    // No 'base' case here on purpose — see the station block below. Nothing
+    // creates a tile of type `base`, so a branch on it is a promise the chart
+    // cannot keep.
+    const mk = t.poi === 'ruin' ? ['◙', '#8a5a1e']
              : t.poi === 'hull' ? ['⊟', '#6a6f52']
              : t.poi === 'salvage' ? ['✕', '#9a3b26'] : t.poi === 'air' ? ['○', '#2c6e7a']
              : t.poi === 'opening' ? ['O', '#7a5a10'] : t.poi === 'signal' ? ['◉', '#5c3a86']
@@ -2368,6 +2371,19 @@ function drawSeaChart() {
     g.fillStyle = mk[1];
     g.font = `${Math.max(7, Math.round(s * 0.85))}px "JetBrains Mono", monospace`;
     g.fillText(mk[0], p.x, p.y);
+  }
+  // YOUR OWN STATION. The comment above says this pass draws "your station, the
+  // peoples, the prizes you know of", and it drew two of those three: the `t.poi
+  // === 'base'` branch up there can never fire, because nothing in the game has
+  // ever made a tile of type `base`. So you could claim a grotto, sail away, and
+  // the chart would not tell you where home was — while the autopilot happily
+  // steered you back to it. Drawn from `state.base`, like the enclaves below, and
+  // drawn whether or not the water over it is charted: you built the place.
+  if (state.base) {
+    const p = P(state.base.q, state.base.r);
+    g.fillStyle = '#3ba883';
+    g.font = `${Math.max(9, Math.round(s * 1.05))}px "JetBrains Mono", monospace`;
+    g.fillText('⌂', p.x, p.y);
   }
   for (const e of (state.enclaves || [])) {
     if (!visited.has(hexKey(e.q, e.r)) && !revealed.has(hexKey(e.q, e.r))) continue;
@@ -6213,7 +6229,7 @@ function silentScout() {
   }
   let best = null, bd = 13;
   for (const [k, t] of world) {
-    if (!t.poi || t.poi === 'deadend' || t.poi === 'surface' || t.poi === 'opening') continue;
+    if (!t.poi || t.poi === 'surface' || t.poi === 'opening') continue;
     if (state.poisFound.includes(k)) continue;
     const d = hexDistance({ q: t.q, r: t.r }, { q: state.q, r: state.r });
     if (d > 0 && d < bd) { bd = d; best = t; }
@@ -6905,9 +6921,13 @@ const TILES = {
   growth:   { name: 'unnatural growth',    char: '✺',  cost: 2,  color: '#180818', poi: 'growth' },
   air:      { name: 'an air pocket',       char: '○',  cost: 1,  color: '#1c2820', poi: 'air' },
   salvage:  { name: 'wreckage',            char: '✕',  cost: 1,  color: '#1a1410', poi: 'salvage' },
-  deadend:  { name: 'a dead end',          char: '•',  cost: 1,  color: '#0a1622', poi: 'deadend' },
+  // `deadend` and `base` used to live here. Both were proven unreachable by
+  // enumerating what the world actually produces across 3,721 hexes and 6,400
+  // decks: no generator names either one. `base` is now drawn from `state.base`
+  // in the sea chart; `deadend` is simply gone. Do NOT restore them as tile
+  // types — `spaceClass()` returns the STRING 'deadend' for a one-exit space,
+  // which is a description of water and has nothing to do with this table.
   surface:  { name: 'the surface',         char: '☼',  cost: 0,  color: '#1a2818', poi: 'surface' },
-  base:     { name: 'your station',        char: '⌂',  cost: 1,  color: '#12241f', poi: 'base' },
 };
 
 function mulberry32(a) {
@@ -9210,13 +9230,12 @@ function render() {
         else if (tile.poi === 'salvage') color = '#f4b860';
         else if (tile.poi === 'surface') color = '#f4b860';
         else if (tile.poi === 'opening') color = '#f4b860'; // warm — the way back up
-        else if (tile.poi === 'deadend') color = '#3a4858';
-        else if (tile.poi === 'base') color = '#6ecfae';  // your own hatch light
+        else if (isBaseDeck(tile.q, tile.r, state.currentDepth)) color = '#6ecfae';  // your own hatch light
         else if (tile.type === 'kelp') color = '#3a6850';
         else if (tile.type === 'current') color = '#4090c8';
         else if (tile.type === 'chasm') color = '#7050a0';
         txt.setAttribute('fill', color);
-        if (tile.poi && tile.poi !== 'deadend') txt.setAttribute('filter', 'url(#softglow)');
+        if (tile.poi) txt.setAttribute('filter', 'url(#softglow)');
         if (tile.poi === 'growth') txt.setAttribute('class', 'growth-glyph'); // it stirs in the water
         txt.textContent = tile.char;
         g.appendChild(txt);
@@ -13408,7 +13427,7 @@ function tickSalvager(c, dPlayer) {
   if (!c.tk && c.phase === 0) {
     let best = null, bestD = 15;
     for (const [k, t] of world) {
-      if (!t.poi || t.poi === 'opening' || t.poi === 'surface' || t.poi === 'deadend') continue;
+      if (!t.poi || t.poi === 'opening' || t.poi === 'surface') continue;
       if (state.poisFound.includes(k)) continue;
       const d = hexDistance({q: t.q, r: t.r}, {q: c.q, r: c.r});
       if (d < bestD) { bestD = d; best = t; }
