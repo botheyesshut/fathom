@@ -1,5 +1,60 @@
 # FATHOM — START HERE (last updated 2026-07-28)
 
+## THE BACKLOG — everything said and not yet done (audited 2026-07-28)
+
+Sean asked for this list explicitly. It is an honest inventory, not a wishlist:
+every item here is something *stated* — by him or by a measurement — and not
+built. Ticked items elsewhere in this file are not repeated.
+
+### A. From Sean's own specs, not built
+
+| | |
+|---|---|
+| **ATTACK in the encounter** | He specified three choices on closing: hail, attack, or be fired on. Only hail and be-fired-on exist. `closeOnShip` has no attack branch, so "incurring a faction penalty and beginning combat" is unbuilt — and ship combat itself does not exist beyond a single incoming salvo. |
+| **Give chase anyway** | "unless they had an enemy faction so upset at them that they were actively hunting them, in which case the other ship might give chase anyhow just in case the player might be their intended quarry." Standing off is currently always free. |
+| **Ships seeing each other** | "These vessels might also see one another and have interactions. If we see them interacting the player can choose to interject one way or another." Nothing. |
+| **Cargo draws pursuit** | "If a user is hauling something a hostile faction wants, that faction might come after it (or send a nearby allied sub after us for it)." Nothing. |
+| **Caches in single chambers** | The `chamber` mouth type is "good maybe for storing just a few things such as air food water and ammunition". It generates, holds loot, and cannot store anything. |
+| **Valleys and trenches** | "we can put some valleys and trenches down there which intersect and give access to and egress from the caves beneath." The biggest generator change still outstanding, and the one he was most interested in. |
+| **Populated caves and deep cities** | "the fish people can populate a few ruins and have cities when one goes deep enough." Enclaves are trading posts; no city exists. |
+| **Diplomacy underwater** | "treaties and missions and alliances are all made at the major cities underwater." No missions, no treaties, no alliances, no cities. |
+| **Charting earns leads** | He said yes to it. Hailing became a second door; charting itself still pays nothing but chart. |
+| **Wartime** | "we could institute a wartime thing later, like in Sid Meier's Pirates!" — deferred by him, recorded here. |
+| **PCs** | "Mariners ... as well as to the PCs once we have them." Multiplayer-adjacent; no work started. |
+
+### B. From the five audits, measured and not fixed
+
+| | |
+|---|---|
+| **`deepruin` is a reskin** | 114.1 vs 114.2 tiles, 4.78 vs 4.79 rooms, 2.96 vs 2.96 doors against a floor ruin. Its only distinctions are that it does not flood and cannot be claimed. The hardest-to-reach room in the game pays 3.62 against a floor ruin's 3.74. |
+| **A hull should yield boat parts** | The cheap answer to "claiming and repairing a wreck": weight the hull loot roll toward `kind:'fit'`. The Con-Fed now *buy* fit items; wrecks still do not *drop* them. |
+| **"Ruins in deeper waters" is not in the generator** | Prize type is a uniform hash over 7 types with no depth term. Hull and ruin have identical depth distributions across 1,127 prizes in 6 worlds. |
+| **`ruin` is a still, not an animation** | It carries `art`, not `frames`, so one of the three "ruin animations" does not animate. `hullside` has 2 distinct frames of 4. |
+| **Interiors ignore `worldSeed`** | `hashStr('interior:q,r,d')` takes no seed, so 0 of 169 ruins differ between two worlds. `restart()`'s comment that interiors "belong to the old seed" is false. |
+| **The port buys no items** | The dock banks crates and vaults relics and nothing else. An item is only money at an enclave you must first find. |
+| **A beach has no instrument** | Not soundable, not a `cavern` lead target, not a POI. 55% of beaches have no lateral water neighbour at their depth, so the only approach is vertical. The audit's proposal: have `soundingBelow()` report a beach cell inside the boat's own `cellRun`. |
+| **UI, all measured** | the porthole's ✕ is 7.4×9 px with `pointer-events: none`, so tapping it falls through and **moves the boat**; `recenter-btn` is 36×36, the only control under 40×40, and does nothing ashore; the ashore vignette stops 57.8 px short top and bottom because `setViewport` is wired to `window.resize` only; the depth readout ashore is 15.68 px, which Sean has already called too small; `#log` is a hard `7.2rem`, so at 360×700 the chart (279 px) is smaller than log + controls (334 px). |
+| **Hours 2–10 never audited** | The one beat nobody has measured. It owns the income question below. |
+
+### C. Open questions for Sean — decisions, not work
+
+- **The income question.** Bots bank ~0–4 crates in 300–400 turns; a hand costs 5. His ruling stands ("do not buff the economy until progress is reliable") and nothing has been touched. What is wanted is one honest 40-minute session and the answer to: did you bank anything, and did it feel earned?
+- **Engagement rate** is 13% of close passes reaching STALK; the combat audit suggested ~33%. Left at 13% because creature aggression should be felt, not computed.
+- **37% of log output carries no tag** — and it is precisely the atmosphere. Tagged reads as "matters", untagged as "skip", which is backwards for a game whose text is the game.
+- **The socialists' final name.** "The Long Line" is in and working; he said he would think on it.
+- **Mariner and Dagon mottos** are mine and marked as proposals in the file.
+- **Traffic density.** Measured: a sail is in reach 3.1% of turns among the harbours and 13.2% out in open water, at most 2–3 at once. Open water showing MORE traffic than the harbours is backwards and unexplained — it may be an artifact of the probe's crude wander, or traffic may genuinely not be concentrating where trade is.
+
+### D. A correction worth keeping
+
+**"Nothing interrupts" was never Sean's ruling.** It appears twice in the repo:
+in a blurb describing the TIPS panel ("Each fires once, ever. Nothing interrupts
+and nothing repeats") and in a comment I wrote citing it as a law of the game.
+It is nowhere in this file and he never said it. I generalised a sentence about
+tooltips into a design principle and attributed it to him. The offered-button
+pattern is still right — a button can be ignored, a modal cannot — but not for
+the reason I gave.
+
 ## THE SURFACE ARC (2026-07-28, in progress) — READ BEFORE TOUCHING GEOGRAPHY
 
 Sean opened a new front: *"why not have stuff at the surface, too? we have this
