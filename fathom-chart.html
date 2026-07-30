@@ -5828,9 +5828,11 @@ let musicGain = 1;
 try { const g = parseFloat(localStorage.getItem('fathom-musicvol')); if (!isNaN(g)) musicGain = g; } catch (e) {}
 
 // THE BUILD STAMP. `document.lastModified` is a local-time string in the host's own
-// format; this normalises it to something short and unambiguous, and says so plainly when
-// the browser will not give a date at all (a `file://` copy reports the moment you opened
-// it, which would be a lie worth not telling).
+// format; this normalises it to something short and unambiguous, and says 'unknown'
+// rather than guess if the browser will not give a date at all. Over http(s) it is the
+// server's Last-Modified, which on GitHub Pages is the deploy. A copy saved to a device
+// reports that file's own timestamp instead — which is exactly the distinction this is
+// here to make visible.
 function buildStamp() {
   try {
     const d = new Date(document.lastModified);
