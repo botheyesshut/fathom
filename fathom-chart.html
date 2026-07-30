@@ -8712,6 +8712,8 @@ function portNear(q, r) {
 // PRE-MORTEM SAID: a ship whose destination is in an ungenerated chunk sails
 // to nowhere. So a route is only ever drawn between two harbours ALREADY on
 // the map, and a ship with no second harbour to make for simply never exists.
+// The six ways out of a hex, in cyclic order, so "the next one round" means something.
+const SHIP_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const SHIP_CAP = 7;          // how many are afloat near you at once
 const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
 
@@ -8891,12 +8893,21 @@ function shipsTick() {
       const from = near[Math.floor(rr() * near.length)];
       const to = near[Math.floor(rr() * near.length)];
       if (from !== to) {
+        // SHE CASTS OFF BEFORE YOU SEE HER. A port tile is a `dock`, and a dock is
+        // LAND — so a hull despatched at `from.q, from.r` was standing on the island
+        // until her first step, and read to a captain offshore as a sail sitting on
+        // dry ground. Put her in the water beside her harbour instead.
+        let sq = from.q, sr = from.r;
+        for (const [dq, dr] of SHIP_DIRS) {
+          const wt = getTile(from.q + dq, from.r + dr);
+          if (wt && !wt.wall) { sq = from.q + dq; sr = from.r + dr; break; }
+        }
         const hull = fleetPick(from.holder, rr);
         const st2 = shipStats(from.holder, hull);
         state.ships.push({
           id: 'sh' + state.moves + ':' + state.ships.length,
           hull: hull, culture: from.holder,
-          q: from.q, r: from.r, toQ: to.q, toR: to.r,
+          q: sq, r: sr, toQ: to.q, toR: to.r,
           fromName: portName(from), toName: portName(to),
           hp: st2.hull, prog: 0, seen: false, followed: false,
         });
@@ -8939,18 +8950,54 @@ function shipsTick() {
       else if (ar >= as) { mr = dr > 0 ? 1 : -1; mq = dq > 0 && aq >= as ? 1 : (dq < 0 && aq >= as ? -1 : 0); }
       else { mq = dq > 0 ? 1 : -1; mr = dr > 0 ? 1 : -1; }
       if (mq === 0 && mr === 0) { sh.arrived = !hunt; break; }
-      const nt = getTile(sh.q + mq, sh.r + mr);
-      if (nt && nt.wall && nt.type !== 'dock') {
-        // A headland in the way. Ships are not clever; they shoulder round it.
-        const alt = [[mq, 0], [0, mr], [mq, -mr], [-mq, mr]];
-        let moved = false;
-        for (const [xq, xr] of alt) {
-          if (!xq && !xr) continue;
-          const t2 = getTile(sh.q + xq, sh.r + xr);
-          if (t2 && (!t2.wall || t2.type === 'dock')) { sh.q += xq; sh.r += xr; moved = true; break; }
+      // A HULL LEFT STANDING ON A HARBOUR. If the spawn could find no water beside a
+      // port — a one-hex inlet, a dock walled in by its own island — she is on land and
+      // has nowhere to be. Retire her; the harbour will put out another.
+      const cur = getTile(sh.q, sh.r);
+      if (cur && cur.wall && cur.type !== 'dock') { sh.arrived = true; break; }
+      // THE DIRECT COURSE FIRST, EVERY STEP — then the coast.
+      //
+      // This took three goes and each of the first two fixed half of it. The original
+      // shoulder-round list included the REVERSE heading, so a hull pressed against a
+      // headland stepped back the way she came and then forward again: measured
+      // -12,22 -> -12,23 -> -12,22 -> -12,23, for ever, and 0 of 7 hulls moved in 60
+      // turns. Jammed against a shore like that she also reads as a sail sitting ON the
+      // island, which is the other half of what Sean found in his first minutes.
+      //
+      // Forward-only detours stopped the reversing and left a two-hex ping-pong.
+      // Committing to a detour for four hexes stopped the ping-pong and walked her
+      // round the island the long way — distance 4, 5, 6, away from her port.
+      //
+      // What works is the standard rule: try the direct hex every single step, and use
+      // the coast only while the direct hex is shut. `skirtSense` remembers which way
+      // round she turned so she does not flip-flop while alongside, and it is dropped
+      // the moment open water lets her resume her course.
+      const openHex = (q2, r2) => { const t2 = getTile(q2, r2); return !!t2 && (!t2.wall || t2.type === 'dock'); };
+      if (openHex(sh.q + mq, sh.r + mr)) {
+        sh.q += mq; sh.r += mr;
+        sh.skirtSense = null;
+      } else {
+        let i0 = -1;
+        for (let k = 0; k < SHIP_DIRS.length; k++) if (SHIP_DIRS[k][0] === mq && SHIP_DIRS[k][1] === mr) { i0 = k; break; }
+        if (i0 < 0) { sh.arrived = !hunt; break; }
+        // Which way round? Whichever side leaves her nearer the port she is making
+        // for. Decided once, then held until the water opens.
+        if (sh.skirtSense !== 1 && sh.skirtSense !== -1) {
+          const L = SHIP_DIRS[(i0 + 5) % 6], R = SHIP_DIRS[(i0 + 1) % 6];
+          const dl = hexDistance({ q: sh.q + L[0], r: sh.r + L[1] }, { q: tq, r: tr });
+          const dr2 = hexDistance({ q: sh.q + R[0], r: sh.r + R[1] }, { q: tq, r: tr });
+          sh.skirtSense = dr2 <= dl ? 1 : -1;
         }
+        let moved = false;
+        for (let k = 1; k <= 5; k++) {
+          const [xq, xr] = SHIP_DIRS[((i0 + sh.skirtSense * k) % 6 + 6) % 6];
+          if (!openHex(sh.q + xq, sh.r + xr)) continue;
+          sh.q += xq; sh.r += xr; moved = true; break;
+        }
+        // TRULY BOXED IN — a cove with one mouth and the mouth behind her. She gives
+        // that voyage up rather than sit in it jittering; the harbours put out another.
         if (!moved) { sh.arrived = !hunt; break; }
-      } else { sh.q += mq; sh.r += mr; }
+      }
     }
     if (sh.arrived) sh.gone = true;
     // AND WHEN SHE CATCHES YOU. Every other gun action in the game is something
