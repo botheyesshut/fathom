@@ -87,23 +87,67 @@ nothing was subtracted.
 | 5. do they intersect | **889 / 1,477 / 889** hexes on two or more axes. Sean's word is honoured and not decoration. |
 | 6. coverage | **15.9% / 18.7% / 16.4%** of eligible water with a floor 300 m+ below the plain — inside the 8–20% band on all three seeds. Tuned by measurement from a first cut at 42–53%. |
 
-### THE OPEN QUESTION A TRENCH LEAVES: is there a reason to go down one?
+### WHAT IS DOWN A TRENCH — and a number I published wrong
 
-Measured, and the answer today is **not yet**. Prizes per hex in eligible water:
-**0.006 in a trench against 0.010 on the plain** — no denser, slightly thinner, and
-the whole sample is 10 prizes so it says little beyond "no depth term exists". Which
-is exactly the backlog item *"ruins are not placed deeper with depth"*: the prize
-TYPE is a uniform hash over 7 types with no depth in it, so opening the deep did not
-put anything in it.
+**Correction to `e81eba5`'s commit message.** It says "0.006 prizes per hex in a
+trench against 0.010 on the plain". The 0.006 came from a 31×31 window far off the
+origin; a second attempt then said 18.4%, by counting prizes across the whole of
+`cellPois` — which chambers write globally, far outside any window — and dividing by
+trench hexes counted inside a 61×61 box. A wide numerator over a narrow denominator.
+Both were wrong, in opposite directions, and they disagreed by 25×.
 
-What a trench does give you today: the shortest road to cave bands b5 (6,480–8,520 m)
-and b6 (9,480–10,800 m), 8–26 hexes per world where the column meets worked cave, and
-`rollItem`'s depth gate — which does widen its pool with depth, so what you find down
-there is better even though there is no more of it.
+Measured properly, with the numerator and denominator covering the **same hexes**:
+**0.012 per hex in a trench against 0.010 on the plain**, over 3,425 hexes of eligible
+water in three worlds. So the substance of what I said holds — a trench is no richer
+than the plain — but the figure was wrong and the second one badly so. *Whenever a
+ratio is reported here, check that both halves cover the same ground.*
 
-**The next piece of generator work is prize placement by depth**, and it is now worth
-much more than it was: before the plain had a floor, "deeper" happened to you as you
-sailed; now it is a place you go on purpose.
+**The real finding in that data was worse than a missing gradient.** The prize type
+was `types[hash % 7]` — a flat seventh each, at every depth in the ocean — so
+`growth` (kelp and colonies, which need light) appeared at 8% **below nine
+kilometres**, and trapped gas at 29% between six and nine. Shelf phenomena in the
+abyss, because nothing had ever said otherwise.
+
+`prizeTypeAt(q, r, d)` now interpolates a weight per type on `t = min(1, d/6000)`.
+Measured at 40,000 draws per band, and confirmed live in a generated world:
+
+| | 0 m | 3,000 m | 9,000 m |
+|---|---|---|---|
+| salvage | 22% | 14% | 5% |
+| growth | 21% | 12% | **2%** |
+| air | 17% | 11% | 5% |
+| hull | 15% | 18% | 21% |
+| ruin | 13% | 20% | **29%** |
+| signal | 3% | 15% | **28%** |
+| chasm | 8% | 10% | 11% |
+
+The shelf keeps ruin at 13% and hull at 15% against the flat 14% each they had, so
+the first hour loses nothing explorable. **Density is untouched** — a trench is still
+no richer, and making it richer is an economy change with no mandate. What changed is
+free and the fiction demanded it: the shelf is salvage and kelp, the abyss is worked
+stone and something transmitting in the dark.
+
+Still open: a trench's *density*. It gives the shortest road to cave bands b5
+(6,480–8,520 m) and b6 (9,480–10,800 m), 8–26 hexes per world where the column meets
+worked cave, and `rollItem`'s depth gate makes what you find better. Whether that is
+reason enough to take a boat down one is a play question, not a measurement.
+
+**And the early game got BETTER, which I twice measured as worse.** The battery
+failed on "a reachable ruin exists to test with", I probed it, found four ruins on
+seed 90210 at 5,340–9,960 m all reading unreachable, and concluded the shelf had lost
+its explorable content. Both that probe and the test searched only to **5,000 m**.
+Searching to the world's real floor reverses it, across seven seeds:
+
+| | ruins in range | reachable | decks reachable at or under 1,500 m |
+|---|---|---|---|
+| before | 30 | 30 | 22 |
+| after | **41** | **39** | **25** |
+
+Ruins went up, not down. What actually happened on seed 90210 is that its ruins
+concentrated deep — the feature working — and its shallow decks are now hulls, which
+generate a deck just the same. `tests/decks.js` is that probe, kept, because a change
+to prize placement can silently break the one thing a beginner needs. A 5,000 m cap
+was safe while type was a flat seventh at every depth. It is not safe now.
 
 ### And it announces itself
 

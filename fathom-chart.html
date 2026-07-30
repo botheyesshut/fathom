@@ -7332,9 +7332,7 @@ function carveChamber(node) {
       let stack = cellPois.get(hk);
       if (!stack) { stack = []; cellPois.set(hk, stack); }
       if (stack.some(pp => pp.d === node.depth)) break;       // already ours
-      const types = PRIZE_TYPES;
-      stack.push({ d: node.depth,
-                   type: types[hashStr(worldSeed + ':ptype:' + hq + ':' + hr + ':' + node.depth) % types.length] });
+      stack.push({ d: node.depth, type: prizeTypeAt(hq, hr, node.depth) });
       stack.sort((a, b) => a.d - b.d);
       setTile(hq, hr, stack[0].type, true);
       // NO `at.poiDepth = ...` HERE. Anything written onto a `world` tile is
@@ -8071,6 +8069,50 @@ function addVolume(q, r, type, kind, ceiling, floor) {
 // second copy — which is how `chasm` went months without the `poi` field that
 // keeps a carve from overwriting it.
 const PRIZE_TYPES = ['ruin', 'signal', 'growth', 'hull', 'chasm', 'air', 'salvage'];
+
+// WHAT LIVES AT WHAT DEPTH. The prize type used to be `types[hash % 7]` — a flat
+// seventh each, at every depth in the ocean. Measured across three worlds: `growth`
+// (kelp, colonies — things that need light) at 8% below NINE KILOMETRES, and
+// trapped gas at 29% between six and nine. Shelf phenomena in the abyss, because
+// nothing had ever said otherwise.
+//
+// Weights per type, shallow to deep, interpolated on t = min(1, d / 6000):
+//
+//              shelf   abyss    why
+//   salvage     2.6     0.5     scattered gear and dredged wrecks: worked water
+//   growth      2.6     0.2     it needs light
+//   air         2.0     0.5     gas pools toward the roof of the world
+//   chasm       1.0     1.2     a hole in the floor is a hole in the floor
+//   hull        1.8     2.2     boats sink at every depth; a few sink far too deep
+//   ruin        1.6     3.0     present on the shelf, and what the deep is MADE of
+//   signal      0.4     3.0     something transmitting, and the dark is where it is
+//
+// Shelf shares come out ruin 13% and hull 15% against the flat 14% each they had,
+// so the first hour keeps every explorable thing it used to have. This is a change
+// of CHARACTER, not of quantity: the same prizes, in kinds that belong.
+const PRIZE_WEIGHTS = {
+  salvage: [2.6, 0.5], growth: [2.6, 0.2], air: [2.0, 0.5], chasm: [1.0, 1.2],
+  hull: [1.8, 2.2], ruin: [1.6, 3.0], signal: [0.4, 3.0],
+};
+function prizeTypeAt(q, r, d) {
+  const t = Math.min(1, Math.max(0, d / 6000));
+  let total = 0;
+  const w = [];
+  for (const k of PRIZE_TYPES) {
+    const pair = PRIZE_WEIGHTS[k];
+    const v = pair ? pair[0] + (pair[1] - pair[0]) * t : 1;
+    total += v;
+    w.push(v);
+  }
+  // Same hash the flat version used, so this is a reweighting and not a reseeding:
+  // one number in [0,1), walked down the weights.
+  let pick = (hashStr(worldSeed + ':ptype:' + q + ':' + r + ':' + d) % 100000) / 100000 * total;
+  for (let i = 0; i < PRIZE_TYPES.length; i++) {
+    pick -= w[i];
+    if (pick < 0) return PRIZE_TYPES[i];
+  }
+  return PRIZE_TYPES[PRIZE_TYPES.length - 1];
+}
 
 const PRIO_TO_KIND = ['water', 'passage', 'chamber', 'sea', 'beach'];
 

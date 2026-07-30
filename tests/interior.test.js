@@ -67,6 +67,9 @@ try { vm.runInContext(script +
   // coordinates — `enterInterior` resolves its own anchor depth through
   // `poiAtDepth`, so the two can disagree.
   '\nfunction __chunk(){ return footChunk(); }' +
+  // THE WHOLE PRIZE COLUMN. `tile.poi` is only the shallowest thing in it, which
+  // stopped being a safe proxy the day prize type began varying with depth.
+  '\nfunction __stack(t){ return poiStack(t); }' +
   '\nfunction __dwell(){ dwellerStep(); }' +
   '\nfunction __claim(){ claimOrStore(); }' +
   '\nfunction __base(){ return state.base; }' +
@@ -1224,13 +1227,26 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
   st.poisFound = []; st.deckTook = {}; st.clearedDecks = [];
   st.air = 99999; st.hull = 100; st.cargo = 0; st.relics = 0; st.crew = [];
 
+  // ANYWHERE IN THE COLUMN, not just on top of it. `t.poi` is the SHALLOWEST prize
+  // in a stack, so a column holding a ruin below a patch of kelp presents as
+  // 'growth' and this search used to walk straight past it. That started mattering
+  // the day prize type began varying with depth. `poiStack` is what the game reads —
+  // the sounder was taught to report the whole column for the same reason.
   let ruin = null, at = null;
   outer:
   for (let q = -22; q <= 22 && !ruin; q++) for (let r = -22; r <= 22; r++) {
     const t = sandbox.__tileAt(q, r);
-    if (!t || t.poi !== 'ruin') continue;
+    if (!t) continue;
+    const holdsRuin = t.poi === 'ruin' ||
+      (sandbox.__stack(t) || []).some(p => p.type === 'ruin');
+    if (!holdsRuin) continue;
     st.q = q; st.r = r;
-    for (let d = 0; d < 5000; d += 60) {
+    // TO THE FLOOR OF THE WORLD, not to 5,000 m. That cap was safe while prize type
+    // was a flat seventh at every depth; now that ruins concentrate deep, a whole
+    // seed's worth of them can sit below it — seed 90210's four are at 5,340 to
+    // 9,960 m, and all four ARE reachable. 11,040 m is the deepest water the flood
+    // fill in tests/trench.js can get to.
+    for (let d = 0; d < 11100; d += 60) {
       if (!sandbox.__openCell(q, r, d)) continue;
       st.currentDepth = d;
       if (sandbox.__prizeDepth(t) != null) { ruin = t; at = d; break outer; }
