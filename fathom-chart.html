@@ -5844,6 +5844,21 @@ function dockHere() {
 // seven hulls afloat at once — a modal every time one came within two hexes
 // would be unbearable. So a sighting puts a button on the row, exactly the way
 // a harbour does, and the button is the only thing that ever happens by itself.
+// THE OTHER BOAT IN REACH, under the surface. She has to be placeable — alongside, lit
+// by a ping, or loud enough to hear — because you cannot hail what you cannot find any
+// more than you can shoot it.
+function rivalInReach() {
+  if (state.foot || !state.alive || state.currentDepth <= 0) return null;
+  for (const c of (state.creatures || [])) {
+    if (c.type !== 'rival' || c.gone || !c.culture) continue;
+    if (!rivalLocalized(c)) continue;
+    if (hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) > 1) continue;
+    if (Math.abs(c.depth - state.currentDepth) > DEPTH_GRID) continue;
+    return c;
+  }
+  return null;
+}
+
 function shipInReach() {
   if (state.foot || !state.alive || state.currentDepth !== 0) return null;
   let best = null, bd = 99;
@@ -5858,9 +5873,13 @@ function syncSailBtn() {
   const b = document.getElementById('btn-sail');
   const a = document.getElementById('btn-attack');
   const sh = shipInReach();
+  // AND ONE DECK DOWN, THE SAME BUTTON. Another captain alongside was unaddressable:
+  // the button hid itself below the surface and the only verb left was the torpedo.
+  const rv = sh ? null : rivalInReach();
   if (b) {
-    b.style.display = sh ? '' : 'none';
+    b.style.display = (sh || rv) ? '' : 'none';
     if (sh) b.textContent = sh.known ? 'Hail' : 'Close';
+    else if (rv) b.textContent = 'Signal';
   }
   // YOU DO NOT FIRE ON A SAIL YOU HAVE NOT IDENTIFIED, and a boat with nothing
   // aboard to shoot has no business being offered the choice.
@@ -5977,6 +5996,16 @@ function attackShip() {
   if (!sh.attacked) {
     sh.attacked = true;
     nudgeStanding(sh.culture, -35, 'you fired on their flag');
+    // UNDER A COMMISSION IT IS SERVICE. The people whose flag you fired on hate you
+    // exactly as much either way — that never gets cheaper — but the people who gave
+    // you the paper are glad, and that is the whole difference between a privateer
+    // and a pirate.
+    const com = state.commission;
+    if (com && com.against === sh.culture && atWar(com.forCulture, com.against)) {
+      com.prizes = (com.prizes || 0) + 1;
+      nudgeStanding(com.forCulture, 20, 'you took a prize under their commission');
+      log(`Under commission, and they will hear of it. That is ${com.prizes} prize${com.prizes === 1 ? '' : 's'} for ${CULTURES[com.forCulture].short}.`, 'good', 'COMMISSION');
+    }
     // AND IF SHE WAS ALREADY FIGHTING SOMEBODY, you have just come in on the other
     // side. This is Sean's "the player can choose to interject one way or another",
     // and it wants no control of its own: firing on one of two hulls IS the choice,
@@ -6160,8 +6189,26 @@ function renderTrade(e) {
       const others = Object.keys(CULTURES).filter(k => k !== e.culture);
       h += '<div class="inv-row"><div class="ig" style="color:#6fae72">\u16dd</div><div class="in"><b>What they will tell you</b><span class="fl">' +
         others.map(k => CULTURES[k].short + ': you are ' + standingBand(k).word +
-          (FLEET_RIVALS[e.culture] === k ? ' \u2014 and they are at war with this city' : '')).join('. ') +
+          (atWar(e.culture, k) ? ' — and this city is at war with them' : '')).join('. ') +
         '.</span></div></div>';
+      // THE WAR NEWS. Nowhere else in the game will tell you this, which is the point:
+      // knowing who is shooting at whom is worth the trip to the bottom.
+      const wars = warsNow();
+      h += '<div class="inv-row"><div class="ig" style="color:#c8624a">⚔</div><div class="in"><b>The war</b><span class="fl">' +
+        (wars.length ? wars.map(wk => { const pr = wk.split('|');
+            return CULTURES[pr[0]].short + ' against ' + CULTURES[pr[1]].short; }).join('; ') + '.'
+          : 'Nobody is shooting at anybody, this season.') +
+        '</span></div></div>';
+      // A COMMISSION, if they are allied to you and at war with somebody.
+      const against = commissionFrom(e.culture);
+      if (state.commission && state.commission.forCulture === e.culture) {
+        h += `<div class="inv-row"><div class="ig" style="color:#e0c070">✒</div><div class="in"><b>You sail under their commission</b>` +
+          `<span class="fl">Against ${CULTURES[state.commission.against].short}. ${state.commission.prizes || 0} prize${(state.commission.prizes || 0) === 1 ? '' : 's'} taken. It is waste paper the day that war ends.</span></div></div>`;
+      } else if (against && !state.commission) {
+        h += `<div class="inv-row"><div class="ig" style="color:#e0c070">✒</div><div class="in"><b>They would give you leave</b>` +
+          `<span class="fl">To take ${CULTURES[against].short} shipping, and to answer for none of it. Their enemy will hate you no less for the paper.</span></div>` +
+          `<button class="act warn" data-commission="1">Accept</button></div>`;
+      }
       // A MISSION.
       const m = state.mission && state.mission.culture === e.culture && state.mission.cityId === e.id
         ? state.mission : null;
@@ -6199,6 +6246,8 @@ function renderTrade(e) {
       if (mb) mb.addEventListener('click', () => takeMission(e));
       const ab = diploEl.querySelector('.act[data-ally]');
       if (ab) ab.addEventListener('click', () => makeAlliance(e));
+      const cb = diploEl.querySelector('.act[data-commission]');
+      if (cb) cb.addEventListener('click', () => takeCommission(e));
     }
   }
 
@@ -8666,10 +8715,86 @@ function portNear(q, r) {
 const SHIP_CAP = 7;          // how many are afloat near you at once
 const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
 
-// WHO IS AT EACH OTHER. Not a standing model — a fact about the setting. The two
-// human powers are rivals; the carrying trade is nobody's enemy and that is what
-// makes it the carrying trade.
+// WHO IS AT EACH OTHER, AND IT CHANGES. This was a constant — the Long Line against
+// the Con-Fed, for ever. Sean asked for "a wartime thing, like in Sid Meier's
+// Pirates!", and the thing that makes that system work is not that there is a war: it
+// is that the combination SHIFTS, and that a shift changes what the sea is like.
+//
+// A pure function of (seed, term), so it costs no state, saves for nothing, survives a
+// reload exactly, and still moves while you play. WAR_TERM is 900 moves — long enough
+// that a war is a season you sail through rather than weather that changes hourly.
+//
+// The carrying trade is never in it. That is their whole character and the reason
+// they hold most of the small islands: somebody has to be able to move freight when
+// the powers are shooting, and everybody needs it to be somebody.
+const WAR_TERM = 900;
+const WAR_PAIRS = [['confluence', 'libertines'], ['confluence', 'dagon'], ['libertines', 'dagon']];
+function warTerm() { return Math.floor((state.moves || 0) / WAR_TERM); }
+function warPairKey(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
+function atWar(a, b) {
+  if (a === b) return false;
+  if (a === 'mariners' || b === 'mariners') return false;   // the carrying trade, never
+  const k = warPairKey(a, b);
+  if (!WAR_PAIRS.some(pr => warPairKey(pr[0], pr[1]) === k)) return false;
+  // The two human powers start the world at war, because that is the setting; the
+  // rest is the roll. 55% keeps the sea dangerous without making peace worthless.
+  const t = warTerm();
+  if (t === 0 && k === warPairKey('confluence', 'libertines')) return true;
+  return (hashStr('war:' + worldSeed + ':' + t + ':' + k) % 100) < 55;
+}
+function warsNow() {
+  return WAR_PAIRS.filter(pr => atWar(pr[0], pr[1])).map(pr => warPairKey(pr[0], pr[1]));
+}
+// Kept as the name of the thing it used to be, because two dozen lines of prose call
+// the Line and the Con-Fed rivals and that is still true whenever they are at war.
 const FLEET_RIVALS = { confluence: 'libertines', libertines: 'confluence' };
+
+// THE WAR TURNS OVER. Announced once per term, because a captain who cannot tell
+// whether there is a war on cannot make a single decision about it.
+function warTick() {
+  const t = warTerm();
+  if (state._warTerm === t) return;
+  const was = state._warTerm;
+  state._warTerm = t;
+  if (was == null) return;                     // first sighting of the term, not news
+  const now = warsNow();
+  if (!now.length) {
+    log('Word off a passing hull: it is over, all of it, for now. Nobody is shooting at anybody.', 'good', 'THE WAR');
+  } else {
+    for (const k of now) {
+      const [a, b] = k.split('|');
+      log(`Word off a passing hull: ${CULTURES[a].short} and ${CULTURES[b].short} are at it.`, 'warn', 'THE WAR');
+    }
+  }
+  if (state.commission && !atWar(state.commission.forCulture, state.commission.against)) {
+    log(`Your commission from ${CULTURES[state.commission.forCulture].short} is waste paper now. That war is finished.`, 'warn', 'THE WAR');
+    state.commission = null;
+  }
+}
+
+// A COMMISSION — a letter of marque, and the piece that makes a war matter to you
+// rather than around you. A people you are ALLIED to, while they are at war, will give
+// you leave to take their enemy's shipping. Holding one turns the same act from piracy
+// into service: the enemy still hates you for it, and your ally now thanks you.
+function commissionFrom(culture) {
+  if (!alliedWith(culture)) return null;
+  for (const pr of WAR_PAIRS) {
+    if (!atWar(pr[0], pr[1])) continue;
+    if (pr[0] === culture) return pr[1];
+    if (pr[1] === culture) return pr[0];
+  }
+  return null;
+}
+function takeCommission(e) {
+  const against = commissionFrom(e.culture);
+  if (!against) return;
+  state.commission = { forCulture: e.culture, against: against, taken: state.moves, prizes: 0 };
+  log(`A commission, in the only hand they have for it. ${CULTURES[e.culture].short} give you leave to take ${CULTURES[against].short} shipping, and will answer for it if anybody asks. Nobody will ask.`,
+      'strange', 'COMMISSION');
+  sfx('bell');
+  renderTrade(e);
+  scheduleSave();
+}
 
 // Two rivals within reach of each other. Returns the pair, nearest first, or null.
 // O(n^2) over at most SHIP_CAP hulls — 21 comparisons at the cap.
@@ -8679,7 +8804,9 @@ function shipDuel() {
     for (let j = i + 1; j < ships.length; j++) {
       const a = ships[i], b = ships[j];
       if (a.gone || b.gone) continue;
-      if (FLEET_RIVALS[a.culture] !== b.culture) continue;
+      // AT WAR, not merely rivals. Before wartime existed these two fought whenever
+      // they met, which made "at war" a thing the world could not be without.
+      if (!atWar(a.culture, b.culture)) continue;
       if (hexDistance(a, b) > 2) continue;
       if (shipStats(a.culture, a.hull).guns <= 0 && shipStats(b.culture, b.hull).guns <= 0) continue;
       return [a, b];
@@ -10981,6 +11108,7 @@ function move(q, r) {
 
   // The water answers: landfall, creatures, then death checks.
   maybeBeach();
+  warTick();
   shipsTick();
   creatureTick();
   checkLeads();
@@ -11154,7 +11282,7 @@ function trackForNow() {
   // stayed on a deck. Read the state directly, the way the viewport does.
   const hunted = (state.creatures || []).some(c => {
     if (c.gone || c.fleeing || c.crippled) return false;
-    const keen = c.type === 'rival' ? (c.hostile && (c.alert || 0) > 45) : (c.interest || 0) > 45;
+    const keen = c.type === 'rival' ? (rivalHostile(c) && (c.alert || 0) > 45) : (c.interest || 0) > 45;
     return keen && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 6;
   });
   if (hunted) return 'hunted';
@@ -13633,9 +13761,34 @@ function wakeNoticeR() { return passiveRange() + 6; }
 // decides how the beast behaves this turn.
 const LURK_WARY = 12, LURK_STALK = 38, LURK_HUNT = 68;
 
+// WHOSE BOAT IS THAT? A `rival` has existed since before the peoples did, and it was
+// an anonymous thing — "another boat", no flag, no name, and shooting at it was the
+// whole of the relationship you could have. Sean's Mariners are "the neutral name
+// given to all NPC boats and subs that do not belong to a faction, as well as to the
+// PCs once we have them", so most of what is down here is Mariner: somebody working,
+// same as you. The rest fly a flag, and a flag means standing applies.
+const BOAT_NAMES = ['Kittiwake', 'Perseverance', 'Long Sorrow', 'Merle', 'Adamant',
+                    'Cormorant', 'Thole Pin', 'Wednesday', 'Grace Abounding', 'Sable',
+                    'Nine Fathom', 'Patience Reid', 'Gannet', 'Undertow', 'Sixpence'];
+function boatIdentity(q, r, depth) {
+  const rr = mulberry32(hashStr('boat:' + worldSeed + ':' + q + ':' + r + ':' + depth));
+  // 62% Mariner, matching the surface: somebody has to be carrying, and the powers
+  // cannot spare hulls for it. The rest are a flag, and a flag has consequences.
+  const roll = rr();
+  const culture = roll < 0.62 ? 'mariners'
+    : roll < 0.79 ? 'confluence'
+    : roll < 0.94 ? 'libertines' : 'dagon';
+  return { culture: culture, name: BOAT_NAMES[Math.floor(rr() * BOAT_NAMES.length)] };
+}
+
 function spawnCreature(type, q, r, depth) {
   const c = { id: type + ':' + q + ',' + r + ',' + depth, type, q, r, depth,
               awake: false, tq: 0, tr: 0, calm: 0, phase: 0 };
+  if (type === 'rival') {
+    const who = boatIdentity(q, r, depth);
+    c.culture = who.culture;
+    c.boat = who.name;
+  }
   if (type === 'lurker') {
     // Each hunter is its own animal, seeded from where it was born:
     //   cunning   — seeks true egress when it flees; less foolable
@@ -13735,7 +13888,7 @@ function noiseMade(q, r, loudness) {
   // (a ping, a shot, blown ballast, a hull striking rock) hands a rival captain
   // your bearing and firms up their fix. Silence is the only thing it can't hunt.
   for (const c of state.creatures) {
-    if (c.type !== 'rival' || !c.hostile || c.gone || c.crippled) continue;
+    if (c.type !== 'rival' || !rivalHostile(c) || c.gone || c.crippled) continue;
     if (Math.abs(c.depth - state.currentDepth) > 3 * DEPTH_GRID) continue;
     const d = hexDistance({ q: c.q, r: c.r }, { q, r });
     if (d > reach + 2) continue;
@@ -13889,7 +14042,9 @@ function tickRival(c, dPlayer) {
   c.alert = Math.max(0, (c.alert || 0) - (psilent ? 7 : 3));   // it loses your thread when you go quiet
   if (c.reload > 0) c.reload--;
 
-  if (!c.hostile) { c.silent = false; return tickSalvager(c, dPlayer); }
+  // A BOAT WITH NO QUARREL WITH YOU IS WORKING, not stalking. `c.hostile` was a coin
+  // flip at spawn that knew nothing about whose boat she was.
+  if (!rivalHostile(c)) { c.silent = false; return tickSalvager(c, dPlayer); }
   // Up close, your own machinery leaks — even at silent running a boat this near
   // gets a sniff. It is how a hunt starts without a shot being fired.
   if (!psilent && dPlayer <= 3) {
@@ -13945,7 +14100,27 @@ function hitRival(c, power) {
   c.alert = 100; c.revealTurns = 3; c.hostile = true;
   if (c.hull <= 0) {
     c.gone = true;
-    log('The torpedo finds the other boat square. A shudder through the water, a long groan of failing plate, and then nothing. It is gone, and everything aboard with it.', 'strange', 'FIRE');
+    log(c.boat
+      ? `The torpedo finds her square. A shudder through the water, a long groan of failing plate, and then nothing. That was the ${c.boat}, and everybody aboard her.`
+      : 'The torpedo finds the other boat square. A shudder through the water, a long groan of failing plate, and then nothing. It is gone, and everything aboard with it.',
+      'strange', 'FIRE');
+    // SHE BELONGED TO SOMEBODY. Before this, sinking another boat cost nothing at all
+    // — the one act in the game with a crew on the other end of it and no consequence.
+    if (c.culture) {
+      const com = state.commission;
+      if (com && com.against === c.culture && atWar(com.forCulture, com.against)) {
+        com.prizes = (com.prizes || 0) + 1;
+        nudgeStanding(c.culture, -30, 'you sank one of their boats');
+        nudgeStanding(com.forCulture, 20, 'you took a boat under their commission');
+        log(`A prize, and a legal one. ${CULTURES[com.forCulture].short} will hear whose boat it was.`, 'good', 'COMMISSION');
+      } else {
+        nudgeStanding(c.culture, -40, 'you sank one of their boats with her crew aboard');
+        if (c.culture === 'mariners') {
+          log('She was carrying for somebody, and now she is not. The carrying trade is a small world and it has a long memory.', 'warn', 'STANDING');
+        }
+      }
+      for (const m of state.crew) { crewVitals(m); frayNerve(m, 8); }
+    }
     sfx('impact');
   } else if (c.hull <= 8 && !c.crippled) {
     c.crippled = true;
@@ -13955,6 +14130,44 @@ function hitRival(c, power) {
     log('The fish strikes home — plate buckles, and the boat reels. It has your bearing now, and it will answer.', 'warn', 'FIRE');
     sfx('strike');
   }
+}
+
+// WILL SHE COME AT YOU? The same three questions the surface asks, one deck down: is
+// she armed with an opinion about you, are you carrying something of theirs, and have
+// they signed anything. A Mariner boat minding her own business is the commonest thing
+// in this ocean and should stay that way.
+function rivalHostile(c) {
+  if (!c || c.gone || !c.culture) return !!(c && c.hostile);
+  if (c.hostile) return true;                       // you shot first; that settles it
+  if (alliedWith(c.culture)) return false;
+  return standingHostile(c.culture);
+}
+
+// AND YOU CAN TALK TO HER. On the surface a hull can be hailed for what it knows; down
+// here there was no way to address another captain at all — the only verb was the
+// torpedo. Once per boat, like a hull, and it costs the same courtesy.
+function hailRival(c) {
+  if (!c || c.gone || !c.culture) return;
+  if (!state.hailed) state.hailed = [];
+  if (state.hailed.indexOf(c.id) >= 0) {
+    log('You have had everything off that one already. Their lamp goes out.', '', 'HAIL');
+    return;
+  }
+  state.hailed.push(c.id);
+  if (rivalHostile(c)) {
+    log(`You put a light on her and she answers with her bow. ${CULTURES[c.culture].short} are not talking to you.`, 'warn', 'HAIL');
+    c.alert = 100; c.revealTurns = 3;
+    render();
+    return;
+  }
+  nudgeStanding(c.culture, 2, 'a civil word between boats');
+  log(`Lamp to lamp, at four hundred metres, in a language of flashes older than either boat. She is the ${c.boat}, out of somewhere she does not say, and she is ${CULTURES[c.culture].short}.`,
+      'strange', 'HAIL');
+  // The same second door the surface hail opens. A captain who has been down here a
+  // while knows where things are.
+  if (typeof shipNews === 'function') shipNews({ id: c.id, culture: c.culture, hull: 'courier' });
+  sfx('bell');
+  render(); scheduleSave();
 }
 
 // A boat is only a target you can actually place: alongside, lit by a ping or a
@@ -14894,6 +15107,7 @@ function changeDepth(deltaMeters) {
   logZContext(tile, cur);
 
   maybeBeach();
+  warTick();
   shipsTick();
   creatureTick();
   checkDeath();
@@ -16764,6 +16978,8 @@ function restart() {
   state.leads = [];
   state.survey = 0;      // a new ocean has been charted by nobody
   state.mission = null;  // ...and owes nobody anything
+  state.commission = null;   // ...and sails under nobody's paper
+  state._warTerm = null;     // ...and has not heard the news yet
   state.allies = [];     // ...and has never met them
   state.enclaves = [];
   state.corpses = [];
@@ -17000,6 +17216,8 @@ function doSave(force) {
       deckTook: state.deckTook,      // what each deck has already given up
       survey: state.survey || 0,     // how far toward the next thing the sheets show
       mission: state.mission || null, // an arrangement outstanding with a city
+      commission: state.commission || null,  // ...and a letter of marque, if any
+      warTerm: state._warTerm == null ? null : state._warTerm,
       allies: state.allies || [],     // ...and the ones already in writing
       deckHurt: state.deckHurt,      // ...what its tenant is still bleeding from
       deckDead: state.deckDead,      // ...and who is lying on it
@@ -17178,6 +17396,8 @@ function resumeGame(save) {
   state.deckTook = obj(save.deckTook);
   state.survey = +save.survey || 0;
   state.mission = save.mission || null;
+  state.commission = save.commission || null;
+  state._warTerm = save.warTerm == null ? null : +save.warTerm;
   state.allies = arr(save.allies);
   state.deckHurt = obj(save.deckHurt);
   state.deckDead = obj(save.deckDead);
@@ -17463,7 +17683,12 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 })();
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('btn-dock').addEventListener('click', dockHere);
-document.getElementById('btn-sail').addEventListener('click', closeOnShip);
+// One control, two seas: a sail on the surface, a lamp under it.
+document.getElementById('btn-sail').addEventListener('click', () => {
+  if (shipInReach()) return closeOnShip();
+  const rv = rivalInReach();
+  if (rv) hailRival(rv);
+});
 document.getElementById('btn-attack').addEventListener('click', attackShip);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();

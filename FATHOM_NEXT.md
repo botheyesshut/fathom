@@ -226,8 +226,56 @@ entries left are the two he set aside.
 | **Charting earns leads** | `SURVEY_PER_LEAD = 400` new (hex, depth) pairs — measured, not guessed, at ~3.5 a move. Pays in **knowledge only**: `word` or `cavern`, never `cache` or `quarry`, because those are cargo and the no-buff ruling stands. Water you have already been over pays nothing (measured: 200 further sweeps of known water moved the counter by 0). One catch found in testing — `makeLead` degrades an unhonourable `cavern` to a `cache`, so the fallback is chosen at the call site and is `word`. |
 | **Populated caves and deep cities** | See THE DEEP IS INHABITED below. |
 | **Diplomacy underwater** | Same. |
-| **Wartime** | *"we could institute a wartime thing later, like in Sid Meier's Pirates!"* — **he deferred this himself.** `FLEET_RIVALS` is now the hook it would hang from. |
-| **PCs** | *"Mariners ... as well as to the PCs once we have them."* Multiplayer-adjacent; **his deferral, not mine.** |
+| **Wartime** | BUILT — see below. He deferred it; then: *"I don't want deferrals."* |
+| **PCs** | BUILT as far as it honestly goes — see below, including what it is **not**. |
+
+## WARTIME, AND ANOTHER BOAT IS SOMEBODY (2026-07-29)
+
+### The war
+
+The Pirates! system is not "there is a war". It is that the powers are at war or at
+peace in **shifting combinations**, and that the combination changes what the sea is
+like. `FLEET_RIVALS` was a constant — the Long Line against the Con-Fed, for ever.
+
+`atWar(a, b)` is a **pure function of (seed, term)**, so it costs no state, needs no
+saving, survives a reload exactly, and still moves while you play. `WAR_TERM` is 900
+moves: a war is a season you sail through, not weather that changes hourly. Measured
+over eight seasons on one seed — two wars, then three, then one, then **a full
+peace**, then two again. The two human powers are at war in the opening season because
+that is the setting. **The carrying trade is never in it** — 0 wars across 40 seasons —
+which is their whole character and the reason they hold most of the small islands.
+
+| | |
+|---|---|
+| **A duel needs a war** | `shipDuel` required only that two hulls be rivals, so they fought in peacetime too, which made "at war" a thing the world could not be without. Measured: two rivals two hexes apart fight at war, and do not at peace. |
+| **A commission** | The piece that makes a war matter *to you* rather than around you. A people you are **allied** to, while at war, gives you leave to take their enemy's shipping. Measured: fire on the enemy under commission and their standing falls **−35 exactly as before** — the paper never makes them like it — while your ally's **rises +20**. That difference is the whole of privateer versus pirate. |
+| **The paper expires** | Measured: a commission taken in season 0 was waste paper by season 3, when that war ended, and it says so. |
+| **The war news** | Only a city will tell you who is shooting at whom. Nowhere else in the game carries it, which is another reason to make the trip. |
+
+### Another boat is somebody — and what this is NOT
+
+**It is not networked multiplayer, and this file will not grow that overnight.** What
+*"PCs once we have them"* needs first is that the game stop assuming exactly one boat
+with a captain in it — and it did assume that.
+
+A `rival` has existed down here since before the peoples did, and it was an anonymous
+thing: "another boat", no flag, no name, and **shooting at it was the entire
+relationship available**. Sean's Mariners are *"the neutral name given to all NPC boats
+and subs that do not belong to a faction, as well as to the PCs once we have them"*.
+
+| | |
+|---|---|
+| **A flag and a name** | Measured over 4,000 boats: 62% Mariner (matching the surface — somebody has to be carrying while the powers shoot), then Liners 17%, Con-Fed 14%, Deep Ones 6%. Fifteen boat names, and identity is a pure function of place. |
+| **Standing governs her** | `c.hostile` was a coin flip at spawn that knew nothing about whose boat she was. Now: neutral people → she is working, not stalking; her people hunt you → she comes; **a treaty → she does not**, the same promise the surface makes; you shot first → she comes regardless, always. |
+| **You can signal her** | The only verb another captain had was the torpedo. The sail button already means "close, then hail" on the surface; one deck down it hid itself. Same control, now reading "Signal". Costs a courtesy, pays +2 and the same news door a hull opens, once per boat. |
+| **Sinking her is done to a people** | It cost **nothing at all** before tonight — the one act in the game with a crew on the other end and no consequence. −40 now, −30 and a prize under commission, and she is named as she goes: *"That was the Thole Pin, and everybody aboard her."* |
+
+**Where PCs go from here** (not built, and not pretending to be): the entity model.
+`state.entities[0]` was built as the step toward this and its own comment says so —
+*"so every existing call site keeps working while new systems (enemy subs, remote
+captains someday) address entities uniformly."* A rival is still a `creature`, not an
+entity. Merging those two lists is the next real piece of multiplayer-readiness, and it
+is a refactor of the same weight as the CELL/voxel one, not an evening's work.
 
 ## THE DEEP IS INHABITED (2026-07-29)
 
