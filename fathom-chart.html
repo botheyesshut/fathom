@@ -1290,6 +1290,7 @@
     <button class="btn primary" id="btn-surface" title="Take her up to the air. Do it within sight of the dock and the hold goes ashore, onto the ledger, where it finally counts">Surface</button>
     <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
     <button class="btn primary" id="btn-sail" title="Close on the sail you have sighted to read her colours, then hail her for news. Holding your course lets her go - unless somebody out here is already hunting you" style="display:none">Close</button>
+    <button class="btn" id="btn-attack" title="Open fire on her. Her people will not forget it, and a submarine in a surface gun action is in the wrong place - but a merchant's hold has to come from somewhere" style="display:none">Attack</button>
     <button class="btn" id="btn-options" title="Sound, the porthole, and starting over">Options</button>
   </div>
 </div>
@@ -5509,10 +5510,18 @@ function shipInReach() {
 
 function syncSailBtn() {
   const b = document.getElementById('btn-sail');
-  if (!b) return;
+  const a = document.getElementById('btn-attack');
   const sh = shipInReach();
-  b.style.display = sh ? '' : 'none';
-  if (sh) b.textContent = sh.known ? 'Hail' : 'Close';
+  if (b) {
+    b.style.display = sh ? '' : 'none';
+    if (sh) b.textContent = sh.known ? 'Hail' : 'Close';
+  }
+  // YOU DO NOT FIRE ON A SAIL YOU HAVE NOT IDENTIFIED, and a boat with nothing
+  // aboard to shoot has no business being offered the choice.
+  if (a) {
+    const armed = (state.torpedoes || 0) > 0 || !!(state.armament && WEAPONS[state.armament]);
+    a.style.display = (sh && sh.known && armed) ? '' : 'none';
+  }
 }
 
 // CLOSE ON HER. Her colours become readable, and whoever hates you acts on it.
@@ -5581,6 +5590,84 @@ function hailShip(sh) {
   log(`You come up on her beam and the loud-hailer squalls. ${cu.short} answer — grudgingly, and then at length, because a boat that has been at sea is a boat that wants to talk.`, '', 'HAIL');
   nudgeStanding(sh.culture, 2, 'you hailed rather than shot');
   shipNews(sh);
+  updateHUD(); render(); scheduleSave();
+}
+
+// ATTACK. Sean specified three outcomes on closing and only two existed: "The
+// player could also decide to simply attack that ship, incurring a faction
+// penalty and beginning combat."
+//
+// A submarine on the surface, in a gun action, against a ship built for gun
+// actions, is in the wrong place. That is the honest shape of this fight and the
+// prose says so: you may do it, and a destroyer will make you regret it. The
+// smart way to take a merchant is not implemented as a special case — it falls
+// out of the fact that her guns cannot reach you if you are not up here.
+function attackShip() {
+  const sh = shipInReach();
+  if (!sh || !sh.known) return;
+  const cu = CULTURES[sh.culture], H = HULLS[sh.hull];
+  const st2 = shipStats(sh.culture, sh.hull);
+
+  // WHAT HAVE YOU GOT? A boat with nothing to shoot cannot open an action, and
+  // saying so is better than a button that fails.
+  const hasTorp = (state.torpedoes || 0) > 0;
+  const arm = state.armament && WEAPONS[state.armament];
+  if (!hasTorp && !arm) {
+    log('You have nothing aboard to open with. A boat without a weapon does not start a gun action with a surface ship.', 'warn', 'ARMS');
+    render();
+    return;
+  }
+  // A torpedo is the right tool and it is spent; the harpoon is what you have
+  // left when it is gone.
+  const useTorp = hasTorp;
+  const W = useTorp ? WEAPONS.torpedo : arm;
+  if (useTorp) state.torpedoes--;
+
+  // THE PRICE, AND IT IS PAID WHETHER YOU HIT OR NOT — but ONCE per hull, not
+  // once per shell. The crime is opening fire on their flag; the rounds after
+  // that are the same crime continuing. Charging the full penalty every round
+  // took a three-round action to -105 and clamped it at hunted, which punished
+  // finishing what you started harder than starting it.
+  if (!sh.attacked) {
+    sh.attacked = true;
+    nudgeStanding(sh.culture, -35, 'you fired on their flag');
+  } else {
+    nudgeStanding(sh.culture, -3, 'you are still firing');
+  }
+
+  const dmg = Math.max(1, Math.round(W.power * (0.75 + rand() * 0.5)));
+  sh.hp = (sh.hp == null ? st2.hull : sh.hp) - dmg;
+  log(useTorp
+    ? `A torpedo away, and the run is short. It takes her ${bearing(sh.q, sh.r, state.q, state.r) ? 'square' : 'square'} amidships — ${dmg} into her.`
+    : `You come alongside and put the harpoon gun into her plating. ${dmg} into her.`,
+    'warn', 'ACTION');
+  noiseMade(state.q, state.r, W.loud);   // a gun action is the loudest thing you can do
+
+  if (sh.hp <= 0) {
+    // SUNK. A merchant's hold comes to you, which is the whole reason anybody
+    // ever robs one.
+    sh.gone = true;
+    log(`${H.name.charAt(0).toUpperCase() + H.name.slice(1)} of ${cu.short} goes down by the head, and the sea takes about four minutes over it.`, 'danger', 'ACTION');
+    if (st2.cargo > 0) {
+      state.cargo += st2.cargo;
+      log(`${st2.cargo} crate${st2.cargo === 1 ? '' : 's'} off her before she goes. It is salvage now, and it was somebody's freight an hour ago.`, '', 'SALVAGE');
+    }
+    // A crew watches you do this.
+    for (const m of state.crew) { crewVitals(m); frayNerve(m, 5); }
+    state.ships = state.ships.filter(x => !x.gone);
+    updateHUD(); render(); scheduleSave();
+    return;
+  }
+
+  // SHE IS STILL AFLOAT, AND NOW SHE KNOWS. This is where a destroyer earns her
+  // racks and a Mariner freighter simply runs.
+  if (st2.guns > 0) {
+    log(`She is still afloat and her people are at the guns.`, 'warn', 'ACTION');
+    shipOpensFire(sh);
+  } else {
+    sh.fleeing = true;
+    log('Unarmed, and making off as fast as she has it in her. Every hull for a hundred miles will hear what you did.', 'warn', 'ACTION');
+  }
   updateHUD(); render(); scheduleSave();
 }
 
@@ -7837,13 +7924,13 @@ function portName(port) {
 //   cargo  what is aboard if you take it
 //   ear    how far off it notices you
 const HULLS = {
-  courier:   { name: 'a courier',   glyph: '‡', speed: 1.6, guns: 0, depthCharge: 0, cargo: 0, ear: 7,
+  courier:   { name: 'a courier',   glyph: '‡', speed: 1.6, guns: 0, depthCharge: 0, cargo: 0, ear: 7, tough: 14,
                flavor: 'Low, narrow and all engine. Nothing aboard but somebody\'s word, going somewhere it matters.' },
-  merchant:  { name: 'a merchant',  glyph: '◘', speed: 0.55, guns: 1, depthCharge: 0, cargo: 6, ear: 4,
+  merchant:  { name: 'a merchant',  glyph: '◘', speed: 0.55, guns: 1, depthCharge: 0, cargo: 6, ear: 4, tough: 42,
                flavor: 'Deep in the water and in no hurry about it. Whatever she is carrying, she is carrying a lot of it.' },
-  naval:     { name: 'a warship',   glyph: '◙', speed: 0.9, guns: 5, depthCharge: 0, cargo: 0, ear: 8,
+  naval:     { name: 'a warship',   glyph: '◙', speed: 0.9, guns: 5, depthCharge: 0, cargo: 0, ear: 8, tough: 72,
                flavor: 'Guns fore and aft and a lookout who is paid to be bored. She is not hunting you. She is hunting somebody.' },
-  destroyer: { name: 'a destroyer', glyph: '◈', speed: 1.15, guns: 3, depthCharge: 4, cargo: 0, ear: 10,
+  destroyer: { name: 'a destroyer', glyph: '◈', speed: 1.15, guns: 3, depthCharge: 4, cargo: 0, ear: 10, tough: 56,
                flavor: 'She runs a listening pattern and she has racks along her stern. She is out here for boats exactly like yours.' },
 };
 
@@ -7880,7 +7967,11 @@ function shipStats(culture, hull) {
     guns: Math.round(H.guns * F.guns),
     depthCharge: Math.round(H.depthCharge * F.guns),
     cargo: Math.round(H.cargo * F.cargo),
-    hull: Math.round((8 + H.guns * 3 + H.cargo) * F.hull),
+    // A HULL IS BUILT, NOT DERIVED. `tough` is the ship; the faction multiplier
+    // is how well they build. A torpedo is 16, so a Con-Fed destroyer at 42
+    // takes three and a Long Line one at 78 takes five — which is exactly the
+    // difference between "thin-skinned" and "patient hands with a hull".
+    hull: Math.round(H.tough * F.hull),
     ear: H.ear,
   };
 }
@@ -8182,7 +8273,7 @@ function syncFootControls(inside) {
   // aboard" from inside a ruin, while the controls you need are clipped.
   const dec = document.getElementById('btn-launch');
   if (dec) dec.textContent = `Decoy (${state.decoys || 0})`;
-  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto', 'btn-dock', 'btn-sail']) {
+  for (const id of ['btn-ping', 'btn-fire', 'btn-launch', 'btn-surface', 'btn-auto', 'btn-dock', 'btn-sail', 'btn-attack']) {
     const el = document.getElementById(id);
     if (el) el.style.display = inside ? 'none' : '';
   }
@@ -16217,6 +16308,7 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 document.getElementById('btn-surface').addEventListener('click', surface);
 document.getElementById('btn-dock').addEventListener('click', dockHere);
 document.getElementById('btn-sail').addEventListener('click', closeOnShip);
+document.getElementById('btn-attack').addEventListener('click', attackShip);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', anotherBoat);
