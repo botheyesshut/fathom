@@ -953,8 +953,18 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
       dup.length ? dup.join(', ') : Object.keys(counts).length + ' scenes, all unique');
   }
 
-  const noCap = names.filter(k => !S[k].cap || S[k].cap.length < 8);
-  check(noCap.length === 0, 'every scene says what it is', noCap.join(', ') || 'all captioned');
+  // A CAPTION IS A TITLE, NOT A SENTENCE. This used to demand eight characters, which
+  // was a fair proxy for "says what it is" while captions were prose — and rejects a
+  // perfectly good title. Measured before the change: 12 of 48 overflowed the 24-column
+  // frame and 40 of 48 ran past three words, which is why Sean only ever saw part of one.
+  const noCap = names.filter(k => !S[k].cap || !S[k].cap.trim());
+  check(noCap.length === 0, 'every scene is captioned', noCap.join(', ') || 'all captioned');
+  const tooWide = names.filter(k => (S[k].cap || '').length > 24);
+  check(tooWide.length === 0, 'and no caption is wider than the frame',
+    tooWide.length ? tooWide.map(k => k + ' (' + S[k].cap.length + ')').join(', ') : 'all inside 24 columns');
+  const tooMany = names.filter(k => (S[k].cap || '').trim().split(/\s+/).length > 4);
+  check(tooMany.length === 0, 'and none of them is a sentence',
+    tooMany.length ? tooMany.map(k => '"' + S[k].cap + '"').join(', ') : 'all four words or fewer');
 
   // ...IN ONE LINE. These were written as prose by someone who knew nobody
   // would read them, so they grew into clauses with commas. The moment they

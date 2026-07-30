@@ -259,6 +259,28 @@ entries left are the two he set aside.
 | **Wartime** | BUILT — see below. He deferred it; then: *"I don't want deferrals."* |
 | **PCs** | BUILT as far as it honestly goes — see below, including what it is **not**. |
 
+## SIX MORE OFF THE PHONE (2026-07-30)
+
+| what he said | what was done |
+|---|---|
+| *"the SURFACE button does nothing the up arrow doesn't do... If we're at the surface whether at depth zero or in an underwater grotto with air, the air should automatically go to full"* | Both true. Air came back **eight units at a time and only at depth zero**, so a captain sat tapping a button to breathe. It now fills to **full** wherever there is air — open sky or a cavern beach under a mile of rock — and the button is gone. |
+| *"tap a visible hex and have the boat automatically begin moving there one hex every .5 secs and halt if something new is detected"* | Built. `courseTo` is a BFS at the current depth through **water you have actually charted** — it will not feel its way through rock and will not sail country you have never seen. It does not dive for you: changing depth is a decision with an air cost. The halt rule is `autoHazard()`, the same one the retrace autopilot already used. Verified: a 15-hex course found, sailed and arrived; and it halts the step after something comes alongside. |
+| *"The info window should only have one message at a time... if we tap it we should get the whole log"* | The tap already opened the transcript. Now only the last entry is displayed; the rest stay in the DOM and in the transcript. The box takes the height of the one line it holds. |
+| *"The porthole isn't showing the right thing at the right time consistently"* | The contact hold ran **six moves and checked nothing but the clock**, so a creature heard once kept the window for six moves whether or not it was still near you and whether or not you had since sailed into a harbour. Now two moves, and **only while the thing is still within earshot**. |
+| *"The porthole caption is only partially displaying... two or three words, like a title of a painting"* | Measured: **12 of 48 overflowed the 24-column frame and 40 of 48 ran past three words.** All 48 retitled. The battery check that guarded this enforced an eight-character floor — a fair proxy while captions were prose, and wrong for titles — so it now asserts the real contract: captioned, inside the frame, four words or fewer. |
+| *"I can't read the two words in the upper right, I can't zoom, and I only seem able to move upward through layers"* | The note was 0.58rem uppercase and letter-spaced; it and the sheet label are now legible. **The layer control wrapped**, so the up arrow — "a shallower sheet" — took you from ALL to the DEEPEST sheet on the first press and behaved correctly ever after, which is exactly how you end up unsure what a button does. Clamped now. **Zoom is not done** — see below. |
+
+**Still open from this list:** zooming the sea chart. It auto-fits to the water you have
+charted, which is why it shrinks as you explore. Pinch-zoom plus pan is the right answer
+and it is a real piece of work on a canvas that currently re-projects on every draw.
+
+**And one near-miss worth recording.** Deleting the Surface button orphaned `surface()` —
+the only thing that puts the hold ashore — leaving it defined and called by nothing.
+`tests/banking.js` would have passed anyway, because it called `surface()` directly.
+Banking is now reached by *breaking surface*, which is where it always belonged, and the
+check drives `changeDepth(-60)` instead so it tests **reachability** rather than the
+function in isolation.
+
 ## THE BOAT TALKS TOO MUCH (2026-07-30)
 
 Sean, on the phone: *"we should only be getting a single description of our situation per

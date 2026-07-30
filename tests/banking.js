@@ -21,7 +21,7 @@ vm.runInContext(script+`
 ;var __L=[]; log=function(t,c,e){__L.push({t:String(t),c:c||'',e:e||''})};
 gameStarted = true;
 var __X={ seedTo(v){worldSeed=v;interiorSalt=':'+v;resetWorldCaches();interiorCache.clear();spawnedChunks.clear();state.enclaves=[];state.creatures=[]},
-  get logs(){return __L}, world,cells,cellKey,tileAt,getTile,hexDistance,hexKey,state,surface,volumeContaining,ports,homeIsle };
+  get logs(){return __L}, world,cells,cellKey,tileAt,getTile,hexDistance,hexKey,state,surface,changeDepth,volumeContaining,ports,homeIsle };
 `,sb,{timeout:120000});
 const X=sb.__X;
 console.log('WHERE IS THE DOCK, AND CAN CARGO BE BANKED?');
@@ -45,10 +45,13 @@ for (const seed of [90210, 4242, 7, 12345, 777]) {
     if (t && !t.wall && X.volumeContaining(t,0)) { spot={q:dock.q+dq,r:dock.r+dr}; break }
   }
   if (!spot) { console.log(String(seed).padEnd(10)+'dock at '+dock.q+','+dock.r+' — no water beside it'); continue }
-  X.state.q=spot.q; X.state.r=spot.r; X.state.currentDepth=0; X.state.alive=true;
+  // RISE INTO IT, do not call surface() by hand. The point of this check is that the
+  // ledger is REACHABLE, and calling the function directly cannot tell you that — it
+  // passed happily on a build where nothing called `surface()` at all.
+  X.state.q=spot.q; X.state.r=spot.r; X.state.currentDepth=120; X.state.alive=true;
   X.state.foot=null; X.state.cargo=7; X.state.cargoBanked=0; X.state.relics=0;
-  X.state.crew=[]; X.state.stores=100; X.logs.length=0;
-  X.surface();
+  X.state.crew=[]; X.state.stores=100; X.state.air=350; X.logs.length=0;
+  for (let i=0;i<4 && X.state.currentDepth>0;i++) X.changeDepth(-60);
   const banked = X.state.cargoBanked;
   console.log(String(seed).padEnd(10)+String(dock.q+','+dock.r).padEnd(16)+String(distTo11).padEnd(16)
     + (banked>0 ? 'YES — '+banked+' crates' : 'NO  — cargo still ' + X.state.cargo + ' aboard'));
