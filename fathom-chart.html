@@ -8295,6 +8295,27 @@ function portNear(q, r) {
 const SHIP_CAP = 7;          // how many are afloat near you at once
 const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
 
+// IS SHE AFTER YOU? Standing off from somebody who is hunting you was a free
+// action: the steering below aimed every hull at her destination and nothing
+// else, so a ship that had every reason to run you down sailed placidly past.
+//
+// The three gates are all load-bearing. She must be able to SEE you — a boat
+// under the surface is a rumour, and a rumour cannot be chased. She must have
+// GUNS — the carrying trade chases nobody, which is the whole character of the
+// Mariners. And you must be genuinely unwelcome, not merely watched: `unwanted`
+// or `hunted`, the bottom two bands, which you reach by doing something.
+function shipHunting(sh) {
+  if (!sh || sh.gone || sh.fleeing) return false;
+  if (state.currentDepth > 0) return false;
+  if (!standingHostile(sh.culture)) return false;
+  if (shipStats(sh.culture, sh.hull).guns <= 0) return false;
+  // A CHASE THAT GIVES UP BECAUSE YOU ARE FAST IS NOT A CHASE. Nine hexes to
+  // START one — that is sighting range — but once she has put her head round she
+  // holds on out to the edge of the world you can perceive. Losing her means
+  // going under or getting clear altogether, not simply having the better speed.
+  return hexDistance(sh, { q: state.q, r: state.r }) <= (sh.chasing ? SHIP_RANGE : 9);
+}
+
 function shipsTick() {
   if (!state.alive) return;
   if (!state.ships) state.ships = [];
@@ -8340,19 +8361,33 @@ function shipsTick() {
   // most spent, and a ship on the open sea has nothing to path around.
   for (const sh of state.ships) {
     const st2 = shipStats(sh.culture, sh.hull);
+    // AND SOME OF THEM ARE NOT GOING TO A PORT. A hunting hull steers at you
+    // instead, and must never "arrive" — reaching her target is how a ship is
+    // retired from the world, and a destroyer that vanished the moment she came
+    // alongside would be the funniest bug in the game.
+    const hunt = shipHunting(sh);
+    if (hunt && !sh.chasing) {
+      sh.chasing = true;
+      log(`She has put her head round and she is coming for you. ${CULTURES[sh.culture].short} know your boat.`, 'danger', 'SAIL');
+      sfx('contact');
+    } else if (!hunt && sh.chasing) {
+      sh.chasing = false;
+      if (state.currentDepth > 0) log('Her screws go on over the top of you and then away. Whatever she was looking for, it was on the surface.', '', 'SONAR');
+    }
+    const tq = hunt ? state.q : sh.toQ, tr = hunt ? state.r : sh.toR;
     sh.prog += st2.speed;
     while (sh.prog >= 1) {
       sh.prog -= 1;
-      const d = hexDistance(sh, { q: sh.toQ, r: sh.toR });
-      if (d <= 0) { sh.arrived = true; break; }
+      const d = hexDistance(sh, { q: tq, r: tr });
+      if (d <= 0) { sh.arrived = !hunt; break; }
       // one hex toward the destination, by the cube-coordinate difference
-      const dq = sh.toQ - sh.q, dr = sh.toR - sh.r, ds = -dq - dr;
+      const dq = tq - sh.q, dr = tr - sh.r, ds = -dq - dr;
       const aq = Math.abs(dq), ar = Math.abs(dr), as = Math.abs(ds);
       let mq = 0, mr = 0;
       if (aq >= ar && aq >= as) { mq = dq > 0 ? 1 : -1; mr = dr > 0 && ar >= as ? 1 : (dr < 0 && ar >= as ? -1 : 0); }
       else if (ar >= as) { mr = dr > 0 ? 1 : -1; mq = dq > 0 && aq >= as ? 1 : (dq < 0 && aq >= as ? -1 : 0); }
       else { mq = dq > 0 ? 1 : -1; mr = dr > 0 ? 1 : -1; }
-      if (mq === 0 && mr === 0) { sh.arrived = true; break; }
+      if (mq === 0 && mr === 0) { sh.arrived = !hunt; break; }
       const nt = getTile(sh.q + mq, sh.r + mr);
       if (nt && nt.wall && nt.type !== 'dock') {
         // A headland in the way. Ships are not clever; they shoulder round it.
@@ -8363,10 +8398,21 @@ function shipsTick() {
           const t2 = getTile(sh.q + xq, sh.r + xr);
           if (t2 && (!t2.wall || t2.type === 'dock')) { sh.q += xq; sh.r += xr; moved = true; break; }
         }
-        if (!moved) { sh.arrived = true; break; }
+        if (!moved) { sh.arrived = !hunt; break; }
       } else { sh.q += mq; sh.r += mr; }
     }
     if (sh.arrived) sh.gone = true;
+    // AND WHEN SHE CATCHES YOU. Every other gun action in the game is something
+    // the player opens; a hull that ran you down and then did nothing would be a
+    // threat with the safety on. Three turns between rounds — enough to dive, or
+    // to turn and fight, which are the two answers.
+    if (hunt && !sh.gone && hexDistance(sh, { q: state.q, r: state.r }) <= 1
+        && state.moves - (sh.firedAt == null ? -99 : sh.firedAt) >= 3) {
+      sh.firedAt = state.moves;
+      sh.known = true;   // you can hardly fail to read her colours now
+      log('She is alongside and she does not hail.', 'danger', 'SAIL');
+      shipOpensFire(sh);
+    }
   }
   state.ships = state.ships.filter(sh => !sh.gone);
 
@@ -10812,6 +10858,13 @@ function tenantTough(kind, seedStr) {
 //   hall     several rooms and real volume — what makes a beach worth keeping
 //   chamber  one dry room, somewhere to leave air, food, water, ammunition
 //   dead     a pocket; some hold a little, some hold a sentence, some nothing
+// WHAT SOMEBODY LEFT IN A DRY ROOM. Air, food, water, ammunition, and the
+// things you patch a body or a boat with — every one of them already in ITEMS,
+// so this needed no new machinery, only somewhere for it to be. Depth-filtered
+// on the way out: a shallow depot holds flasks and rations, a deep one holds
+// bottled oxygen and a torpedo, because that is who could get down there.
+const CACHE_STOCK = ['airflask', 'rations', 'freshwater', 'patchkit', 'dressing',
+                     'flare', 'weldkit', 'still', 'oxygen', 'antivenom', 'torpedo'];
 const MOUTH_LETTERS = ['', 'B', 'C'];       // '' is mouth A, so old saves still read
 const CAVE_SEGS = { passage: 4, hall: 2, chamber: 1, dead: 1 };
 
@@ -10840,6 +10893,15 @@ function caveSeg(kind) { const p = caveParts(kind); return p ? p.seg : -1; }
 // grotto from a wreck or a building: no flood, no bulkheads, its own prose.
 function inGrotto(kind) { return kind === 'beach' || caveSeg(kind) >= 0; }
 function caveKind(letter, seg) { return 'cave' + letter + (seg ? seg : ''); }
+// WHICH OF THE THREE HOLES IS THIS ONE. The whole grotto sits at one set of
+// coordinates, so the deck can simply ask the beach it hangs off. Returns null
+// for the sand itself and for anything that is not a cave.
+function mouthTypeAt(q, r, d, kind) {
+  const cp = caveParts(kind);
+  if (!cp) return null;
+  for (const m of beachMouths(q, r, d)) if (m.letter === cp.letter) return m.type;
+  return null;
+}
 
 // WHERE A PASSAGE COMES OUT. Computed lazily, at the moment the captain
 // reaches the far end, because a pure function cannot scan a world that has
@@ -10932,6 +10994,7 @@ function interiorAt(q, r, d, kind) {
   if (hit) return hit;
 
   const rnd = mulberry32(hashStr('interior:' + key + interiorSalt));
+  const mouthType = mouthTypeAt(q, r, d, kind);
   const tiles = new Map();
   let caveSize = null;
   // The outer ring stays solid — a deck needs a hull. The entry is punched
@@ -11230,11 +11293,18 @@ function interiorAt(q, r, d, kind) {
   for (const t of tiles.values()) if (t.t === 'floor' && !t.wet && rnd() < 0.07) t.t = 'rubble';
   for (let i = 1; i < rooms.length; i++) {
     const rm = rooms[i];
-    const n = rnd() < 0.55 ? 1 : rnd() < 0.5 ? 2 : 0;
+    const n = mouthType === 'chamber' ? 2 + Math.floor(rnd() * 2)
+            : rnd() < 0.55 ? 1 : rnd() < 0.5 ? 2 : 0;
     for (let j = 0; j < n; j++) {
       const x = rm.x + Math.floor(rnd() * rm.w), y = rm.y + Math.floor(rnd() * rm.h);
       const t = tiles.get(x + ',' + y);
       if (t && t.t !== 'entry' && !t.loot) {
+        // SOMEBODY'S DEPOT. Not richer than a cave — differently stocked, and
+        // stocked with the things that decide whether you get home.
+        if (mouthType === 'chamber') {
+          const stock = CACHE_STOCK.filter(k => ITEMS[k] && ITEMS[k].depth <= d);
+          if (stock.length) { t.loot = stock[Math.floor(rnd() * stock.length)]; continue; }
+        }
         // A WRECKED BOAT IS FULL OF BOAT. Sean asked whether claiming and
         // repairing a wreck could make sense; the honest version is that you do
         // not get a second home out of a drowned submarine, you get YOUR boat
@@ -13833,7 +13903,15 @@ function soundingBelow() {
     if (e.depth > run.floor) continue;                          // stone between
     if (camp === null || e.depth < camp) camp = e.depth;
   }
+  // AIR UNDER STONE, AND IT MAY WELL BE ABOVE YOU.
+  let shore = null;
+  for (let dd = run.ceiling; dd <= run.floor; dd += DEPTH_GRID) {
+    const c = cells.get(cellKey(t.q, t.r, dd));
+    if (c && c.kind === 'beach') { shore = dd; break; }
+  }
+
   return { floor: run.floor, under: under, odd: odd, camp: camp,
+           shore: shore, shoreOff: shore == null ? null : shore - state.currentDepth,
            campUnder: camp == null ? null : Math.max(0, camp - state.currentDepth),
            oddUnder: oddAt == null ? under : Math.max(0, oddAt - state.currentDepth) };
 }
@@ -15330,6 +15408,23 @@ function handleTile(tile) {
     sfx('contact');
   } else if (snd && snd.under <= 0 && state.currentDepth < 300) {
     tip('shelf');
+  }
+  // A SHORE IN THIS WATER. Told once per hex per session and not written to the
+  // save, because a reading is not a discovery — walking up the sand is, and
+  // `maybeBeach` files that under poisFound the moment you do.
+  if (snd && snd.shore != null) {
+    if (!state._shoreTold) state._shoreTold = {};
+    const sk = hexKey(state.q, state.r);
+    if (!state._shoreTold[sk] && !state.poisFound.includes('beach:' + sk)) {
+      state._shoreTold[sk] = 1;
+      const off = snd.shoreOff;
+      log(off === 0
+          ? 'The sounder has nothing to say about the water and a great deal to say about the roof: it is not there. Open air, straight up, and the return comes back off sand.'
+          : off < 0 ? `${-off} m over your head the return dies away to nothing — no roof, no rock. There is air up there, and something to stand on under it.`
+                    : `${off} m below, the water ends in something soft and level. Sand, and dry air over it.`,
+          'strange', 'SOUNDER');
+      sfx('contact');
+    }
   }
   if (snd && snd.camp != null && snd.campUnder > 0) {
     log(`The sounder finds worked stone ${snd.campUnder} m under the keel — cut surfaces, and something regular about them. Somebody lives down there.`, 'strange', 'SOUNDER');
