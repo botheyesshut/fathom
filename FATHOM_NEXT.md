@@ -547,6 +547,7 @@ apart from here.
 - **The deep room is 70% richer than a floor ruin, and I decided that on his behalf.** 13.5 against 7–8. Reachable only through a sinkhole, a beach, the right mouth of three, and 2–4 chambers of walking with the air draining, then all of it again on the way out. My reasoning: the hardest place to reach should be the best place to reach, or the cave layer has no economic purpose. If it reads as too generous in play, the one number to move is the `'relic'` in the `kind === 'deepruin'` branch of `interiorAt`.
 - **Engagement rate: measured, and NOT changed.** The audit wanted ship encounters raised from 13% to 33%. Measured instead: **92%** of open water has two harbours in reach, which is the condition for a hull to be despatched at all, and sitting in busy water gave 555 turn-sightings inside nine hexes over 300 turns. The sea is not empty and Sean's worry ran the other way. Left alone. (Creature STALK aggression is a separate 13% and also left alone — aggression should be felt, not computed.)
 - **"37% of log output carries no tag" — true of the runtime stream, wrong as a conclusion.** The call-site figure is 6% (20 of 325), and **11 of those 20 are `pickFlavor`** — ambient prose, which is the *room* talking and correctly wears no instrument label. Both numbers are true at once because flavour fires every single turn. The ten that were genuinely wrong were refusals, and a refusal with no label reads as the narrator sulking; they are tagged now (ARMS, SONAR, DECOY, HELM, BALLAST, AIR). Ambient prose stays untagged deliberately.
+- **Standing does not move a price, and I did not make it.** Found by the reachability sweep (2026-07-30): `standingFriendly()` existed and nothing called it. Tracing why turned up the real asymmetry — standing's *hostile* half gates real behaviour (hulls hunt you, the first mate warns you off a heading), and its *friendly* half gates nothing but flavour text and the alliance check, which asks for `trusted` outright and skips `welcome` entirely. So being **welcome** among a people currently buys you a kinder sentence and not one crate. The obvious fix is a price effect — a people that trusts you pays a little over the odds — and that is an economy change, which his ruling puts in his hands and not mine. Two things to weigh if he wants it: (a) a friendly *bonus* alone is a buff in practice, because a player always trades where they are liked; (b) a symmetric **spread** — friendly pays more, hostile pays less, `known`/`nobody` unchanged — is closer to neutral and makes hostility cost crates for the first time. The whole change is one multiplier inside `sellPriceTo`. It is not in the build.
 - **The socialists' final name.** "The Long Line" is in and working; he said he would think on it.
 - **Mariner and Dagon mottos** are mine and marked as proposals in the file.
 - **Traffic density.** Earlier probe: a sail in reach 3.1% of turns among the harbours and 13.2% out in open water, which is backwards and was unexplained. The overnight measurement suggests why — despatch depends on two harbours being within `SHIP_RANGE` of **the boat**, not on the boat being near trade, so open water between clusters can see more traffic than a harbour on the edge of the world. Worth one honest look; the fix, if it is one, is to weight despatch by the harbours' business rather than by the player's position.
@@ -562,6 +563,35 @@ deleted it, which would have made the ledger unreachable.
 **So make this a habit, not a sweep:** after writing any new function, `grep -c` its name
 before committing. One occurrence means it is dead. It costs five seconds and it has
 caught four bugs that the battery could not.
+
+**AND IT IS MECHANISED NOW — `node tests/reachable.js` (2026-07-30).** Habit is what I
+kept failing at, so the check no longer depends on my remembering. It walks all 456
+top-level functions and reports three lists: **DEAD** (named nowhere else — the bug),
+**ONLY-IN-TESTS** (the battery can reach it, the game cannot), and **wiring-only** (reached
+through `addEventListener`, which is how a control is *supposed* to be reached — listed for
+the eye, not as a fault). It also cross-checks every `getElementById('x')` in the script
+against the ids actually in the markup, because **the suites are structurally blind to a
+typo'd id**: they boot inside a Proxy DOM that answers every id with a truthy stub, so a
+binding to an element that does not exist passes all ten suites and throws on boot in
+front of Sean. Currently: 0 dead, 0 test-only, 93/93 ids present.
+
+Its first run found six dead functions and one thing worse. `itemWorth()` had been
+superseded by `buyMult`/`sellPriceTo` and the game had stopped calling it — but the item
+suite went on checking it every single run, so a green line reading *"a Dagon relic is
+worth more than its face"* had been proving nothing about any price a player could be
+offered. That check now asks `sellPriceTo`, and asks more of it: prized above face (Dagon
+pays 22 for an idol), worth less to a people who do not care (mariners pay 5), worth
+nothing to the people who stock it themselves (ambergris, 0).
+
+**And one it found that was not a bug at all.** `ableParty()` — the living crew minus the
+incapacitated — was dead, and there was exactly one combat site still counting a senseless
+hand's weapon. I wired it in. Then I read the paragraph above that function, which says in
+so many words that this is *deliberate*: "the deep costs you bodies and your screen, never
+your ability to keep swinging. Combat that spirals unwinnable is not fair, and fairness is
+the whole brief." My fix would have built the exact spiral the design refuses. Reverted, and
+the reasoning is now a comment at the call site. **A dead function is not evidence that
+something is missing** — sometimes it is the residue of a decision, and the decision is
+written down a few lines above it.
 
 **Content can be wired at both ends with nothing in the middle, and the battery
 will not notice.** `deepruin` had a kind, a suffix, three porthole scenes, its own

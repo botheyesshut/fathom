@@ -48,7 +48,7 @@ try { vm.runInContext(script +
   '\nfunction __stress(t,i){ stressHold(t,i); }' +
   '\nfunction __haunt(){ hauntTick(); }' +
   '\nfunction __jettison(k){ jettisonItem(k); }' +
-  '\nfunction __worth(k){ return itemWorth(k); }' +
+  '\nfunction __worth(c,k){ return sellPriceTo(c,k); }' +
   '\nfunction __lampR(){ return effLampR(); }' +
   '\nfunction __cultures(){ return CULTURES; }' +
   '\nfunction __hold(){ holdTick(); }' +
@@ -291,7 +291,18 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // SIGNIFICANT: the WORTH hook works, and Cultures is left EMPTY for Sean.
   const cults = sandbox.__cultures();
   check(!!cults.dagon && !!cults.confluence && !!cults.libertines, 'the three peoples now hold the registry', Object.keys(cults).join(', '));
-  check(sandbox.__worth('idol') > 6, 'a Dagon relic is worth more than its face — its people prize it', 'worth=' + sandbox.__worth('idol'));
+  // THIS CHECK USED TO ASK THE WRONG FUNCTION. It read `itemWorth`, which the
+  // game had stopped calling — face value times the item's own culture's
+  // multiplier, with nobody on the other side of the counter. So it passed every
+  // run while proving nothing about any price a player can actually be offered.
+  // It now asks `sellPriceTo`, which is what the trade window pays out of, and it
+  // asks the fuller question: prized ABOVE face, worth LESS to a people who do
+  // not care, and worth NOTHING to the people who stock it themselves.
+  const idolDagon = sandbox.__worth('dagon', 'idol');
+  const idolMariners = sandbox.__worth('mariners', 'idol');
+  check(idolDagon > 6, 'a Dagon relic is worth more than its face — its people prize it', 'dagon pays ' + idolDagon);
+  check(idolDagon > idolMariners, 'and the mariners, who want no part of it, pay less', 'dagon ' + idolDagon + ' vs mariners ' + idolMariners);
+  check(sandbox.__worth('dagon', 'ambergris') === 0, 'nobody buys back their own stock — Dagon sells ambergris and will not take it', 'dagon pays ' + sandbox.__worth('dagon', 'ambergris') + ' for ambergris');
 }
 
 //--- 8. The big roster, and the new properties it introduced -------------------

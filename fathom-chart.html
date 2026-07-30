@@ -1974,10 +1974,13 @@ function standingHostile(culture) {
   const k = standingBand(culture).key;
   return k === 'unwanted' || k === 'hunted';
 }
-function standingFriendly(culture) {
-  const k = standingBand(culture).key;
-  return k === 'trusted' || k === 'welcome';
-}
+// There is deliberately no `standingFriendly` here. Its absence is the finding:
+// standing's HOSTILE half gates real behaviour — hulls hunt you, the mate warns
+// you off a heading — and its friendly half gates nothing but flavour and the
+// alliance check, which asks for `trusted` outright. Being WELCOME somewhere
+// currently buys you a kinder sentence and nothing else. The obvious fix is a
+// price effect, and a price effect is an economy change, so it is Sean's call
+// and not mine. See FATHOM_NEXT.md, "Standing does not move a price".
 
 // Move it, and SAY SO. A change the log does not report is a change the player
 // cannot learn from, and this whole system exists to be learned from.
@@ -2039,7 +2042,11 @@ function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 function hasProp(key, p) { const it = ITEMS[key]; return !!(it && it.props && it.props.indexOf(p) >= 0); }
 function heldWith(p) { return Object.keys(state.items || {}).filter(k => itemCount(k) > 0 && hasProp(k, p)); }
 function countHeldWith(p) { return heldWith(p).reduce((s, k) => s + itemCount(k), 0); }
-function itemWorth(key) { const it = ITEMS[key]; if (!it) return 0; const c = it.sig && CULTURES[it.sig]; return (it.val || 0) * (c && c.buys ? c.buys.mult : 1); }
+// `itemWorth(key)` used to live here — face value times the item's own culture's
+// multiplier, a price with no buyer attached to it. `buyMult`/`sellPriceTo`
+// replaced it (they know WHO is paying, and they honour the no-buy-back rule it
+// ignored) and no line of the game called it again. The battery went on checking
+// it every run, which is how a check can pass for a year and mean nothing.
 function luminousBonus() { return countHeldWith('luminous'); }
 // Can the party cross drowned water? Only with Dagon work — which is the whole
 // point of dealing with them: they sell you the freedom of their own element.
@@ -7111,6 +7118,11 @@ function bestWeaponAtk() {
   // not to a hand, and it is the floor everyone improves on rather than a
   // bonus that stacks.
   let best = state.lockerWeapon && GEAR[state.lockerWeapon] ? GEAR[state.lockerWeapon].atk : 0;
+  // party(), not the able ones only — see the note above the function. The
+  // reachability sweep flagged `ableParty` as dead and I very nearly wired it in
+  // here, which would have made a beaten party hit softer and softer until the
+  // fight was unwinnable. That is the exact spiral the paragraph above refuses.
+  // A dead function is not evidence that something is missing.
   for (const m of party()) if (m.gear && m.gear.weapon && GEAR[m.gear.weapon]) best = Math.max(best, GEAR[m.gear.weapon].atk);
   return best;
 }
@@ -7118,7 +7130,6 @@ function bestWeaponAtk() {
 // The living party ashore with you — the bodies the deep can reach. Positioning
 // (who stands where) is a later push; for now they screen the captain as a group.
 function party() { return state.crew.filter(m => !m.lost); }
-function ableParty() { return party().filter(m => !memberIncapacitated(crewVitals(m))); }
 
 // Inflict a wound. severity01 (0..1) is the raw menace of the blow; the member's
 // own armour deletes the worst rows, and low Vigor puts them back. Returns the
@@ -8299,14 +8310,12 @@ function homeShoreDist(q, r) {
   return hd - shore;
 }
 
-// Mountain check: any hex that's not shelf water, not south of coast, but
-// beyond the bay walls. Used to leave walls in place during chunk generation.
-// THE BAY WALLS ARE GONE. They ran 32 hexes north of a coast line that no
-// longer exists, and on a finite island they would have been two absurd
-// peninsulas reaching out into open ocean. Sean, releasing them: "the starting
-// cove should be fresh of course." The cove is now whatever the island's own
-// outline makes of it.
-function isMountainHex(q, r) { return false; }
+// THE BAY WALLS ARE GONE, and so is the mountain check that kept them. They ran
+// 32 hexes north of a coast line that no longer exists, and on a finite island
+// they would have been two absurd peninsulas reaching into open ocean. Sean,
+// releasing them: "the starting cove should be fresh of course." The cove is now
+// whatever the island's own outline makes of it. The predicate survived as a
+// `return false` stub for a while after; nothing asked it anything.
 
 const CHUNK = 14; // hex coords per chunk side
 
@@ -8500,11 +8509,10 @@ function kindToType(kind) {
   return TILES[kind] ? kind : 'passage';
 }
 
-// Backwards-compatible single-range setter. Most generators still call this.
-function setOpenTile(q, r, type, ceiling, floor) {
-  const kind = ['water', 'passage', 'chamber', 'sea'].includes(type) ? type : 'passage';
-  addVolume(q, r, type, kind, ceiling, floor);
-}
+// The single-range setter that used to sit here is gone. Its comment claimed
+// "most generators still call this" and by the end not one of them did — every
+// caller had moved to addVolume during the CELL refactor. A shim whose comment
+// describes a world that no longer exists is worse than no shim.
 
 function getTile(q, r) {
   return world.get(hexKey(q, r));
@@ -10610,16 +10618,6 @@ function revealFade(q, r, currentDepth) {
   const maxDist = 3 * DEPTH_GRID;
   if (minDist >= maxDist) return 0;
   return 1 - minDist / maxDist;
-}
-
-function revealAround(q, r, radius) {
-  const depth = state.currentDepth;
-  revealAt(q, r, depth);
-  for (let dq = -radius; dq <= radius; dq++) {
-    for (let dr = Math.max(-radius, -dq-radius); dr <= Math.min(radius, -dq+radius); dr++) {
-      revealAt(q + dq, r + dr, depth);
-    }
-  }
 }
 
 // Sonar model. Passive sonar is constant — always on, free, fixed range —
@@ -14963,8 +14961,6 @@ function creatureTick() {
 // keep working, and vertically-adjacent open cells correctly read as one
 // connected space (no phantom 60-m walls between stacked carves).
 const MAX_DEPTH_SCAN = 12000; // the world generates no deeper than ~10,800 m
-
-function cellAt(q, r, d) { return cells.get(cellKey(q, r, d)); }
 
 // Expand the open run containing (q,r,d): walk up/down while cells stay open.
 function cellRun(q, r, d) {
