@@ -492,7 +492,59 @@ in the ledger at the top with the number that closed it.
 | | |
 |---|---|
 | **~~Hours 2–10 never audited~~** | **MEASURED 2026-07-29** — see below. |
-| **Ruins are not placed deeper with depth** | *Yield* now scales with depth (see the ledger) but the PRIZE TYPE is still a uniform hash over 7 types with no depth term, so a hull and a ruin have identical depth distributions. Fixing placement is a generator change and belongs beside trenches, not in a cleanup pass. |
+| **~~Ruins are not placed deeper with depth~~** | **DONE 2026-07-31.** *Yield* scaled with depth and *type* varied with it, but PLACEMENT did not — see the section below for what that cost and what it now does. |
+
+### PRIZE PLACEMENT BY DEPTH — DONE (2026-07-31)
+
+**What was wrong.** Chamber density thins with depth on purpose (0.83 at 480 m to
+0.34 at 9,480 — the CAVE_BANDS comment is right that the deep should be "sparser
+and lonelier"). But `CAVE_POI_CHANCE` was a flat 0.40 in every band, so the deep
+was lonely **and** poor and the two compounded: yield per lattice cell fell 0.332
+→ 0.136, a 2.4× penalty for going down.
+
+**The fix: rarer, but richer.** `density * chance` is now held constant, so a deep
+chamber is scarce and worth finding. Measured over 14 seeds and 97,113 water hexes:
+
+| band | before | after | |
+|---|---|---|---|
+| 0–600 m | 90 | **90** | held |
+| 600–1200 | 268 | **268** | held |
+| 1200–2400 | 265 | 212 | −20% |
+| 2400–4200 | 132 | 106 | −20% |
+| 4200–6000 | 115 | 119 | +3% |
+| 6000–9000 | 92 | **133** | **+45%** |
+| 9000+ | 88 | **122** | **+39%** |
+| **total** | **1050** | **1050** | **0.0%** |
+
+**The care in it is the two bands held out.** The first version flattened all seven
+and looked perfect — world total +0.2%, home-shelf total a dead heat — and it still
+cut the prizes a STARTING boat can reach (home shelf, ≤1,200 m) from **183 to 128**,
+a third gone. Total-neutral is not the test that matters when the whole cut lands on
+the first hour, which is the one part of this game already known to be too thin. So
+b0/b1 keep their flat 0.40 and the deep is paid for out of the MIDDLE (1,620–3,600 m
+— water a competent boat crosses on its way somewhere). Shelf ≤1,200 m is now
+**183 → 183, unchanged**, and the world total is 1050 → 1050 exactly.
+
+**A theory I had, measured, and had to throw away.** I was going to write that this
+"makes trenches worth diving" — the trench being the door to the deep bands. It is
+not true. A trenched hex is **0.8×** as likely as plain seabed to hold a prize below
+4,400 m (0.0029 vs 0.0036 per hex). The cave network already reaches those depths
+*everywhere*, through shafts; a trench only lets you swim there in open water instead
+of crawling. So what this change actually did is make the **deep cave bands** pay,
+wherever they are — reached by shaft, not by trench.
+
+**Which leaves the trench question still open, and now properly measured.** Trenches
+have no prize advantage of any kind: 0.010 per hex against 0.010 on the plain for the
+whole column, and slightly *worse* for deep prizes specifically. Whether that is a
+problem depends on what a trench is FOR. If its value is access — a way to be at
+9,000 m in open water, where pressure and air are the content — then it needs no
+prizes. If it is meant to be a place you go to find things, it needs a trench term in
+placement, which is a further generator change and is not in this one. **Do not
+repeat my mistake and reason about this from the shape of the map; measure it.** An
+earlier 3-seed run said trenches were 20% *richer* (0.012 vs 0.010) and that was six
+prizes' worth of noise pointing the wrong way. `PRIZE_SEEDS=14 PRIZE_W=42 node
+tests/prizes.js` is the honest sample; the default 3-seed run is for a quick glance
+only.
 
 
 ### B2. HOURS 2–10, MEASURED AT LAST (2026-07-29)

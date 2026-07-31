@@ -7383,7 +7383,42 @@ const CAVE_BANDS = [
 const NODE_CELL = 12; // hexes per node-cell side
 // Substrate feature-content rates — deterministic hash rolls (see the tail of
 // carveChamber and the shelf-feature pass in generateChunk). Feel knobs.
-const CAVE_POI_CHANCE = 0.40;      // chance a chamber holds a point of interest
+// PRIZE CHANCE RISES EXACTLY AS FAR AS CHAMBER DENSITY FALLS.
+//
+// Chamber density thins with depth on purpose — 0.83 at 480 m down to 0.34 at
+// 9,480 — and the comment on CAVE_BANDS is right that the deep should be
+// "sparser and lonelier". But the prize roll was a flat 0.40 in every band, so
+// the deep was lonely AND poor, and the two compounded. Measured over 14 seeds
+// and 97,113 water hexes: a trenched floor 5,400-9,600 m down held 0.009 prizes
+// per hex against 0.010 on the abyssal plain. The most dramatic feature in the
+// world was, to a captain, flat mud four kilometres further from air. (An
+// earlier 3-seed run said 0.012 vs 0.010 and I nearly built on it; six prizes is
+// not a number you may compare against anything.)
+//
+// So: rarer, but richer. `density * chance` is held constant, which keeps the
+// loneliness and removes the poverty — a chamber in the deep is scarce and worth
+// the finding, and what a lattice cell yields stops falling away with depth.
+// This is a REDISTRIBUTION and not a raise; Sean's ruling stands ("do not buff
+// the economy until progress is reliable") and `tests/prizes.js` holds me to it.
+//
+// BUT THE FIRST TWO BANDS ARE HELD OUT OF IT, and that is the whole care in this
+// change. Flattening all seven kept the world total to +0.2% and the home shelf
+// to a dead heat — and still cut the prizes a STARTING boat can reach (shelf,
+// 1,200 m or shallower) from 183 to 128, a third gone. Total-neutral is not the
+// test that matters when the cut lands entirely on the first hour, which is the
+// one part of this game already known to be too thin. So b0 and b1 keep their
+// flat roll untouched, and the deep is paid for out of the MIDDLE — 1,620 to
+// 3,600 m, the water a competent boat crosses on its way somewhere, which is
+// neither a struggle nor an achievement and is the right place to take it from.
+const CAVE_POI_SHALLOW = 0.40;     // b0/b1 — the first hours. Not to be traded against.
+const CAVE_POI_FLAT_FROM = 2;      // b2 and below share out what they used to hold
+const CAVE_POI_LOAD = 0.1928;      // = mean of (density * 0.40) across b2..b6
+function cavePoiChance(bandIdx) {
+  const b = CAVE_BANDS[bandIdx];
+  if (!b || !b.density) return CAVE_POI_SHALLOW;
+  if (bandIdx < CAVE_POI_FLAT_FROM) return CAVE_POI_SHALLOW;
+  return Math.max(0.05, Math.min(0.95, CAVE_POI_LOAD / b.density));
+}
 const SHELF_KELP_ROLL = 0.0026;    // per shelf hex: roll under this → kelp...
 const SHELF_SALVAGE_ROLL = 0.0013; // ...but under this → a wreck instead
 
@@ -7681,7 +7716,7 @@ function carveChamber(node) {
   // elect the same hex, they agree on what sits there, and carve order
   // cannot matter. Sink hexes (incl. the pier entry) are reserved.
   const prng = mulberry32(hashStr('poi:' + worldSeed + ':' + node.id));
-  if (prng() < CAVE_POI_CHANCE) {
+  if (prng() < cavePoiChance(node.bandIdx)) {
     // ELECT A CELL THAT ACTUALLY EXISTS.
     //
     // This used to elect ONE candidate and give up silently if it was not open

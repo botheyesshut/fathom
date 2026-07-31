@@ -51,14 +51,24 @@ function boot(html) {
 }
 
 const X = boot(fs.readFileSync(process.argv[2] || 'C:/Users/bothe/Documents/GitHub/personal/Fathom/fathom-chart.html', 'utf8'));
-const SEEDS = [90210, 4242, 7];
+// SAMPLE SIZE IS SETTABLE, because the default is too small to say anything about
+// trenches. A 61x61 window holds ~500 trenched hexes and about SIX prizes in them,
+// and six is not a number you may compare against anything. `PRIZE_SEEDS=24` and
+// `PRIZE_W=45` push it to a few hundred, which is. Defaults kept small so the
+// instrument stays quick to glance at.
+const NSEEDS = Math.max(1, parseInt(process.env.PRIZE_SEEDS || '3', 10));
+const SEEDS = [90210, 4242, 7, 31337, 512, 8675309, 1123, 44, 90909, 2718, 1414, 6180,
+               777, 20260730, 101, 55555, 8, 123456, 999, 31415, 271828, 60221, 66260, 29979]
+  .slice(0, NSEEDS);
 // One window, generated with a margin so every chamber that reaches into it has
 // carved. (Verified: the count inside the window is stable once the margin is
 // there — 9 prizes at every generation radius from 31 to 151 wide.)
-const W = 30, MARGIN = 14;
+const W = Math.max(5, parseInt(process.env.PRIZE_W || '30', 10)), MARGIN = 14;
 
 const bands = [[0, 600], [600, 1200], [1200, 2400], [2400, 4200], [4200, 6000], [6000, 9000], [9000, 99999]];
 const depthTally = bands.map(() => ({ n: 0, types: {} }));
+let shelfHexes = 0, shelfPrizes = 0, shelfShallow = 0;
+let trenchDeep = 0, plainDeep = 0;
 let trenchHexes = 0, plainHexes = 0, trenchPrizes = 0, plainPrizes = 0, allPrizes = 0, allHexes = 0;
 const trenchMix = {}, plainMix = {};
 
@@ -80,10 +90,27 @@ for (const seed of SEEDS) {
         }
       }
     }
-    // eligible water only, so trench and plain are compared on equal terms
-    if (X.homeShoreDist(q, r) < 23) continue;
+    // THE HOME SHELF, COUNTED ON ITS OWN — because this is the water Sean's
+    // ruling is actually about. Any change that raises the deep by taking from
+    // the shallow lands HERE, on the first hours, where income is already the
+    // open problem. Counting the world total and calling it neutral is not
+    // enough: neutral overall can still be a cut to the only water a new
+    // captain can reach. Reported at the depths a starting boat can survive.
+    if (X.homeShoreDist(q, r) < 23) {
+      shelfHexes++;
+      for (const p of stack) { shelfPrizes++; if (p.d <= 1200) shelfShallow++; }
+      continue;
+    }
     const tf = X.trenchFloorAt ? X.trenchFloorAt(q, r) : null;
     const inTrench = tf != null && tf >= X.ABYSS_FLOOR + 300;
+    // AND THE SAME SPLIT FOR DEEP PRIZES ONLY. The whole-column figure cannot
+    // answer the question that matters, because a trenched hex's column contains
+    // every shallow prize above it too — so a change that moves prizes downward
+    // inside the same column shows up as no change at all. What a captain
+    // actually experiences is the density AT the depth they are at. Below 4,400 m
+    // is past the abyssal floor: water you can only be in because the ground
+    // opened up.
+    for (const p of stack) if (p.d >= 4400) { if (inTrench) trenchDeep++; else plainDeep++; }
     if (inTrench) { trenchHexes++; trenchPrizes += stack.length; for (const p of stack) trenchMix[p.type] = (trenchMix[p.type] || 0) + 1; }
     else { plainHexes++; plainPrizes += stack.length; for (const p of stack) plainMix[p.type] = (plainMix[p.type] || 0) + 1; }
   }
@@ -102,8 +129,27 @@ for (let i = 0; i < bands.length; i++) {
   console.log((bands[i][0] + '-' + (bands[i][1] > 90000 ? 'inf' : bands[i][1])).padEnd(16)
     + String(t.n).padStart(6) + (t.n / Math.max(1, allPrizes) * 100).toFixed(1).padStart(8) + '%   ' + pct(t.types, t.n));
 }
+console.log('\nTHE HOME SHELF (homeShoreDist < 23) — the water the first hours happen in:');
+console.log('  ' + shelfHexes + ' hexes   ' + shelfPrizes + ' prizes   '
+  + (shelfPrizes / Math.max(1, shelfHexes)).toFixed(4) + ' per hex   '
+  + 'of which at 1200 m or shallower: ' + shelfShallow
+  + ' (' + (100 * shelfShallow / Math.max(1, shelfPrizes)).toFixed(0) + '%)');
+
 console.log('\nSAME WINDOW, eligible water split by whether the floor is trenched:');
 console.log('  in a trench   ' + String(trenchHexes).padStart(5) + ' hexes  ' + String(trenchPrizes).padStart(4) +
   ' prizes  ' + (trenchPrizes / Math.max(1, trenchHexes)).toFixed(3) + ' per hex   ' + pct(trenchMix, trenchPrizes));
 console.log('  on the plain  ' + String(plainHexes).padStart(5) + ' hexes  ' + String(plainPrizes).padStart(4) +
   ' prizes  ' + (plainPrizes / Math.max(1, plainHexes)).toFixed(3) + ' per hex   ' + pct(plainMix, plainPrizes));
+
+// BELOW 4,400 m — past the abyssal floor, so this is water that exists only
+// where the ground opened. If trenches are the door to the deep bands, nearly
+// all of these sit in trenched hexes; if they do not, then "dive a trench" is
+// not the reason the deep got richer and I should not say that it is.
+console.log('\nPRIZES DEEPER THAN 4,400 m — past the abyssal floor:');
+console.log('  in trenched hexes ' + String(trenchDeep).padStart(4)
+  + '   (' + (trenchDeep / Math.max(1, trenchHexes)).toFixed(4) + ' per trenched hex)');
+console.log('  on the plain      ' + String(plainDeep).padStart(4)
+  + '   (' + (plainDeep / Math.max(1, plainHexes)).toFixed(4) + ' per plain hex)');
+const ratio = (plainDeep / Math.max(1, plainHexes));
+console.log('  a trenched hex is ' + ((trenchDeep / Math.max(1, trenchHexes)) / Math.max(1e-9, ratio)).toFixed(1)
+  + 'x as likely to hold one');
