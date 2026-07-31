@@ -56,7 +56,7 @@ var __X = {
              state.leads=[]; state.berth=null; state.ticket=0; state.poisFound=[];
              state.creatures=[]; state.enclaves=[]; state.ships=[]; state.pingMemory=new Map(); },
   state, tileAt, getTile, hexKey, hexDistance, homeDock, cellRun, poiStack, poiTaken,
-  soundingBelow, hexAcceptsDepth, DEPTH_GRID, SOUNDER_PRIZE, cellPois,
+  soundingBelow, hexAcceptsDepth, DEPTH_GRID, SOUNDER_PRIZE, cellPois, cells, cellKey,
   ping, PING_LEVELS, setPower(p){ pingPower = function(){ return p; }; },
   pingWayTo, nearestOpeningKnown, revealFade, settledDepth, revealAt, lookAround, crewLvl,
 };
@@ -347,3 +347,50 @@ console.log('  hidden from a boat that has not sounded ' + hidden + '   ('
 console.log('  visible once the depth IS charted       ' + shownAfter + '   ('
   + (100 * shownAfter / Math.max(1, tested)).toFixed(0) + '%)');
 console.log('  => a secret, not a deletion, if the second number is 100%.');
+
+// ---- AIR: BEACHES AND POCKETS, AND WHETHER ANYBODY CAN FIND ONE ------------
+// Sean: "How does a captain find a cave with a beach and an air bubble?"
+// Air is the clock on every dive, so a landfall in the deep is not a nicety —
+// it is the thing that decides how far down the game can go at all. Same method
+// as the prizes: count what exists, then count what a captain is ever told.
+console.log('\n--- AIR IN THE DEEP, NEAR HOME ---');
+let beaches = 0, pockets = 0, beachSealed = 0, beachOpen = 0;
+const beachD = [], pocketD = [];
+let sounderHearsBeach = 0, sounderHearsAir = 0, surfaceSamples = 0;
+for (const seed of SEEDS) {
+  X.seedTo(seed);
+  const hd = X.homeDock();
+  for (let dq = -RING; dq <= RING; dq++) for (let dr = -RING; dr <= RING; dr++) {
+    const q = hd.q + dq, r = hd.r + dr;
+    if (X.hexDistance({ q, r }, hd) > RING) continue;
+    const t = X.tileAt(q, r);
+    if (!t || t.wall) continue;
+    // Every beach cell in this column, at any depth.
+    for (let z = 0; z <= 11000; z += X.DEPTH_GRID) {
+      const c = X.cells.get(X.cellKey(q, r, z));
+      if (!c) continue;
+      if (c.kind === 'beach') {
+        beaches++; beachD.push(z);
+        const run = X.cellRun(q, r, z);
+        if (run && run.ceiling <= 0) beachOpen++; else beachSealed++;
+      }
+    }
+    for (const p of X.poiStack(t)) if (p.type === 'air') { pockets++; pocketD.push(p.at); }
+    // What the sounder says from the surface over this hex.
+    X.state.q = q; X.state.r = r; X.state.currentDepth = 0; X.state.foot = null;
+    surfaceSamples++;
+    let snd = null; try { snd = X.soundingBelow(); } catch (e) {}
+    if (snd && snd.shore != null) sounderHearsBeach++;
+    if (snd && snd.odd) sounderHearsAir++;
+  }
+}
+const mid = (a) => a.length ? a.sort((x, y) => x - y)[Math.floor(a.length / 2)] : 0;
+console.log('  cavern beaches within ' + RING + ' of the dock        ' + beaches
+  + '   (' + (beaches / SEEDS.length).toFixed(1) + ' per world, median ' + mid(beachD) + ' m down)');
+console.log('     ...in water open to the surface           ' + beachOpen);
+console.log('     ...sealed behind rock                     ' + beachSealed);
+console.log('  air pockets (the ○ prize)                    ' + pockets
+  + '   (' + (pockets / SEEDS.length).toFixed(1) + ' per world, median ' + mid(pocketD) + ' m down)');
+console.log('\n  THE SOUNDER, READ FROM THE SURFACE over ' + surfaceSamples + ' hexes:');
+console.log('    columns where it reports a shore           ' + sounderHearsBeach);
+console.log('    columns where it reports anything at all   ' + sounderHearsAir);
