@@ -1,5 +1,56 @@
 # FATHOM — START HERE (last updated 2026-07-30)
 
+## WHY NOBODY FINDS ANYTHING — the real answer, 2026-07-31
+
+Sean: *"What encourages a captain to dive and search?"* I answered from the
+sounder's numbers and **got it wrong**, then measured properly. Both the wrong
+answer and the right one are kept here, because the wrong one is the more
+instructive.
+
+**What I said first, off `tests/reasons.js`:** the sounder fires on 0.4% of water
+hexes — one return every 233 hexes of sailing — so almost nothing invites a
+captain down. True, and the wrong instrument to judge by. The sounder is passive
+and *confirms*; the ping is the thing you press, and it *searches*.
+
+**Driving the real `ping()`, 366 pings per power level from open water:**
+
+| power | reach | air | names a prize |
+|---|---|---|---|
+| 1 | 1 | 1 | 4% |
+| 2 | 3 | 3 | 23% |
+| 3 | 5 | 6 | 38% |
+| 4 | 8 | 10 | **52%** |
+| 5 | 12 | 15 | 51% |
+
+The sonar works. It finds prizes half the time. **So the failure is downstream of
+finding**, and here it is:
+
+> **145 prizes near home. SIX of them — 4.1% — sit in water open to the surface.
+> The other 95.9% are sealed in rock at a median of 2,100 m.**
+
+That is the whole thing. A captain pings, is told "wreckage north, 420 m out",
+sails there, and finds unbroken water over stone. 100% of bot runs used active
+sonar; 17% ever picked anything up. The sonar never lied — it said something was
+there, which was true, and never said you could reach it, because nobody asked.
+
+**What was built (2026-07-31).**
+
+1. **The ping now says which kind of return it got.** "The water is open above it. You could go straight down." or "There is rock between you and it — no way down from this water. The nearest break in the floor is west, 720 m." Every named prize gets a verdict; measured 100% accounted for.
+2. **Reachable prizes are reported first.** Sorting by distance alone meant the sonar nearly always named the one thing in earshot the boat could not have. Reachable wins, distance breaks the tie inside each group. **Swimmable reports went 3% → 12%** on the same world — a 4× improvement from sorting, not from generation.
+3. **A hand who hears things.** The `sonarman` role existed and did exactly one thing: a flat +1 passive range, identical at every level — the shape the knack ruling forbids ("A KNACK OPENS AN OPTION. IT NEVER MULTIPLIES A NUMBER"). Now: with one aboard, *Look about you* gets their read on the floor — the nearest break within 9 hexes, for no air and no noise. Without one you buy the same knowledge with a ping, which costs both. Deliberately **not** scaled by level; the option is having anybody aboard who can do it.
+4. **The floor keeps its secrets consistently.** `floorSecret` hid salvage resting on the bottom but let a ruin 2,100 m down under the same open water draw its glyph for free — one secret kept in one case and given away in the other. Now every prize that *rests* somewhere is earned the same way, and against `settledDepth` (where the thing actually is) rather than `tile.floor` (ground it may be nowhere near). Growth is exempt: kelp climbs the column and breaks the surface, which is the one thing down there you genuinely could see from a boat. **Verified a secret and not a deletion: 100% hidden before sounding, 100% visible after charting that depth.**
+
+**THE BIG OPEN QUESTION, AND IT IS SEAN'S.** 96% of prizes being sealed means the
+ping will say "there is rock in the way" most times it says anything. That is now
+honest and it points at the door, but it is still a lot of no. The cave network is
+the intended route — sinkholes, beaches, mouths — and near home there are only
+**~3 breaks within 22 hexes, the nearest a median of 12 hexes away**. Two ways to
+go, and I did not pick one:
+- **Leave it.** The deep is meant to be hard to enter, the board now gives a reason to sail, and the sonar finally tells you what you are looking at.
+- **Open the floor a little.** Raise the fraction of chambers that connect to open water, or put more sinkholes near home. That is a generator change and an economy change, so it is his call.
+
+---
+
 ## THE HARBOUR BOARD — the early game, built 2026-07-31
 
 Sean: *"We need a meaningful way for new captains to start moving up in the world

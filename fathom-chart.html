@@ -10458,11 +10458,23 @@ function render() {
       // reloads: the substrate regenerates the tile, but the overlay
       // (poisFound) knows it was taken — draw plain water, not the prize.
       const consumedPoi = (tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(key);
-      // Ruling: the bottom keeps its secrets. Wreckage resting on the floor is
-      // invisible to surface eyes — the glyph is earned by sonar or by having
-      // charted near its depth. (Kelp climbs the column; it stays visible.)
-      const floorSecret = tile.poi === 'salvage' && !consumedPoi
-        && revealFade(tile.q, tile.r, tile.floor) <= 0;
+      // Ruling: THE BOTTOM KEEPS ITS SECRETS — and it kept them for salvage
+      // only, which meant a wreck on the floor was hidden from surface eyes
+      // while a sunken ruin two kilometres down under the same open water drew
+      // its glyph for free. One secret, kept in one case and given away in the
+      // other, and the given-away case is the more remarkable thing to see.
+      //
+      // Now every prize that RESTS somewhere is earned the same way: by sonar,
+      // or by having charted near the depth it actually lies at. `settledDepth`
+      // is where the thing is, which is the only depth worth testing — the old
+      // test read `tile.floor`, so a prize sitting mid-column in a flooded shaft
+      // was checked against ground it was nowhere near. Growth is the exception
+      // and stays visible: kelp climbs the whole column and breaks the surface,
+      // which is the one thing down there you genuinely could see from a boat.
+      const restsBelow = tile.poi && tile.poi !== 'growth' && tile.poi !== 'opening'
+        && tile.poi !== 'surface';
+      const poiAt = restsBelow ? settledDepth(tile, (poiStack(tile)[0] || { d: tile.floor })) : 0;
+      const floorSecret = restsBelow && !consumedPoi && revealFade(tile.q, tile.r, poiAt) <= 0;
       if (tile.char && !consumedPoi && !floorSecret && hexAcceptsDepth(tile, state.currentDepth)) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', px.x);
@@ -11267,6 +11279,42 @@ function launchDecoy() {
   schedulePregen();
 }
 
+// CAN THE BOAT SWIM TO IT, OR IS THERE STONE IN THE WAY? A prize is claimable
+// only by being AT it, so the honest test is whether the open run that holds the
+// thing reaches up to the depth the boat is at — if it does, you can cross to
+// that hex and go straight down; if it does not, there is rock between, and the
+// way in is somewhere else entirely.
+function pingWayTo(tile) {
+  const st = poiStack(tile);
+  for (const p of st) {
+    if (poiTaken(tile, p)) continue;
+    const run = cellRun(tile.q, tile.r, p.at);
+    if (run && run.ceiling <= state.currentDepth) return { open: true, at: p.at };
+  }
+  return { open: false };
+}
+
+// The nearest break in the floor inside the sweep just made. Bounded by the
+// ping's own reach, so this reports only water the sonar actually touched —
+// the same sanctioned knowledge as everything else the ping says, and not a
+// free index of every sinkhole in the ocean.
+function nearestOpeningKnown(radius) {
+  let best = null;
+  for (let dq = -radius; dq <= radius; dq++) {
+    for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) {
+      const q = state.q + dq, r = state.r + dr;
+      const d = hexDistance({ q, r }, { q: state.q, r: state.r });
+      if (d === 0 || d > radius) continue;
+      const t = getTile(q, r);
+      if (!t || t.wall) continue;
+      const isWay = t.poi === 'opening'
+        || poiStack(t).some(p => p.type === 'opening' && !poiTaken(t, p));
+      if (isWay && (!best || d < best.d)) best = { q: q, r: r, d: d };
+    }
+  }
+  return best;
+}
+
 function ping() {
   if (ashore()) return;
   const power = pingPower();
@@ -11294,6 +11342,7 @@ function ping() {
   const radius = lvl.activeRange;
   let interesting = null;
   let interestingDist = 999;
+  let interestingOpen = false;
   let openHexes = 0;
   let totalHexes = 0;
 
@@ -11361,11 +11410,19 @@ function ping() {
     if (!tile.wall) openHexes++;
     const d = hexDistance({q, r}, {q: state.q, r: state.r});
     const poiConsumed = (tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(k);
+    // NEAREST IS THE WRONG SORT WHEN ALMOST NOTHING IS REACHABLE. 97% of the
+    // prizes a ping can name are sealed in rock, so sorting by distance alone
+    // meant the sonar nearly always reported the one thing in earshot the boat
+    // could not have, while a wreck you could swim straight down to sat one hex
+    // further out and went unmentioned. Reachable wins; distance breaks the tie
+    // within each group. The sealed ones are still reported when there is
+    // nothing better, because knowing where the rock is holding something is
+    // worth hearing — it is the reason to go looking for the way in.
     if (tile.poi && !poiConsumed && d > 1) {
-      if (d < interestingDist) {
-        interesting = tile;
-        interestingDist = d;
-      }
+      const open = pingWayTo(tile).open;
+      const better = open && !interestingOpen ? true
+                   : (open === interestingOpen && d < interestingDist);
+      if (better) { interesting = tile; interestingDist = d; interestingOpen = open; }
     }
     // Arrow overlay: skip the sub's own hex, walls, and hexes already
     // reachable horizontally at current depth.
@@ -11422,6 +11479,23 @@ function ping() {
                : 'ECHO';
     const echoClass = (echo === 'STRANGE') ? 'strange' : (echo === 'AIR' ? 'warn' : '');
     log(`${interesting.name.charAt(0).toUpperCase() + interesting.name.slice(1)} ${dir}, ${meters} m out${depthHint}.`, echoClass, echo);
+    // IS THERE WATER BETWEEN YOU AND IT, OR ROCK? This is the line the whole
+    // instrument was missing. Measured near home: 145 prizes, and SIX of them —
+    // 4.1% — sit in water open to the sky. The other 95.9% are sealed in stone
+    // at a median of 2,100 m, reachable only through the cave network. The ping
+    // named a bearing to all of them with exactly the same confidence, so a
+    // captain sailed to the mark, found nothing but water, and learned that the
+    // sonar lies. It never lied: it said something is there, which was true, and
+    // it never said you could get to it, which nobody asked. Now it says which.
+    const iw = pingWayTo(interesting);
+    if (iw.open) {
+      log(`The water is open above it. You could go straight down.`, 'good', echo);
+    } else {
+      const w = nearestOpeningKnown(lvl.activeRange);
+      log(`There is rock between you and it — no way down from this water.`
+        + (w ? ` The nearest break in the floor is ${bearing(state.q, state.r, w.q, w.r)}, ${w.d * 60} m.`
+             : ` You would have to find a way in.`), 'warn', echo);
+    }
   } else if (atSurface) {
     // Surface pings detect bottom contours and openings — no walls up here.
     const reach = PING_LEVELS[power] ? PING_LEVELS[power].activeRange * 60 : 0;
@@ -16530,6 +16604,43 @@ function lookAround() {
   // is you going and looking, which is the point of the button.
   const mate = firstMate();
   log(describeSpace('ask'), '', mate ? (mate.machine ? 'CALCULATOR' : 'FIRST MATE') : 'LOOK');
+
+  // A HAND WHO HEARS THINGS. The sonarman role existed and did exactly one
+  // thing: a flat +1 hex of passive range, the same at every level. That is the
+  // shape the knack ruling forbids — "A KNACK OPENS AN OPTION. IT NEVER
+  // MULTIPLIES A NUMBER." — and it is also the least interesting thing a person
+  // who has spent their life listening to water could possibly do.
+  //
+  // What they do now is the thing the measurement says is scarce. Near home
+  // there are about three breaks in the floor within 22 hexes and the nearest
+  // is a median of 12 away, while 96% of prizes are sealed behind rock — so
+  // knowing where a way down IS, is the bottleneck of the whole early game.
+  // Ask, and they will tell you, for no air and no noise. Without one aboard
+  // you buy the same knowledge with a ping, which costs both.
+  //
+  // Deliberately NOT scaled by level: the option is having anybody aboard who
+  // can do it. A second year of listening does not make the seafloor closer.
+  if (crewLvl('sonarman') > 0 && !state.foot) {
+    const w = nearestOpeningKnown(SONARMAN_EAR);
+    const who = soundHand();
+    if (w) {
+      log(`${who} puts a hand up for quiet and listens to the hull for a while. "There's a hollow under us, ${bearing(state.q, state.r, w.q, w.r)}. ${w.d * 60} m, near enough. The water goes down there."`,
+          'good', 'SONARMAN');
+    } else {
+      log(`${who} listens a long time, and shakes their head. "Solid, all round. Whatever's under this is under all of it."`,
+          '', 'SONARMAN');
+    }
+  }
+}
+// How far a listening hand reads the floor. Wider than a mid ping because they
+// are not shouting — they are waiting, and they have all watch to do it.
+const SONARMAN_EAR = 9;
+// Name the hand, so it is a person saying it and not the boat.
+function soundHand() {
+  for (const m of state.crew) {
+    if (m.role === 'sonarman' && !m.wounded && !m.lost) return m.name || 'Your sonarman';
+  }
+  return 'Your sonarman';
 }
 
 // Air literacy. The captain who drowns because nobody told them where air
