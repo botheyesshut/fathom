@@ -1,5 +1,66 @@
 # FATHOM — START HERE (last updated 2026-07-30)
 
+## THE HARBOUR BOARD — the early game, built 2026-07-31
+
+Sean: *"We need a meaningful way for new captains to start moving up in the world
+as soon as the game begins. Please devise it and build it and launch it."*
+
+**What was wrong, measured first.** `node tests/playtest.js 12 900` — twelve bot
+captains, 900 turns each: **17%** ever picked up any cargo at all, **median crates
+banked 0**, **0 of 36 items** ever held, **0%** fitted an upgrade or bought a boat,
+median deepest point **900 m**. The ocean was open in every direction and not one
+of those directions was a reason to go. Work existed — missions at the deep cities
+— behind a standing you cannot have yet and a dive you cannot survive yet.
+
+**What it is.** The harbour keeps a slate. Two postings, at the dock you start on,
+from the first turn, in the first section of the port window (everything else in
+that room spends crates; this is the only thing in it that earns them).
+
+- **A sounding** — a position the harbour wants on its charts. Go, be there, come back.
+- **A salvage** — a boat went down and nobody has looked. Keep what you lift; the fee is for going.
+- **An errand** — bring back a named item. **Never offered to an unrated captain**, because the same measurement says a new captain holds 0 of 36 items, so "fetch me a thing" is a wall with prose on it.
+
+Taking one puts a mark on the chart — deliberately a `state.leads` entry with
+`kind: 'berth'`, because three places already draw that array (chart extent, the
+mark on the paper, the ⌖ over the water) and `checkLeads` already does arrival and
+the "closing now" call. A job IS a position you have been given.
+
+**The ladder — this is the "moving up" part.** Finishing work raises `state.ticket`,
+and the rating is what puts better work on the slate:
+
+| jobs done | the quay calls you | reach | depth | pays |
+|---|---|---|---|---|
+| 0 | nobody in particular | 5–10 hexes | 600 m | 3 |
+| 1 | known on the quay | 8–15 | 1,200 m | 5 |
+| 3 | trusted with a hold | 11–20 | 2,400 m | 8 |
+| 6 | a name on this coast | 14–26 | 4,200 m | 12 |
+
+**The rate, which is the number to argue with.** ~12–16 crates per 100 turns at
+*every* rating — deliberately flat. The ladder gives bigger jobs, not a better
+hourly, so climbing is about access and capability rather than grinding. That is a
+CEILING: it assumes nothing goes wrong, and half of all bot runs die. **One number
+tunes the whole thing: `pay` in `BOARD_RANKS`.** A hand costs 5 crates; the brass
+first mate costs 60.
+
+**Why this does not break the no-buff ruling.** Nothing here changes what the sea
+holds. It gives a captain somewhere to point the boat and pays for the pointing.
+
+**Two bugs found on the way, both worth keeping.**
+1. **The home dock is not a port.** It is a `dock` tile the origin chunk writes; the port window opens there on a `hexDistance(..., homeDock()) <= 4` test, and `portNear` returns null. I built the whole board on `portNear` and every one of twelve seeds reported "the slate is bare" — the nearest real port is **22 hexes** from where the game starts you. `boardPort()` now asks the same question the window asks.
+2. **The polar-to-axial conversion does not preserve distance** — it compresses by about a third. `leadTarget` has used it since chart-leads went in and its comment has claimed "8-16 hexes off" the whole time while delivering 5–10. I inherited the bug by copying the formula and caught it because jobs measured 4.8 hexes out against a stated reach of 5–10. `boardTarget` now opens the radius up AND checks the result. **`leadTarget`'s behaviour is unchanged** — 5–10 hexes is a good distance for a lead and has been the played distance all along; only its comment was a lie, and only the comment was fixed.
+
+**`tests/board.test.js` is in the battery** (11 suites now). It drives `portRows()`
+and `portBuy()` rather than calling `takeBerth`/`payBerth`, because the whole point
+is proving a captain can *reach* the thing — the same distinction that let a broken
+`surface()` pass a test that called it directly.
+
+**Still open here:** the playtest bot does not know the board exists, so
+`playtest.js` cannot yet measure the improvement — its 17%/median-0 figures are the
+BEFORE and there is no AFTER from it. Teaching the bot to dock, take a posting and
+follow the mark is the honest next measurement.
+
+---
+
 ## HOW SEAN SHOULD TEST — the settled answer (2026-07-30)
 
 He asked directly, having been startled that his phone offered to *install* the game.

@@ -5501,6 +5501,41 @@ function portRows() {
     return bits.join(' and ');
   };
 
+  // ---- THE BOARD. FIRST IN THE WINDOW, because it is the answer to the only
+  // question a new captain actually has, which is "what am I supposed to do".
+  // Everything below this line is a way to spend crates; this is the only way
+  // in the room to get some.
+  const bport = boardPort();
+  const brank = boardRank();
+  rows.push({ head: 'The Board', note: 'Work, and what the harbour makes of you: ' + brank.word + '.' });
+  if (state.berth) {
+    const b = state.berth;
+    const ready = berthReady();
+    rows.push({ label: b.title, cost: ready ? 'done — ' + b.pay + ' crates owed' : 'in hand' });
+    if (ready) {
+      rows.push({ name: 'Collect on it', desc: b.pay + ' crate' + (b.pay === 1 ? '' : 's') + ' and a word in your favour.',
+        ok: true, why: '', act: 'berthpay' });
+    } else if (b.kind === 'errand') {
+      rows.push({ name: 'Still wanted: ' + ITEMS[b.item].name + (b.n > 1 ? ' ×' + b.n : ''),
+        desc: 'You have ' + itemCount(b.item) + ' of ' + b.n + '.', ok: false, why: '', act: null });
+    } else {
+      rows.push({ name: 'Not yet done', desc: b.tell, ok: false, why: '', act: null });
+    }
+    rows.push({ name: 'Give it back', desc: 'No fee, no grudge. The slate will not change for it.',
+      ok: true, why: '', act: 'berthdrop' });
+  } else {
+    let posted = 0;
+    for (let s = 0; s < BOARD_SLOTS; s++) {
+      const o = boardOffer(bport, s);
+      if (!o) continue;
+      posted++;
+      rows.push({ name: o.title, desc: o.tell + ' · ' + o.pay + ' crate' + (o.pay === 1 ? '' : 's'),
+        ok: true, why: '', act: 'berth:' + s });
+    }
+    if (!posted) rows.push({ name: 'The slate is bare', desc: 'Nothing wanted today. Somebody will want something.',
+      ok: false, why: '', act: null });
+  }
+
   // ---- THE CHANDLER. The dock banked crates and vaulted relics and would not
   // look at anything else, so twenty of the thirty-five findable items could
   // only ever become money at an enclave you had to find first. A working port
@@ -5644,6 +5679,9 @@ function portBuy(act) {
     updateHUD(); renderPort(); scheduleSave();
     return;
   }
+  if (act && act.indexOf('berth:') === 0) { takeBerth(boardPort(), parseInt(act.slice(6), 10)); return; }
+  if (act === 'berthdrop') { dropBerth(); return; }
+  if (act === 'berthpay') { payBerth(boardPort()); return; }
   if (act && act.indexOf('chandler:') === 0) {
     const k = act.slice(9), it = ITEMS[k];
     if (!it || !itemCount(k)) return;
@@ -6656,13 +6694,178 @@ const LEAD_KINDS = {
     tell: 'a way in. Open plates, or a mouth in the rock, and rooms behind it' },
   word: { mark: '✧', colour: '#5c3a86',
     tell: 'no cargo at all. Only a position somebody thought worth the ink' },
+  // Work off the harbour board. It rides in `state.leads` on purpose: three
+  // separate places already draw that array — the chart's extent, the mark on
+  // the paper, the ⌖ over the water — and `checkLeads` already does the
+  // arrival test and the "closing now" call. A job is a position you have been
+  // given, which is what a lead is. Not in LEAD_KEYS: nothing may roll one at
+  // random, it comes off the slate or not at all.
+  berth: { mark: '⚑', colour: '#c8a860',
+    tell: 'work. The harbour wants somebody to go and look, and you said you would' },
 };
 const LEAD_KEYS = ['cache', 'quarry', 'cavern', 'word'];
+
+// ---- THE HARBOUR BOARD ----------------------------------------------------
+//
+// A NEW CAPTAIN HAD NO JOB. Measured, 12 bot runs of 900 turns each: 17% ever
+// picked up any cargo at all, median crates banked 0, no run ever fitted an
+// upgrade or bought a boat, 0 of the 36 items was ever held, and the median
+// deepest point reached was 900 m. The ocean was open in every direction and
+// not one of those directions was a reason to go. Work existed — missions at
+// the deep cities — but behind a standing you cannot have yet and a dive you
+// cannot survive yet.
+//
+// So the harbour keeps a slate, at the dock you start on, from the first turn.
+// Take a posting and it puts a mark on your chart — deliberately the SAME mark
+// a chart-lead uses, so it draws on the paper, glows on the water, and calls
+// out as you close on it — and bringing it home pays crates and raises what the
+// harbour thinks of you. What the harbour thinks of you is what puts better
+// work on the slate: further out, deeper down, worth more. That is the ladder,
+// and it is meant to be climbed rather than watched — the pay is real, but it
+// is pay for a trip that can drown you.
+//
+// Sean, asking for exactly this: "a meaningful way for new captains to start
+// moving up in the world as soon as the game begins." His standing ruling — do
+// not buff the economy until progress is reliable — is what this ANSWERS rather
+// than breaks. Nothing here raises what the sea holds. It gives a captain
+// somewhere to point the boat, and pays for the pointing.
+const BOARD_SLOTS = 2;
+const BOARD_RANKS = [   // first match wins, so highest first
+  { at: 6, key: 'name',    word: 'a name on this coast',  reach: [14, 26], maxD: 4200, pay: 12 },
+  { at: 3, key: 'trusted', word: 'trusted with a hold',   reach: [11, 20], maxD: 2400, pay: 8  },
+  { at: 1, key: 'known',   word: 'known on the quay',     reach: [8,  15], maxD: 1200, pay: 5  },
+  { at: 0, key: 'unrated', word: 'nobody in particular',  reach: [5,  10], maxD: 600,  pay: 3  },
+];
+function boardRank() {
+  const t = state.ticket || 0;
+  for (const b of BOARD_RANKS) if (t >= b.at) return b;
+  return BOARD_RANKS[BOARD_RANKS.length - 1];
+}
+
+// WHICH QUAY AM I STANDING ON — and the answer is not `portNear`. The home dock
+// is NOT in the ports map; it is a `dock` tile the origin chunk writes, and the
+// port window opens there on a distance test against homeDock() instead. I built
+// this whole board on portNear first and it produced "the slate is bare" on all
+// twelve seeds, because the nearest real port is twenty-two hexes from where the
+// game puts you. The board has to answer the same question the window does, so
+// it uses the same <= 4 test the surfacing path uses. The home quay is mariner
+// water: they are the ones who will not hunt you whatever you do, which is the
+// right people to be doing your first favours for.
+function boardPort() {
+  const p = portNear(state.q, state.r);
+  if (p) return p;
+  const hd = homeDock();
+  if (hexDistance({ q: state.q, r: state.r }, hd) <= 4) {
+    return { q: hd.q, r: hd.r, holder: 'mariners', home: true };
+  }
+  return null;
+}
+
+// A position this rank's boat can actually reach and actually stand in. The
+// depth is the DEEPEST open water at that hex within the rank's ceiling, so the
+// first jobs are a shallow run off the light and the later ones are a real dive
+// — the ladder is in the geography, not in a difficulty number.
+function boardTarget(rng, port, rank) {
+  for (let tries = 0; tries < 40; tries++) {
+    const ang = rng() * Math.PI * 2;
+    const dist = rank.reach[0] + Math.floor(rng() * (rank.reach[1] - rank.reach[0] + 1));
+    // THE POLAR-TO-AXIAL CONVERSION DOES NOT PRESERVE DISTANCE. It compresses by
+    // about a third — ask for 26 and the hex you get is 16.5 away. `leadTarget`
+    // has used this same formula since chart-leads went in and its comment has
+    // claimed "8-16 hexes off" the whole time while delivering 5-10. I inherited
+    // the bug by copying the formula, and measured jobs landing 4.8 hexes out
+    // when the rank said 5-10. So the radius is opened up to compensate AND the
+    // result is checked below: `reach` means hexes, because a captain reading
+    // "4.2 km off" is going to sail that far and expect to arrive.
+    const pr = Math.round(Math.sin(ang) * dist * 1.56 / 1.5);
+    const pq = Math.round(Math.cos(ang) * dist * 1.56 / SQRT3 - pr / 2);
+    const q = port.q + pq, r = port.r + pr;
+    const away = hexDistance({ q: port.q, r: port.r }, { q: q, r: r });
+    if (away < rank.reach[0] || away > rank.reach[1]) continue;
+    const t = tileAt(q, r);
+    if (!t || t.wall) continue;
+    // A DEPTH, NOT THE DEPTH. Taking the deepest water within the cap put every
+    // single unrated job at exactly 600 m — two postings on the slate, both "600
+    // m down", which reads as one job printed twice. Pick from the open depths
+    // instead, biased to the lower half so it is still a dive.
+    const open = [];
+    for (let z = DEPTH_GRID; z <= rank.maxD; z += DEPTH_GRID) if (hexAcceptsDepth(t, z)) open.push(z);
+    if (!open.length) continue;           // must be a dive, not a row across the bay
+    const d = open[Math.floor(open.length / 2) + Math.floor(rng() * Math.ceil(open.length / 2))];
+    return { q, r, d };
+  }
+  return null;
+}
+
+// Something a boat of this rank could plausibly come across. `find` is the
+// item table's own commonness and `depth` is the shallowest it appears, so this
+// asks the roster rather than keeping a second list that would drift out of step.
+function boardErrandItem(rng, rank) {
+  const pool = Object.keys(ITEMS).filter(k => (ITEMS[k].depth || 0) <= rank.maxD && (ITEMS[k].find || 0) >= 4);
+  if (!pool.length) return null;
+  return pool[Math.floor(rng() * pool.length)];
+}
+
+// AN UNRATED CAPTAIN IS NEVER SENT AFTER AN OBJECT. The same measurement that
+// made this whole board necessary says a new captain holds 0 of the 36 items in
+// a 900-turn run — so "bring me a cold-light bead" is not a first job, it is a
+// wall with prose on it. The first work is always somewhere to GO, because going
+// somewhere is the one thing a boat can definitely do. Fetching starts once the
+// harbour has seen you come back from something, by which time you are finding
+// things. (Measured before the rule: 5 of 12 seeds opened with an errand.)
+const BOARD_KINDS = ['sounding', 'salvage', 'errand'];
+function boardKindsFor(rank) {
+  return rank.key === 'unrated' ? ['sounding', 'salvage'] : BOARD_KINDS;
+}
+// Deterministic in (seed, port, ticket, slot). Keyed on the TICKET so the slate
+// changes when you finish something and not when you walk out of the room —
+// a captain cannot stand on the quay rerolling the work until they like it.
+function boardOffer(port, slot) {
+  if (!port) return null;
+  const rank = boardRank();
+  const rng = mulberry32(hashStr('board:' + worldSeed + ':' + port.q + ':' + port.r
+    + ':' + (state.ticket || 0) + ':' + slot));
+  // THE TWO SLOTS ARE DIFFERENT KINDS OF DAY. Rolling each slot's kind off its
+  // own stream gave both postings the same kind about half the time, and a slate
+  // reading "A sounding wanted / A sounding wanted" is not a choice. One spin
+  // per port, then step by the slot: adjacent slots can never collide.
+  const pool = boardKindsFor(rank);
+  const spin = hashStr('boardkind:' + worldSeed + ':' + port.q + ':' + port.r + ':' + (state.ticket || 0));
+  const kind = pool[(spin + slot) % pool.length];
+  const base = { slot: slot, kind: kind, pay: rank.pay, stand: 4, rank: rank.key };
+  if (kind === 'errand') {
+    const item = boardErrandItem(rng, rank);
+    if (!item) return null;
+    const n = 1 + (rng() < 0.3 ? 1 : 0);
+    return Object.assign(base, { item: item, n: n,
+      pay: rank.pay + Math.round((ITEMS[item].val || 1) * n * 0.6),
+      title: 'Wanted: ' + ITEMS[item].name + (n > 1 ? ' ×' + n : ''),
+      tell: 'The chandler has a buyer and no stock. Bring ' + (n > 1 ? n + ' of them' : 'one') + ' back here.' });
+  }
+  const t = boardTarget(rng, port, rank);
+  if (!t) return null;
+  const km = (hexDistance({ q: port.q, r: port.r }, { q: t.q, r: t.r }) * 60 / 1000).toFixed(1);
+  const where = bearing(port.q, port.r, t.q, t.r) + ', ' + km + ' km, ' + Math.round(t.d) + ' m down';
+  if (kind === 'salvage') {
+    return Object.assign(base, { q: t.q, r: t.r, d: t.d, pay: rank.pay + 2,
+      title: 'Salvage off the ' + bearing(port.q, port.r, t.q, t.r).replace(/^to the /, ''),
+      tell: 'A boat went down here and nobody has been to look. ' + where + '. Keep what you lift; the fee is for going.' });
+  }
+  return Object.assign(base, { q: t.q, r: t.r, d: t.d,
+    title: 'A sounding wanted',
+    tell: 'The harbour wants this position on its own charts and will not send its own boat. ' + where + '.' });
+}
 
 function leadTarget(seedStr, fromQ, fromR) {
   const rng = mulberry32(hashStr(seedStr + ':' + worldSeed));
   const ang = rng() * Math.PI * 2;
-  const dist = 8 + Math.floor(rng() * 9);          // 8-16 hexes off
+  // 8-16 by this formula, which is NOT 8-16 hexes — the conversion below
+  // compresses by about a third, so a lead actually lands 5-10 hexes off. The
+  // comment used to claim hexes and was wrong for as long as it stood; measured
+  // 2026-07-31 while building the harbour board on the same maths. Left as it
+  // is because 5-10 hexes is a good distance for a lead and has been the played
+  // distance all along — the number was right and only the label was a lie.
+  const dist = 8 + Math.floor(rng() * 9);
   const dq = Math.round(Math.cos(ang) * dist);
   const dr = Math.round(Math.sin(ang) * dist);
   // E5.1: this used to roll a flat 600-3800 m with no reference to the boat, so
@@ -6779,9 +6982,90 @@ function checkLeads() {
 // perpetual motion — a tier-50 link paying 52 crates and 26 items, forever.
 const LEAD_TIER_CAP = 6;
 
+// You said you would go and look, and here you are. The fee is NOT paid out
+// here — it is paid at the quay, by the people who asked, which is the whole
+// shape of the thing: a job is a round trip, and the sea is between you and the
+// money on the way back as well as on the way out.
+function resolveBerth(L) {
+  const b = state.berth;
+  if (!b || b.found) return;
+  b.found = true;
+  if (b.kind === 'salvage') {
+    const crates = 2 + randInt(3);
+    state.cargo += crates;
+    const got = rollItem(state.currentDepth);
+    if (got) giveItem(got, 1);
+    log(`Her plates are open and there is nobody aboard to mind. ${crates} crate${crates > 1 ? 's' : ''} out of the dark${got ? ', and ' + ITEMS[got].name : ''}. The fee is still on the quay, and so is the way home.`,
+        'good', 'BOARD');
+  } else {
+    log('You take the sounding: the floor, the set of the water, what the dark does with a light. It is written down. It is worth something to somebody ashore, which is the strange part.',
+        'strange', 'BOARD');
+  }
+  sfx('relic');
+  updateHUD(); scheduleSave();
+}
+
+function takeBerth(port, slot) {
+  if (state.berth || !port) return;
+  const o = boardOffer(port, slot);
+  if (!o) return;
+  state.berth = Object.assign({}, o, { port: port.q + ',' + port.r, found: false });
+  if (o.q != null) {
+    if (!state.leads) state.leads = [];
+    state.leads.push({ q: o.q, r: o.r, d: o.d, tier: 1, kind: 'berth' });
+  }
+  log(`Your name goes in the book against the posting: ${o.title.toLowerCase()}. ${o.tell} ${o.pay} crate${o.pay === 1 ? '' : 's'} when it is done, and not before.`,
+      'good', 'BOARD');
+  sfx('bell');
+  renderPort(); render(); scheduleSave();
+}
+
+// Handing it back. No penalty beyond the wasted trip — and no reroll either,
+// because the slate is keyed to the ticket and not to whether you hold a job.
+function dropBerth() {
+  if (!state.berth) return;
+  state.leads = (state.leads || []).filter(L => L.kind !== 'berth');
+  state.berth = null;
+  log('You take your name back out of the book. Nobody says anything about it, which is somehow worse.', 'warn', 'BOARD');
+  renderPort(); render(); scheduleSave();
+}
+
+// Is the thing they asked for actually done?
+function berthReady() {
+  const b = state.berth;
+  if (!b) return false;
+  if (b.kind === 'errand') return itemCount(b.item) >= b.n;
+  return !!b.found;
+}
+
+function payBerth(port) {
+  const b = state.berth;
+  if (!b || !berthReady() || !port) return;
+  if (b.kind === 'errand') takeItem(b.item, b.n);
+  state.cargoBanked += b.pay;
+  state.ticket = (state.ticket || 0) + 1;
+  state.leads = (state.leads || []).filter(L => L.kind !== 'berth');
+  state.berth = null;
+  const was = boardRank();
+  nudgeStanding(port.holder, b.stand, 'work done off the board');
+  log(`Paid, and the book is marked: ${b.pay} crate${b.pay === 1 ? '' : 's'}. They will remember the boat, which is the part that keeps.`,
+      'good', 'BOARD');
+  // The ladder, said out loud — a rank that rises in silence is a number, and a
+  // number is not what he asked for.
+  const now = boardRank();
+  if (now.key !== was.key) {
+    log(`Something changes in how the quay talks to you. You are ${now.word} here now, and there is better work on the slate for it.`,
+        'strange', 'BOARD');
+    sfx('relic');
+  }
+  sfx('bell');
+  updateHUD(); renderPort(); render(); scheduleSave();
+}
+
 function resolveLead(L) {
   const tier = Math.min(LEAD_TIER_CAP, L.tier || 1);
   const kind = L.kind || 'cache';
+  if (kind === 'berth') return resolveBerth(L);
   if (kind === 'word') return resolveWord(L, tier);
   if (kind === 'quarry') return resolveQuarry(L, tier);
   if (kind === 'cavern') return resolveCavern(L, tier);
@@ -17445,6 +17729,8 @@ function restart() {
   state.leads = [];
   state.survey = 0;      // a new ocean has been charted by nobody
   state.mission = null;  // ...and owes nobody anything
+  state.berth = null;    // ...and has not put its name in anybody's book
+  state.ticket = 0;      // ...and is nobody in particular on any quay
   state.commission = null;   // ...and sails under nobody's paper
   state.travel = null;       // ...and is steering nowhere in particular
   state.aiMate = false;      // ...and has no engine to read the water for her
@@ -17698,6 +17984,8 @@ function doSave(force) {
       items: state.items,
       fits: state.fits,
       leads: state.leads,
+      berth: state.berth,
+      ticket: state.ticket,
       enclaves: state.enclaves,
       corpses: state.corpses,
       layersFelt: state.layersFelt,
@@ -17880,6 +18168,10 @@ function resumeGame(save) {
   state.items = save.items || {};
   state.fits = save.fits || {};
   state.leads = arr(save.leads);
+  // A save from before the board existed loads with no job and no rating, which
+  // is exactly what such a captain had.
+  state.berth = (save.berth && typeof save.berth === 'object' && !Array.isArray(save.berth)) ? save.berth : null;
+  state.ticket = typeof save.ticket === 'number' ? save.ticket : 0;
   state.enclaves = arr(save.enclaves);
   state.corpses = arr(save.corpses);
   // `|| null` accepted a STRING here, and the back-fill below then set
