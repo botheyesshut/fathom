@@ -12375,6 +12375,34 @@ function passageFar(q, r, d) {
   return best;
 }
 
+// THE DRAUGHT. A captain standing on the sand can count the mouths and, until
+// now, learn nothing else — what lay behind one was unnamed until walked, and
+// whether it came out anywhere was unknown until followed to its end. Measured:
+// 66% of beaches are sealed at the back, 29% have one way through, 5% are a
+// crossroads. That is a good spread and it was completely unreadable, so the one
+// site in a world worth holding could only be found by exhausting every other.
+//
+// A passage comes out at another beach. Air moves through it. Nothing else here
+// moves air at all. So the sand tells you the shape of the place before you
+// commit a lamp to it: still air is a dead end, and a dead end is a fortress.
+//
+// This is a reading, not a map. It says a way through exists; it never says
+// where it goes, and you still have to walk it to find out.
+function draughtLine(mouths) {
+  const through = mouths.filter(m => m.type === 'passage').length;
+  const n = mouths.length;
+  if (through === 0) {
+    return n === 1
+      ? 'The air is still in the mouth of it. Whatever is back there ends in the rock.'
+      : 'The air is still in all of them. Whatever is back there ends in the rock.';
+  }
+  if (n === 1) return 'The air stirs at the mouth of it. It comes out somewhere.';
+  if (through === n) return 'The air stirs at the mouth of every one of them. This is a road, not a room.';
+  return through === 1
+    ? 'The air stirs at the mouth of one of them. The rest are still.'
+    : 'The air stirs at the mouth of ' + through + ' of them. The rest are still.';
+}
+
 // The plan for the system behind ONE mouth.
 function mouthPlan(q, r, d, letter) {
   const all = beachMouths(q, r, d);
@@ -13129,9 +13157,14 @@ function enterGrotto(kind) {
   // 128 tiles. The deck is standing right there; ask it.
   const n = mouths.length;
   log('Pale sand going up out of the water, and the boat riding black behind you. At the back of it the rock is broken open — '
-    + (n === 1 ? 'one way in' : n === 2 ? 'two ways in, and no telling which is the better' : 'three ways in')
+    + (n === 1 ? 'one way in' : n === 2 ? 'two ways in' : 'three ways in')
     + '.', 'strange', 'GROTTO');
-  log('Nothing is coming in after you here. The rock is dry and the roof holds — but there is not a door in the whole of it, either.', '', 'GROTTO');
+  log(draughtLine(mouths), '', 'GROTTO');
+  // This used to end "there is not a door in the whole of it, either" — written
+  // when a beach was a sealed pocket and left standing after it got one to three
+  // mouths, so the game named the ways in and then denied them in the next
+  // breath. The sand is the safe part; the rock behind it is the question.
+  log('Nothing is coming in after you off the water. The rock is dry, the roof holds, and the boat can wait.', '', 'GROTTO');
   sfx('bell');
   updateHUD(); render(); scheduleSave();
 }
@@ -16704,8 +16737,13 @@ function describeDeck() {
     ]);
     const back = mouths === 0 ? 'The rock at the back of it is solid the whole way along.'
       : mouths === 1 ? 'One opening at the back of it, and dark past that.'
-      : mouths + ' openings at the back of it, and no telling one from another until you are in.';
-    return shore + ' ' + back;
+      : mouths + ' openings at the back of it.';
+    // The draught again, on demand. You get it once on landing, and a captain
+    // sizing up a site will want to stand there and read it a second time
+    // before they spend a season's crates on the place.
+    const plan = beachMouths(f.q, f.r, f.d);
+    const air = (mouths > 0 && plan.length) ? ' ' + draughtLine(plan) : '';
+    return shore + ' ' + back + air;
   }
   const cave = inGrotto(f.kind);
   const boat = f.kind === 'hull';

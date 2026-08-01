@@ -49,7 +49,7 @@ var __X = { L: __L, state,
   seedTo(v){ worldSeed=v; interiorSalt=':'+v; resetWorldCaches(); interiorCache.clear();
              spawnedChunks.clear(); revealed.clear(); visited.clear(); },
   tileAt, getTile, hexKey, hexDistance, homeDock, cells, cellKey, cellRun,
-  beachMouths, CAVE_SEGS, DEPTH_GRID, MOUTH_LETTERS };
+  beachMouths, CAVE_SEGS, DEPTH_GRID, MOUTH_LETTERS, draughtLine };
 `, sb, { timeout: 180000 });
 const X = sb.__X;
 
@@ -125,8 +125,36 @@ const bad = sites.filter(s => s.ways >= 2 && s.dist < 10);
 console.log('  a crossroads right on the doorstep      ' + bad.length + '   ' + pct(bad.length));
 
 console.log('\n--- CAN THE CAPTAIN TELL, STANDING ON THE SAND? ---');
-console.log('  The mouths are visible on the beach — you can count them.');
-console.log('  What is BEHIND each one is not named until you walk it, and');
-console.log('  whether a passage comes out somewhere else is not known until');
-console.log('  you follow it to the end. So the count is legible and the SHAPE');
-console.log('  is not. Whether that is mystery or opacity is the design call.');
+console.log('  Yes, as of the draught. The mouths were always countable and the');
+console.log('  SHAPE was not — what lay behind one went unnamed until walked, and');
+console.log('  whether it came out anywhere was unknown until followed to its end,');
+console.log('  so the one site per world worth holding could only be found by');
+console.log('  exhausting every other. Now the air answers: a passage moves it and');
+console.log('  nothing else does. Still air is a dead end, and a dead end is a');
+console.log('  fortress. It says a way through EXISTS and never where it goes.');
+
+// ---- THE DRAUGHT MUST NOT LIE ----------------------------------------------
+// The line a captain reads off the sand is the ONLY way to tell a fortress from
+// a road before committing to one. If it ever says "still" over a site with a
+// way through, it is worse than saying nothing — a captain would build there.
+console.log('\n--- DOES THE SAND TELL THE TRUTH? ---');
+let wrong = 0, stillAndSealed = 0, stirsAndOpen = 0;
+const samples = {};
+for (const s of sites) {
+  const mouths = s.types.map(t => ({ type: t }));
+  const line = X.draughtLine(mouths);
+  const saysStill = /air is still/.test(line);
+  const saysStirs = /air stirs/.test(line);
+  if (saysStill && s.ways > 0) wrong++;
+  if (saysStirs && s.ways === 0) wrong++;
+  if (saysStill && s.ways === 0) stillAndSealed++;
+  if (saysStirs && s.ways > 0) stirsAndOpen++;
+  const key = s.n + 'mouth/' + s.ways + 'through';
+  if (!samples[key]) samples[key] = line;
+}
+console.log('  sealed sites told "still"        ' + stillAndSealed + ' of ' + sites.filter(s => s.ways === 0).length);
+console.log('  sites with a way told "stirs"    ' + stirsAndOpen + ' of ' + sites.filter(s => s.ways > 0).length);
+console.log('  OUTRIGHT LIES                    ' + wrong);
+console.log('\n  every shape it can say, once each:');
+for (const k of Object.keys(samples).sort()) console.log('    ' + k.padEnd(16) + samples[k]);
+process.exit(wrong === 0 ? 0 : 1);
