@@ -22,6 +22,16 @@ const path = require('path');
 //   migrate.test  — an older save is still somebody's campaign: deck records
 //                   rekeyed by kind, and a station that predates knowing what
 //                   kind of place it is
+//   greed.test    — the exploits, and that they stay shut: an errand never pays
+//                   more than buying the item costs, a wreck is salvaged once,
+//                   and attacking a ship spends a turn. Every one of these was
+//                   introduced by adding a feature without asking what it cost
+//   mate.test     — the First Mate reports a change in your situation, in a
+//                   named person's voice — and NEVER adds a line, because the
+//                   log being unreadable is a thing Sean has already told me
+//                   once. Checks the same event is one line with or without a
+//                   mate, and that every call site is a decision (sail, hull
+//                   strike, air) rather than ambient prose
 //   orders.test   — the tutorial thread: seven lines in order, the next only
 //                   when the last is actually DONE, never repeated, never stale
 //                   for a captain who wandered off and did it early, and the
@@ -42,13 +52,30 @@ const path = require('path');
 //                   it proves a captain can reach all of that and not merely
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed'];
+// THE RUNNER MUST SAY WHICH ONE AND WHY. It used to count failures and print
+// only the count, so "BATTERY: 1 SUITE(S) FAILED" meant a hunt through fourteen
+// suites to find out what had gone wrong — and twice it was not a failing check
+// at all but the spawn itself dying under load, which the count could not
+// distinguish from a real bug. A gate that cannot tell you what it caught is
+// most of the way to no gate.
 let failed = 0;
+const bad = [];
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');
   process.stdout.write('\n========== ' + s + ' ==========\n');
-  const r = spawnSync(process.execPath, [file], { stdio: 'inherit', timeout: 600000 });
-  if (r.status !== 0) failed++;
+  const r = spawnSync(process.execPath, [file], { stdio: 'inherit', timeout: 900000 });
+  if (r.status === 0) continue;
+  failed++;
+  // Three different things wear the same exit code. Name them apart.
+  const why = r.error ? 'could not spawn: ' + r.error.message
+            : r.signal ? 'killed by ' + r.signal + (r.signal === 'SIGTERM' ? ' — this is the 15-minute timeout, not a failed check' : '')
+            : 'exit status ' + r.status + ' — a check failed; scroll up to the FAIL line in this suite';
+  bad.push(s + ' (' + why + ')');
 }
-console.log('\n' + (failed === 0 ? 'BATTERY: ALL SUITES PASSED' : 'BATTERY: ' + failed + ' SUITE(S) FAILED'));
+if (failed === 0) console.log('\nBATTERY: ALL SUITES PASSED');
+else {
+  console.log('\nBATTERY: ' + failed + ' SUITE(S) FAILED');
+  for (const b of bad) console.log('  - ' + b);
+}
 process.exit(failed === 0 ? 0 : 1);

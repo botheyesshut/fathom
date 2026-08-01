@@ -595,9 +595,16 @@
        The tap already opened the transcript; what it did not do was stop at one. A
        fixed height is now wrong — the box takes the height of the single line it holds,
        between two and four lines of prose, and the chart gets the rest. */
+    /* AND THE BOX WAS TWO LINES. 6.4rem minus padding and margin left ~67px of
+       text at 1.15rem/1.5 — two lines — against prose where nearly half of all
+       messages need three or more and the tutorial needs five to seven. Raised
+       to four lines at the top of the clamp, still yielding on short screens so
+       a small phone does not pay for it out of the chart. Sean called the log
+       height a taste call and left it to me; it stopped being taste when the
+       measurement came in. */
     height: auto;
     min-height: 3.4rem;
-    max-height: clamp(4.6rem, 12vh, 6.4rem);
+    max-height: clamp(5.2rem, 20vh, 9.2rem);
     /* SCROLLABLE, by finger or wheel. It used to be overflow:hidden with the
        content pinned to the bottom, so anything that had gone past was simply
        unreachable without opening the full transcript. */
@@ -882,6 +889,17 @@
   }
   #chart-head {
     display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+    /* THE DEPTH STEPPER WAS OFF THE EDGE OF THE PHONE, and this one missing word
+       is why. `#chart-layers` asks for its own row with `flex-basis: 100%` and
+       `order: 2` — which does nothing at all in a nowrap flex container. The
+       three items need ~528px of minimum width in a 304px box, and `order: 2`
+       put the stepper last, so the stepper is what got cut: the player saw the
+       left sliver of the up-arrow and no label and no down-arrow. That is Sean's
+       report — "I only seem able to move upward through layers, though I can't
+       be sure that's what's happening" — and he was right not to be sure,
+       because he was looking at a third of a control. The whole per-depth chart
+       was dead on a phone and worked perfectly at desktop width. */
+    flex-wrap: wrap;
     padding: 0.6rem 0.9rem; border-bottom: 1px solid #b9a67f; background: #ddcfae;
     font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.35rem; color: #3a2f1c;
   }
@@ -2193,6 +2211,13 @@ function renderInventory() {
   };
   // Properties, spelled out, so a cursed or volatile thing is never a surprise.
   const PROP_TAG = {
+    // `gills` had no row here, so the one item in the game that lets a party
+    // walk a drowned passage advertised nothing and fell through to the generic
+    // "worth" label. This table exists so a cursed or volatile thing is never a
+    // surprise; the thing that decides whether the crew can cross water belongs
+    // in it more than most. (Written as a bare string first, which would have
+    // rendered `undefined` twice — every other row is {t, c}.)
+    gills: { t: 'gill-work', c: '#6fae72' },
     volatile: { t: 'volatile', c: '#e0724a' }, cursed: { t: 'cursed', c: '#c88ce8' },
     fragile: { t: 'fragile', c: '#d0b0e0' }, heavy: { t: 'heavy', c: '#a8a888' },
     luminous: { t: 'luminous', c: '#bfe0ff' }, sig: { t: 'significant', c: '#e0c060' },
@@ -5511,7 +5536,7 @@ function portRows() {
   if (state.berth) {
     const b = state.berth;
     const ready = berthReady();
-    rows.push({ label: b.title, cost: ready ? 'done — ' + b.pay + ' crates owed' : 'in hand' });
+    rows.push({ name: b.title, desc: ready ? 'Done — ' + b.pay + ' crates owed you.' : 'In hand. Not finished yet.', ok: false, why: '', act: null });
     if (ready) {
       rows.push({ name: 'Collect on it', desc: b.pay + ' crate' + (b.pay === 1 ? '' : 's') + ' and a word in your favour.',
         ok: true, why: '', act: 'berthpay' });
@@ -5548,9 +5573,17 @@ function portRows() {
     for (const k of sellable) {
       const it = ITEMS[k];
       const pay = Math.max(1, Math.round((it.val || 1) * 0.8));
-      rows.push({ label: it.name + ' \u00d7' + state.items[k],
-                  cost: 'pays ' + pay + ' crate' + (pay === 1 ? '' : 's'),
-                  ok: true, act: 'chandler:' + k });
+      // `label`/`cost` WAS A DIALECT NOTHING SPEAKS. renderPort reads `name` and
+      // `desc`; these rows were the only ones in the file using other words, so
+      // every item at the Chandler rendered as "undefined | undefined" with a
+      // working Buy button beside it. Visible in the port window, and green in
+      // the battery \u2014 because board.test.js indexes rows by `act` and never asks
+      // whether a row says anything. It asked "is the action offered" and not
+      // "does it have a name", which is the same shape of hole as every other
+      // bug in this file's history.
+      rows.push({ name: it.name + ' \u00d7' + state.items[k],
+                  desc: 'He pays ' + pay + ' crate' + (pay === 1 ? '' : 's') + ' for it, and not a crate more.',
+                  ok: true, why: '', act: 'chandler:' + k });
     }
   }
 
@@ -6313,6 +6346,23 @@ function attackShip() {
   if (!sh || !sh.known) return;
   const cu = CULTURES[sh.culture], H = HULLS[sh.hull];
   const st2 = shipStats(sh.culture, sh.hull);
+  // AN ACTION COSTS A TURN, AND THIS ONE DID NOT.
+  //
+  // Measured over 200 kills: a merchant went down in a mean 6.8 presses for 9.0
+  // crates, spending ZERO turns and ZERO air. And the mariners can never object
+  // — `FLEETS.mariners.guns` is 0, so `shipStats` gives every mariner hull no
+  // guns, `shipHunting` bails on `guns <= 0` so they cannot chase, and the
+  // return-fire branch below can never run. Sitting still beside one harbour for
+  // 200 turns took 279 crates on the best seed: 1.40 crates a turn, against the
+  // harbour board's CEILING of 0.17-0.21 at every rank. Five to seven times the
+  // intended rate, with none of the intended costs, off a source `shipsTick`
+  // refills to seven hulls on every single move.
+  //
+  // The turn is the fix. It does not make piracy a bad idea — it makes it cost
+  // what everything else in this game costs, which is time in the water, and it
+  // puts the rate back under the board's. The standing consequence is already
+  // written and already fires; what was missing was the clock.
+  state.moves++;
 
   // WHAT HAVE YOU GOT? A boat with nothing to shoot cannot open an action, and
   // saying so is better than a button that fails.
@@ -6771,7 +6821,14 @@ const TRACE_SHED = {
   signal:  'a hum that is not the boat — it comes and goes with the water',
   growth:  'a sweetness in the water that the crew do not like at all',
   air:     'a thread of small bubbles going up past the glass',
-  wreck:   'an oil sheen crawling along the hull, decades old and still rising',
+  // `wreck` WAS NEVER A POI. The table is read as TRACE_SHED[t.poi], and the
+  // nine values TILES can produce are chasm/opening/ruin/hull/signal/growth/
+  // air/salvage/surface — so this row could never fire, while `hull`, which IS
+  // one and is the second-heaviest prize type in the abyss, had no row at all.
+  // A sunken boat shed nothing into the current. The rename that split `hull`
+  // off from `ruin` reached the generator and never reached this table; the
+  // string is unchanged, only the key it is filed under.
+  hull:    'an oil sheen crawling along the hull, decades old and still rising',
 };
 // Walk UPSTREAM hop by hop — each hex is asked about its own set, so a trace
 // can bend around a gyre the way a real plume does.
@@ -6955,8 +7012,27 @@ function boardOffer(port, slot) {
     const item = boardErrandItem(rng, rank);
     if (!item) return null;
     const n = 1 + (rng() < 0.3 ? 1 : 0);
+    // AN ERRAND MUST NOT PAY MORE THAN THE THING COSTS TO BUY.
+    //
+    // This was `rank.pay + val * n * 0.6` — a function of your RATING and not of
+    // the item, so at the top rank a val-1 errand paid 13 while the same item
+    // sits on a Con-Fed shelf at 2. Measured across 300 slates: 44% carried an
+    // errand a stocked captain settles on the spot, netting +888 crates for zero
+    // turns, and — far worse than the crates — every settlement also buys a
+    // TICKET. Five free tickets in a row were observed, which is unrated to the
+    // top rating without leaving the quay, and the whole ladder the board exists
+    // to create is a shopping trip.
+    //
+    // The fee is now capped under the cheapest shelf price for the item, so
+    // buying one to hand in is always a loss and the only way to settle an
+    // errand profitably is to have FOUND the thing. `buyPriceFrom` is
+    // val * markup with markup at least 1.8, so 1.2x val stays below it at
+    // every value and every markup in the table.
+    const worth = ITEMS[item].val || 1;
+    const floorPay = Math.min(rank.pay, 3 + Math.round(worth * n * 0.5));
     return Object.assign(base, { item: item, n: n,
-      pay: rank.pay + Math.round((ITEMS[item].val || 1) * n * 0.6),
+      pay: Math.min(floorPay + Math.round(worth * n * 0.6),
+                    Math.round(worth * n * 1.2)),
       title: 'Wanted: ' + ITEMS[item].name + (n > 1 ? ' ×' + n : ''),
       tell: 'The chandler has a buyer and no stock. Bring ' + (n > 1 ? n + ' of them' : 'one') + ' back here.' });
   }
@@ -7107,6 +7183,21 @@ const LEAD_TIER_CAP = 6;
 function resolveBerth(L) {
   const b = state.berth;
   if (!b || b.found) return;
+  // A WRECK IS SALVAGED ONCE. `dropBerth` deletes the berth and `boardOffer` is
+  // deterministic in (seed, port, ticket, slot) — so taking the same posting
+  // again handed back the same position with `found` cleared, and the same hex
+  // could be stripped for ever. Measured: 5 of 5 re-harvests on 8 seeds, ~15
+  // crates and 5 items out of one wreck without once collecting the fee. The
+  // position is recorded against the campaign, not against the posting.
+  const spent = 'berth:' + b.q + ',' + b.r + ',' + b.d;
+  if (!state.poisFound) state.poisFound = [];
+  if (state.poisFound.indexOf(spent) >= 0) {
+    b.found = true;
+    log('You are over the position and there is nothing here that you did not already take off it. The fee is still owed you at the quay.', '', 'BOARD');
+    updateHUD(); scheduleSave();
+    return;
+  }
+  state.poisFound.push(spent);
   b.found = true;
   if (b.kind === 'salvage') {
     const crates = 2 + randInt(3);
@@ -7343,7 +7434,7 @@ function resolveQuarry(L, tier) {
                                           d: snapToGrid(state.currentDepth) };
   log(`The marked position, and the mark was honest: a cache, plain in the silt — and ${pick.name} lying over it, which has not moved in a long while and is moving now. ${crates} crates' worth, if you want it that badly. Nobody is making you.`,
       'danger', 'QUARRY');
-  sfx('warn');
+  sfx('contact');
   updateHUD(); render(); scheduleSave();
 }
 // Taking the cache is a separate act from arriving. You may simply leave.
@@ -7536,13 +7627,24 @@ function party() { return state.crew.filter(m => !m.lost); }
 // Inflict a wound. severity01 (0..1) is the raw menace of the blow; the member's
 // own armour deletes the worst rows, and low Vigor puts them back. Returns the
 // condition inflicted, or null on a glancing miss.
-function inflictCondition(m, severity01) {
+// `pressure` says whether a condition is a wound to the BODY or to the NERVE.
+// Every one of the ten rows carries it and nothing had ever read it, so the
+// picker chose on tier alone and a hand crushed against the plating could come
+// back with "the shakes" instead. The field was written to make exactly this
+// distinction and the picker never learned to ask. Default 'body': a blow is a
+// blow unless the caller says otherwise.
+function inflictCondition(m, severity01, pressure) {
   if (m.lost) return null;   // the gone are inert — no wounding a body already taken
   crewVitals(m);
   const eff = Math.max(0, Math.min(1, severity01 * vigorMult() - crewDef(m) * 0.12));
   const maxTier = eff > 0.72 ? 3 : eff > 0.4 ? 2 : eff > 0.12 ? 1 : 0;
   if (maxTier === 0) return null;
-  const pool = Object.keys(CONDITIONS).filter(k => CONDITIONS[k].tier <= maxTier && CONDITIONS[k].tier >= Math.max(1, maxTier - 1));
+  const want = pressure === 'nerve' ? 'nerve' : 'body';
+  const inTier = (k) => CONDITIONS[k].tier <= maxTier && CONDITIONS[k].tier >= Math.max(1, maxTier - 1);
+  let pool = Object.keys(CONDITIONS).filter(k => inTier(k) && CONDITIONS[k].pressure === want);
+  // Not every tier has a row of both kinds — fall back rather than return null,
+  // because a blow that lands must do something.
+  if (!pool.length) pool = Object.keys(CONDITIONS).filter(inTier);
   const key = pool[Math.floor(rand() * pool.length)];
   const c = CONDITIONS[key];
   m.conditions.push(key);
@@ -9712,8 +9814,12 @@ function shipsTick() {
       // A SIGHTING DOES NOT NAME HER. Sean's flow, out of Pirates!: you sight a
       // vessel, and only if you close on her do her colours become readable.
       // Hull shape carries at distance; a flag does not.
-      log(`Sail, ${bearing(state.q, state.r, sh.q, sh.r)} of you. ${H.flavor}`,
-          '', 'SAIL');
+      // SAIL HO. The bearing and the range, because those are the two things a
+      // decision needs — and no name, because a sighting does not name her.
+      const km = (d * 60 / 1000).toFixed(1);
+      mateSays(`Sail ho${mateAddress()} — ${bearing(state.q, state.r, sh.q, sh.r)} of us, ${km} km. ${H.flavor}`,
+               `Sail, ${bearing(state.q, state.r, sh.q, sh.r)} of you. ${H.flavor}`,
+               '', 'SAIL');
       log('Close on her to read her colours, or hold your course and let her go.', '', 'SAIL');
     } else {
       log(`Screws on the surface, ${bearing(state.q, state.r, sh.q, sh.r)} — fast and shallow. Something is crossing up there.`, '', 'SONAR');
@@ -14612,12 +14718,24 @@ function leaveInterior(prefix) {
   // room refills the moment you surface, which is the restock faucet twice
   // over — and WITH it, re-entering is free to allow, because the deck simply
   // has nothing left in it.
-  if (!state.deckTook) state.deckTook = {};
-  const dkOut = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
-  const prev = state.deckTook[dkOut] || [];
-  const merged = prev.slice();
-  for (const k of (f.took || [])) if (merged.indexOf(k) < 0) merged.push(k);
-  state.deckTook[dkOut] = merged;
+  // STASH THE WHOLE DECK, NOT JUST WHAT YOU TOOK OFF IT. This used to be an
+  // inline merge of `f.took` and nothing else — so the ORDINARY exit, swimming
+  // up to the boat, was the one way out that did not call `stashDeck`. The four
+  // lateral moves (followWay, followFar, returnThroughPassage, retreatWay) all
+  // did. Two things died here every time:
+  //
+  //   the tenant's WOUNDS — beat a warden from 22 down to 1, surface for air,
+  //   come back and it is whole again. The comment on `footInto` says this bug
+  //   was fixed; the fix landed on the entry and never on the exit.
+  //
+  //   your DEAD — `loseCrew` puts a body on `f.dead` at the tile it fell on so
+  //   you can go back for it, and the Deep Ones pay for the recovered. On a hull
+  //   or a ruin that body was destroyed the moment you went up the ladder.
+  //
+  // `stashDeck` writes all three overlays (took, hurt, dead) and does the same
+  // merge this did. One way out, one record.
+  const own = onOwnDeckNow();      // ASKED BEFORE THE FOOT IS NULLED — see below
+  stashDeck(f);
   recallParty();   // the hands that are still standing come up through the breach with you
   state.foot = null;
   state.cargo += f.crates;
@@ -14650,8 +14768,23 @@ function leaveInterior(prefix) {
   if (!state.poisFound.includes(ck)) state.poisFound.push(ck);
   // A claimed deck keeps its mark on the chart; a stripped one goes back to
   // being ordinary water.
-  const own = onOwnDeckNow();
-  setTile(f.q, f.r, own ? 'base' : 'passage');
+  //
+  // `own` IS COMPUTED ABOVE, BEFORE state.foot IS NULLED. It used to be asked
+  // here, and `onOwnDeckNow()` reads `state.foot` — which is null by this line,
+  // so it was ALWAYS false. Three things followed: the homecoming line below
+  // could never print (you were told your own station was worked out), the
+  // station hex was overwritten with 'passage' whose TILES entry has char '',
+  // so a claimed ruin lost its glyph from the main view for the rest of the
+  // session, and the re-entry branch that needs `poi === 'ruin'` could not fire
+  // again either.
+  //
+  // AND THE OBVIOUS REPAIR CRASHES. There is no `base` key in TILES — it was
+  // removed deliberately ("Do NOT restore them as tile types") — so `setTile`
+  // would read `.wall` off undefined, throwing after the cargo credit and
+  // before the render, inside a click handler. So a station's hex is simply
+  // LEFT ALONE: it stays the ruin or the beach it always was, and the ⌂ on the
+  // chart is drawn from `state.base`, which is where it was coming from anyway.
+  if (!own) setTile(f.q, f.r, 'passage');
   if (own) {
     log('You cycle the lock behind you and swim up to the boat. The station holds.', '', 'STATION');
     updateHUD(); render(); scheduleSave();
@@ -15623,7 +15756,11 @@ function lurkerStrike(c) {
   const dmg = 5 + Math.floor(rand() * 6);
   state.hull = Math.max(0, state.hull - dmg);
   state.lastFailTime = performance.now();
-  log(`Something slams the hull out of the dark. -${dmg} hull.`, 'danger', 'STRIKE');
+  // SOMETHING AT THE HULL. The decision this is announcing is run, fight, or go
+  // quiet — so it says where it hit and what it cost, and nothing else.
+  mateSays(`Something at the hull${mateAddress()} — she is taking it! ${dmg} off the plate!`,
+           `Something slams the hull out of the dark. -${dmg} hull.`,
+           'danger', 'STRIKE');
   sfx('strike');
   c.interest = 100; // blood in the water
 }
@@ -16888,6 +17025,42 @@ function firstMate() {
   return best;
 }
 
+// ---- THE MATE SPEAKS UP -----------------------------------------------------
+//
+// Sean: "what if we also had a First Mate to give situation reports when they
+// arise, such as 'Sail ho, capn, 600 meters SW' or 'Something at the hull, capn,
+// she's under attack!'"
+//
+// The rule I am holding this to, and it is the whole difference between a mate
+// and a nuisance: IF THE MATE SPEAKS, YOU MUST HAVE A DECISION TO MAKE. He told
+// me two sessions ago that the log was unreadable and we cut it to one
+// description per hex and depth; a voice that chatters would undo that in a
+// morning.
+//
+// So the Mate does not ADD lines. He takes the lines the boat was already going
+// to say about a change in your situation — a sail, a strike on the hull, air
+// going short — and says them himself, with your rank in them and a bearing you
+// can steer on. A boat with nobody aboard reads the same events flatly, off the
+// instruments, which is exactly what it is like to sail alone.
+function mateName() {
+  const m = firstMate();
+  if (!m) return null;
+  return m.machine ? 'The calculator' : (m.name || 'The mate');
+}
+// How a hand addresses the captain. The machine does not address anybody.
+function mateAddress() {
+  const m = firstMate();
+  if (!m) return '';
+  return m.machine ? '' : pickLoose([', cap’n', ', captain', ', skipper']);
+}
+// Say a thing in the Mate's voice if there is one to speak, and plainly if not.
+// `plain` is what the boat said before and still says with nobody aboard.
+function mateSays(spoken, plain, cls, tag) {
+  const who = mateName();
+  if (!who) { log(plain, cls, tag); return; }
+  log(who + ': “' + spoken + '”', cls, tag);
+}
+
 // HAS THIS ROOM ALREADY SPOKEN? One description per hex AND depth — the same hex is a
 // different room at a different depth, and it was already treated that way, but nothing
 // remembered having said so. Session-scoped and capped: a room you saw an hour ago may
@@ -17409,7 +17582,12 @@ function airCounsel() {
   for (const step of AIR_STEPS) {
     if (pct <= step.at && state._airMark > step.at) {
       state._airMark = step.at;
-      log(step.text, step.cls, 'AIR');
+      // THE THIRD THING A MATE IS FOR. The air ladder is already the most
+      // decision-shaped thing in the game — every rung is "turn now or do not"
+      // — so it is exactly what somebody standing at the gauge would say out
+      // loud. The counsel itself is unchanged; only who tells you.
+      mateSays(Math.round(pct * 100) + ' per cent air' + mateAddress() + '. ' + step.text,
+               step.text, step.cls, 'AIR');
       return;
     }
   }
@@ -18064,9 +18242,25 @@ function logAtBottom() {
   if (!el) return true;
   return el.scrollHeight - el.scrollTop - el.clientHeight < 24;
 }
+// SHOW THE START OF WHAT WAS JUST SAID, NOT THE END OF IT.
+//
+// This pinned `scrollTop = scrollHeight`, which shows the BOTTOM of the box —
+// so a message longer than the box put you at its last two lines and you had to
+// finger-scroll UP inside a 67-pixel window to find the beginning. Measured
+// across the 306 log calls in this file: 45.8% run to more than two lines and
+// 16.3% to more than three, and every one of the seven Standing Orders — the
+// tutorial a new captain reads first — is five to seven. The most important
+// prose in the game was the most reliably unread.
+//
+// Scrolling to the TOP of the newest entry instead means you always start at the
+// first word. If it overruns the box you scroll down to finish it, which is the
+// direction reading already goes.
 function logScrollDown() {
   const el = document.getElementById('log');
-  if (el) el.scrollTop = el.scrollHeight;
+  if (!el) return;
+  const last = el.lastElementChild;
+  if (!last) { el.scrollTop = el.scrollHeight; return; }
+  el.scrollTop = Math.max(0, last.offsetTop - el.offsetTop);
 }
 
 function log(text, cls, echo) {
@@ -18314,6 +18508,19 @@ function restart() {
   state.route = ['0,0,0']; state.refuges = { surface: '0,0,0' }; state.autoTarget = null;
   state.layersFelt = [];
   state.portHire = null;
+  // A NEW WORLD GETS THE TUTORIAL BACK. `ordersSaid` survived a restart, so a
+  // captain who finished the Standing Orders and then started a fresh ocean had
+  // them permanently silent — in that campaign and every one after it. The
+  // thread is about THIS campaign; `tipsSeen` above is deliberately cross-world
+  // and says so in a comment, which is the difference.
+  state.ordersSaid = []; state.ordersAt = null;
+  // AND THE OLD SEA'S TRAFFIC GOES WITH IT. `shipsTick` culls by distance unless
+  // you are FOLLOWING a hull — so a ship under escort sailed into the new ocean
+  // still steering for a harbour in a world that no longer exists.
+  state.ships = [];
+  state._atEnclave = null;
+  // The decoy buoys in the water belonged to the old sea as well.
+  state.buoys = [];
   if (typeof logHistory !== 'undefined') logHistory.length = 0;
   state.air = sub.air; state.hull = sub.hull;
   state.currentDepth = 0; state.maxDepth = 0;
@@ -18603,6 +18810,7 @@ function doSave(force) {
       tipsSeen: state.tipsSeen,
       ordersSaid: state.ordersSaid,
       ordersAt: state.ordersAt,
+      buoys: state.buoys,
       route: state.route,        // the way back is knowledge, and it is saved
       refuges: state.refuges,
       airMark: state._airMark,   // which rung of the air counsel we have reached
@@ -18738,6 +18946,12 @@ function resumeGame(save) {
   state.tipsSeen = arr(save.tipsSeen);
   state.ordersSaid = arr(save.ordersSaid);
   state.ordersAt = typeof save.ordersAt === 'number' ? save.ordersAt : null;
+  // A DECOY IS PAID FOR IN AIR AND IN DECOYS, AND THE BUOY WAS NOT SAVED. Both
+  // costs were durable and the thing they bought was not, so a captain who
+  // launched one and reloaded — which is exactly what somebody does when
+  // something is closing — had spent 6 air and a decoy for nothing. Torpedo
+  // re-homing and creature steering both read this list.
+  state.buoys = arr(save.buoys);
   state.route = arr(save.route);
   state.refuges = obj(save.refuges);
   state.autoTarget = null;       // never resume under power
