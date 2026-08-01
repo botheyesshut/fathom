@@ -22,6 +22,10 @@ const path = require('path');
 //   migrate.test  — an older save is still somebody's campaign: deck records
 //                   rekeyed by kind, and a station that predates knowing what
 //                   kind of place it is
+//   orders.test   — the tutorial thread: seven lines in order, the next only
+//                   when the last is actually DONE, never repeated, never stale
+//                   for a captain who wandered off and did it early, and the
+//                   switch in Options silences the lot
 //   locks.test    — the first lock in the game: hatchkey and bonekey were
 //                   `kind: 'key'` and nothing in the world had a keyhole. Checks
 //                   they open something, that opening SPENDS them, and that a
@@ -38,7 +42,7 @@ const path = require('path');
 //                   it proves a captain can reach all of that and not merely
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

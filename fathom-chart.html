@@ -5893,6 +5893,91 @@ const TIPS = {
 let tipsOn = true;
 try { tipsOn = localStorage.getItem('fathom-tips') !== '0'; } catch (e) {}
 
+// ---- STANDING ORDERS: what to do, as opposed to what a thing is -------------
+//
+// The TIPS above are REACTIVE and they are good at their job — you meet a
+// thermocline and one tells you what a thermocline is. What nothing did was
+// answer the first question a new captain actually has, which is "what am I
+// supposed to be doing". Sean, planning his own first real test: "I will not
+// know how to do many of these things."
+//
+// So this is a thread rather than a glossary. One line at a time, in order, and
+// the next only arrives when the last is DONE — which is checked against the
+// real state of the campaign, never against a step counter, so a captain who
+// wanders off and claims a grotto before taking any work is simply further along
+// the thread than they thought and never gets told to do something they have
+// already done.
+//
+// It is meant to be mellow. Seven lines across a whole first session, each said
+// once and never again, and the same switch in Options turns the whole of it off
+// along with the tips — one control for "help me", because two would be a puzzle
+// of its own.
+const ORDERS = [
+  // AN OPENER, NOT AN OBJECTIVE — and the difference matters, because the thread
+  // WAITS for the current order to be done before offering the next. This first
+  // gated on four moves, so a captain who tapped DOCK before wandering anywhere
+  // was stuck on it for ever and never heard another word. `opener` means done
+  // the moment it is said: it is information, and reading it is the whole task.
+  { id: 'helm', opener: true,
+    done: () => false,
+    say: 'The arrows around the boat move her a hex at a time. LOOK costs nothing and tells you where you are standing. PING costs air and tells you what is out there — the dial beside it is how hard you shout, and everything in the water can hear you shout.' },
+
+  { id: 'work',
+    done: () => !!state.berth || (state.ticket || 0) > 0,
+    say: 'Nothing out here will happen to you until you go and make it happen. While you are alongside the dock, DOCK opens the harbour — the first thing in that window is a slate of work. Take a posting. It is the only thing in the room that pays you rather than charges you.' },
+
+  // SAILING IS DONE WHEN YOU ARE OVER IT, NOT WHEN YOU HAVE REACHED IT.
+  // This first read `berth.found`, and reaching a mark MEANS diving to it — so
+  // sail and dive completed in the same instant and the dive line, the one a
+  // new captain most needs, could never fire at all. The test caught it by
+  // printing the thread as it advanced; the checks were all green.
+  { id: 'sail',
+    done: () => (state.ticket || 0) > 0 || (state.berth && state.berth.found)
+      || (state.berth && state.berth.q != null
+          && hexDistance({ q: state.q, r: state.r }, { q: state.berth.q, r: state.berth.r }) <= 1),
+    say: 'The posting is marked on your water now — a flag on the sea itself and the same mark on the chart. Steer for it. It will call out as you close, and it will say so when you are over the top of it.' },
+
+  { id: 'dive',
+    done: () => (state.maxDepth || 0) >= 180 || (state.ticket || 0) > 0 || (state.berth && state.berth.found),
+    say: 'It is under you as well as ahead of you. The down arrow takes her a step deeper; the air gauge is the clock on all of it, and coming back up to daylight fills the tanks right off. Go down to the marked depth and the job is done.' },
+
+  { id: 'collect',
+    done: () => (state.ticket || 0) > 0,
+    say: 'Now take her home and tap DOCK again to collect. Nothing in the hold is yours until it is on the ledger — the sea keeps the boat and everything aboard her, and the harbour keeps what you banked. That is the whole of it.' },
+
+  { id: 'ashore',
+    done: () => !!state.foot || !!state.base || Object.keys(state.deckTook || {}).length > 0,
+    say: 'The shelf floor is not the sea floor. Within a few hexes of the dock the ground opens — the chart draws those O — and under them there is air, sand, and rooms nobody has walked in since the Fall. Take her down through one and put the crew ashore.' },
+
+  { id: 'keep',
+    done: () => !!state.base,
+    say: 'A place down here with nothing living in it can be kept. Claim it and what you leave there is still there when you come back, and the sea cannot take it from you the way it takes a hold. It is the only address you will ever have.' },
+];
+
+function ordersTick() {
+  if (!tipsOn || !gameStarted || !state.alive) return;
+  if (!state.ordersSaid) state.ordersSaid = [];
+  // ONE LINE PER TURN, WHATEVER ELSE HAPPENS. Without this the opener chained
+  // straight into the first objective and a captain got two paragraphs before
+  // touching anything. A turn is a move; docking or claiming can finish an order
+  // but the next one waits for the boat to do something, which is the difference
+  // between a thread and a lecture.
+  if (state.ordersAt != null && state.ordersAt === (state.moves || 0)) return;
+  for (const o of ORDERS) {
+    const said = state.ordersSaid.indexOf(o.id) >= 0;
+    // An opener is finished the moment it has been read. An objective is
+    // finished when the campaign says so, and until then the thread waits here
+    // rather than running ahead with advice you have not earned yet.
+    if (o.opener ? said : o.done()) continue;
+    if (said) return;
+    state.ordersSaid.push(o.id);
+    state.ordersAt = (state.moves || 0);
+    log(o.say, 'tip', 'ORDERS');
+    scheduleSave();
+    return;
+  }
+}
+
 function tip(key) {
   if (!tipsOn || !TIPS[key]) return;
   if (!state.tipsSeen) state.tipsSeen = [];
@@ -5941,10 +6026,10 @@ function renderOptions() {
     + (vpOn ? 'On' : 'Off') + '</button></div>'
     + '<div class="opt-d">The illustration window in the corner of the chart.</div></div>'
 
-    + '<div class="opt"><div class="opt-h"><div class="opt-n">Tutorial tips</div>'
+    + '<div class="opt"><div class="opt-h"><div class="opt-n">Tutorial</div>'
     + '<button class="opt-b' + (tipsOn ? '' : ' off') + '" data-opt="tips">'
     + (tipsOn ? 'On' : 'Off') + '</button></div>'
-    + '<div class="opt-d">A line of explanation the first time something happens to you — the sounder, a thermocline, a hunter fixing on your noise. Each fires once, ever. Nothing interrupts and nothing repeats.</div></div>'
+    + '<div class="opt-d">Two things, one switch. STANDING ORDERS are a thread of seven lines telling a new captain what to do next — take work, follow the mark, go down to it, come home and get paid, find a way under the shelf, keep a place of your own. The next only arrives when the last is actually done. TIPS are a line of explanation the first time something happens to you: the sounder, a thermocline, a locked door, a hunter fixing on your noise. Everything here fires once, ever. Nothing interrupts, nothing repeats, and turning it off stops both.</div></div>'
 
     // WHICH BUILD AM I PLAYING? Sean sent a screenshot of a build three commits old and
     // neither of us could tell — I spotted it only because a button I had deleted was
@@ -9812,6 +9897,8 @@ const state = {
   // Tips fire once EVER — across boats, across new worlds. Being taught the
   // same thing twice is worse than not being taught it.
   tipsSeen: [],
+  ordersSaid: [],
+  ordersAt: null,
   decoys: 3,          // buoys in the racks; restocked at the dock
   alive: true,
   cameraX: 0, cameraY: 0,   // smoothed camera (follows sub)
@@ -18075,6 +18162,13 @@ function updateHUD() {
   // A harbour or a sail appears and disappears as the boat moves, so the buttons
   // that offer them have to be re-asked every time anything changes.
   syncDockBtn();
+  // THE STANDING ORDERS RIDE HERE and nowhere else. One wire rather than a hook
+  // in every path that could advance the thread — move, dive, dock, go ashore,
+  // claim — because a thread with six hooks is a thread with a hole in it. This
+  // runs on action, not on frames (61 call sites, none in a rAF loop), and
+  // `ordersTick` says at most one line ever per order, so calling it often costs
+  // seven predicate checks and nothing else.
+  ordersTick();
   syncSailBtn();
   const sub = activeSub();
   syncDiveControls();
@@ -18507,6 +18601,8 @@ function doSave(force) {
       pagesFound: state.pagesFound,
       bestiary: state.bestiary,
       tipsSeen: state.tipsSeen,
+      ordersSaid: state.ordersSaid,
+      ordersAt: state.ordersAt,
       route: state.route,        // the way back is knowledge, and it is saved
       refuges: state.refuges,
       airMark: state._airMark,   // which rung of the air counsel we have reached
@@ -18640,6 +18736,8 @@ function resumeGame(save) {
   state.pagesFound = arr(save.pagesFound);  // the account, as far as you have got
   state.bestiary = obj(save.bestiary);      // what you have learned about what lives here
   state.tipsSeen = arr(save.tipsSeen);
+  state.ordersSaid = arr(save.ordersSaid);
+  state.ordersAt = typeof save.ordersAt === 'number' ? save.ordersAt : null;
   state.route = arr(save.route);
   state.refuges = obj(save.refuges);
   state.autoTarget = null;       // never resume under power
