@@ -77,6 +77,11 @@ function boot(seed) {
     '\nfunction __world(){ return world; }' +
     '\nfunction __openAt(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
     '\nfunction __grid(){ return DEPTH_GRID; }' +
+    // The harbour board, reached the way a captain reaches it: the rows the
+    // window actually offers, and the button it actually presses.
+    '\nfunction __portRows(){ return portRows(); }' +
+    '\nfunction __portBuy(act){ return portBuy(act); }' +
+    '\nfunction __boardPort(){ return boardPort(); }' +
     '\nfunction __start(){ gameStarted = true; }';
   try { vm.runInContext(script + probe, sandbox, { timeout: 20000 }); }
   catch (e) { if (typeof sandbox.state === 'undefined') throw e; }
@@ -238,6 +243,31 @@ function playOne(tallies, personaName, seed) {
       call(sb.surface);
       if (s.cargoBanked > banked0) sawOnce(T, run, 'banked salvage at port');
       if (sb.__sub() !== sub) sawOnce(T, run, 'bought a better boat');
+
+      // THE HARBOUR BOARD. The bot did not know it existed, so playtest.js has
+      // been reporting the world as it was BEFORE the early game had a job in
+      // it — 17% of runs ever picking up cargo, median 0 banked — and there was
+      // no AFTER to compare that to. Driven through portRows/portBuy, the same
+      // window and the same buttons a captain uses, so this measures what a
+      // player can actually reach rather than what the functions can do.
+      let bp = null;
+      try { bp = sb.__boardPort(); } catch (e) { bp = null; }
+      if (bp) {
+        let rows = [];
+        try { rows = sb.__portRows() || []; } catch (e) { rows = []; }
+        const pay = rows.filter(r => r.act === 'berthpay')[0];
+        if (pay) {
+          const t0 = s.ticket || 0;
+          call(sb.__portBuy, 'berthpay');
+          if ((s.ticket || 0) > t0) sawOnce(T, run, 'collected on a posting');
+        } else if (!s.berth) {
+          const offer = rows.filter(r => r.act && r.act.indexOf('berth:') === 0)[0];
+          if (offer) {
+            call(sb.__portBuy, offer.act);
+            if (s.berth) sawOnce(T, run, 'took work off the board');
+          }
+        }
+      }
     }
     // Ping sometimes.
     if (rnd() < P.ping) { call(sb.ping); sawOnce(T, run, 'used active sonar'); }
@@ -347,6 +377,13 @@ function pickGoal(sb, s, P) {
   const sub = sb.__sub();
   const heavy = s.cargo >= 8, hurt = s.hull < sub.hull * 0.45;
   if (heavy || hurt) return { q: 1, r: 1 };                       // the dock
+  // A POSTING IS THE STRONGEST REASON TO BE ANYWHERE. Out to the mark while it
+  // is unfinished, home to the quay the moment it is done — which is the whole
+  // shape of the loop the board was built to create.
+  if (s.berth) {
+    if (s.berth.q != null && !s.berth.found) return { q: s.berth.q, r: s.berth.r };
+    return { q: 1, r: 1 };
+  }
   if ((s.leads || []).length) return { q: s.leads[0].q, r: s.leads[0].r };
   for (const e of (s.enclaves || [])) {
     if (sb.__dist({q: e.q, r: e.r}, {q: s.q, r: s.r}) <= 20) return { q: e.q, r: e.r };
