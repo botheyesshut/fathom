@@ -960,6 +960,17 @@ for (const k of dch.tiles.keys()) {
 }
 check(!!safeF, 'there is inner rock to cut safely', safeF ? 'from ' + safeF.x + ',' + safeF.y : 'none');
 df.x = safeF.x; df.y = safeF.y;
+// THE RIG IS A MIDGAME PURCHASE and cutting rock is refused without one, so
+// check the gate first and then buy past it — everything below is testing the
+// digging, not the buying.
+const crGate = DB.stores.crates, carvedGate = DB.carved.length;
+sandbox.__st().miner = false;
+sandbox.__dig();
+check(DB.carved.length === carvedGate && DB.stores.crates === crGate,
+  'no cutting rock without a boring rig, and no crates spent trying',
+  DB.carved.length + ' tiles, ' + DB.stores.crates + ' crates');
+sandbox.__st().miner = true;
+
 const crBefore = DB.stores.crates, carvedBefore = DB.carved.length;
 sandbox.__dig();
 const tk = safeF.tg.x + ',' + safeF.tg.y;

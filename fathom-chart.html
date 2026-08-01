@@ -5584,6 +5584,28 @@ function portRows() {
   } else {
     rows.push({ name: 'The calculating engine', desc: 'Fitted. It never tires and it never learns.', ok: false, why: '', act: null });
   }
+  // THE BORING RIG. Cutting your own rooms out of the rock is a midgame thing to
+  // be able to do, not a thing you can do the afternoon you claim a hole. Sean:
+  // "this possibility should be something we can build up to, not something
+  // everyone gets right away. We should need to buy an autominer for it."
+  //
+  // Gated on the harbour's rating and not on crates alone, because crates alone
+  // is just waiting. The yard will sell a hull to anyone; it will not hand a
+  // boring rig to somebody it has never seen finish a job, and by the time it
+  // has, a captain has been out far enough to know which hole they want to keep.
+  if (!state.miner) {
+    const rated = (state.ticket || 0) >= MINER_TICKET;
+    rows.push({ name: 'A boring rig', desc: rated
+        ? 'Cuts rooms out of live rock. Bolts into a station of your own · ' + MINER_COST + ' crates'
+        : 'The yard will not build one for a captain it has not seen finish work · ' + MINER_COST + ' crates',
+      ok: rated && canPay(MINER_COST, 0),
+      why: !rated ? 'the board must rate you ' + BOARD_RANKS.find(b => b.at === MINER_TICKET).word
+                  : shortfall(MINER_COST, 0),
+      act: 'miner' });
+  } else {
+    rows.push({ name: 'The boring rig', desc: 'Aboard, and it will cut anywhere you own.', ok: false, why: '', act: null });
+  }
+
   const next = Object.keys(SUBS).filter(k => SUBS[k].tier === sub.tier + 1)[0];
   if (next) {
     const b = SUBS[next];
@@ -5674,6 +5696,16 @@ function portBuy(act) {
     state.cargoBanked -= cost;
     state.aiMate = true;
     log('The yard swings a crate aboard and bolts it to the chart table: brass, glass, and a great many small wheels that turn when the boat moves. It reads the water and it tells you what it reads. It has no opinion about any of it.',
+        'strange', 'OUTFIT');
+    sfx('bell');
+    updateHUD(); renderPort(); scheduleSave();
+    return;
+  }
+  if (act === 'miner') {
+    if (state.miner || (state.ticket || 0) < MINER_TICKET || state.cargoBanked < MINER_COST) return;
+    state.cargoBanked -= MINER_COST;
+    state.miner = true;
+    log('The yard swings it aboard in pieces and you stow it the way you would stow a body — a boring rig, all screw and shoring plate, pre-Fall and re-bedded twice. It will cut you a room out of live rock wherever you have a station to bolt it into.',
         'strange', 'OUTFIT');
     sfx('bell');
     updateHUD(); renderPort(); scheduleSave();
@@ -7558,6 +7590,14 @@ function crushPenalty() {
 }
 
 // Dock economy prices — every future service the port sells lives here.
+// THE BORING RIG. A large sink, and the second one in the game — the calculator
+// is 60 and this sits just under it, so a captain in the middle of a campaign is
+// choosing between a voice on the boat and a hand in the rock rather than
+// idly accruing both. MINER_TICKET is a rung of the harbour board's rating
+// (see BOARD_RANKS): three finished jobs, which is "trusted with a hold".
+const MINER_COST = 48;
+const MINER_TICKET = 3;
+
 const DOCK_PRICES = {
   hullPerCrate: 25, // the yard: one banked crate buys this much hull patching
   // A brass mate. See the Yard row that sells it: the only large sink in the economy,
@@ -9938,7 +9978,7 @@ function syncFootControls(inside) {
     }
   }
   const dig = document.getElementById('btn-dig');
-  if (dig) dig.style.display = (own && !state.base.breached && !!digTargetNear()) ? '' : 'none';
+  if (dig) dig.style.display = (own && state.miner && !state.base.breached && !!digTargetNear()) ? '' : 'none';
 
   // Boarding offers itself when anything of yours — you, or a crewman — is
   // toe-to-toe with the thing. A dead control is worse than no control.
@@ -13699,6 +13739,12 @@ function digTargetNear() {
 // gamble — the sea is a hand's breadth beyond it, and a bad cut lets it in.
 function digAdjacent() {
   const f = state.foot, b = state.base;
+  // THE RIG IS THE GATE, and it is checked here rather than only on the button —
+  // a control can be hidden and still reachable, and this one spends crates.
+  if (!state.miner) {
+    log('You could scratch at this with hand tools for a season and have a niche to show for it. Cutting rooms out of live rock takes a rig, and the yard sells them to captains it has seen finish work.', 'warn', 'DIG');
+    return;
+  }
   if (!f || !b || !stationSecure(f.q, f.r, f.d, f.kind)) {
     if (f) log(b && b.breached ? 'The station is flooded. Reseat the lock and pump it dry before you cut any more rock.' : 'You can only dig out a sealed station of your own.', 'warn', 'DIG');
     return;
@@ -18111,6 +18157,7 @@ function restart() {
   state.commission = null;   // ...and sails under nobody's paper
   state.travel = null;       // ...and is steering nowhere in particular
   state.aiMate = false;      // ...and has no engine to read the water for her
+  state.miner = false;       // ...and no rig to cut rock with
   state._warTerm = null;     // ...and has not heard the news yet
   state.allies = [];     // ...and has never met them
   state.enclaves = [];
@@ -18363,6 +18410,7 @@ function doSave(force) {
       leads: state.leads,
       berth: state.berth,
       ticket: state.ticket,
+      miner: state.miner,
       enclaves: state.enclaves,
       corpses: state.corpses,
       layersFelt: state.layersFelt,
@@ -18551,6 +18599,8 @@ function resumeGame(save) {
   // is exactly what such a captain had.
   state.berth = (save.berth && typeof save.berth === 'object' && !Array.isArray(save.berth)) ? save.berth : null;
   state.ticket = typeof save.ticket === 'number' ? save.ticket : 0;
+  // A campaign saved before rigs existed has not bought one.
+  state.miner = !!save.miner;
   state.enclaves = arr(save.enclaves);
   state.corpses = arr(save.corpses);
   // `|| null` accepted a STRING here, and the back-fill below then set

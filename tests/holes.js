@@ -181,4 +181,35 @@ console.log('  sites where a cut can NEVER hole through: ' + safe
   + ' (' + (100 * safe / lone.length).toFixed(0) + '%)');
 console.log('  => flat means the idea is dead; a spread means site choice is real.');
 
+
+// ---- TWO QUESTIONS ABOUT CUTTING ROCK --------------------------------------
+// Sean: "Is it possible to hit water and flood the place? Is it possible to dig
+// quite a while without hitting a tunnel and then suddenly to hit one?"
+console.log('\n--- HOW MANY CUTS BEFORE THE FIRST HOLE? ---');
+console.log('  neighbours   median cut   earliest   latest   never in 200');
+for (const near of [1, 2, 3, 4]) {
+  const firsts = [];
+  let never = 0;
+  for (let trial = 0; trial < 4000; trial++) {
+    let hit = 0;
+    for (let cut = 1; cut <= 200; cut++) {
+      // Same odds the game uses, with the first tiles safe.
+      if (cut <= 3) continue;
+      if (Math.random() < Math.min(0.30, near * 0.05)) { hit = cut; break; }
+    }
+    if (hit) firsts.push(hit); else never++;
+  }
+  firsts.sort((a, b) => a - b);
+  console.log('  ' + String(near).padStart(6)
+    + String(firsts.length ? firsts[Math.floor(firsts.length / 2)] : '-').padStart(13)
+    + String(firsts.length ? firsts[0] : '-').padStart(11)
+    + String(firsts.length ? firsts[firsts.length - 1] : '-').padStart(9)
+    + String(never).padStart(15));
+}
+console.log('  (each cut is its own roll, so a long quiet run then a sudden hole');
+console.log('   is the normal shape of it, not an exception)');
+
+// THE VERDICT STAYS LAST. Twice now I have appended a section below this line
+// and wondered why it printed nothing — process.exit ends the file, so anything
+// after it is dead text. New sections go ABOVE here.
 process.exit(wrong === 0 ? 0 : 1);

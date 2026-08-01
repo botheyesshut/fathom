@@ -114,12 +114,24 @@ check(hole1 > 0 && hole3 > hole1, 'one hole opens the back, and each one after w
 X.state.base = mkBase({ holes: 12 });
 check(X.caveExposure() <= 0.6, 'but the front door never stops being the likelier one',
   'capped at ' + X.caveExposure().toFixed(2));
-// And a cut can only break into something that is there to break into.
-X.state.base = mkBase({ carved: new Array(20).fill('x') });
-const emptyRock = X.networkNear(99999, 99999, 1200);
-check(emptyRock === 0 && X.digHolesThrough(X.state.base) === false,
-  'a cut in rock with no cave near it cannot hole through to anything',
-  'open cells within reach: ' + emptyRock);
+// And a cut can only break into something that is there to break into. Do NOT
+// assume a coordinate is empty — 99999,99999 had a chamber near it, which is
+// what an infinite world is for. Go and find a lonely one, then assert.
+let lonely = null;
+for (let q = 400; q < 900 && !lonely; q += 7) {
+  for (let r = 400; r < 900; r += 7) {
+    if (X.networkNear(q, r, 1200) === 0) { lonely = { q, r }; break; }
+  }
+}
+check(!!lonely, 'there is somewhere in the rock with no chamber beside it',
+  lonely ? lonely.q + ',' + lonely.r : 'searched 5,000 spots and found none');
+if (lonely) {
+  X.state.base = mkBase({ q: lonely.q, r: lonely.r, d: 1200, carved: new Array(20).fill('x') });
+  let holed = 0;
+  for (let i = 0; i < 500; i++) if (X.digHolesThrough(X.state.base)) holed++;
+  check(holed === 0, 'and five hundred cuts there hole through to nothing',
+    holed + ' holes in 500 cuts, neighbours: ' + X.networkNear(lonely.q, lonely.r, 1200));
+}
 
 //--- 4. THE BUTTON OFFERS THE WEAKER SIDE -------------------------------------
 console.log('\n--- 4. FORTIFY READS THE STATION ---');
