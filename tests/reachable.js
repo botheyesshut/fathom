@@ -81,8 +81,19 @@ console.log('a suite asking "does this draw correctly" is not asking "can anybod
 // The suites cannot catch this: they boot inside a Proxy DOM that answers EVERY id
 // with a truthy stub, so a typo'd id is invisible to all ten of them and visible
 // immediately to Sean. Checked here against the actual markup instead.
+// IDS COME FROM TWO PLACES, and reading only one of them makes this cry wolf.
+// The static markup declares most of them; the rest are written at runtime by
+// panels that build their own innerHTML (Options, the Port, the Hold, the
+// muster). Scanning the head alone flagged `opt-musicpct` — an id created by
+// `renderOptions` and read a line later, entirely correct — as missing. An
+// instrument that reports a false alarm is one you learn to scroll past, which
+// is worse than no instrument.
 const head = html.slice(0, html.indexOf('<script>'));
 const declaredIds = new Set([...head.matchAll(/id="([^"]+)"/g)].map(x => x[1]));
+// ...and every id the script itself writes into markup, however it is quoted.
+for (const m of script.matchAll(/id=\\?["']([A-Za-z][\w-]*)\\?["']/g)) declaredIds.add(m[1]);
+for (const m of script.matchAll(/\.id\s*=\s*['"]([A-Za-z][\w-]*)['"]/g)) declaredIds.add(m[1]);
+for (const m of script.matchAll(/setAttribute\(\s*['"]id['"]\s*,\s*['"]([A-Za-z][\w-]*)['"]/g)) declaredIds.add(m[1]);
 const asked = [...new Set([...script.matchAll(/getElementById\('([^']+)'\)/g)].map(x => x[1]))];
 const missing = asked.filter(i => !declaredIds.has(i));
 const unguarded = [...new Set([...script.matchAll(/document\.getElementById\('([^']+)'\)\.\w/g)]

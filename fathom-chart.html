@@ -205,15 +205,21 @@
   }
 
   /* The small print under a gauge: the number the gauge is measured against. */
+  /* WAS 8px, nowrap, ellipsised, in a ~72px column — about fourteen characters.
+     'PAST CRUSH 2200m' is sixteen, so the crush depth was cut off at exactly the
+     moment the hull is failing and the number is the point; '128 banked · 4
+     vault' is twenty-one, so the vault count was never once visible. And #5f6b60
+     on the void is 3.59:1, under the 4.5 floor. Bigger, brighter, and allowed to
+     use the second line it was already leaving empty. */
   .stat-sub {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.5rem;
-    letter-spacing: 0.04em;
-    color: #5f6b60;
+    font-size: 0.58rem;
+    letter-spacing: 0.02em;
+    color: #7d8a7e;
     margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   /* DEPTH IS NOT ONE STAT AMONG FOUR. It is the number that decides whether the
@@ -963,7 +969,10 @@
   }
   .opt-b.off { border-color: rgba(120,120,120,0.3); background: transparent; color: #6a6250; }
   .opt-b.danger { border-color: rgba(224,90,74,0.6); color: #e05a4a; background: rgba(60,20,16,0.35); }
-  .opt-s { width: 100%; margin-top: 0.55rem; accent-color: #6ecfae; }
+  /* WAS THE BROWSER DEFAULT — about 20px, under half the 44px touch floor every
+     other control in this file was deliberately raised to. A fader you cannot
+     get a thumb on is a fader you cannot use. */
+  .opt-s { width: 100%; margin-top: 0.55rem; accent-color: #6ecfae; height: 44px; }
   #bestiary-list { overflow-y: auto; padding: 0.3rem 0.8rem 0.8rem; -webkit-overflow-scrolling: touch; }
   .bst { display: flex; gap: 0.7rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(160,140,100,0.12); }
   .bst:last-child { border-bottom: none; }
@@ -6050,7 +6059,7 @@ function renderOptions() {
     + '<div class="opt-d">The boat\'s own noises — sonar, impacts, the bell at the dock.</div></div>'
 
     + '<div class="opt"><div class="opt-h"><div class="opt-n">Music</div>'
-    + '<span class="opt-b off" style="cursor:default">' + pct + '%</span></div>'
+    + '<span class="opt-b off" id="opt-musicpct" style="cursor:default">' + pct + '%</span></div>'
     + '<div class="opt-d">Written in 2012 for The Dark Way Down. These levels are guesses — set them where you want them.</div>'
     + '<input class="opt-s" type="range" min="0" max="100" step="5" value="' + pct + '" data-opt="musicvol"></div>'
 
@@ -6090,7 +6099,14 @@ function renderOptions() {
         // you drag it — a volume control you have to restart to hear is a form.
         const cur = musicEls[musicNow];
         if (cur && !audioMuted) cur.volume = Math.max(0, Math.min(1, (MUSIC[musicNow] || {}).vol * musicGain));
-        renderOptions();
+        // NO renderOptions() HERE. It rewrites innerHTML on the scroll container,
+        // which destroys the very <input> under your thumb — the implicit pointer
+        // capture dies with the element, so the drag stopped dead after one step
+        // AND the list jumped back to the top. Setting the music from 40 to 80
+        // was eight separate scroll-down-and-tap operations. The only thing that
+        // needed redrawing was the percentage beside the slider, so redraw that.
+        const pctEl = document.getElementById('opt-musicpct');
+        if (pctEl) pctEl.textContent = Math.round(musicGain * 100) + '%';
       });
       return;
     }
@@ -11111,7 +11127,22 @@ function render() {
     far.setAttribute('fill', 'rgba(0,0,0,0.001)');
     far.setAttribute('stroke', 'none');
     far.style.cursor = 'pointer';
-    far.addEventListener('click', () => travelTo(tl.q, tl.r));
+    // A TAP ON A GLYPH IS A QUESTION, NOT A COURSE. These travel targets are
+    // appended AFTER the tap-to-identify targets and are wider (0.9 against
+    // 0.7), so they painted on top and swallowed every tap meant to ask what a
+    // symbol was. The comment on the identify target says it is "the only
+    // interactive element on the hex"; it had not been since tap-to-travel went
+    // in. A captain tapped an unknown mark to ask, and the boat silently set a
+    // course and took the first step of it on the same tap.
+    //
+    // So a hex with something ON it answers first. Anywhere else still starts a
+    // voyage, which is what tap-to-travel is for.
+    far.addEventListener('click', () => {
+      const poiHere = tl.poi && !((tl.poi === 'air' || tl.poi === 'salvage')
+        && state.poisFound.includes(k));
+      if (poiHere) { identifyPoi(tl); return; }
+      travelTo(tl.q, tl.r);
+    });
     g.appendChild(far);
   }
 
@@ -18386,15 +18417,15 @@ function updateHUD() {
   const dr = document.getElementById('depth-rating');
   if (dr) {
     const safe = safeDepthNow(), crush = crushDepthNow();
-    if (d > crush) { dr.textContent = 'PAST CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; }
+    if (d > crush) { dr.textContent = 'CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; }
     else if (d > safe) { dr.textContent = 'crush at ' + crush + 'm'; dr.style.color = '#e8a050'; tip('depth'); }
     else { dr.textContent = 'safe to ' + safe + 'm'; dr.style.color = ''; }
   }
   // E9: and it never showed you your own money.
   const hv = document.getElementById('hold-val'), hs = document.getElementById('hold-sub');
   if (hv) hv.textContent = state.cargo + (state.relics ? ' +' + state.relics + 'r' : '');
-  if (hs) hs.textContent = state.cargoBanked + ' banked'
-    + (state.relicsBanked ? ' · ' + state.relicsBanked + ' vault' : '');
+  if (hs) hs.textContent = state.cargoBanked + ' bank'
+    + (state.relicsBanked ? ' · ' + state.relicsBanked + ' vlt' : '');
 
   // Color states — thresholds are percentages of max so they scale with sub.
   const airPct = state.air / sub.air;
@@ -19193,13 +19224,24 @@ function topPanel() {
   const tip = document.createElement('div');
   tip.id = 'longpress-tip';
   document.body.appendChild(tip);
-  let timer = null, fired = false;
+  let timer = null, fired = false, hideAt = null, x0 = 0, y0 = 0;
+  // THE TOAST STAYED UP FOR A FLAT 2.6 SECONDS whatever it said. The Autopilot
+  // title is 38 words — that is about 880 words a minute — and it could not be
+  // summoned again without another successful long press. Time it by length,
+  // with a floor and a ceiling.
   const show = (text) => {
     tip.textContent = text;
     tip.classList.add('show');
-    setTimeout(() => tip.classList.remove('show'), 2600);
+    if (hideAt) clearTimeout(hideAt);
+    const ms = Math.max(2600, Math.min(11000, 400 + text.length * 42));
+    hideAt = setTimeout(() => { tip.classList.remove('show'); hideAt = null; }, ms);
   };
   const start = (e) => {
+    // A THUMB IS NOT A MOUSE. `pointermove` cancelled with NO slop threshold, so
+    // one pixel of tremor inside the half-second killed the tip — and a thumb
+    // held on a button for half a second on a bus does not stay within a pixel.
+    // This is the only route to 28 title= explanations on a touchscreen.
+    x0 = e.clientX; y0 = e.clientY;
     const el = e.target && e.target.closest && e.target.closest('[title]');
     if (!el) return;
     const text = el.getAttribute('title');
@@ -19208,10 +19250,20 @@ function topPanel() {
     timer = setTimeout(() => { fired = true; show(text); }, 500);
   };
   const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  // AND `fired` COULD STRAND ITSELF TRUE. It was only ever reset inside `start`,
+  // which returns early on any target without a title — so long-pressing a
+  // titled control, sliding off it and releasing left `fired` set, and the NEXT
+  // TAP ANYWHERE IN THE GAME was swallowed in the capture phase. Including a
+  // panel's Close button. Clearing it on pointerup as well costs nothing and
+  // closes the hole.
+  const release = () => { cancel(); setTimeout(() => { fired = false; }, 0); };
   document.addEventListener('pointerdown', start, true);
-  document.addEventListener('pointerup', cancel, true);
-  document.addEventListener('pointercancel', cancel, true);
-  document.addEventListener('pointermove', cancel, true);
+  document.addEventListener('pointerup', release, true);
+  document.addEventListener('pointercancel', release, true);
+  document.addEventListener('pointermove', (e) => {
+    if (!timer) return;
+    if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 12) cancel();
+  }, true);
   // Swallow the click that follows a long press, so explaining a control never
   // also fires it — a player asking "what is this?" has not decided to use it.
   document.addEventListener('click', (e) => {
