@@ -1,5 +1,60 @@
 # FATHOM — START HERE (last updated 2026-07-30)
 
+## THE DAY SEAN WAS AWAY (2026-08-01) — deferred cleared, then the tutorial
+
+He asked for the deferred list done first and then a tutorial, with minimal
+interruption. Five things shipped, in this order.
+
+**1. Traffic was a fact about where you were standing.** The despatch drew BOTH
+ends of every route from harbours within `SHIP_RANGE` of *the boat*, so a captain
+midway between two clusters sat in everybody's lane and one tied up at a lonely
+harbour saw nothing. Measured backwards for a week: **60.6% of turns with a sail
+in sight beside a harbour against 67.8% in open water.** Now the origin is a
+harbour near you and the destination is a harbour near *the origin*. Beside a
+harbour 60.6% → **58.0%** (barely moved, which is the point); open water 67.8% →
+**27.7%**. `tests/traffic.js`.
+
+**2. The keys open something.** `hatchkey` and `bonekey` were `kind: 'key'`,
+worth 2 crates, bought by three peoples, and nothing in the world had a keyhole.
+Some decks now have a strongroom: a hull takes the hatch key, a drowned building
+takes the bone one, caves get none. **24% of hull decks, 19% of ruins, 0% of
+caves.** Turning it SPENDS the key. The bug I nearly shipped: a lock remembered
+on `state.foot` re-locks itself the moment you surface, because interiors
+regenerate deterministically — it rides in `deckTook` instead. `tests/locks.test.js`.
+
+**3. THE TUTORIAL — Standing Orders.** Seven lines, in order, one per turn, each
+said once ever, covering exactly the arc he named: the helm and the free controls
+→ take work off the board → follow the mark → go down to it → come home and get
+paid → find a way under the shelf and go ashore → keep a place of your own. The
+next only arrives when the last is **actually done**, checked against campaign
+state, so a captain who wanders off and claims a grotto early is never told to do
+what they have already done. **The switch is in Options, labelled Tutorial, and
+governs the orders AND the tips** — one control for "help me".
+
+Two bugs the tests caught here, both of which would have shipped:
+- `sail` was done when the mark was REACHED — but reaching a mark *means* diving to it, so sail and dive completed in the same instant and **the dive line could never fire at all.** Every check was green; the failure was visible only in the printed trace.
+- `helm` gated on four moves, which made an opener into an objective. The thread WAITS for the current order, so a captain who tapped DOCK before wandering was stuck on it for ever. Openers are done the moment they are read. **Found in the browser, not the suite.**
+
+**4. The bot knows the board, so the early game has an AFTER.** `playtest.js` had
+been quoting the pre-board world. Now: cargo ever picked up **17% → 33%**, median
+crates banked **0 → 3**, best run **4 → 20**, and **100% of runs take work, 58%
+complete one.** Median banked going 0 → 3 is the whole argument for the board in
+one number.
+
+**5. `tests/reachable.js`, `holes.js`, `traffic.js`, `reasons.js`** all still
+report clean. Battery is **14 suites** now.
+
+### What is open after today, and most of it is yours
+
+- **The board may crowd out exploring.** The bot's median max depth fell 900 m → 180 m and it never reached 2,400 m, because unrated postings are shallow and near home and it does board work to the exclusion of all else. A human would mix. If it turns out to be real in play, the answer is the rank ladder pulling further out, **not** the board paying less.
+- **96% of prizes are sealed in rock** — the ping says so honestly now and points at the nearest way down, but it is still a lot of no. Open the floor a little, or leave the deep hard to enter? Generator + economy, so yours.
+- **Standing still does not move a price.** One multiplier in `sellPriceTo`. Yours, per the no-buff ruling.
+- **The income question**, the **deep room at 70% richer**, the **log window font/height** — all unchanged and all yours.
+- **PCs proper** — merging `state.creatures` into `state.entities` — still the big refactor, still not started, still honestly described as such.
+- **Rooms with a purpose** (the Dwarf Fortress step): you can cut rock, and where you cut now matters, but a carved tile is just floor. Designating a room as magazine or quarters, and works that need a room to live in, is the next real build there.
+
+---
+
 ## WHY NOBODY FINDS ANYTHING — the real answer, 2026-07-31
 
 Sean: *"What encourages a captain to dive and search?"* I answered from the
