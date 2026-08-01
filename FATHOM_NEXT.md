@@ -1,5 +1,92 @@
 # FATHOM — START HERE (last updated 2026-07-30)
 
+## FOUR AUDITORS (2026-08-01, second session) — what they found and what is left
+
+Sean, going offline: *"come up with another six hours of work to complete our
+goals and go... feel free to loose the test agents too."* Four agents were turned
+loose on dead branches, save/load, the economy, and the phone interface while I
+built. They found more than I would have in a day, and a lot of it was mine from
+this week. **Everything below marked FIXED is shipped and battery-green;
+everything under STILL OPEN is written down and not built.**
+
+### Fixed — the ones a player hits
+
+| | |
+|---|---|
+| **The log showed TWO LINES and pinned to the END of a message** | 45.8% of the file's 306 log calls run past two lines; every one of the seven Standing Orders is 5–7. So the tutorial put a new captain at the *last two lines* of each instruction. Now scrolls to the top of the newest entry; box takes four lines. |
+| **The chart's depth stepper was off the edge of the phone** | `#chart-layers` asks for its own row with `flex-basis:100%` + `order:2`; `#chart-head` never declared `flex-wrap`, which makes both inert. Needed ~528px in a 304px box. **This is Sean's own bug report** — "I only seem able to move upward through layers, though I can't be sure" — he was looking at the left sliver of one arrow. |
+| **Every Chandler row rendered `undefined \| undefined`** | `portRows` emitted `{label, cost}`; `renderPort` reads `{name, desc}`. Green in the battery the whole time because `board.test.js` indexes rows by `act` and never asks whether a row *says* anything. |
+| **A tap on a glyph laid a course instead of answering** | Travel targets are wider (0.9 vs 0.7) and appended later, so they swallowed every identify tap. |
+| **Long-press ate your next tap** | `fired` was only reset in `start()`, which early-returns on untitled targets — so pressing a control, sliding off and releasing swallowed the next tap *anywhere in the game*. Also: no slop threshold (one pixel of tremor killed it) and a flat 2.6s toast for a 38-word title. |
+| **The music slider could not be dragged** | Its `input` handler re-rendered the scroll container, destroying the `<input>` under your thumb. |
+| **Piracy cost no turns** | 6.8 presses, 9 crates, zero air, against a fleet with `guns: 0` that can never fight back. **1.40 crates/turn against the board's ceiling of 0.17–0.21.** |
+| **Board errands were priced off your RANK, not the item** | A val-1 errand paid 13 at top rank; the item is 2 on a shelf. 44% of slates carried one and each also bought a **ticket** — five in a row is unrated to top rating without leaving the quay. |
+| **`dropBerth` reset `found`** | One wreck could be stripped for ever. |
+| **`restart()` leaked `ordersSaid`** | Finishing the tutorial once silenced it in **every world after, permanently.** Also leaked `ships` and `buoys`. |
+| **`leaveInterior` never called `stashDeck`** | The ordinary exit was the *one* way out that didn't. Tenant wounds reset to full, and **a body left for you to recover was destroyed** when you went up the ladder. |
+| **`own` was read after `state.foot` was nulled** | Always false — a claimed station lost its glyph for the session. The obvious repair crashes: `TILES` has no `base` key, by deliberate deletion. |
+| **`CONDITIONS.pressure` was read by nothing** | All ten rows carry it; the picker filtered on tier alone, so a hand crushed against the plating could come back as "the shakes". |
+| **`TRACE_SHED` had a `wreck` key no poi can be, and no `hull` key** | A sunken boat shed nothing into the current. |
+| **`state.buoys` was never saved** | A decoy cost 6 air and a decoy — both durable — and the buoy evaporated on reload. |
+| Smaller | `sfx('warn')` named a sound that isn't one of the nine; the gill-hood had no `PROP_TAG` row so the one item that lets a party cross drowned water advertised nothing; the two stat sub-readouts truncated at 8px so the crush depth and the vault count were never visible; hailing a rival was repeatable by reloading. |
+
+### STILL OPEN — found, verified, NOT built
+
+**Content that exists and nobody can reach.** `chamberKind` classifies every chamber
+in an infinite world (grand/cavern/chamber/antechamber) and nothing reads it.
+`CULTURES[*].depthBand` is dead and camouflaged by a same-named *function* that
+takes a number. `FLEET_RIVALS`, `FLAVOR.openWater` (seven sentences),
+`POI_DESCRIPTIONS.deadend`, `PRIZE_NOUN.base` — all orphans. Write-only fields:
+a ship knows `fromName`/`toName` — the harbour she left and the one she is making
+for — **and the game never says either**, which is a free piece of characterisation
+sitting unused.
+
+**Four porthole scenes, ~181 lines of hand-drawn art, with a zero-probability
+trigger.** `shipcourier`/`shipmerchant`/`shipnaval`/`shipdestroyer` are reached
+only by `'ship' + near.hull`, which is unreachable: measured 1,547 island holders
+across 5 seeds — 868 mariners, 355 confluence, 324 libertines, **0 dagon** — and
+all 10 reachable (culture, hull) pairs have a yard-specific scene. The comment
+calls them a fallback "for a fifth people". Worth an explicit decision.
+
+**`startExpedition` has one live arm of three.** Called once, always with
+`'signal'`, so `relicChance` is always 0.20 and the `'beach'` prose can never
+print. Every beach path goes through `enterGrotto` now.
+
+**The commission chain costs more than it looks.** An alliance needs `trusted`
+(≥60) at a **city**, cities are Dagon-only at ≥3,600 m on a 35% roll, and only
+two of seven `nudgeStanding` sites can ever name Dagon. Measured within 60 hexes
+of home: **2, 0, 2, 0, 0, 1 cities across six seeds** — half the worlds have none.
+Floor of ~5 city missions after finding a city. Wired at both ends; it is the
+price of the ticket that is the question.
+
+**Missions read a pool the pricing rules never see.** `missionOffer` builds from
+`cu.buys.keys` raw — `buyMult`'s no-buy-back rule never applied. The Confluence's
+list contains `ambergris` (which Dagon *sells* at 13) and `warhead` (Con-Fed sells
+at 17), paying 19. Net +6 and +2 per unit, and repeatable — 12 completed
+back-to-back at one city. **Dormant only because Dagon alone holds cities today.**
+The day another people can, it is live.
+
+**Free provisioning.** `dockHere()` has no `state.moves++`: air 10 → 350, stores
+5 → 100, all wounds cleared, decoys restocked — three taps, zero turns.
+Deliberate? It is the "a night ashore" fiction. But it is the same shape as the
+piracy hole and should be a decision rather than an oversight.
+
+**More phone work.** The Options panel still re-renders and jumps to the top on
+every *toggle*; the control row reflows under the thumb between the two taps of
+an arm-then-confirm (`FIRE`→`FIRE?`, `AUTO`→`SURFACE`); 5.6px between ▼ and ▼▼,
+where a mis-tap is 120 m of unwanted descent; `.btn:disabled` sits at **1.69:1**
+so a disabled control looks absent rather than dim; rotating the phone with the
+chart open leaves it mis-registered until you close and reopen; chart zoom
+persists into interiors with no floor on target size; eight duplicate `inv-panel`
+/ `inv-head` ids waiting for the first person to call `getElementById` on one.
+
+**Test coverage gap the save auditor named:** *no test asserts what `restart()`
+clears* — that one test would have caught the `ordersSaid` leak outright. And
+`board`/`works`/`locks` never call the real save functions; `locks.test.js` fakes
+the round trip with `JSON.parse(JSON.stringify(...))`.
+
+---
+
 ## THE DAY SEAN WAS AWAY (2026-08-01) — deferred cleared, then the tutorial
 
 He asked for the deferred list done first and then a tutorial, with minimal

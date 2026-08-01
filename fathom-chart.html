@@ -18841,6 +18841,7 @@ function doSave(force) {
       tipsSeen: state.tipsSeen,
       ordersSaid: state.ordersSaid,
       ordersAt: state.ordersAt,
+      hailed: state.hailed,
       buoys: state.buoys,
       route: state.route,        // the way back is knowledge, and it is saved
       refuges: state.refuges,
@@ -19021,7 +19022,15 @@ function resumeGame(save) {
   state.deckDead = obj(save.deckDead);
   state.beachDrawn = obj(save.beachDrawn);
   state.standing = obj(save.standing);
-  state.hailed = [];   // a new session may hail the same hull again
+  // A NEW SESSION MAY HAIL THE SAME SURFACE HULL AGAIN — and that reasoning is
+  // right for ships, which are not saved at all and whose ids embed state.moves,
+  // so no id can survive a reload to be re-hailed. It is WRONG for rivals:
+  // `spawnCreature` builds a deterministic id from type and position, and
+  // `state.creatures` IS saved. So a captain could hail the same rival boat,
+  // reload, and hail it again — measured at standing 2 -> 4 on one hull, and
+  // repeatable, which makes reputation a thing you get by pressing F5. Keep the
+  // rival ids and drop only the ship ones.
+  state.hailed = arr(save.hailed).filter(id => String(id).indexOf('sh') !== 0);
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
   state.items = save.items || {};
