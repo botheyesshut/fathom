@@ -9431,15 +9431,37 @@ function shipsTick() {
   // measured at 49 voyages across 5 seeds and 400 turns each, where the
   // arithmetic wanted about 750. A harbour does not despatch one hull a day
   // and then close.
+  // A ROUTE IS A FACT ABOUT TWO HARBOURS, NOT ABOUT WHERE YOU ARE STANDING.
+  //
+  // Both ends used to be drawn from the harbours within SHIP_RANGE of THE BOAT,
+  // which made traffic a property of the player's position: a captain midway
+  // between two distant clusters sat in the middle of everybody's shipping lane,
+  // and a captain tied up at a harbour whose neighbours were far off watched an
+  // empty sea. Measured, and it came out backwards — 60.6% of turns with a sail
+  // in sight beside a harbour against 67.8% alone in open water.
+  //
+  // Now: the ORIGIN is a harbour near you, because a hull can only be put into
+  // the world where you could see it happen. The DESTINATION is a harbour near
+  // the ORIGIN — somewhere that harbour actually trades with, whether or not it
+  // is anywhere near you. So a busy harbour is busy, a lonely one is quiet, and
+  // the sea between them carries what they send each other.
   const near = [];
   for (const p of ports.values()) {
     if (hexDistance(p, here) <= SHIP_RANGE) near.push(p);
   }
   for (let attempt = 0; state.ships.length < SHIP_CAP && attempt < SHIP_CAP * 2; attempt++) {
-    if (near.length >= 2) {
+    if (near.length >= 1) {
       const rr = mulberry32(hashStr('ship:' + worldSeed + ':' + state.moves + ':' + attempt + ':' + state.ships.length));
       const from = near[Math.floor(rr() * near.length)];
-      const to = near[Math.floor(rr() * near.length)];
+      // Everywhere this harbour has business with. Still only ports already on
+      // the map, per the pre-mortem: a destination in an ungenerated chunk is a
+      // ship sailing to nowhere.
+      const partners = [];
+      for (const p of ports.values()) {
+        if (p !== from && hexDistance(p, from) <= SHIP_RANGE) partners.push(p);
+      }
+      if (!partners.length) continue;      // a harbour with nobody to trade with sends nothing
+      const to = partners[Math.floor(rr() * partners.length)];
       if (from !== to) {
         // SHE CASTS OFF BEFORE YOU SEE HER. A port tile is a `dock`, and a dock is
         // LAND — so a hull despatched at `from.q, from.r` was standing on the island
