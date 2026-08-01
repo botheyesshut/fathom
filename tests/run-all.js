@@ -22,6 +22,11 @@ const path = require('path');
 //   migrate.test  — an older save is still somebody's campaign: deck records
 //                   rekeyed by kind, and a station that predates knowing what
 //                   kind of place it is
+//   locks.test    — the first lock in the game: hatchkey and bonekey were
+//                   `kind: 'key'` and nothing in the world had a keyhole. Checks
+//                   they open something, that opening SPENDS them, and that a
+//                   door stays open across surfacing — the interior regenerates
+//                   deterministically, so only the overlay remembers
 //   works.test    — a station holds because of what is BOLTED to it, never who
 //                   is standing in it: two approaches (the lock and the workings
 //                   behind), digging as a bargain rather than a bonus, and an
@@ -33,7 +38,7 @@ const path = require('path');
 //                   it proves a captain can reach all of that and not merely
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

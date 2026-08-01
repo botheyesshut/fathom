@@ -5887,6 +5887,7 @@ const TIPS = {
   bulkhead: 'A bulkhead beside you can be dogged shut. It holds back water and whatever is walking in it — and everything on the far side is lost to you while it holds.',
   anchorhere: 'A grotto with nothing living in it can be kept: warp the boat in against the sand, run lamps up the beach, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one station.',
   claimdeck: 'A deck with nothing living on it can be claimed as your station: the breach becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
+  locks:   'Some doors are locked rather than stuck. A hull wreck takes a corroded hatch key; a drowned building takes the bone kind. Both turn up in the deep, both sell well at an enclave, and both are spent the moment they open something — so the question is always whether this is the door worth spending it on.',
   chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. The boat carries no positioning gear, so it cannot mark itself — you dead-reckon, until you find something that can.',
 };
 let tipsOn = true;
@@ -12747,6 +12748,25 @@ function interiorAt(q, r, d, kind) {
     doors.push(k);
   }
 
+  // A STRONGROOM, AND THE FIRST LOCK IN THE GAME. Both keys in the roster —
+  // `hatchkey` and `bonekey` — were `kind: 'key'`, worth 2 crates, bought by
+  // three of the four peoples, and there was nothing anywhere in the world that
+  // a key opened. Vendor trash wearing a keyhole. They open this.
+  //
+  // Which key depends on what you are standing in, because a corroded pre-Fall
+  // hatch key does not turn a lock cut for something with the wrong number of
+  // fingers. One lock per deck at most, and only where there is a door to hang
+  // it on, so it stays a thing you come across rather than a tax on every deck.
+  if (doors.length && rnd() < LOCK_CHANCE) {
+    const need = (kind === 'hull') ? 'hatchkey'
+               : (kind === 'ruin' || kind === 'deepruin') ? 'bonekey' : null;
+    if (need) {
+      const lk = doors[Math.floor(rnd() * doors.length)];
+      const lt = tiles.get(lk);
+      if (lt) { lt.locked = need; }
+    }
+  }
+
   // Something already lives here, and it spawns as far from the breach as the
   // deck allows — so the place has time to feel merely empty first.
   let dweller = null;
@@ -13991,6 +14011,24 @@ function dwellerStep() {
   }
 }
 
+// A turned lock is recorded against the DECK, not the visit. `deckTook` already
+// carries per-deck facts across surfacing and reloads, so a lock rides in it
+// under a key no tile coordinate can collide with.
+const LOCK_CHANCE = 0.22;   // decks with a door that get a locked one
+function lockKey(nk) { return 'lock:' + nk; }
+function lockOpened(f, nk) {
+  if (!f) return false;
+  const dk = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
+  return ((state.deckTook || {})[dk] || []).indexOf(lockKey(nk)) >= 0;
+}
+function noteLockOpened(f, nk) {
+  if (!f) return;
+  if (!state.deckTook) state.deckTook = {};
+  const dk = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
+  const prev = state.deckTook[dk] || [];
+  if (prev.indexOf(lockKey(nk)) < 0) state.deckTook[dk] = prev.concat([lockKey(nk)]);
+}
+
 function stepFoot(x, y) {
   const f = state.foot;
   if (!f || !state.alive) return;
@@ -14006,6 +14044,30 @@ function stepFoot(x, y) {
   if (f.closed.includes(nk)) {
     log('That bulkhead is dogged shut. You would have to haul it open again.', 'warn', 'BULKHEAD');
     return;
+  }
+
+  // A LOCKED DOOR, AND THE KEY IS SPENT TURNING IT. The whole point of a key
+  // that opens something is that it stops being a key afterwards — otherwise it
+  // is a permit, and the roster already had two of those pretending to be keys.
+  // A LOCK STAYS OPEN ONCE IT IS OPEN. Remembered in `deckTook` — the same
+  // per-deck overlay that stops a looted room restocking — and NOT on the foot,
+  // which dies when you surface. On the foot it would have re-locked itself
+  // every visit and charged a second key for a door you had already opened.
+  if (t.locked && !lockOpened(f, nk)) {
+    const need = t.locked;
+    if (itemCount(need) <= 0) {
+      log(`It is locked, and not stuck — a proper lock, cut for ${ITEMS[need].name}. Nothing you are carrying turns it.`,
+          'warn', 'LOCK');
+      tip('locks');
+      return;
+    }
+    takeItem(need, 1);
+    noteLockOpened(f, nk);
+    log(`${ucfirst(ITEMS[need].name)} turns most of the way, sticks, and then goes. Whatever was worth locking up is on the other side of this.`,
+        'good', 'LOCK');
+    sfx('bell');
+    scheduleSave();
+    return;   // turning it is the move; walking through is the next one
   }
 
   // S6: LEAVING SPENDS THE SITE, SO IT TAKES TWO TAPS.
@@ -14600,8 +14662,13 @@ function renderInterior() {
       glyph(x, y, armed ? '⇑' : '≈', armed ? '#b8f0d8' : '#6ecfae', armed ? 15 : 13, dim);
     } else if (t.t === 'door') {
       const shut = f.closed.includes(k);
-      box(x, y, shut ? '#5b4a2e' : '#2f3a33', dim);
-      glyph(x, y, shut ? '▬' : '╪', shut ? '#f0d49a' : '#7fae9a', 14, dim);
+      // A LOCKED DOOR HAS TO LOOK LIKE ONE. It draws in brass with a keyhole
+      // rather than a bulkhead's bar, so a captain reads "that needs something"
+      // from across the room instead of walking into it to find out.
+      const shutTight = t.locked && !lockOpened(f, k);
+      if (shutTight) { box(x, y, '#4a3c1e', dim); glyph(x, y, '⚿', '#e0c060', 14, dim); }
+      else { box(x, y, shut ? '#5b4a2e' : '#2f3a33', dim);
+             glyph(x, y, shut ? '▬' : '╪', shut ? '#f0d49a' : '#7fae9a', 14, dim); }
     } else {
       box(x, y, t.t === 'rubble' ? '#433727' : '#3a3126', dim);
       if (t.t === 'rubble') glyph(x, y, '·', '#8a7758', 15, dim);
