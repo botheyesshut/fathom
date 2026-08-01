@@ -13391,7 +13391,7 @@ function claimOrStore() {
   state.base = { q: f.q, r: f.r, d: f.d, kind: f.kind || 'ruin',
                  stores: { crates: 0, relics: 0, items: {} },
                  defence: 0, threat: 0, siege: null, breached: false, boarder: null, carved: [],
-                 works: [], _worksFrom: true };
+                 works: [], holes: 0, _worksFrom: true };
   f.water = [];
   f.dweller = null;
   // A GROTTO IS THE OBVIOUS PLACE FOR A STATION and the one the game never
@@ -13466,11 +13466,56 @@ function baseHold(face) {
   }
   return h;
 }
-// How exposed the back is: nothing until you cut, then it climbs with the cut.
+// HOW EXPOSED THE BACK IS — and this counts HOLES, not tiles.
+//
+// The first version read `carved.length`, so cutting rock raised the odds of an
+// attack from behind whether or not you had ever broken into anything. Sean:
+// "So I decide I want to carve one unit of space and I do so, and when I do the
+// rock falls inward and there's a tunnel exposed back there for sure, every
+// time?" No — and worse, nothing was ever exposed at all. The game would
+// announce something in the workings when no cut had ever met open cave, off a
+// counter the captain could not see. Ten lines below this, cutting OUTWARD
+// already had the right shape: a discrete gamble, announced, that lets the sea
+// in. This is that, facing the other way.
+//
+// So `b.holes` is a count of times a cut actually met the tunnel network, each
+// one an event you were told about. No holes, no back door, however much rock
+// you have moved.
 function caveExposure() {
   const b = state.base;
-  const dug = (b && b.carved) ? b.carved.length : 0;
-  return Math.min(0.6, dug / 30);
+  const holes = (b && b.holes) || 0;
+  if (holes <= 0) return 0;
+  return Math.min(0.6, 0.18 + (holes - 1) * 0.14);
+}
+
+// IS THERE ANYTHING BACK THERE TO BREAK INTO? A cut can only hole through to
+// the network if the network is actually next door — so this asks the world,
+// not a dice roll. It is what makes SITE CHOICE matter to digging: a station in
+// a lonely pocket can be cut out in safety, and one wedged against a busy warren
+// cannot. That is the cul-de-sac question again, one floor down.
+// COUNT NEIGHBOURING CHAMBERS, NOT OPEN CELLS. The first version counted open
+// cells within three hexes and every single real site scored 36 out of 36 — the
+// maximum — because a cavern beach sits at the CROWN OF A CHAMBER, so naturally
+// there is open cave all around it. It was measuring the room the station is in.
+// A discriminator that returns the same number everywhere discriminates nothing,
+// and the whole "a lonely pocket is safe to dig out" idea was dead on arrival.
+//
+// The honest question is whether there is anything ELSE back there: how many
+// OTHER chambers of the lattice sit within digging reach, at a depth a cut could
+// wander into. That varies with the site, which is the entire point.
+const DIG_REACH = 10;       // hexes a cut and its spoil could plausibly run
+const DIG_BAND = 3;         // how many 60 m steps up or down still counts as "beside"
+function networkNear(q, r, d) {
+  const others = caveNodesInRegion(q - DIG_REACH, q + DIG_REACH, r - DIG_REACH, r + DIG_REACH);
+  let n = 0;
+  for (const node of others) {
+    if (hexDistance({ q: node.q, r: node.r }, { q: q, r: r }) > DIG_REACH) continue;
+    if (Math.abs(node.depth - d) > DIG_BAND * DEPTH_GRID) continue;
+    // The chamber this station is cut into is not a neighbour of itself.
+    if (node.q === q && node.r === r) continue;
+    n++;
+  }
+  return n;
 }
 // The next thing worth fitting on a given face, or null if that face is done.
 function nextWork(face) {
@@ -13498,6 +13543,9 @@ const DEFENCE_LEGACY = ['baffles', 'netbar', 'lock', 'turret'];
 function migrateBaseWorks(b) {
   if (!b) return;
   if (!Array.isArray(b.works)) b.works = [];
+  // A station saved before holes were counted has broken into nothing. Its
+  // carved rooms do not retroactively become breaches — that was the bug.
+  if (typeof b.holes !== 'number') b.holes = 0;
   if (typeof b.defence === 'number' && b.defence > 0 && !b._worksFrom) {
     for (let i = 0; i < b.defence && i < DEFENCE_LEGACY.length; i++) {
       if (b.works.indexOf(DEFENCE_LEGACY[i]) < 0) b.works.push(DEFENCE_LEGACY[i]);
@@ -13617,6 +13665,22 @@ function baseTick() {
 
 const DIG_COST = 2;   // crates of tools and shoring per tile of rock taken
 
+// Does THIS cut meet the tunnel network? Only where there is network to meet,
+// and never on the first few tiles — the first rooms are the ones you cut hard
+// against the station you already hold, and a captain who takes one bay out of
+// the rock should not be punished for it. After that the odds climb with how
+// much open cave surrounds the site, capped so it stays a gamble rather than a
+// certainty. A station in a lonely pocket can be dug out in complete safety;
+// this is the cul-de-sac question again, one floor down.
+const DIG_SAFE_TILES = 3;
+function digHolesThrough(b) {
+  if (!b) return false;
+  if ((b.carved || []).length <= DIG_SAFE_TILES) return false;
+  const near = networkNear(b.q, b.r, b.d);
+  if (near <= 0) return false;                 // nothing back there to break into
+  return rand() < Math.min(0.30, near * 0.05);
+}
+
 // Is there solid rock next to you worth cutting into — inside the deck, not the
 // hull ring? (The ring is the sea wall; you do not dig that on purpose.)
 function digTargetNear() {
@@ -13654,6 +13718,16 @@ function digAdjacent() {
     b.breached = true;
     f.water = [k];
     log('You drive the cut outward — and the last foot of rock gives all at once, into cold black water. The sea was right there, and now it is in your station. The pumps cannot touch it until you reseat the lock.', 'danger', 'DIG');
+    sfx('impact');
+  } else if (digHolesThrough(b)) {
+    // THE OTHER WAY A CUT CAN GO WRONG. Not the sea — the network. This only
+    // ever happens where there IS network within a few hexes of the station, so
+    // a lonely pocket can be dug out in safety and a warren-adjacent one cannot.
+    b.holes = (b.holes || 0) + 1;
+    log(b.holes === 1
+      ? 'The tools go through into nothing. Cold air comes back the other way, off water you cannot see, and the lamp leans toward it. You have cut into somebody else’s dark — the workings run on past your wall now, and things that live out there can find their way in.'
+      : 'Through again. That is ' + b.holes + ' places where your station and the deep share a wall, and the deep did not ask for any of them.',
+      'danger', 'DIG');
     sfx('impact');
   } else {
     if (risky) log('You cut outward. The rock goes thin under the tools — beyond it, the sea, close enough to hear — but it holds. A new bay, won from the stone.', 'warn', 'DIG');

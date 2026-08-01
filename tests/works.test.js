@@ -45,6 +45,7 @@ vm.runInContext(script + `
 gameStarted = true;
 var __X = { L: __L, state, WORKS, workByKey, baseHold, caveExposure, nextWork, weakFace,
   migrateBaseWorks, DEFENCE_LEGACY, placeWord, baseTick, startSiege, breachStation,
+  networkNear, digHolesThrough, DIG_SAFE_TILES,
   fortifyBase, onOwnDeckNow, plural };
 `, sb, { timeout: 120000 });
 const X = sb.__X;
@@ -91,28 +92,44 @@ check(X.baseHold('sea') === X.baseHold('cave') && X.baseHold('sea') > 1,
   'a hired watch answers to both, being people rather than plate',
   'sea ' + X.baseHold('sea') + ', workings ' + X.baseHold('cave'));
 
-//--- 3. DIGGING IS A BARGAIN, NOT A BONUS -------------------------------------
+//--- 3. A BACK DOOR IS A HOLE YOU CUT, NOT ROCK YOU MOVED ----------------------
+// The first version of this read `carved.length`, so moving rock raised the odds
+// of an attack from behind whether or not a cut had ever met open cave. Sean:
+// "So I decide I want to carve one unit of space and I do so, and when I do the
+// rock falls inward and there's a tunnel exposed back there for sure, every
+// time?" It never exposed anything — it just quietly counted tiles. Exposure is
+// counted in HOLES now, each one an announced event.
 console.log('\n--- 3. WHAT CUTTING ROCK COSTS YOU ---');
-X.state.base = mkBase({ carved: [] });
-const dug0 = X.caveExposure();
-X.state.base = mkBase({ carved: new Array(12).fill('x') });
-const dug12 = X.caveExposure();
-X.state.base = mkBase({ carved: new Array(40).fill('x') });
-const dug40 = X.caveExposure();
-check(dug0 === 0, 'an uncut station has no back door at all', 'exposure ' + dug0);
-check(dug12 > dug0 && dug40 > dug12, 'and every room you cut opens one further',
-  '0 rooms ' + dug0.toFixed(2) + ' -> 12 rooms ' + dug12.toFixed(2) + ' -> 40 rooms ' + dug40.toFixed(2));
-check(dug40 <= 0.6, 'but the front door never stops being the likelier one', 'capped at ' + dug40.toFixed(2));
+X.state.base = mkBase({ carved: new Array(40).fill('x'), holes: 0 });
+const dugNoHole = X.caveExposure();
+check(dugNoHole === 0,
+  'forty rooms cut and nothing broken into is still a sealed station',
+  'exposure ' + dugNoHole);
+X.state.base = mkBase({ carved: new Array(6).fill('x'), holes: 1 });
+const hole1 = X.caveExposure();
+X.state.base = mkBase({ carved: new Array(6).fill('x'), holes: 3 });
+const hole3 = X.caveExposure();
+check(hole1 > 0 && hole3 > hole1, 'one hole opens the back, and each one after widens it',
+  '1 hole ' + hole1.toFixed(2) + ' -> 3 holes ' + hole3.toFixed(2));
+X.state.base = mkBase({ holes: 12 });
+check(X.caveExposure() <= 0.6, 'but the front door never stops being the likelier one',
+  'capped at ' + X.caveExposure().toFixed(2));
+// And a cut can only break into something that is there to break into.
+X.state.base = mkBase({ carved: new Array(20).fill('x') });
+const emptyRock = X.networkNear(99999, 99999, 1200);
+check(emptyRock === 0 && X.digHolesThrough(X.state.base) === false,
+  'a cut in rock with no cave near it cannot hole through to anything',
+  'open cells within reach: ' + emptyRock);
 
 //--- 4. THE BUTTON OFFERS THE WEAKER SIDE -------------------------------------
 console.log('\n--- 4. FORTIFY READS THE STATION ---');
 X.state.base = mkBase({ carved: [] });
-check(X.weakFace() === 'sea', 'with nothing cut, there is only the sea to answer for', X.weakFace());
-X.state.base = mkBase({ carved: new Array(30).fill('x'), works: ['lock', 'turret'] });
+check(X.weakFace() === 'sea', 'with nothing broken into, there is only the sea to answer for', X.weakFace());
+X.state.base = mkBase({ holes: 2, works: ['lock', 'turret'] });
 check(X.weakFace() === 'cave',
-  'dig deep and neglect the back, and the button starts offering you a grille',
+  'hole through and neglect the back, and the button starts offering you a grille',
   'weaker face: ' + X.weakFace() + ' (next: ' + (X.nextWork(X.weakFace()) || {}).name + ')');
-X.state.base = mkBase({ carved: new Array(30).fill('x'), works: ['grille', 'choke', 'watch', 'drone'] });
+X.state.base = mkBase({ holes: 2, works: ['grille', 'choke', 'watch', 'drone'] });
 check(X.weakFace() === 'sea', '...and swaps back once the workings are answered for', X.weakFace());
 
 //--- 5. AN OLD SAVE KEEPS WHAT IT PAID FOR ------------------------------------

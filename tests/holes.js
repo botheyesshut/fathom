@@ -49,7 +49,8 @@ var __X = { L: __L, state,
   seedTo(v){ worldSeed=v; interiorSalt=':'+v; resetWorldCaches(); interiorCache.clear();
              spawnedChunks.clear(); revealed.clear(); visited.clear(); },
   tileAt, getTile, hexKey, hexDistance, homeDock, cells, cellKey, cellRun,
-  beachMouths, CAVE_SEGS, DEPTH_GRID, MOUTH_LETTERS, draughtLine };
+  beachMouths, CAVE_SEGS, DEPTH_GRID, MOUTH_LETTERS, draughtLine,
+  networkNear, digHolesThrough, caveNodesInRegion };
 `, sb, { timeout: 180000 });
 const X = sb.__X;
 
@@ -157,4 +158,27 @@ console.log('  sites with a way told "stirs"    ' + stirsAndOpen + ' of ' + site
 console.log('  OUTRIGHT LIES                    ' + wrong);
 console.log('\n  every shape it can say, once each:');
 for (const k of Object.keys(samples).sort()) console.log('    ' + k.padEnd(16) + samples[k]);
+
+// ---- IS "A LONELY POCKET" A REAL THING? ------------------------------------
+// digHolesThrough asks networkNear whether there is anything back there to break
+// into. The first version counted open CELLS within three hexes and returned 36
+// of 36 at every real site — a beach sits at a chamber crown, so of course the
+// cave is all around it. It measured the room the station was in. If this
+// distribution is flat too, "a lonely pocket can be dug out safely" is a
+// sentence in a comment and nothing more.
+console.log('\n--- HOW LONELY IS THIS SITE, REALLY? ---');
+const lone = sites.map(s => X.networkNear(s.q, s.r, s.d));
+const hist = {};
+for (const n of lone) hist[n] = (hist[n] || 0) + 1;
+const keys = Object.keys(hist).map(Number).sort((a, b) => a - b);
+console.log('  neighbouring chambers within reach:');
+console.log('    ' + keys.map(k => k + ': ' + hist[k]).join('   '));
+lone.sort((a, b) => a - b);
+console.log('  fewest ' + lone[0] + '   median ' + lone[Math.floor(lone.length / 2)]
+  + '   most ' + lone[lone.length - 1]);
+const safe = lone.filter(n => n === 0).length;
+console.log('  sites where a cut can NEVER hole through: ' + safe
+  + ' (' + (100 * safe / lone.length).toFixed(0) + '%)');
+console.log('  => flat means the idea is dead; a spread means site choice is real.');
+
 process.exit(wrong === 0 ? 0 : 1);
