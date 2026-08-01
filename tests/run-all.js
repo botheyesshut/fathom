@@ -22,6 +22,10 @@ const path = require('path');
 //   migrate.test  — an older save is still somebody's campaign: deck records
 //                   rekeyed by kind, and a station that predates knowing what
 //                   kind of place it is
+//   works.test    — a station holds because of what is BOLTED to it, never who
+//                   is standing in it: two approaches (the lock and the workings
+//                   behind), digging as a bargain rather than a bonus, and an
+//                   old save's defence rung becoming the works it paid for
 //   board.test    — the harbour board: there IS work at turn one, it can be
 //                   taken, it marks the chart, reaching the mark finishes it,
 //                   the quay pays, and the rating rises. Driven through
@@ -29,7 +33,7 @@ const path = require('path');
 //                   it proves a captain can reach all of that and not merely
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works'];
 let failed = 0;
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');

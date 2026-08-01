@@ -668,39 +668,49 @@ check(sandbox.__base().siege === null, 'killing it lifts the siege', 'station ho
   b2.threat = 0;
 }
 
-// Defences slow the breach — measurably.
-function breachRate(defenceLevel) {
+// Defences slow the breach — measurably. Reads WORKS now, not the old single
+// `defence` rung: a station holds because of what is bolted to it, and each
+// work covers the sea approach or the workings behind, not both by default.
+function breachRate(works) {
   const b = sandbox.__base();
-  b.defence = defenceLevel; b.siege = { power: 14, breach: 0 };
+  b.works = works.slice(); b._worksFrom = true;
+  b.defence = 0;
+  b.siege = { power: 14, breach: 0, face: 'sea' };
   sandbox.__st().creatures = [{ id: 'x', type: 'lurker', q: b.q, r: b.r, depth: b.d, besieging: true }];
   sandbox.__baseTick();
   return b.siege ? b.siege.breach : 999;
 }
-const rawRate = breachRate(0), heldRate = breachRate(3);
+const rawRate = breachRate([]), heldRate = breachRate(['lock', 'turret']);
 check(heldRate < rawRate, 'a fortified lock holds it up',
-  'grate ' + rawRate.toFixed(1) + '/turn vs hardened ' + heldRate.toFixed(1) + '/turn');
+  'bare rock ' + rawRate.toFixed(1) + '/turn vs lock+turret ' + heldRate.toFixed(1) + '/turn');
 
 // Fortifying spends what is struck below.
 sandbox.__st().foot = null;
 sandbox.__enter(sandbox.__base().q, sandbox.__base().r, sandbox.__base().d);
 const bb = sandbox.__base();
-bb.defence = 0; bb.breached = false; bb.stores.crates = 20;
+// A station now holds because of the WORKS bolted to it, not one `defence`
+// rung — so these read b.works. The claims are unchanged: fitting something
+// costs the station's own crates, and it is refused when it cannot pay.
+bb.defence = 0; bb.works = []; bb._worksFrom = true; bb.carved = [];
+bb.breached = false; bb.stores.crates = 20;
 sandbox.__fortify();
-check(bb.defence === 1 && bb.stores.crates === 20 - 4, 'fortifying spends the station\'s own crates',
-  'defence ' + bb.defence + ', ' + bb.stores.crates + ' crates left');
+check(bb.works.length === 1 && bb.stores.crates === 20 - 4, 'fortifying spends the station\'s own crates',
+  'fitted [' + bb.works.join(', ') + '], ' + bb.stores.crates + ' crates left');
 bb.stores.crates = 1;
 sandbox.__fortify();
-check(bb.defence === 1, 'and is refused when the station cannot pay', 'held at ' + bb.defence);
+check(bb.works.length === 1, 'and is refused when the station cannot pay',
+  'held at [' + bb.works.join(', ') + ']');
 
 // The breach itself: stores lost, works wrecked, and the sea gets in.
-bb.stores.crates = 10; bb.stores.relics = 4; bb.defence = 2;
-bb.siege = { power: 99, breach: 99 };
+bb.stores.crates = 10; bb.stores.relics = 4; bb.works = ['lock', 'turret']; bb._worksFrom = true;
+bb.siege = { power: 99, breach: 99, face: 'sea' };
 sandbox.__st().creatures = [{ id: 'y', type: 'lurker', q: bb.q, r: bb.r, depth: bb.d, besieging: true }];
 sandbox.__baseTick();
 check(bb.breached === true && bb.siege === null, 'a lock left long enough gives way', 'breached');
 check(bb.stores.crates < 10 && bb.stores.relics < 4, 'and the station loses part of what was struck below',
   bb.stores.crates + ' crates, ' + bb.stores.relics + ' relics left');
-check(bb.defence === 1, 'the works are wrecked getting in', 'defence 2 -> ' + bb.defence);
+check(bb.works.length === 1, 'the works are wrecked getting in',
+  'lock+turret -> [' + bb.works.join(', ') + ']');
 check(sandbox.__foot() && sandbox.__foot().water.length > 0,
   'and the sea comes in on the captain standing in it',
   sandbox.__foot() ? sandbox.__foot().water.length + ' wet' : 'no body');
@@ -746,9 +756,9 @@ sandbox.__st().foot = null;
 sandbox.__save();
 sandbox.__st().base = null;
 sandbox.__resume();
-check(sandbox.__base() && sandbox.__base().defence === 1 && sandbox.__base().breached === false,
-  'the station\'s defences and condition survive a reload',
-  sandbox.__base() ? 'defence ' + sandbox.__base().defence : 'lost');
+check(sandbox.__base() && (sandbox.__base().works || []).length === 1 && sandbox.__base().breached === false,
+  'the station\'s works and condition survive a reload',
+  sandbox.__base() ? '[' + (sandbox.__base().works || []).join(', ') + ']' : 'lost');
 
 //--- 12. The boarding: a forced lock puts the thing INSIDE ------------------
 // The two-layer siege closes here — a breach is no longer settled at the lock,
