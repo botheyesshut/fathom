@@ -22,6 +22,11 @@ const path = require('path');
 //   migrate.test  — an older save is still somebody's campaign: deck records
 //                   rekeyed by kind, and a station that predates knowing what
 //                   kind of place it is
+//   crew.test     — the roster: no trade is named for a sex and none of them
+//                   took the bland way out; an old save's sonarman becomes the
+//                   Ear and its engineer the Wrench without losing the dials
+//                   they turn; a new captain sails with two hands and an empty
+//                   berth, so the Hiring Hall is not dead on arrival
 //   greed.test    — the exploits, and that they stay shut: an errand never pays
 //                   more than buying the item costs, a wreck is salvaged once,
 //                   and attacking a ship spends a turn. Every one of these was
@@ -52,7 +57,7 @@ const path = require('path');
 //                   it proves a captain can reach all of that and not merely
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed'];
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed', 'crew'];
 // THE RUNNER MUST SAY WHICH ONE AND WHY. It used to count failures and print
 // only the count, so "BATTERY: 1 SUITE(S) FAILED" meant a hunt through fourteen
 // suites to find out what had gone wrong — and twice it was not a failing check

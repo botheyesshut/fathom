@@ -1580,7 +1580,11 @@ const SUBS = {
     // Outfitter tier & price (banked crates). Tier 0 is the starter boat.
     tier: 0,
     price: 0,
-    crewCap: 2,
+    // WAS 2, AND YOU START WITH TWO — which would have filled the boat on turn
+    // one and killed the Hiring Hall stone dead, along with the 5-crate sign-on
+    // that the harbour board's pay is the first thing FOR. Three: two aboard and
+    // one empty berth, because an empty berth is an invitation.
+    crewCap: 3,
   },
   charon: {
     name: 'Charon',
@@ -1599,7 +1603,7 @@ const SUBS = {
     porthole: false,
     tier: 1,
     price: 20,
-    crewCap: 3,
+    crewCap: 4,
   },
   nyx: {
     name: 'Nyx',
@@ -1618,7 +1622,10 @@ const SUBS = {
     porthole: false,
     tier: 2,
     price: 60,
-    crewCap: 4,
+    // Sean: "they could later upgrade to five or six". Six is the roster: an
+    // Ear, a Wrench, a Gun, a Diver, a Hand — and one more of whichever the
+    // captain has learned they cannot sail without.
+    crewCap: 6,
   },
 };
 
@@ -1628,8 +1635,55 @@ const SUBS = {
 // yard's work. A member's level is 1 + floor(xp/3), capped at 3; levels of a
 // role stack across the crew.
 const CREW_NAMES = ['Okafor', 'Reyes', 'Halvorsen', 'Ito', 'Marchetti', 'Osei', 'Lindqvist', 'Baptiste', 'Ferro', 'Ngata', 'Sorokin', 'Adeyemi'];
-const CREW_ROLES = ['diver', 'sonarman', 'engineer'];
+
+// ---- WHAT A HAND IS FOR -----------------------------------------------------
+//
+// Sean: "I like the idea of a sonarman (but we should de-gender it somehow
+// without it sounding bland or too obviously evasive in a political way)."
+//
+// So the answer is not a scrub — `sonarperson` would be exactly the bland,
+// obviously-evasive thing he asked me to avoid. It is a change of REGISTER. A
+// hand is named for the job they do on the boat, the way a lookout or a helm is:
+// the Ear, the Wrench, the Gun, the Diver, the Hand. Spare, nautical, slightly
+// eerie, and it sounds like how this world would talk. Nothing about it reads as
+// a compromise, which is the test he set.
+//
+// THE MATE IS NOT IN THIS TABLE, deliberately. `firstMate()` returns your
+// longest-serving able hand whatever their trade — so the mate is somebody who
+// EARNED it by staying alive, not a job you hire. That is better than making it
+// a role and it was already built that way.
+const ROLES = {
+  ear:    { name: 'the Ear',    of: 'listens to the hull, and hears where the floor is open' },
+  wrench: { name: 'the Wrench', of: 'keeps the engine turning and makes the yard\'s work go further' },
+  gun:    { name: 'the Gun',    of: 'lays and serves whatever the boat is armed with' },
+  diver:  { name: 'the Diver',  of: 'goes over the side, and comes back with more of it' },
+  hand:   { name: 'the Hand',   of: 'carries, hauls, and gets people out of rooms they should not be in' },
+};
+const CREW_ROLES = Object.keys(ROLES);
+// OLD SAVES CARRY THE OLD WORDS. A campaign in progress has hands whose role is
+// `sonarman` or `engineer`; those are the same people doing the same job under
+// the name this world uses for it. Migrated once, on load, in place.
+const ROLE_WAS = { sonarman: 'ear', engineer: 'wrench' };
+function roleName(key) { return (ROLES[key] || {}).name || 'a hand'; }
+function migrateCrewRoles() {
+  for (const m of (state.crew || [])) {
+    if (m && ROLE_WAS[m.role]) m.role = ROLE_WAS[m.role];
+  }
+  if (state.portHire && ROLE_WAS[state.portHire.role]) state.portHire.role = ROLE_WAS[state.portHire.role];
+}
 const CREW_HIRE_COST = 5; // banked crates for a sign-on
+// The two hands a new captain casts off with. Named from the roster so they are
+// people rather than slots, and given no xp — they are as new to this as you
+// are, and the one who lives longest becomes your Mate by having lived longest.
+function startingCrew() {
+  const names = CREW_NAMES.slice();
+  const pickName = () => names.splice(Math.floor(rand() * names.length), 1)[0];
+  const hand = (role) => ({ name: pickName(), role: role, xp: 0, conditions: [],
+                            nerve: 70, scars: [], gear: {}, lost: false,
+                            wounded: false, dying: false });
+  return [hand('ear'), hand('hand')];
+}
+
 function crewLvl(role) {
   let s = 0;
   for (const m of state.crew) {
@@ -5505,7 +5559,7 @@ function renderMuster() {
     const state_ = m.lost ? 'lost' : m.dying ? 'dying' : m.wounded ? 'unfit for work' : null;
     return '<div class="mus">'
       + '<div class="mus-n">' + m.name + (state_ ? ' <span class="mus-c">(' + state_ + ')</span>' : '') + '</div>'
-      + '<div class="mus-r">' + (m.role || '—') + ' · ' + tenure + ' · nerve ' + Math.round(m.nerve) + '</div>'
+      + '<div class="mus-r">' + roleName(m.role) + ' · ' + tenure + ' · nerve ' + Math.round(m.nerve) + '</div>'
       + '<div class="mus-k">' + kn + '</div>'
       + (conds ? '<div class="mus-c">' + conds + '</div>' : '')
       + (scars ? '<div class="mus-s">' + scars + '</div>' : '')
@@ -5604,7 +5658,7 @@ function portRows() {
     // and then discarded — `need` ignored it and `gained` was clipped to the
     // deficit, so a yard bill came to the same crates at every engineer level.
     // Crew you had paid a sign-on for, doing nothing you could measure.
-    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * Math.min(3, crewLvl('engineer')));
+    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * Math.min(3, crewLvl('wrench')));
     const need = Math.max(1, Math.ceil(missing / perCrate));
     rows.push({ name: 'Patch the hull', desc: '+' + missing + ' hull · ' + need + ' crate' + (need > 1 ? 's' : ''),
       ok: canPay(need, 0), why: shortfall(need, 0), act: 'repair' });
@@ -5674,8 +5728,8 @@ function portRows() {
       state.portHire = { name: pick(free.length ? free : CREW_NAMES), role: pick(CREW_ROLES) };
     }
     const h = state.portHire;
-    const an = /^[aeiou]/i.test(h.role) ? 'an ' : 'a ';
-    rows.push({ name: h.name, desc: an + h.role + ' looking for a berth · ' + CREW_HIRE_COST + ' crates',
+    rows.push({ name: h.name, desc: roleName(h.role) + ' — ' + (ROLES[h.role] || {}).of
+        + ' · ' + CREW_HIRE_COST + ' crates',
       ok: canPay(CREW_HIRE_COST, 0), why: shortfall(CREW_HIRE_COST, 0), act: 'hire' });
   }
 
@@ -5691,7 +5745,7 @@ function portRows() {
       if (!empty) continue;
       any = true;
       const price = (g.cost.relics ? g.cost.relics + ' relic' + (g.cost.relics > 1 ? 's' : '') : g.cost.crates + ' crates');
-      rows.push({ name: g.name + ' — ' + m.name, desc: m.role + "'s " + g.slot + ' · ' + price,
+      rows.push({ name: g.name + ' — ' + m.name, desc: roleName(m.role) + "'s " + g.slot + ' · ' + price,
         ok: canPay(g.cost.crates, g.cost.relics), why: shortfall(g.cost.crates, g.cost.relics),
         act: 'gear:' + i + ':' + k });
     }
@@ -5773,7 +5827,7 @@ function portBuy(act) {
     // and then discarded — `need` ignored it and `gained` was clipped to the
     // deficit, so a yard bill came to the same crates at every engineer level.
     // Crew you had paid a sign-on for, doing nothing you could measure.
-    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * Math.min(3, crewLvl('engineer')));
+    const perCrate = DOCK_PRICES.hullPerCrate * (1 + 0.25 * Math.min(3, crewLvl('wrench')));
     const need = Math.max(1, Math.ceil(missing / perCrate));
     if (state.cargoBanked < need) return;
     state.cargoBanked -= need;
@@ -15048,7 +15102,7 @@ const CONTACT_LOG_TURNS = 3;   // min player actions between passive-contact lin
 // Called bare it is the old flat envelope — every existing site keeps working,
 // and the sites that know WHOSE depth they are asking about get the trick.
 function passiveContactR(otherDepth, oq, or_) {
-  const base = passiveRange() + 2 + (crewLvl('sonarman') > 0 ? 1 : 0);
+  const base = passiveRange() + 2 + (crewLvl('ear') > 0 ? 1 : 0);
   if (otherDepth == null) return base;
   return Math.floor(base * layerDamp(state.currentDepth, otherDepth,
                                      oq == null ? state.q : oq, or_ == null ? state.r : or_));
@@ -17312,25 +17366,25 @@ function lookAround() {
   //
   // Deliberately NOT scaled by level: the option is having anybody aboard who
   // can do it. A second year of listening does not make the seafloor closer.
-  if (crewLvl('sonarman') > 0 && !state.foot) {
-    const w = nearestOpeningKnown(SONARMAN_EAR);
+  if (crewLvl('ear') > 0 && !state.foot) {
+    const w = nearestOpeningKnown(EAR_REACH);
     const who = soundHand();
     if (w) {
       log(`${who} puts a hand up for quiet and listens to the hull for a while. "There's a hollow under us, ${bearing(state.q, state.r, w.q, w.r)}. ${w.d * 60} m, near enough. The water goes down there."`,
-          'good', 'SONARMAN');
+          'good', 'THE EAR');
     } else {
       log(`${who} listens a long time, and shakes their head. "Solid, all round. Whatever's under this is under all of it."`,
-          '', 'SONARMAN');
+          '', 'THE EAR');
     }
   }
 }
-// How far a listening hand reads the floor. Wider than a mid ping because they
+// How far the Ear reads the floor. Wider than a mid ping because they
 // are not shouting — they are waiting, and they have all watch to do it.
-const SONARMAN_EAR = 9;
+const EAR_REACH = 9;
 // Name the hand, so it is a person saying it and not the boat.
 function soundHand() {
   for (const m of state.crew) {
-    if (m.role === 'sonarman' && !m.wounded && !m.lost) return m.name || 'Your sonarman';
+    if (m.role === 'ear' && !m.wounded && !m.lost) return m.name || 'Your Ear';
   }
   return 'Your sonarman';
 }
@@ -18498,6 +18552,21 @@ function endGame(title, summary) {
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.decoys = 3;
   state.items = {}; state.fits = {};   // the hold and every fitting go down with the boat
+  // TWO HANDS, AND A BERTH LEFT OPEN. Sean: "what if new sailors started with
+  // two sailors, Mate and Sonar... So the party would start at three."
+  //
+  // The captain sailing alone was how every campaign began, and it made the
+  // opening read as a solo game that mentions a crew. An Ear and a Hand: the
+  // Ear because knowing where the floor is open is the bottleneck of the whole
+  // early game (96% of prizes are sealed in rock and only a break in the floor
+  // reaches them), and a Hand because somebody has to carry. Whichever has
+  // served longer becomes your Mate, which on turn one is a coin toss and by
+  // the end of a campaign is a person you know.
+  // THE SEA KEEPS THE CREW. A replacement boat is crewed in anotherBoat(),
+  // not here — putting startingCrew() on the death path handed you two new
+  // hands at the instant the old ones drowned, which reads as the sea taking
+  // nothing at all. cargo.test caught it on the first run: "the sea keeps what
+  // was aboard".
   state.crew = [];
   state.expedition = null;
   state._outfitOffer = null; state._hireOffer = null; state._armoryOffer = null; state._armsOffer = null;
@@ -18510,6 +18579,9 @@ function endGame(title, summary) {
 // The button on the death screen: not a new world — another boat on the same sea.
 function anotherBoat() {
   state.alive = true;
+  // THE REPLACEMENT IS CREWED. Two hands sign on with the new hull — the port
+  // does not send a captain out alone any more than it did the first time.
+  if (!state.crew || !state.crew.length) state.crew = startingCrew();
   document.getElementById('gameover').classList.remove('show');
   const pp = document.getElementById('ping-power');
   if (pp) pp.max = activeSub().sonarMaxPower;
@@ -18583,7 +18655,7 @@ function restart() {
   state.allies = [];     // ...and has never met them
   state.enclaves = [];
   state.corpses = [];
-  state.crew = [];
+  state.crew = startingCrew();
   state._hireOffer = null;
   state._armoryOffer = null;
   state._armsOffer = null;
@@ -19030,6 +19102,7 @@ function resumeGame(save) {
   // reload, and hail it again — measured at standing 2 -> 4 on one hull, and
   // repeatable, which makes reputation a thing you get by pressing F5. Keep the
   // rival ids and drop only the ship ones.
+  migrateCrewRoles();
   state.hailed = arr(save.hailed).filter(id => String(id).indexOf('sh') !== 0);
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
