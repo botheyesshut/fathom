@@ -635,7 +635,12 @@
      failure here before fixing it — 27 entries, nothing to scroll. A margin on
      the first child anchors short logs to the bottom and lets long ones grow
      upward into scrollable space. */
-  #log > .log-entry:first-child { margin-top: auto; }
+  /* ANCHOR THE ONE THAT IS SHOWN. This was on :first-child, and since the rule
+     below hides every entry but the last, the first child is only ever visible
+     while it IS the last — so message one sat on the floor of the box and
+     message two jumped to the ceiling. The visible line is :last-child; anchor
+     that. */
+  #log > .log-entry:last-child { margin-top: auto; }
   /* EVERYTHING BUT THE LAST LINE IS HIDDEN. It is still in the DOM, and still in the
      transcript behind a tap — this is about what competes for the eye, not about
      throwing anything away. */
@@ -867,7 +872,11 @@
   }
 
   @media (max-width: 420px) {
-    .btn { font-size: 0.62rem; letter-spacing: 0.06em; padding: 0.8rem 0.35rem; }
+    /* WAS 0.8rem of padding — which put the slab straight back on any phone
+       420px or narrower, i.e. the only phones this game is played on. Written
+       before the size pass and never revisited; it silently reverted the fix on
+       the exact device it was for. Narrower gutters here, nothing taller. */
+    .btn { font-size: 0.62rem; letter-spacing: 0.06em; padding: 0.45rem 0.3rem; }
     #controls-row { gap: 0.35rem; }
   }
 
@@ -1359,7 +1368,7 @@
     <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
     <button class="btn primary" id="btn-sail" title="Close on the sail you have sighted to read her colours, then hail her for news. Holding your course lets her go - unless somebody out here is already hunting you" style="display:none">Close</button>
     <button class="btn" id="btn-attack" title="Open fire on her. Her people will not forget it, and a submarine in a surface gun action is in the wrong place - but a merchant's hold has to come from somewhere" style="display:none">Attack</button>
-    <button class="btn" id="btn-more" title="The rest of the boat — the muster, the bestiary, the recovered account, and the settings. Tap again to put them away.">MORE</button>
+    <button class="btn" id="btn-more" title="The rest of the boat — the muster, the bestiary and the settings. Tap again to put them away.">MORE</button>
   </div>
   <!-- THE REST OF THE BOAT. Sean: "The buttons... either need to be nested in
        menus or need to be like half their current size." Both. These four are
@@ -1431,7 +1440,11 @@ const HEX_DIRS = [
   { dq: 1, dr: 0 }, { dq: 1, dr: -1 }, { dq: 0, dr: -1 },
   { dq: -1, dr: 0 }, { dq: -1, dr: 1 }, { dq: 0, dr: 1 },
 ];
-const CURRENT_NAMES = ['east', 'northeast', 'north', 'west', 'southwest', 'south'];
+// NAMED FROM THE SAME COMPASS `bearing()` USES. Dirs 2 and 5 were 'north' and
+// 'south'; the axial steps [0,-1] and [0,1] come out at -120° and +60°, which
+// that function calls northwest and southeast. Two vocabularies for one set of
+// six directions, both said out loud to the player.
+const CURRENT_NAMES = ['east', 'northeast', 'northwest', 'west', 'southwest', 'southeast'];
 const CURRENT_SCALE = 9;   // hexes per gyre cell — big enough to read and use
 
 // A smooth-ish angular field. Two offset lattice samples blended by position so
@@ -1617,7 +1630,7 @@ const SUBS = {
   },
   nyx: {
     name: 'Nyx',
-    description: 'An abyssal boat, all armor and instruments. Built for the black bands where the pressure sings against the plates.',
+    description: 'An abyssal boat, all armour and instruments. Built for the black bands where the pressure sings against the plates.',
     hull: 180,
     air: 600,
     safeDepth:  6000,
@@ -2084,7 +2097,7 @@ function nudgeStanding(culture, by, why) {
   // back out of contempt is what needs the remarkable deed.
   if (by > 0 && v <= STANDING_FLOOR) {
     state.standing[culture] = v;
-    log(`${CULTURES[culture].short} take the ${why} and give nothing back. It will take more than courtesy now.`, 'warn', 'STANDING');
+    log(`${ucfirst(CULTURES[culture].short)} take the ${why} and give nothing back. It will take more than courtesy now.`, 'warn', 'STANDING');
     return;
   }
   v = Math.max(-100, Math.min(100, v + by));
@@ -2661,7 +2674,11 @@ function drawSeaChart() {
       if (!cur) continue;
       const p = P(t.q, t.r);
       if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
-      const a = Math.PI / 180 * (60 * cur.dir);
+      // MINUS sixty. The chart's own projection puts the six hex directions at
+      // screen angles 0, -60, -120, 180, +120, +60 — so `60 * dir` was right for
+      // dirs 0 and 3 and MIRRORED for 1, 2, 4 and 5. A current setting northeast
+      // drew pointing southeast, on the instrument you plan a route from.
+      const a = Math.PI / 180 * (-60 * cur.dir);
       // A floor on the arrow, so the set stays readable as the survey grows and
       // the scale shrinks — an unreadable arrow is the same as no arrow.
       const L = Math.max(cur.strong ? 4.5 : 3, rad * (cur.strong ? 0.95 : 0.6));
@@ -5576,7 +5593,7 @@ function renderMuster() {
       + '<div class="mus-k">' + kn + '</div>'
       + (conds ? '<div class="mus-c">' + conds + '</div>' : '')
       + (scars ? '<div class="mus-s">' + scars + '</div>' : '')
-      + (next != null ? '<div class="mus-w">' + (next - xp) + ' more voyages before they learn the next thing.</div>' : '')
+      + (next != null ? '<div class="mus-w">' + plural(next - xp, 'voyage') + ' before they learn the next thing.</div>' : '')
       + '</div>';
   });
   el.innerHTML = rows.join('');
@@ -6136,7 +6153,7 @@ function renderOptions() {
     + '<div class="opt"><div class="opt-h"><div class="opt-n">New world</div>'
     + '<button class="opt-b danger" data-opt="newworld">Abandon</button></div>'
     + '<div class="opt-d">A different sea, and a different seed. You lose the boat, the bank, the vault and your crew. '
-    + 'You keep what you have <em>learned</em> — the recovered pages and the bestiary come with you, because drowning does not un-teach you anything.</div></div>';
+    + 'You keep what you have <em>learned</em> — the bestiary comes with you, because drowning does not un-teach you anything.</div></div>';
 
   el.querySelectorAll('[data-opt]').forEach(node => {
     const kind = node.getAttribute('data-opt');
@@ -6212,7 +6229,7 @@ function checkEnclave() {
       // thing in the world and the reason a trench is worth going down.
       log(`Lights. Not one light — a field of them, going away below you further than the ping will carry, in courses and terraces and something that has to be streets. ${city.name}.`,
           'strange', 'CITY');
-      log(`${cu.name} live here, in numbers, and have for longer than there has been anybody to count. This is where arrangements are made.`,
+      log(`${ucfirst(cu.name)} live here, in numbers, and have for longer than there has been anybody to count. This is where arrangements are made.`,
           'strange', 'CITY');
       sfx('relic');
       if (!state.poisFound.includes('city:' + city.id)) {
@@ -6249,7 +6266,7 @@ function dockHere() {
   const k = 'port:' + port.q + ',' + port.r;
   if (!state.poisFound.includes(k)) {
     state.poisFound.push(k);
-    log(`${nm}. ${cu.name} hold it — a dozen roofs, a crane that still turns, and a bar for boats that have somewhere to be.`, 'good', 'PORT');
+    log(`${nm}. ${ucfirst(cu.name)} hold it — a dozen roofs, a crane that still turns, and a bar for boats that have somewhere to be.`, 'good', 'PORT');
     // A PEOPLE PUTS ITS WORDS WHERE ITS BOATS COME IN. The motto is over the
     // gate of every town they hold — which is the first place you would ever
     // read it, and the last thing you would hear from one of their decks.
@@ -6389,7 +6406,7 @@ function hailShip(sh) {
     return;
   }
   state.hailed.push(sh.id);
-  log(`You come up on her beam and the loud-hailer squalls. ${cu.short} answer — grudgingly, and then at length, because a boat that has been at sea is a boat that wants to talk.`, '', 'HAIL');
+  log(`You come up on her beam and the loud-hailer squalls. ${ucfirst(cu.short)} answer — grudgingly, and then at length, because a boat that has been at sea is a boat that wants to talk.`, '', 'HAIL');
   nudgeStanding(sh.culture, 2, 'you hailed rather than shot');
   shipNews(sh);
   updateHUD(); render(); scheduleSave();
@@ -6468,7 +6485,7 @@ function attackShip() {
       const ally = (state.ships || []).find(x => x.id === sh.duelWith && !x.gone);
       if (ally) {
         nudgeStanding(ally.culture, 18, 'you came in on their side of a gun action');
-        log(`${CULTURES[ally.culture].short} saw whose side you came in on. That will be remembered, for as long as they remember anything.`, 'good', 'STANDING');
+        log(`${ucfirst(CULTURES[ally.culture].short)} saw whose side you came in on. That will be remembered, for as long as they remember anything.`, 'good', 'STANDING');
       }
     }
   } else {
@@ -6735,7 +6752,7 @@ function tradeBuy(e, key) {
   const p = buyPriceFrom(e.culture, key);
   if (state.cargo < p) { log('Not crates enough for that.', 'warn', 'TRADE'); return; }
   state.cargo -= p; giveItem(key, 1);
-  log(`Bought: ${ITEMS[key].name}, ${p} crates. ${CULTURES[e.culture].short} count it out and hand it over.`, '', 'TRADE');
+  log(`Bought: ${ITEMS[key].name}, ${p} crates. ${ucfirst(CULTURES[e.culture].short)} count it out and hand it over.`, '', 'TRADE');
   nudgeStanding(e.culture, 1, 'you deal fairly with them');
   sfx('bell'); renderTrade(e); updateHUD(); render(); scheduleSave();
 }
@@ -6887,10 +6904,10 @@ function silentScout() {
 const TRACE_REACH = 3;   // hexes a shed will carry before the sea eats it
 const TRACE_SHED = {
   ruin:    'a haze of silt, too fine to be the seabed and too steady to be chance',
-  salvage: 'an oil sheen crawling along the hull, decades old and still rising',
+  salvage: 'torn plate and a slick of something lighter than water, still letting go of it',
   signal:  'a hum that is not the boat — it comes and goes with the water',
   growth:  'a sweetness in the water that the crew do not like at all',
-  air:     'a thread of small bubbles going up past the glass',
+  air:     'a thread of small bubbles going up, steady, from somewhere below',
   // `wreck` WAS NEVER A POI. The table is read as TRACE_SHED[t.poi], and the
   // nine values TILES can produce are chasm/opening/ruin/hull/signal/growth/
   // air/salvage/surface — so this row could never fire, while `hull`, which IS
@@ -7014,14 +7031,16 @@ function boardTarget(rng, port, rank) {
   for (let tries = 0; tries < 40; tries++) {
     const ang = rng() * Math.PI * 2;
     const dist = rank.reach[0] + Math.floor(rng() * (rank.reach[1] - rank.reach[0] + 1));
-    // THE POLAR-TO-AXIAL CONVERSION DOES NOT PRESERVE DISTANCE. It compresses by
-    // about a third — ask for 26 and the hex you get is 16.5 away. `leadTarget`
-    // has used this same formula since chart-leads went in and its comment has
-    // claimed "8-16 hexes off" the whole time while delivering 5-10. I inherited
-    // the bug by copying the formula, and measured jobs landing 4.8 hexes out
-    // when the rank said 5-10. So the radius is opened up to compensate AND the
-    // result is checked below: `reach` means hexes, because a captain reading
-    // "4.2 km off" is going to sail that far and expect to arrive.
+    // THIS conversion does not preserve distance: the `/1.5` and `/SQRT3` below
+    // compress by about a third — ask for 26 and the hex you get is 16.5 away.
+    // Measured when jobs came out 4.8 hexes from a rank that promised 5-10. So
+    // the radius is opened up to compensate AND the result is checked below:
+    // `reach` means hexes, because a captain reading "4.2 km off" will sail that
+    // far and expect to arrive.
+    //
+    // NOTE: `leadTarget` does NOT share this formula — it uses bare cos/sin and
+    // is genuinely 8-16 hexes. An earlier version of this comment said it did,
+    // and that error propagated into leadTarget's own comment.
     const pr = Math.round(Math.sin(ang) * dist * 1.56 / 1.5);
     const pq = Math.round(Math.cos(ang) * dist * 1.56 / SQRT3 - pr / 2);
     const q = port.q + pq, r = port.r + pr;
@@ -7123,12 +7142,17 @@ function boardOffer(port, slot) {
 function leadTarget(seedStr, fromQ, fromR) {
   const rng = mulberry32(hashStr(seedStr + ':' + worldSeed));
   const ang = rng() * Math.PI * 2;
-  // 8-16 by this formula, which is NOT 8-16 hexes — the conversion below
-  // compresses by about a third, so a lead actually lands 5-10 hexes off. The
-  // comment used to claim hexes and was wrong for as long as it stood; measured
-  // 2026-07-31 while building the harbour board on the same maths. Left as it
-  // is because 5-10 hexes is a good distance for a lead and has been the played
-  // distance all along — the number was right and only the label was a lie.
+  // 8-16, and that IS roughly hexes: measured over 36,000 angles, mean 13.07,
+  // range 6-23, with 76% landing inside 8-16.
+  //
+  // A previous version of this comment said the opposite — that the conversion
+  // "compresses by about a third" so a lead lands 5-10 hexes off — and told the
+  // next reader it had been left alone deliberately. That was wrong, and it was
+  // wrong in the most expensive way a comment can be: it was measured on a
+  // DIFFERENT function. `boardTarget` converts polar to axial with `/1.5` and
+  // `/SQRT3`, and those divisors are what compress. This one takes bare cos and
+  // sin, so nothing compresses. Anybody who trusted the correction, measured 13,
+  // and "fixed" the formula would have halved every chart lead in the game.
   const dist = 8 + Math.floor(rng() * 9);
   const dq = Math.round(Math.cos(ang) * dist);
   const dr = Math.round(Math.sin(ang) * dist);
@@ -7293,7 +7317,7 @@ function takeBerth(port, slot) {
     if (!state.leads) state.leads = [];
     state.leads.push({ q: o.q, r: o.r, d: o.d, tier: 1, kind: 'berth' });
   }
-  log(`Your name goes in the book against the posting: ${o.title.toLowerCase()}. ${o.tell} ${o.pay} crate${o.pay === 1 ? '' : 's'} when it is done, and not before.`,
+  log(`Your name goes in the book against the posting: ${o.title.replace(/^Wanted: /, 'the ').toLowerCase()}. ${o.tell} ${o.pay} crate${o.pay === 1 ? '' : 's'} when it is done, and not before.`,
       'good', 'BOARD');
   sfx('bell');
   renderPort(); render(); scheduleSave();
@@ -9524,7 +9548,7 @@ function takeCommission(e) {
   const against = commissionFrom(e.culture);
   if (!against) return;
   state.commission = { forCulture: e.culture, against: against, taken: state.moves, prizes: 0 };
-  log(`A commission, in the only hand they have for it. ${CULTURES[e.culture].short} give you leave to take ${CULTURES[against].short} shipping, and will answer for it if anybody asks. Nobody will ask.`,
+  log(`A commission, in the only hand they have for it. ${ucfirst(CULTURES[e.culture].short)} give you leave to take ${CULTURES[against].short} shipping, and will answer for it if anybody asks. Nobody will ask.`,
       'strange', 'COMMISSION');
   sfx('bell');
   renderTrade(e);
@@ -9683,8 +9707,8 @@ function shipsTick() {
     if (hunt && !sh.chasing) {
       sh.chasing = true;
       log(sh.greed && !standingHostile(sh.culture)
-        ? `She has put her head round and she is coming for you — and it is not personal. ${CULTURES[sh.culture].short} want what you are carrying${sh.greedFor ? ' (' + sh.greedFor + ')' : ''}.`
-        : `She has put her head round and she is coming for you. ${CULTURES[sh.culture].short} know your boat.`,
+        ? `She has put her head round and she is coming for you — and it is not personal. ${ucfirst(CULTURES[sh.culture].short)} want what you are carrying${sh.greedFor ? ' (' + sh.greedFor + ')' : ''}.`
+        : `She has put her head round and she is coming for you. ${ucfirst(CULTURES[sh.culture].short)} know your boat.`,
         'danger', 'SAIL');
       sfx('contact');
     } else if (!hunt && sh.chasing) {
@@ -9915,7 +9939,7 @@ function takeMission(e) {
   if (!m) return;
   state.mission = m;
   const it = ITEMS[m.item];
-  log(`It is agreed. ${CULTURES[e.culture].short} want ${m.n === 1 ? '' : m.n + ' of '}${it.name}, brought here to ${e.name}. They will not put a time on it. They do not think in times.`,
+  log(`It is agreed. ${ucfirst(CULTURES[e.culture].short)} want ${m.n === 1 ? '' : m.n + ' of '}${it.name}, brought here to ${e.name}. They will not put a time on it. They do not think in times.`,
       'strange', 'MISSION');
   sfx('bell');
   renderTrade(e);
@@ -9947,7 +9971,7 @@ function makeAlliance(e) {
   if (!canAlly(e.culture)) return;
   if (!state.allies) state.allies = [];
   state.allies.push(e.culture);
-  log(`It is written, in a hand that is not writing, on something that is not paper. ${CULTURES[e.culture].short} will not hunt you again while it holds.`,
+  log(`It is written, in a hand that is not writing, on something that is not paper. ${ucfirst(CULTURES[e.culture].short)} will not hunt you again while it holds.`,
       'good', 'TREATY');
   sfx('bell');
   renderTrade(e);
@@ -11509,7 +11533,12 @@ function creatureTough(c) {
 function hitCreature(c, power) {
   const dmg = Math.max(1, power - 2 + Math.floor(rand() * 5));
   c.dmgTaken = (c.dmgTaken || 0) + dmg;
-  const nm = c.type === 'hulk' ? 'the leviathan' : c.type === 'shoal' ? 'the school' : c.type === 'chorus' ? 'the colony' : 'it';
+  // ONE CREATURE, ONE NAME. This called the hulk "the leviathan", the shoalfang
+  // "the school" and the chorus "the colony" — none of which the Bestiary uses,
+  // and "leviathan" appears in no other line in the game. The hulk's entry is
+  // the one that teaches you do not fight weather; the line that repeats the
+  // lesson when you shoot it called it something else. Ask the bestiary.
+  const nm = (BESTIARY[c.type] && BESTIARY[c.type].name) ? 'the ' + BESTIARY[c.type].name : 'it';
   if (c.dmgTaken < creatureTough(c)) {
     if (c.type === 'hulk') { log('The leviathan takes the hit and does not so much as turn. You will not kill this with what you carry.', 'warn', 'FIRE'); return; }
     if (c.type === 'lurker') c.interest = Math.min(100, (c.interest || 0) + 25); // a wound only enrages it
@@ -11888,6 +11917,23 @@ function wait() {
   const tile = getTile(state.q, state.r);
   if (tile && rand() < 0.6) handleTile(tile);
   creatureTick();
+  // HOLDING STATION IS A TURN, AND THE SEA KEEPS WORKING — which the line at the
+  // top of this function has claimed all along while only two of the eleven
+  // per-turn ticks actually ran. Traffic stopped, the war stopped, leads never
+  // resolved, the hold never stirred, the dying never worsened — and airCounsel
+  // never fired, on the single action a captain repeats when the air is short
+  // and the counsel is the whole point of it.
+  warTick();
+  shipsTick();
+  checkLeads();
+  ordersTick();
+  checkEnclave();
+  hauntTick();
+  holdTick();
+  corpseTick();
+  dyingTick();      // a hand bleeding out is running out of time whether you move or not
+  airCounsel();
+  provisionTick();  // and the boat eats
   checkDeath();
   updateHUD();
   render();
@@ -11929,7 +11975,13 @@ function move(q, r) {
     log(`${pickLoose(WALL_FACE)} -${dmg} hull.`, 'danger', 'IMPACT');
     tip('impact');
     flagMoveFail(q, r, '#a04030');
-    noiseMade(q, r, 2); // metal on rock carries — hunters hear it
+    // QUIET FEET, AS AN OPTION. A hand who can work "without telling the whole
+    // sea about it" is worth having for the noise you did NOT choose to make:
+    // the wall you did not see in the dark. A ping is a decision and still
+    // costs what it costs; this is the accident, and they catch it. Binary,
+    // unlevelled, and it removes an event rather than scaling a number.
+    if (!crewCan('quietfeet')) noiseMade(q, r, 2);   // metal on rock carries
+    else if (rand() < 0.35) log('The hull rings — and somebody has a hand on it before the sound gets away.', '', 'IMPACT');
     sfx('impact');
     creatureTick();
     checkDeath();
@@ -11956,7 +12008,13 @@ function move(q, r) {
     }
     tip('impact');
     flagMoveFail(q, r, '#a04030');
-    noiseMade(q, r, 2); // metal on rock carries — hunters hear it
+    // QUIET FEET, AS AN OPTION. A hand who can work "without telling the whole
+    // sea about it" is worth having for the noise you did NOT choose to make:
+    // the wall you did not see in the dark. A ping is a decision and still
+    // costs what it costs; this is the accident, and they catch it. Binary,
+    // unlevelled, and it removes an event rather than scaling a number.
+    if (!crewCan('quietfeet')) noiseMade(q, r, 2);   // metal on rock carries
+    else if (rand() < 0.35) log('The hull rings — and somebody has a hand on it before the sound gets away.', '', 'IMPACT');
     sfx('impact');
     creatureTick();
     checkDeath();
@@ -11975,7 +12033,7 @@ function move(q, r) {
       : blocker.type === 'drifter'
       ? 'Something vast fills the passage, drifting. The boat backs off.'
       : blocker.type === 'rival'
-      ? "Another boat holds that water and won't yield. You back off."
+      ? "Another boat holds that water and will not yield. You back off."
       : 'Something is in that water. The boat backs off.', 'warn', 'CONTACT');
     flagMoveFail(q, r, '#7050a0');
     creatureTick();
@@ -12342,7 +12400,19 @@ function maybeBeach() {
   const sub = activeSub();
   if (!state.poisFound.includes(k)) {
     state.poisFound.push(k);
-    state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.5));
+    // FULL. Sean, verbatim: "If we're at the surface whether at depth zero or in
+    // an underwater grotto with air, the air should automatically go to full."
+    // It was +50% here and +25% on a revisit, and `surfaceAirRecovery` — which
+    // DOES fill to full and has a `pocket` branch written for exactly this — is
+    // unreachable from a beach, because both its call sites sit inside
+    // `currentDepth <= 0`. Measured: 259 beach cells on one seed, ONE of them at
+    // depth zero. The promise in that function's comment was never kept.
+    //
+    // The anti-farm below is untouched and is the thing that actually works: a
+    // pocket you have just drained does not refill for BEACH_RECHARGE moves. A
+    // partial fill never stopped farming — you could tap again after every
+    // window regardless — it only made the one refuge in the deep worse.
+    state.air = sub.air;
     if (!state.beachDrawn) state.beachDrawn = {};
     state.beachDrawn[k] = state.moves;
     noteRefuge('air');
@@ -12367,8 +12437,8 @@ function maybeBeach() {
       log('The pocket is thin — the crew take what there is and it is not much. It seeps back out of the rock in its own time.', 'warn', 'BEACH');
     } else {
       state.beachDrawn[k] = state.moves;
-      state.air = Math.min(sub.air, state.air + Math.round(sub.air * 0.25));
-      log('The old beach. The crew tops the tanks off the pocket.', '', 'BEACH');
+      state.air = sub.air;   // full, same ruling — the gate above is the limit
+      log('The old beach, and the pocket has come back. The crew fills her right up off it.', '', 'BEACH');
     }
     // A grotto you have found stays a place you can walk back into.
     if (!state.expedition && !state.foot) enterGrotto();
@@ -12387,7 +12457,7 @@ function expeditionTick() {
   const relicChance = exp.type === 'signal' ? 0.20 : exp.type === 'beach' ? 0.15 : 0.10;
   if (roll < relicChance) {
     exp.relics++;
-    log('The divers surface a RELIC — old work, and not drowned-men make.', 'strange', 'RELIC');
+    log('The divers surface a relic — old work, and not drowned-men make.', 'strange', 'RELIC');
     sfx('relic');
   } else if (roll < relicChance + 0.35 + 0.05 * crewLvl('diver')) {
     exp.crates++;
@@ -14336,7 +14406,7 @@ function stepFoot(x, y) {
         ? ` ${left} thing${left > 1 ? 's' : ''} still lie${left > 1 ? '' : 's'} in here${grotto ? ', and they will still be here when you come back' : ', and the ruin is worked out once you are through'}.`
         : ' Nothing is left down here that you have not already got.';
       const hold = carrying
-        ? ` You have ${f.crates || 0} crate${(f.crates || 0) === 1 ? '' : 's'}${f.relics ? ' and ' + f.relics + ' relic' + (f.relics === 1 ? '' : 's') : ''} to bring up.`
+        ? ` You have ${[f.crates ? plural(f.crates, 'crate') : '', f.relics ? plural(f.relics, 'relic') : ''].filter(Boolean).join(' and ')} to bring up.`
         : ' Your hands are empty.';
       log((grotto
         ? 'The sand, and the boat riding black water beyond it. Step onto it again to go back aboard — anything else and you stay ashore.'
@@ -14555,7 +14625,11 @@ const SWING_POOR = [
 // Matches the largest crewCap in SUBS. At 3 against the Nyx's 4 berths, the
 // fourth hand you paid for never once went ashore — and `deployParty` fills
 // in roster order, so it was always the same person, 60 times out of 60.
-const PARTY_MAX = 4;   // a small party — you lead a boarding, you do not command a company
+// Matches the largest crewCap in SUBS — the Nyx now berths six, and the whole
+// point of this constant is that no hand you paid a sign-on for is left aboard
+// for ever. It was 4 against the Nyx's 6 after the roster work: hands five and
+// six could never once go ashore.
+const PARTY_MAX = 6;
 
 function partyBodies() { return state.crew.filter(m => m.ashore && !m.lost); }
 
@@ -15182,8 +15256,16 @@ function noiseMade(q, r, loudness) {
   const reach = 2 + loudness * 3;
   // A salt-iron ward in the hold, and a hull lined for silence, both make the
   // deep less willing to fix on you — the hunters and rival boats stoke slower.
-  const damp = Math.max(0.2, (1 - countHeldWith('ward') * 0.4) * (1 - fitLevel('quiet') * 0.22)
-                             * (crewCan('quietfeet') ? 0.72 : 1));
+  // QUIET FEET IS NOT IN THIS CHAIN ANY MORE. It was a `* 0.72` sitting between
+  // an item and a fit — a knack multiplying a number, which is the one thing the
+  // law thirteen thousand lines above this forbids in capitals: "A KNACK OPENS
+  // AN OPTION. IT NEVER MULTIPLIES A NUMBER." Measured before the change: one
+  // loudness-4 noise stoked a lurker to 49 interest without the knack and 35
+  // with it. The commit that introduced it was called "crew who specialise, and
+  // provably never get stronger", which is exactly the mistake being easy to
+  // make. What it does instead is at the hull-strike call sites: the noise you
+  // did not choose to make simply does not happen.
+  const damp = Math.max(0.2, (1 - countHeldWith('ward') * 0.4) * (1 - fitLevel('quiet') * 0.22));
 
   // A station is found the same way the boat is: by noise. Working loudly on
   // your own doorstep is how the deep learns there is a door. This is the
@@ -15424,7 +15506,7 @@ function hitRival(c, power) {
         com.prizes = (com.prizes || 0) + 1;
         nudgeStanding(c.culture, -30, 'you sank one of their boats');
         nudgeStanding(com.forCulture, 20, 'you took a boat under their commission');
-        log(`A prize, and a legal one. ${CULTURES[com.forCulture].short} will hear whose boat it was.`, 'good', 'COMMISSION');
+        log(`A prize, and a legal one. ${ucfirst(CULTURES[com.forCulture].short)} will hear whose boat it was.`, 'good', 'COMMISSION');
       } else {
         nudgeStanding(c.culture, -40, 'you sank one of their boats with her crew aboard');
         if (c.culture === 'mariners') {
@@ -15467,7 +15549,7 @@ function hailRival(c) {
   }
   state.hailed.push(c.id);
   if (rivalHostile(c)) {
-    log(`You put a light on her and she answers with her bow. ${CULTURES[c.culture].short} are not talking to you.`, 'warn', 'HAIL');
+    log(`You put a light on her and she answers with her bow. ${ucfirst(CULTURES[c.culture].short)} are not talking to you.`, 'warn', 'HAIL');
     c.alert = 100; c.revealTurns = 3;
     render();
     return;
@@ -15660,7 +15742,12 @@ function tickAngler(c, dPlayer) {
       state.hull = Math.max(0, state.hull - dmg);
       state.lastFailTime = performance.now();
       c.revealed = true;
-      log(`The wreck unfolds — it was never a wreck. Something closes on the hull. -${dmg} hull.`, 'danger', 'AMBUSH');
+      // IT WEARS ONE OF THREE. `c.mask` is salvage, signal or ruin — so two
+      // times in three a captain chasing a signal or a drowned building was
+      // told a WRECK unfolded, about a thing they had never taken for a wreck.
+      const wore = c.mask === 'signal' ? 'The signal' : c.mask === 'ruin' ? 'The ruin' : 'The wreck';
+      const was  = c.mask === 'signal' ? 'a signal'  : c.mask === 'ruin' ? 'a ruin'  : 'a wreck';
+      log(`${wore} unfolds — it was never ${was}. Something closes on the hull. -${dmg} hull.`, 'danger', 'AMBUSH');
       sfx('strike');
     }
     return; // otherwise it holds absolutely still
@@ -15844,7 +15931,7 @@ function tickLurker(c, dPlayer, silent) {
   if (c.interest >= LURK_HUNT) {
     if (teamScore().atk === 0 && !state._huntAdvised) {
       state._huntAdvised = true;
-      log('It has your scent. Unarmed, distance and silence are your only defenses — run, or kill the sonar and pray it loses you.', 'danger', 'THE DEEP');
+      log('It has your scent. Unarmed, distance and silence are your only defences — run, or kill the sonar and pray it loses you.', 'danger', 'THE DEEP');
     }
     if (sameSlice && dPlayer === 1) { lurkerStrike(c); return; }
     // WHAT IT IS ACTUALLY CHASING. Three things can be true, in this order:
@@ -16699,7 +16786,7 @@ const SPACE_AGAIN = {
     'Daylight, and no more impressed by it than the last time.', 'Topside again. Nothing has changed up here either.',
     'The same grey sky waiting where you left it.', 'Back on top. The horizon has not moved an inch.'],
   shaft: [
-    'Your sub still braves the vertical tube.',
+    'The shaft again, and no more decided about it than last time.',
     'The shaft again. The same scraped rock going past, up and down.',
     'Still in the chimney. The walls have not moved, whatever the dark suggests.',
     'Up and down, same as before, and no closer to a decision.',
@@ -16928,7 +17015,7 @@ const AMBIENT = {
   sunlit: [
     'A school of something silver passes through your sonar and is gone.',
     'Water above and water below, and the boat hanging in the middle of it.',
-    'Weed comes past the glass in long ropes, going up.',
+    'Weed goes up past the sounder in long ropes, and the return comes back soft.',
     'The swell reaches down even here, and the boat rolls with it, slightly, like a sleeper.',
     'Sunlight from far above, bent and broken by the swell.',
     'A shadow crosses the light above and does not come back.',
@@ -16946,14 +17033,14 @@ const AMBIENT = {
     'Cold on the hull plate, and the seams weep a little, and the drops taste of the outside.',
   ],
   middle: [
-    'A single flake of something white falls past the port and keeps falling.',
+    'Something white crosses the sounder going down, once, and does not stop.',
     'Pressure builds slowly. The boat settles into the depth.',
     'The boat holds. The water leans on her and the water is patient.',
     'The air in here has gone over and over through the scrubbers and tastes of it.',
     "Somebody's oilskin is drying somewhere aft, and it is the only warm smell left aboard.",
   ],
   deep: [
-    'Particles drift past the viewport. Marine snow, falling.',
+    'The return comes back grainy. Marine snow, falling through the beam.',
     'The lamps put a small yellow ring on nothing at all.',
     'Marine snow. It has been falling since before there was anyone to name it.',
     'Something creaks that has not creaked before, once, and then does not do it again.',
@@ -17329,7 +17416,13 @@ function lookAround() {
     const w = nearestOpeningKnown(EAR_REACH);
     const who = soundHand();
     if (w) {
-      log(`${who} puts a hand up for quiet and listens to the hull for a while. "There's a hollow under us, ${bearing(state.q, state.r, w.q, w.r)}. ${w.d * 60} m, near enough. The water goes down there."`,
+      // NOT "UNDER US" — it is a bearing and a range, and the two together said
+      // the opposite of each other: a captain read "under us", dived on the spot,
+      // and found rock. Worse, `m` means DEPTH in every other line the boat says
+      // ("240 m under the keel"), so a distance in metres read as a depth. The
+      // range is in km like every other range in the game, and the hollow is
+      // off, not below.
+      log(`${who} puts a hand up for quiet and listens to the hull for a while. "There's a hollow off us, ${bearing(state.q, state.r, w.q, w.r)} — ${(w.d * 60 / 1000).toFixed(1)} km, near enough. The water goes down there."`,
           'good', 'THE EAR');
     } else {
       log(`${who} listens a long time, and shakes their head. "Solid, all round. Whatever's under this is under all of it."`,
@@ -17345,7 +17438,7 @@ function soundHand() {
   for (const m of state.crew) {
     if (m.role === 'ear' && !m.wounded && !m.lost) return m.name || 'Your Ear';
   }
-  return 'Your sonarman';
+  return 'Your Ear';
 }
 
 // Air literacy. The captain who drowns because nobody told them where air
@@ -17439,7 +17532,7 @@ function autoStop(why) {
   const was = state.autoTarget;
   state.autoTarget = null;
   syncAutoBtn();
-  if (why && was) log('The helm is yours again - ' + why + '.', 'warn', 'HELM');
+  if (why && was) log('The helm is yours again — ' + why + '.', 'warn', 'HELM');
   render();
 }
 
@@ -18150,7 +18243,7 @@ const FLAVOR = {
     'Wind across the casing. The hull creaks against the chop.',
     'The horizon is a thin grey line. Nothing breaks it.',
     'Salt on your face. The boat smells of diesel and brine.',
-    'Open water on every heading. A single crate lid rides the swell a hundred yards off, and it is going the same way you are.',
+    'Open water on every heading. A single crate lid rides the swell a hundred metres off, and it is going the same way you are.',
   ],
   breach: [
     'The hatch breaks the surface. Cold air pours in.',
@@ -18193,7 +18286,7 @@ const FLAVOR = {
     'The hull is silent. You could be the only living thing for miles.',
     'Sunlight from far above, bent and broken by the swell.',
     'Pressure builds slowly. The boat settles into the depth.',
-    'Particles drift past the viewport. Marine snow, falling.',
+    'The return comes back grainy. Marine snow, falling through the beam.',
   ],
   passage: [
     'Stone presses close. The hull complains.',
@@ -18460,7 +18553,11 @@ function updateHUD() {
   // Pressure indicator on depth bar
   const depthBar = document.getElementById('depth-bar');
   depthBar.className = 'bar-fill';
-  if (state.currentDepth > sub.crushDepth) depthBar.classList.add('danger');
+  // crushDepthNow(), not the raw hull rating — pressure plating buys 450 m a
+  // level and death already uses the fitted figure. With the fit on, the bar
+  // went red 900 m before anything was wrong, on the same line that prints the
+  // fitted number.
+  if (state.currentDepth > crushDepthNow()) depthBar.classList.add('danger');
   else if (state.currentDepth > safeDepthNow()) depthBar.classList.add('warn');
 
   // Update vertical depth strip if present
@@ -18664,10 +18761,13 @@ function restart() {
   // the premise, not a tutorial — it names the trade and the two things that
   // kill you, and then it stops. Nobody is told how to play, only what the job
   // is and what the sea charges for it.
-  log(`The other half of the work is the chart. Water you have sounded stays sounded, and a captain who comes home with nothing but new water has still come home with something. Nothing else is promised, and the sea keeps no ledger of what you meant to do.`,
-      '', 'THE CHART');
+  // THE TRADE FIRST, THEN THE CHART. These were the other way round, so the
+  // fourth thing a new captain ever read was "The other half of the work is
+  // the chart" — told about the other half before the first half existed.
   log(`The trade is salvage. Take the boat down, find what the Fall left on the bottom, and bring it back to this dock — nothing counts until it is ashore. Two things end you down there: the air runs out, or the pressure finds a seam. Both are on the gauges.`,
       '', 'THE TRADE');
+  log(`The other half of the work is the chart. Water you have sounded stays sounded, and a captain who comes home with nothing but new water has still come home with something. Nothing else is promised, and the sea keeps no ledger of what you meant to do.`,
+      '', 'THE CHART');
   document.getElementById('gameover').classList.remove('show');
   // Cap ping power slider at sub's max
   const pp = document.getElementById('ping-power');
@@ -19057,7 +19157,7 @@ function resumeGame(save) {
   // reload, and hail it again — measured at standing 2 -> 4 on one hull, and
   // repeatable, which makes reputation a thing you get by pressing F5. Keep the
   // rival ids and drop only the ship ones.
-  migrateCrewRoles();
+
   state.hailed = arr(save.hailed).filter(id => String(id).indexOf('sh') !== 0);
   state.stores = save.stores == null ? 100 : save.stores;
   state.lostCrew = save.lostCrew || [];
@@ -19087,6 +19187,14 @@ function resumeGame(save) {
     if (f.dweller === undefined) f.dweller = null;
   }
   state.crew = arr(save.crew);
+  // MIGRATE AFTER THE CREW IS LOADED, NOT BEFORE. This ran twenty-nine lines
+  // up, against a state.crew that was still last session's — so every save
+  // written before the rename kept role 'sonarman', and `crewLvl('ear')` and
+  // `soundHand()` never matched it. The Ear was silently dead in every campaign
+  // in progress. It LOOKED fine because state.portHire is assigned earlier and
+  // did migrate, so the hiring hall offered the new names while the hands
+  // aboard kept the old ones.
+  migrateCrewRoles();
   for (const m of state.crew) crewVitals(m);   // AFTER the load, or it vitalises the roster it is about to replace
   state._hireOffer = null;
   state._armoryOffer = null;

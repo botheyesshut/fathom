@@ -702,8 +702,16 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     found++; kinds.add(tr.poi);
     if (tr.dist >= 1 && tr.dist <= 3) sane++;
     // The named bearing must be the reverse of the set that carried it here.
-    const opposite = { east: 'west', west: 'east', north: 'south', south: 'north',
-                       northeast: 'southwest', southwest: 'northeast' };
+    // THE SIX HEX DIRECTIONS ARE THREE AXES: east/west, northeast/southwest,
+    // northwest/southeast. This map used to carry north/south instead of
+    // northwest/southeast, because CURRENT_NAMES did — and those two names were
+    // geometrically wrong: the axial steps [0,-1] and [0,1] come out at -120°
+    // and +60°, which `bearing()`, the game's compass of record, calls northwest
+    // and southeast. With the names corrected, six of thirty-five bearings
+    // looked up `undefined` here and the check failed. The names were the bug.
+    const opposite = { east: 'west', west: 'east',
+                       northeast: 'southwest', southwest: 'northeast',
+                       northwest: 'southeast', southeast: 'northwest' };
     if (opposite[tr.setName] === tr.toward) bent++;
   }
   check(found > 0, 'the sea carries traces of what is in it', found + ' plumes in the sample');
