@@ -57,7 +57,16 @@ const path = require('path');
 //                   it proves a captain can reach all of that and not merely
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed', 'crew'];
+//   delve         — THE ON-FOOT LAYER, WHICH NOTHING ELSE HERE WALKS. The sea
+//                   bot in playtest.js reaches a deck in 3% of its runs, so
+//                   tenants, wounds, nerve and bodies were covered by three runs
+//                   in a hundred. This walks 60 decks directly and asserts, every
+//                   step, that nothing impossible happened — including that
+//                   `inflictCondition` and `frayNerve` never re-enter themselves,
+//                   which is the one check that reliably catches the recursion
+//                   that shipped on 2026-08-04. Verified both ways: silent on the
+//                   sound build, red on a scratch build with the bug replanted.
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed', 'crew', 'delve'];
 // THE RUNNER MUST SAY WHICH ONE AND WHY. It used to count failures and print
 // only the count, so "BATTERY: 1 SUITE(S) FAILED" meant a hunt through fourteen
 // suites to find out what had gone wrong — and twice it was not a failing check
@@ -80,11 +89,26 @@ const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'statio
 // child), and let the CHILD'S OWN FAIL LINE decide which of the two it was. A
 // suite that exits nonzero without printing one did not fail a check — it died,
 // and saying so is the difference between "you broke the game" and "re-run it".
+// EITHER NAMING, AND SAY SO WHEN NEITHER EXISTS. This appended '.test.js'
+// unconditionally, so adding `delve.js` to the list above spawned a path that
+// has never existed — and the classifier below, which was written precisely to
+// tell a failed check from a dying suite, called a MISSING FILE "it died on the
+// way. Usually memory, seventeen VMs deep." A third thing wearing the same exit
+// code, and a confidently wrong diagnosis of it. Resolve both conventions, and
+// when neither is there, say that instead of guessing.
+const fs = require('fs');
 let failed = 0;
 const bad = [];
 for (const s of suites) {
-  const file = path.join(__dirname, s + '.test.js');
+  const cands = [path.join(__dirname, s + '.test.js'), path.join(__dirname, s + '.js')];
+  const file = cands.find(f => fs.existsSync(f));
   process.stdout.write('\n========== ' + s + ' ==========\n');
+  if (!file) {
+    failed++;
+    bad.push(s + ' (NO SUCH FILE — looked for ' + s + '.test.js and ' + s + '.js)');
+    process.stdout.write('  no such suite: neither ' + s + '.test.js nor ' + s + '.js exists\n');
+    continue;
+  }
   const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 900000, maxBuffer: 64 * 1024 * 1024 });
   const out = (r.stdout || '') + (r.stderr || '');
   process.stdout.write(out);
@@ -96,7 +120,7 @@ for (const s of suites) {
             : fails.length ? fails.length + ' check(s) failed — first: ' + fails[0].trim()
             : 'exit ' + r.status + ' WITHOUT REPORTING A VERDICT — it did not fail a check, it died on the'
               + ' way. Usually memory, seventeen VMs deep. Re-run this suite alone before believing it:'
-              + ' node tests/' + s + '.test.js';
+              + ' node ' + path.relative(process.cwd(), file).replace(/\\/g, '/');
   bad.push(s + ' (' + why + ')');
 }
 if (failed === 0) console.log('\nBATTERY: ALL SUITES PASSED');

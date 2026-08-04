@@ -23,6 +23,25 @@ const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const RUNS = parseInt(process.argv[2] || '120', 10);
 const TURNS = parseInt(process.argv[3] || '400', 10);
 
+// A CLOCK THAT DOES NOT MOVE.
+//
+// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
+// purpose, so reloading a save does not replay the same coin flips. The cost is
+// that every suite exercising save/reload became unreproducible from that line
+// on: combat rolls, item detonations and curse bleeds all differed run to run,
+// inside checks written tolerantly enough not to notice. A regression could sit
+// in that wobble indefinitely.
+//
+// Only `now` is pinned. `new Date()` still works, because the transcript export
+// formats real dates and has no business being frozen.
+// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
+// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
+// clock made every restart regenerate the SAME ocean — and save.test caught it,
+// which is the check doing exactly its job. This advances a fixed step per read,
+// so the Nth call is always the same number across runs while still moving
+// forward within one.
+let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
 function makeStub() {
   const fn = function () { return stub; };
   const stub = new Proxy(fn, { get(t, p) {
@@ -47,7 +66,7 @@ function boot(seed) {
     return stub;
   }});
   const mem = {};
-  const sandbox = { console: { log(){}, warn(){}, error(){} }, Math, JSON, Date, Array, Object, Map, Set, String, Number, Boolean, Symbol,
+  const sandbox = { console: { log(){}, warn(){}, error(){} }, Math, JSON, Date: FrozenDate, Array, Object, Map, Set, String, Number, Boolean, Symbol,
     parseInt, parseFloat, isNaN, isFinite,
     setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
     requestAnimationFrame: () => 0, cancelAnimationFrame: () => {}, performance: { now: () => Date.now() },
@@ -60,7 +79,7 @@ function boot(seed) {
   vm.createContext(sandbox);
   const probe =
     '\nfunction __state(){ return state; }' +
-    '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
+    '\nfunction __seed(s){ worldSeed=s; interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s); resetWorldCaches(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
     '\nfunction __tile(q,r){ return tileAt(q,r); }' +
     '\nfunction __accepts(t,d){ return hexAcceptsDepth(t,d); }' +
     '\nfunction __sound(){ return soundingBelow(); }' +
@@ -100,15 +119,112 @@ const PERSONAS = {
   pacifist:  { dive: 0.22, deepTarget: 1200, fleeAir: 0.50, ping: 0.10, fight: 0.05, enterRuin: 0.6, buy: true,  claim: true },
 };
 
+// SEEDED, NOT Math.random. An instrument that rolls unseeded dice reports a
+// SAMPLE and reads like a FACT — and two runs of it over identical code differ,
+// which makes it impossible to diff a build against its predecessor and see
+// what a change actually moved (see tests/moved.js). The bot's own dice are
+// seeded PER RUN from that run's world seed, so every run still plays its own
+// game and the whole report is reproducible. Set FATHOM_SEED to resample.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const BOT_SEED = parseInt(process.env.FATHOM_SEED || '20260804', 10);
+
+const wanderRand = mulberry32(BOT_SEED + 977);
+
 function newTally() {
   return {
     runs: 0, turns: 0, deaths: {}, survived: 0, softlocks: 0, traps: 0, botStuck: 0, errors: {},
     maxDepth: [], cratesBanked: [], relicsVaulted: [],
     reach: {}, itemsFound: {}, itemsUsed: {}, boats: {}, crewLost: 0, crewHired: 0,
     peakCargo: [], everCollected: 0, portVisits: 0, softlockWhere: [],
+    broken: {},   // invariants violated during play — see checkInvariants
   };
 }
 function saw(T, key) { T.reach[key] = (T.reach[key] || 0) + 1; }
+
+
+// WHAT MUST NEVER BE TRUE, ASSERTED EVERY TURN OF EVERY RUN.
+//
+// The rest of this file measures what the game DOES. This measures what it must
+// never do, continuously, across every turn of every run — which is a different
+// kind of question and catches a different kind of bug. A wound system that
+// quietly empties the roster, a hold that goes negative, an air tank that fills
+// past its own capacity: none of these fail a check written to test something
+// else, and none of them look wrong in a log. They just sit there.
+//
+// Cheap comparisons only. This runs tens of thousands of times per report, so
+// nothing here may allocate or scan a collection. The first violation of each
+// kind is recorded WITH ITS CONTEXT — turn, seed, values — because a count with
+// no example is a puzzle rather than a bug report.
+function checkInvariants(T, s, sub, seed, turn) {
+  const bad = (name, detail) => {
+    if (T.broken[name]) { T.broken[name].n++; return; }
+    T.broken[name] = { n: 1, first: 'seed ' + seed + ' turn ' + turn + ': ' + detail };
+  };
+  const num = (v) => typeof v === 'number' && !isNaN(v) && isFinite(v);
+
+  if (!num(s.currentDepth)) bad('depth is not a number', String(s.currentDepth));
+  else if (s.currentDepth < 0) bad('depth above the surface', s.currentDepth + ' m');
+
+  if (!num(s.air)) bad('air is not a number', String(s.air));
+  else if (s.air < 0) bad('air below zero', String(s.air));
+  else if (sub && num(sub.air) && s.air > sub.air) bad('air past the tank', s.air + ' of ' + sub.air);
+
+  if (!num(s.hull)) bad('hull is not a number', String(s.hull));
+  else if (s.hull < 0) bad('hull below zero', String(s.hull));
+
+  if (num(s.cargo) && s.cargo < 0) bad('cargo below zero', String(s.cargo));
+  if (num(s.cargoBanked) && s.cargoBanked < 0) bad('banked cargo below zero', String(s.cargoBanked));
+  if (num(s.relics) && s.relics < 0) bad('relics below zero', String(s.relics));
+
+  const crew = s.crew || [];
+  // A hand marked lost is spliced out of the roster by `loseCrew`; one that is
+  // both lost and aboard means something removed them halfway.
+  for (let i = 0; i < crew.length; i++) {
+    const m = crew[i];
+    if (!m) { bad('a hole in the roster', 'crew[' + i + '] is ' + String(m)); continue; }
+    if (m.lost) bad('a lost hand still aboard', (m.name || '?') + ' is lost and on the roster');
+    if (!num(m.nerve)) bad('nerve is not a number', (m.name || '?') + ': ' + String(m.nerve));
+    else if (m.nerve < 0 || m.nerve > 100) bad('nerve outside 0-100', (m.name || '?') + ': ' + m.nerve);
+
+    // ONE BLOW, ONE WOUND — the invariant the nerve recursion actually breaks.
+    //
+    // I first wrote the lost-hand check above and claimed in this comment that
+    // it would have caught that bug. It would not have, and I only know because
+    // I planted the bug back in a scratch build and ran this against it: not one
+    // invariant fired, and `crew lost` read 0 on both builds. The claim was the
+    // same species of confident-and-unchecked statement the bug itself came from.
+    //
+    // THIS is the one that breaks. `inflictCondition` adds exactly one row per
+    // blow. When it re-entered itself through `frayNerve`, a single turn stacked
+    // several. A jump of more than two conditions between consecutive turns is
+    // not a bad minute, it is a loop.
+    const nc = (m.conditions || []).length;
+    const key = m.name || ('#' + i);
+    const prev = T._cond && T._cond[key];
+    if (typeof prev === 'number' && nc - prev > 2) {
+      bad('conditions inflicted in a burst — something is re-entering',
+        key + ' went from ' + prev + ' to ' + nc + ' in one turn');
+    }
+    if (!T._cond) T._cond = {};
+    T._cond[key] = nc;
+
+    if (nc > 12) bad('conditions piling up without bound', key + ' carries ' + nc);
+  }
+  if (crew.length > 8) bad('more hands than any hull berths', String(crew.length));
+
+  // Ashore, the party has to be somewhere real.
+  if (s.foot) {
+    if (!num(s.foot.x) || !num(s.foot.y)) bad('ashore at no coordinates', s.foot.x + ',' + s.foot.y);
+    if (num(s.foot.crates) && s.foot.crates < 0) bad('carrying negative crates', String(s.foot.crates));
+  }
+}
 
 // ---- One game ----
 function playOne(tallies, personaName, seed) {
@@ -126,12 +242,16 @@ function playOne(tallies, personaName, seed) {
   };
   let died = null, turns = 0, idle = 0, peakCargo = 0;
 
-  const rnd = () => Math.random();
+  // This run's own dice, seeded from the world it is playing, so the same
+  // seed always produces the same captain making the same decisions.
+  const botRand = mulberry32((BOT_SEED ^ seed) >>> 0);
+  const rnd = () => botRand();
   const call = (fn, ...a) => { try { fn(...a); return true; } catch (e) {
     const k = (e && e.message ? e.message : String(e)).slice(0, 90);
     T.errors[k] = (T.errors[k] || 0) + 1; return false; } };
 
   for (turns = 0; turns < TURNS; turns++) {
+    checkInvariants(T, s, sb.__sub && sb.__sub(), seed, turns);
     if (!s.alive) { died = died || 'unknown'; break; }
 
     // ---- ASHORE: walking an interior ----
@@ -408,7 +528,7 @@ function pickGoal(sb, s, P) {
   }
   if (best) return best;
   // Nothing known: strike out in a consistent direction so we actually explore.
-  const ang = Math.random() * Math.PI * 2;
+  const ang = wanderRand() * Math.PI * 2;
   return { q: s.q + Math.round(Math.cos(ang) * 14), r: s.r + Math.round(Math.sin(ang) * 14) };
 }
 
@@ -493,6 +613,21 @@ console.log(`  distinct items ever held: ${foundKeys.length}/${allItems.length}`
 if (neverFound.length) console.log(`  NEVER FOUND: ${neverFound.join(', ')}`);
 const used = Object.keys(T.itemsUsed);
 console.log(`  items the bot actually used: ${used.length ? used.map(k => k + '×' + T.itemsUsed[k]).join(', ') : 'none'}`);
+
+// THE INVARIANTS, WHICH ARE THE ONLY PART OF THIS REPORT THAT IS A VERDICT.
+// Everything else here is "what happened"; this is "what must never happen",
+// and a line under it is a bug rather than a reading.
+console.log('');
+console.log('=== INVARIANTS — what must never be true, checked every turn ===');
+const brokenKeys = Object.keys(T.broken);
+if (!brokenKeys.length) {
+  console.log('  none violated across ' + T.turns + ' turns of ' + T.runs + ' runs');
+} else {
+  for (const k of brokenKeys.sort((a, b) => T.broken[b].n - T.broken[a].n)) {
+    console.log('  ' + String(T.broken[k].n).padStart(6) + 'x  ' + k);
+    console.log('          first: ' + T.broken[k].first);
+  }
+}
 
 if (Object.keys(T.errors).length) {
   console.log('\n=== ERRORS THROWN DURING PLAY ===');

@@ -21,17 +21,36 @@
 //
 // Result at the time of writing: 8 of 8 properties measurably real.
 const fs=require('fs'),vm=require('vm');
-const html=fs.readFileSync(__dirname+'/../fathom-chart.html','utf8');
+const html=fs.readFileSync((process.env.FATHOM_HTML || __dirname + '/../fathom-chart.html'),'utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// A CLOCK THAT DOES NOT MOVE.
+//
+// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
+// purpose, so reloading a save does not replay the same coin flips. The cost is
+// that every suite exercising save/reload became unreproducible from that line
+// on: combat rolls, item detonations and curse bleeds all differed run to run,
+// inside checks written tolerantly enough not to notice. A regression could sit
+// in that wobble indefinitely.
+//
+// Only `now` is pinned. `new Date()` still works, because the transcript export
+// formats real dates and has no business being frozen.
+// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
+// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
+// clock made every restart regenerate the SAME ocean — and save.test caught it,
+// which is the check doing exactly its job. This advances a fixed step per read,
+// so the Nth call is always the same number across runs while still moving
+// forward within one.
+let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
 function makeStub(){const fn=function(){return stub;};const stub=new Proxy(fn,{get(t,p){if(p===Symbol.toPrimitive)return()=>0;if(p===Symbol.iterator)return function*(){};if(p==='length')return 0;if(['firstChild','lastChild','nextSibling','parentNode'].includes(p))return null;if(p==='childNodes')return[];if(p==='classList')return{add(){},remove(){},contains(){return false},toggle(){return false}};if(p==='style')return{};return stub;},apply(){return stub},set(){return true},has(){return true},construct(){return stub}});return stub;}
 function boot(seed){
   const stub=makeStub();const pingEl={value:'2',max:'5',addEventListener:()=>{},disabled:false,textContent:''};
   const documentStub=new Proxy({},{get(t,p){if(['createElementNS','createElement','querySelector','querySelectorAll'].includes(p))return()=>makeStub();if(p==='getElementById')return id=>id==='ping-power'?pingEl:makeStub();if(p==='addEventListener')return()=>{};return stub;}});
   const mem={};
-  const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date,Array,Object,Map,Set,String,Number,Boolean,Symbol,parseInt,parseFloat,isNaN,isFinite,setTimeout:()=>0,clearTimeout:()=>{},setInterval:()=>0,clearInterval:()=>{},requestAnimationFrame:()=>0,cancelAnimationFrame:()=>{},performance:{now:()=>0},document:documentStub,navigator:{userAgent:'node'},localStorage:{getItem:k=>(k in mem?mem[k]:null),setItem:(k,v)=>{mem[k]=String(v)},removeItem:k=>{delete mem[k]}},addEventListener:()=>{},removeEventListener:()=>{},location:{href:'',reload:()=>{}},matchMedia:()=>({matches:false,addEventListener:()=>{},addListener:()=>{}}),alert:()=>{}};
+  const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date: FrozenDate,Array,Object,Map,Set,String,Number,Boolean,Symbol,parseInt,parseFloat,isNaN,isFinite,setTimeout:()=>0,clearTimeout:()=>{},setInterval:()=>0,clearInterval:()=>{},requestAnimationFrame:()=>0,cancelAnimationFrame:()=>{},performance:{now:()=>0},document:documentStub,navigator:{userAgent:'node'},localStorage:{getItem:k=>(k in mem?mem[k]:null),setItem:(k,v)=>{mem[k]=String(v)},removeItem:k=>{delete mem[k]}},addEventListener:()=>{},removeEventListener:()=>{},location:{href:'',reload:()=>{}},matchMedia:()=>({matches:false,addEventListener:()=>{},addListener:()=>{}}),alert:()=>{}};
   sb.window=sb;sb.globalThis=sb;sb.self=sb;vm.createContext(sb);
   const probe='\nfunction __state(){return state}\nfunction __I(){return ITEMS}'
-   +'\nfunction __seed(s){worldSeed=s;rng=mulberry32(s);resetWorldCaches();spawnedChunks.clear();state.creatures=[];state.enclaves=[]}'
+   +'\nfunction __seed(s){worldSeed=s;interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s);resetWorldCaches();spawnedChunks.clear();state.creatures=[];state.enclaves=[]}'
    +'\nfunction __has(p){return countHeldWith(p)}\nfunction __lum(){return luminousBonus()}\nfunction __gills(){return canBreatheWater()}'
    +'\nfunction __noise(q,r,l){noiseMade(q,r,l)}\nfunction __stress(t,i){stressHold(t,i)}'
    +'\nfunction __give(k,n){giveItem(k,n)}\nfunction __count(k){return itemCount(k)}'

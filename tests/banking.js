@@ -13,9 +13,28 @@
 // hours 2-10 audit measured: median 0, MAX 0, over 24 runs of 2,500 turns.
 const fs=require('fs'),vm=require('vm');
 function mk(){const fn=function(){return s};const s=new Proxy(fn,{get(t,p){if(p===Symbol.toPrimitive)return()=>0;if(p===Symbol.iterator)return function*(){};if(p==='length')return 0;if(['firstChild','lastChild','nextSibling','parentNode'].includes(p))return null;return s},apply(){return s},set(){return true},has(){return true}});return s}
-const script=fs.readFileSync('C:/Users/bothe/Documents/GitHub/personal/Fathom/fathom-chart.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const script=fs.readFileSync((process.env.FATHOM_HTML || __dirname + '/../fathom-chart.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 const doc=new Proxy({},{get(t,p){if(['createElementNS','createElement','getElementById','querySelector','querySelectorAll'].includes(p))return()=>mk();if(p==='addEventListener')return()=>{};return mk()}});
-const sb={console,Math,JSON,Date,Array,Object,Map,Set,String,Number,Boolean,Symbol,parseInt,parseFloat,isNaN,isFinite,setTimeout:()=>0,clearTimeout:()=>{},setInterval:()=>0,clearInterval:()=>{},requestAnimationFrame:()=>0,performance:{now:()=>Date.now()},document:doc,navigator:{userAgent:'node'},localStorage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},addEventListener:()=>{},location:{href:'',reload:()=>{}},matchMedia:()=>({matches:false,addEventListener:()=>{},addListener:()=>{}}),alert:()=>{}};
+// A CLOCK THAT DOES NOT MOVE.
+//
+// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
+// purpose, so reloading a save does not replay the same coin flips. The cost is
+// that every suite exercising save/reload became unreproducible from that line
+// on: combat rolls, item detonations and curse bleeds all differed run to run,
+// inside checks written tolerantly enough not to notice. A regression could sit
+// in that wobble indefinitely.
+//
+// Only `now` is pinned. `new Date()` still works, because the transcript export
+// formats real dates and has no business being frozen.
+// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
+// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
+// clock made every restart regenerate the SAME ocean — and save.test caught it,
+// which is the check doing exactly its job. This advances a fixed step per read,
+// so the Nth call is always the same number across runs while still moving
+// forward within one.
+let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
+const sb={console,Math,JSON,Date: FrozenDate,Array,Object,Map,Set,String,Number,Boolean,Symbol,parseInt,parseFloat,isNaN,isFinite,setTimeout:()=>0,clearTimeout:()=>{},setInterval:()=>0,clearInterval:()=>{},requestAnimationFrame:()=>0,performance:{now:()=>Date.now()},document:doc,navigator:{userAgent:'node'},localStorage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},addEventListener:()=>{},location:{href:'',reload:()=>{}},matchMedia:()=>({matches:false,addEventListener:()=>{},addListener:()=>{}}),alert:()=>{}};
 sb.window=sb;sb.globalThis=sb;sb.self=sb;vm.createContext(sb);
 vm.runInContext(script+`
 ;var __L=[]; log=function(t,c,e){__L.push({t:String(t),c:c||'',e:e||''})};

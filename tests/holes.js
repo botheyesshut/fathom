@@ -26,14 +26,33 @@ function stub() {
     }, apply() { return s }, set() { return true }, has() { return true } });
   return s;
 }
-const script = fs.readFileSync(process.argv[2] || __dirname + '/../fathom-chart.html', 'utf8')
+const script = fs.readFileSync(process.env.FATHOM_HTML || process.argv[2] || __dirname + '/../fathom-chart.html', 'utf8')
   .match(/<script>([\s\S]*?)<\/script>/)[1];
 const doc = new Proxy({}, { get(t, p) {
   if (['createElementNS', 'createElement', 'getElementById', 'querySelector', 'querySelectorAll'].includes(p)) return () => stub();
   if (p === 'addEventListener') return () => {};
   return stub();
 }});
-const sb = { console, Math, JSON, Date, Array, Object, Map, Set, String, Number, Boolean, Symbol,
+// A CLOCK THAT DOES NOT MOVE.
+//
+// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
+// purpose, so reloading a save does not replay the same coin flips. The cost is
+// that every suite exercising save/reload became unreproducible from that line
+// on: combat rolls, item detonations and curse bleeds all differed run to run,
+// inside checks written tolerantly enough not to notice. A regression could sit
+// in that wobble indefinitely.
+//
+// Only `now` is pinned. `new Date()` still works, because the transcript export
+// formats real dates and has no business being frozen.
+// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
+// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
+// clock made every restart regenerate the SAME ocean — and save.test caught it,
+// which is the check doing exactly its job. This advances a fixed step per read,
+// so the Nth call is always the same number across runs while still moving
+// forward within one.
+let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
+const sb = { console, Math, JSON, Date: FrozenDate, Array, Object, Map, Set, String, Number, Boolean, Symbol,
   parseInt, parseFloat, isNaN, isFinite, setTimeout: () => 0, clearTimeout: () => {},
   setInterval: () => 0, clearInterval: () => {}, requestAnimationFrame: () => 0,
   performance: { now: () => Date.now() }, document: doc, navigator: { userAgent: 'node' },
@@ -187,6 +206,22 @@ console.log('  => flat means the idea is dead; a spread means site choice is rea
 // quite a while without hitting a tunnel and then suddenly to hit one?"
 console.log('\n--- HOW MANY CUTS BEFORE THE FIRST HOLE? ---');
 console.log('  neighbours   median cut   earliest   latest   never in 200');
+// SEEDED, NOT Math.random. An instrument that rolls unseeded dice reports a
+// SAMPLE and reads like a FACT — and two runs of it over identical code differ,
+// which makes it impossible to diff a build against its predecessor and see
+// what a change actually moved (see tests/moved.js). Deterministic by default;
+// set FATHOM_SEED to deliberately resample.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const BOT_SEED = parseInt(process.env.FATHOM_SEED || '20260804', 10);
+const botRand = mulberry32(BOT_SEED);
+
 for (const near of [1, 2, 3, 4]) {
   const firsts = [];
   let never = 0;
@@ -195,7 +230,7 @@ for (const near of [1, 2, 3, 4]) {
     for (let cut = 1; cut <= 200; cut++) {
       // Same odds the game uses, with the first tiles safe.
       if (cut <= 3) continue;
-      if (Math.random() < Math.min(0.30, near * 0.05)) { hit = cut; break; }
+      if (botRand() < Math.min(0.30, near * 0.05)) { hit = cut; break; }
     }
     if (hit) firsts.push(hit); else never++;
   }

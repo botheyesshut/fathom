@@ -26,18 +26,37 @@
 // turns, so vertical-column lines are over-represented compared with a human.
 // Compare a number here only against another run of THIS file.
 const fs=require('fs'),vm=require('vm');
-const html=fs.readFileSync(__dirname+'/../fathom-chart.html','utf8');
+const html=fs.readFileSync((process.env.FATHOM_HTML || __dirname + '/../fathom-chart.html'),'utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// A CLOCK THAT DOES NOT MOVE.
+//
+// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
+// purpose, so reloading a save does not replay the same coin flips. The cost is
+// that every suite exercising save/reload became unreproducible from that line
+// on: combat rolls, item detonations and curse bleeds all differed run to run,
+// inside checks written tolerantly enough not to notice. A regression could sit
+// in that wobble indefinitely.
+//
+// Only `now` is pinned. `new Date()` still works, because the transcript export
+// formats real dates and has no business being frozen.
+// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
+// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
+// clock made every restart regenerate the SAME ocean — and save.test caught it,
+// which is the check doing exactly its job. This advances a fixed step per read,
+// so the Nth call is always the same number across runs while still moving
+// forward within one.
+let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
 function makeStub(){const fn=function(){return stub;};const stub=new Proxy(fn,{get(t,p){if(p===Symbol.toPrimitive)return()=>0;if(p===Symbol.iterator)return function*(){};if(p==='length')return 0;if(['firstChild','lastChild','nextSibling','parentNode'].includes(p))return null;if(p==='classList')return{add(){},remove(){},contains(){return false},toggle(){return false}};if(p==='style')return{};return stub;},apply(){return stub},set(){return true},has(){return true},construct(){return stub}});return stub;}
 function boot(seed){
   const stub=makeStub();const pingEl={value:'2',max:'5',addEventListener:()=>{},disabled:false,textContent:''};
   const documentStub=new Proxy({},{get(t,p){if(['createElementNS','createElement','querySelector','querySelectorAll'].includes(p))return()=>makeStub();if(p==='getElementById')return id=>id==='ping-power'?pingEl:makeStub();if(p==='addEventListener')return()=>{};return stub;}});
   const mem={};let clock=0;
-  const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date,Array,Object,Map,Set,String,Number,Boolean,Symbol,parseInt,parseFloat,isNaN,isFinite,setTimeout:()=>0,clearTimeout:()=>{},setInterval:()=>0,clearInterval:()=>{},requestAnimationFrame:()=>0,cancelAnimationFrame:()=>{},performance:{now:()=>(clock+=3000)},document:documentStub,navigator:{userAgent:'node'},localStorage:{getItem:k=>(k in mem?mem[k]:null),setItem:(k,v)=>{mem[k]=String(v)},removeItem:k=>{delete mem[k]}},addEventListener:()=>{},removeEventListener:()=>{},location:{href:'',reload:()=>{}},matchMedia:()=>({matches:false,addEventListener:()=>{},addListener:()=>{}}),alert:()=>{}};
+  const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date: FrozenDate,Array,Object,Map,Set,String,Number,Boolean,Symbol,parseInt,parseFloat,isNaN,isFinite,setTimeout:()=>0,clearTimeout:()=>{},setInterval:()=>0,clearInterval:()=>{},requestAnimationFrame:()=>0,cancelAnimationFrame:()=>{},performance:{now:()=>(clock+=3000)},document:documentStub,navigator:{userAgent:'node'},localStorage:{getItem:k=>(k in mem?mem[k]:null),setItem:(k,v)=>{mem[k]=String(v)},removeItem:k=>{delete mem[k]}},addEventListener:()=>{},removeEventListener:()=>{},location:{href:'',reload:()=>{}},matchMedia:()=>({matches:false,addEventListener:()=>{},addListener:()=>{}}),alert:()=>{}};
   sb.window=sb;sb.globalThis=sb;sb.self=sb;vm.createContext(sb);
   const probe='\nvar __L=[];(function(){var _l=log;log=function(t,c,g){__L.push({t:String(t),tag:g||""});return _l.apply(null,arguments)}})();'
    +'\nfunction __L_(){return __L}function __clr(){__L.length=0}\nfunction __state(){return state}'
-   +'\nfunction __seed(s){worldSeed=s;rng=mulberry32(s);resetWorldCaches();spawnedChunks.clear();state.creatures=[];state.enclaves=[]}'
+   +'\nfunction __seed(s){worldSeed=s;interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s);resetWorldCaches();spawnedChunks.clear();state.creatures=[];state.enclaves=[]}'
    +'\nfunction __tile(q,r){return tileAt(q,r)}\nfunction __accepts(t,d){return hexAcceptsDepth(t,d)}\nfunction __nbrs(q,r){return hexNeighbors(q,r)}'
    +'\nfunction __snd(){return soundingBelow()}\nfunction __start(){gameStarted=true}';
   try{vm.runInContext(script+probe,sb,{timeout:20000})}catch(e){if(typeof sb.state==='undefined')throw e}
@@ -47,15 +66,31 @@ function boot(seed){
 const lines=[];
 const RUNS=parseInt(process.argv[2]||'20',10), TURNS=parseInt(process.argv[3]||'400',10);
 for(let i=0;i<RUNS;i++){
+// SEEDED, NOT Math.random. An instrument that rolls unseeded dice reports a
+// SAMPLE and reads like a FACT — and two runs of it over identical code differ,
+// which makes it impossible to diff a build against its predecessor and see
+// what a change actually moved (see tests/moved.js). Deterministic by default;
+// set FATHOM_SEED to deliberately resample.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const BOT_SEED = parseInt(process.env.FATHOM_SEED || '20260804', 10);
+
   const s=boot(7000+i); const st=s.__state();
+  const botRand = mulberry32(BOT_SEED + i);
   for(let t=0;t<TURNS && st.alive;t++){
-    const r=Math.random();
+    const r=botRand();
     if(r<0.08) s.ping();
     else if(r<0.14) s.lookAround();
     else if(r<0.42){ const snd=s.__snd(); if(snd&&snd.under>0) s.changeDepth(s.activeSub().diveStep); else s.changeDepth(-s.activeSub().diveStep); }
     else {
       const ns=s.__nbrs(st.q,st.r).map(n=>s.__tile(n.q,n.r)).filter(tl=>tl&&!tl.wall&&!tl.land&&s.__accepts(tl,st.currentDepth));
-      if(ns.length){const n=ns[Math.floor(Math.random()*ns.length)];s.move(n.q,n.r);} else s.wait();
+      if(ns.length){const n=ns[Math.floor(botRand()*ns.length)];s.move(n.q,n.r);} else s.wait();
     }
   }
   lines.push(...s.__L_());

@@ -17,12 +17,31 @@
 // broken"; this answers "is it worth playing", and that second question has no
 // pass line — it has a trend. Read the numbers, not a verdict.
 const fs = require('fs'); const vm = require('vm');
-const html = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
+const html = fs.readFileSync((process.env.FATHOM_HTML || __dirname + '/../fathom-chart.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 const RUNS = parseInt(process.argv[2] || '40', 10);
 const TURNS = parseInt(process.argv[3] || '25', 10);
 
+// A CLOCK THAT DOES NOT MOVE.
+//
+// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
+// purpose, so reloading a save does not replay the same coin flips. The cost is
+// that every suite exercising save/reload became unreproducible from that line
+// on: combat rolls, item detonations and curse bleeds all differed run to run,
+// inside checks written tolerantly enough not to notice. A regression could sit
+// in that wobble indefinitely.
+//
+// Only `now` is pinned. `new Date()` still works, because the transcript export
+// formats real dates and has no business being frozen.
+// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
+// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
+// clock made every restart regenerate the SAME ocean — and save.test caught it,
+// which is the check doing exactly its job. This advances a fixed step per read,
+// so the Nth call is always the same number across runs while still moving
+// forward within one.
+let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
 function makeStub() {
   const fn = function () { return stub; };
   const stub = new Proxy(fn, { get(t, p) {
@@ -47,7 +66,7 @@ function boot(seed) {
     return stub;
   }});
   const mem = {};
-  const sandbox = { console: { log(){}, warn(){}, error(){} }, Math, JSON, Date, Array, Object, Map, Set, String, Number, Boolean, Symbol,
+  const sandbox = { console: { log(){}, warn(){}, error(){} }, Math, JSON, Date: FrozenDate, Array, Object, Map, Set, String, Number, Boolean, Symbol,
     parseInt, parseFloat, isNaN, isFinite,
     setTimeout: (f) => { try { f(); } catch (e) {} return 0; }, clearTimeout: () => {},
     setInterval: () => 0, clearInterval: () => {},
@@ -67,7 +86,7 @@ function boot(seed) {
     '\nfunction __lines_(){ return __lines; }' +
     '\nfunction __clear(){ __lines.length = 0; }' +
     '\nfunction __state(){ return state; }' +
-    '\nfunction __seed(s){ worldSeed=s; rng=mulberry32(s); resetWorldCaches(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
+    '\nfunction __seed(s){ worldSeed=s; interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s); resetWorldCaches(); spawnedChunks.clear(); state.creatures=[]; state.enclaves=[]; }' +
     '\nfunction __tile(q,r){ return tileAt(q,r); }' +
     '\nfunction __accepts(t,d){ return hexAcceptsDepth(t,d); }' +
     '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
@@ -87,10 +106,23 @@ function boot(seed) {
 // A NEW CAPTAIN, not a bot optimiser. Taps Look, taps Ping, dives when there is
 // water under, and otherwise wanders — which is what the audit's trace shows a
 // real first session looks like.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const coldRand = mulberry32(parseInt(process.env.FATHOM_SEED || '20260804', 10));
+
 function playCold(s, turns) {
   const st = s.__state();
   for (let t = 0; t < turns && st.alive; t++) {
-    const roll = s.rand ? s.rand() : Math.random();
+    // The fallback used to be Math.random, so on any boot where the game's own
+    // `rand` was not exported this instrument silently became unreproducible
+    // and nobody could have told from the output. Seeded either way now.
+    const roll = s.rand ? s.rand() : coldRand();
     if (t === 1) { s.lookAround(); continue; }
     if (t === 2) { s.ping(); continue; }
     const snd = s.soundingBelow && s.soundingBelow();
