@@ -9486,13 +9486,43 @@ const PRIZE_WEIGHTS = {
   salvage: [2.6, 0.5], growth: [2.6, 0.2], air: [2.0, 0.5], chasm: [1.0, 1.2],
   hull: [1.8, 2.2], ruin: [1.6, 3.0], signal: [0.4, 3.0],
 };
+// HOME WATER: THE SAME PRIZES, MORE OF THEM WORTH WALKING INTO.
+//
+// Measured before touching anything: inside 12 hexes of the dock and above the
+// Erebus's rated depth there are 2.9 prizes in an average world, and 30% of
+// them are interiors — which is exactly what the shelf weights above ask for
+// (ruin 1.6 + hull 1.8 of a 12.0 total). Working as designed, and the design
+// left three worlds in eight with NOTHING a new captain could walk into. The
+// sea-going bot reaches an interior in 3% of its runs for the same reason.
+//
+// The lever is the TYPE, not the COUNT. Nothing here adds a prize — Sean's rule
+// is that the economy does not get buffed until progress is reliable, and this
+// does not hand out one extra crate. It changes what the prizes already there
+// turn out to be, in home water only, so the first hours contain a door.
+//
+// DISTANCE FROM THE ORIGIN, not from `homeDock()`. The dock is within a few
+// hexes of 0,0 by construction, and homeDock() scans whichever chunks happen to
+// exist — calling it here would make prize type depend on generation ORDER,
+// which flip.test exists to forbid. A literal depth for the same reason: the
+// world is a pure function of the seed and must not change when you buy a
+// deeper boat.
+// 16, MEASURED RATHER THAN GUESSED. At the first cut's 12 hexes, 8 worlds in 40
+// still had nothing a starting captain could walk into; the interiors in those
+// worlds existed at 14 to 19 hexes, just outside an arbitrary line I had drawn.
+// Coverage by radius, 40 worlds: 8 -> 26 dead, 12 -> 8 dead, 16 -> 4, 20 -> 1.
+// Sixteen is a real first voyage and it is where the curve flattens.
+const HOME_REACH = 16;      // hexes from the origin
+const HOME_CEIL = 1500;     // the Erebus's rated depth, as a constant not a lookup
+const HOME_DOOR = 4.0;      // what hull and ruin weights are multiplied by there
 function prizeTypeAt(q, r, d) {
   const t = Math.min(1, Math.max(0, d / 6000));
+  const home = d <= HOME_CEIL && hexDistance({ q: q, r: r }, { q: 0, r: 0 }) <= HOME_REACH;
   let total = 0;
   const w = [];
   for (const k of PRIZE_TYPES) {
     const pair = PRIZE_WEIGHTS[k];
-    const v = pair ? pair[0] + (pair[1] - pair[0]) * t : 1;
+    let v = pair ? pair[0] + (pair[1] - pair[0]) * t : 1;
+    if (home && (k === 'hull' || k === 'ruin')) v *= HOME_DOOR;
     total += v;
     w.push(v);
   }
