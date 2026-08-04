@@ -226,7 +226,7 @@
      next move kills you, and it was sharing a size with Hold. Ashore, the big
      1.5rem dive-row readout is hidden entirely, so this was the only depth on
      the screen at 15.68 px. */
-  #depth-val { font-size: 1.34rem; letter-spacing: 0.04em; }
+  /* #depth-val went with the HUD's depth stat — see the note in the markup. */
   .stat-value.warn { color: var(--lantern); }
   .stat-value.danger { color: var(--blood); animation: pulse-danger 1s ease-in-out infinite; }
 
@@ -400,8 +400,17 @@
     min-height: 44px;
     min-width: 72px;
   }
-  #dive-depth-readout {
+  .dive-depth-stack {
     flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+  #dive-depth-band {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.52rem; letter-spacing: 0.08em;
+    color: var(--sonar-dim); margin-top: 0.12rem;
+  }
+  #dive-depth-readout {
     text-align: center;
     font-family: 'JetBrains Mono', monospace;
     font-size: 1.5rem;
@@ -543,6 +552,44 @@
   /* O4: the long-press explanation. Sits above everything, ignores pointers so
      it can never eat the tap it is explaining, and reads as the boat talking
      rather than as a browser tooltip. */
+  /* THE BRIEFING CARD. Sized for the 375 px screen this game is played on:
+     the card takes the middle of the display, the button sits at the bottom of
+     it at full width and 48 px so a thumb cannot miss, and the whole backdrop
+     is a dismiss target. */
+  #brief {
+    position: fixed; inset: 0; z-index: 60;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(4, 8, 16, 0.82);
+    padding: 1.2rem;
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  }
+  #brief.show { display: flex; }
+  #brief-card {
+    width: 100%; max-width: 30rem; max-height: 80vh; overflow-y: auto;
+    background: var(--abyss);
+    border: 1px solid var(--sonar-dim);
+    border-radius: 3px;
+    padding: 1.1rem 1.1rem 0.9rem;
+    box-shadow: 0 0 0 1px rgba(94, 184, 154, 0.08), 0 18px 50px rgba(0,0,0,0.7);
+  }
+  #brief-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--lantern); margin-bottom: 0.7rem;
+  }
+  #brief-body { color: var(--bone); font-size: 0.98rem; line-height: 1.5; }
+  #brief-body p { margin: 0 0 0.7rem; }
+  #brief-body p:last-child { margin-bottom: 0; }
+  #brief-body b { color: var(--lantern); font-weight: 500; letter-spacing: 0.04em; }
+  #brief-ok {
+    display: block; width: 100%; min-height: 48px;
+    margin-top: 1rem; font-size: 0.82rem; letter-spacing: 0.14em;
+  }
+  #brief-off {
+    text-align: center; margin-top: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.54rem; letter-spacing: 0.06em; color: var(--bone-dim);
+  }
   #longpress-tip {
     position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%) translateY(6px);
     z-index: 300; max-width: 84vw; pointer-events: none;
@@ -1240,6 +1287,22 @@
 </div>
 
 <!-- THE BESTIARY — what the boat has learned about what lives down here. -->
+<!-- THE BRIEFING. Sean: "These should be pop up windows I can dismiss without
+     much trouble... it does need to tell me what I should be trying to do the
+     first time I find myself at each stage of playing the game."
+     Deliberately NOT a modal in the usual sense: it dims the screen but the tap
+     that closes it is anywhere at all, and the button is thumb-sized at the
+     bottom where a thumb already is. Nothing behind it advances while it is up,
+     because it only ever appears between turns. -->
+<div id="brief">
+  <div id="brief-card">
+    <div id="brief-title"></div>
+    <div id="brief-body"></div>
+    <button class="btn" id="brief-ok">Understood</button>
+    <div id="brief-off">these are the Standing Orders — turn them off in Options</div>
+  </div>
+</div>
+
 <div id="bestiary">
   <div id="inv-panel">
     <div id="inv-head"><span>The Bestiary</span><button class="btn" id="bestiary-close">Close</button></div>
@@ -1287,12 +1350,15 @@
       <div class="stat-value" id="hull-val">100</div>
       <div class="bar"><div class="bar-fill" id="hull-bar" style="width:100%"></div></div>
     </div>
-    <div class="stat">
-      <div class="stat-label">Depth</div>
-      <div class="stat-value" id="depth-val">0</div>
-      <div class="bar"><div class="bar-fill" id="depth-bar" style="width:0%; background: var(--strange);"></div></div>
-      <div class="stat-sub" id="depth-rating">safe</div>
-    </div>
+    <!-- DEPTH USED TO SIT HERE AS WELL, AND IT WAS THE THIRD PLACE IT WAS
+         SHOWN: this stat, the graphical strip down the side of the chart, and
+         the number between the dive arrows. Three readouts of one figure, on a
+         375 px screen, and the two survivors are the ones a captain is already
+         looking at — the strip when judging the water, the number when their
+         thumb is on the arrows. The safe/crush band moved onto that number,
+         which is better placed than it was here: it is now attached to the
+         control that endangers you rather than filed at the top of the screen.
+         The three remaining stats get a third more width each. -->
     <!-- E9: the game never showed you how much money you had. -->
     <div class="stat">
       <div class="stat-label">Hold</div>
@@ -1340,7 +1406,10 @@
 <div id="controls">
   <div id="ping-power-row" title="The sonar dial. Reach is bought with noise and air: at silent you hear almost nothing and almost nothing hears you.">
     <div class="ping-info">
-      <span class="ping-label">Sonar Power</span>
+      <!-- The words "Sonar Power" are gone. The row is a slider with a cost and
+           a reach written beside it; naming it spent a line of the smallest
+           screen the game runs on to tell a captain what the numbers beside it
+           already tell them. The long-press still explains the whole bargain. -->
       <!-- O8: the units used to be hardcoded around these spans, so silent
            running read "OFF air · silent m". They live in the spans now. -->
       <span class="ping-stats"><span id="ping-cost">5 air</span> · <span id="ping-range">300 m</span></span>
@@ -1350,7 +1419,7 @@
   <div id="dive-controls">
     <button class="btn dive-btn" id="btn-ascend-fast" title="Ascend 120 m">▲▲</button>
     <button class="btn dive-btn" id="btn-ascend" title="Ascend one step. Rising is how you outlast a hull that is past its rated depth, and how you get home">▲</button>
-    <span id="dive-depth-readout">0 m</span>
+    <span class="dive-depth-stack"><span id="dive-depth-readout">0 m</span><span id="dive-depth-band">safe</span></span>
     <button class="btn dive-btn" id="btn-descend" title="Descend one step. The shelf floor is not the sea floor — the sinkholes, drawn O, are the way through it">▼</button>
     <button class="btn dive-btn" id="btn-descend-fast" title="Descend 120 m">▼▼</button>
   </div>
@@ -6041,67 +6110,180 @@ try { tipsOn = localStorage.getItem('fathom-tips') !== '0'; } catch (e) {}
 // once and never again, and the same switch in Options turns the whole of it off
 // along with the tips — one control for "help me", because two would be a puzzle
 // of its own.
-const ORDERS = [
-  // AN OPENER, NOT AN OBJECTIVE — and the difference matters, because the thread
-  // WAITS for the current order to be done before offering the next. This first
-  // gated on four moves, so a captain who tapped DOCK before wandering anywhere
-  // was stuck on it for ever and never heard another word. `opener` means done
-  // the moment it is said: it is information, and reading it is the whole task.
-  { id: 'helm', opener: true,
-    done: () => false,
-    say: 'The arrows around the boat move her a hex at a time. LOOK costs nothing and tells you where you are standing. PING costs air and tells you what is out there — the dial beside it is how hard you shout, and everything in the water can hear you shout.' },
+// THE BRIEFINGS — what a captain should be TRYING to do, the first time they are
+// somewhere that asks a new question of them.
+//
+// This replaced a thread of seven log lines. Sean, testing: "it does need to
+// tell me what I should be trying to do the first time I find myself at each
+// stage of playing the game... These should be pop up windows I can dismiss
+// without much trouble." The log was the wrong instrument for it — a line about
+// what a dock is FOR scrolls away under the line describing the water, and the
+// one message a new captain most needs is the one most likely to be gone by the
+// time they look for it.
+//
+// SITUATION-TRIGGERED, NOT SEQUENCED. The old thread waited for order N to be
+// `done()` before offering N+1, which meant it could stall: a captain who did
+// things out of turn never heard the rest of it. Each entry here fires on its
+// own `when()` and never again, so the game explains whatever you have actually
+// walked into, in whatever order you walk into it. Array order is only the
+// tie-break for a turn where two become true at once.
+//
+// At most one per turn, and never over an open panel.
+const BRIEFS = [
+  { id: 'helm', title: 'The Erebus',
+    when: () => true,
+    body: `<p>She is yours, she leaks, and she is the only one you are getting.</p>
+      <p>The <b>arrows around the boat</b> on the chart move her a hex at a time. The
+      <b>&#9650; &#9660;</b> below take her up and down; the number between them is your
+      depth, and under it the depth this hull can stand.</p>
+      <p><b>LOOK</b> costs nothing and tells you where you are standing. <b>PING</b> costs
+      air and tells you what is out there — and everything in the water hears you do it.</p>` },
 
-  { id: 'work',
-    done: () => !!state.berth || (state.ticket || 0) > 0,
-    say: 'Nothing out here will happen to you until you go and make it happen. While you are alongside the dock, DOCK opens the harbour — the first thing in that window is a slate of work. Take a posting. It is the only thing in the room that pays you rather than charges you.' },
+  { id: 'harbour', title: 'The dock',
+    when: () => !state.foot && state.currentDepth <= 0 && atHomeDock(),
+    body: `<p>You are alongside a dock. This is the only place the sea gives anything back:
+      what you haul up is worth nothing until it is on a ledger here.</p>
+      <p><b>Tap DOCK</b> to open the harbour. There is not much in that window yet — a
+      slate of work, a hand or two for hire, and a yard selling very little you can
+      afford.</p>
+      <p>That is the shape of it. The dock grows as you do: deeper boats, better gear,
+      armament, a surgeon for the crew. For now, <b>take a posting off the slate</b> — it
+      is the only thing in the room that pays you rather than charges you.</p>` },
 
-  // SAILING IS DONE WHEN YOU ARE OVER IT, NOT WHEN YOU HAVE REACHED IT.
-  // This first read `berth.found`, and reaching a mark MEANS diving to it — so
-  // sail and dive completed in the same instant and the dive line, the one a
-  // new captain most needs, could never fire at all. The test caught it by
-  // printing the thread as it advanced; the checks were all green.
-  { id: 'sail',
-    done: () => (state.ticket || 0) > 0 || (state.berth && state.berth.found)
-      || (state.berth && state.berth.q != null
-          && hexDistance({ q: state.q, r: state.r }, { q: state.berth.q, r: state.berth.r }) <= 1),
-    say: 'The posting is marked on your water now — a flag on the sea itself and the same mark on the chart. Steer for it. It will call out as you close, and it will say so when you are over the top of it.' },
+  { id: 'posting', title: 'A posting',
+    when: () => !!state.berth,
+    body: `<p>The job is marked on your water now — a flag on the sea itself, and the same
+      mark on the chart.</p>
+      <p><b>Steer for it.</b> It will call out as you close, and say so plainly when you
+      are over the top of it. Then go <b>down</b>: it is under you as well as ahead of
+      you, and the posting names the depth.</p>` },
 
-  { id: 'dive',
-    done: () => (state.maxDepth || 0) >= 180 || (state.ticket || 0) > 0 || (state.berth && state.berth.found),
-    say: 'It is under you as well as ahead of you. The down arrow takes her a step deeper; the air gauge is the clock on all of it, and coming back up to daylight fills the tanks right off. Go down to the marked depth and the job is done.' },
+  { id: 'air', title: 'Air is the clock',
+    when: () => state.currentDepth >= 120 && !state.foot,
+    body: `<p>The <b>AIR</b> gauge is the only clock this game has. Every move spends it.
+      Pinging spends more. Running fast spends more still.</p>
+      <p>Coming up to daylight fills the tanks right off, free, every time. There is no
+      penalty for surfacing and no prize for staying down — the boat that comes home with
+      three crates beats the boat that does not come home.</p>` },
 
-  { id: 'collect',
-    done: () => (state.ticket || 0) > 0,
-    say: 'Now take her home and tap DOCK again to collect. Nothing in the hold is yours until it is on the ledger — the sea keeps the boat and everything aboard her, and the harbour keeps what you banked. That is the whole of it.' },
+  { id: 'collect', title: 'Nothing is yours yet',
+    when: () => (state.cargo || 0) > 0 || (state.ticket || 0) > 0,
+    body: `<p>There is something in the hold. It is not yours.</p>
+      <p>The sea keeps the boat and everything aboard her — go down, and that cargo goes
+      down with you. The harbour keeps what you banked, and keeps it across this campaign
+      and every one after it.</p>
+      <p><b>Take her home and tap DOCK</b> to put it on the ledger.</p>` },
 
-  { id: 'ashore',
-    done: () => !!state.foot || !!state.base || Object.keys(state.deckTook || {}).length > 0,
-    say: 'The shelf floor is not the sea floor. Within a few hexes of the dock the ground opens — the chart draws those O — and under them there is air, sand, and rooms nobody has walked in since the Fall. Take her down through one and put the crew ashore.' },
+  { id: 'floor', title: 'The floor opens',
+    when: () => !state.foot && knownOpeningNear(),
+    body: `<p>The shelf floor is not the sea floor. It is a lid, and it has holes in it —
+      the chart draws them <b>O</b>.</p>
+      <p>Under them is the deep: colder, darker, further than this hull was built for,
+      and where everything actually worth carrying is. Take her down through one when you
+      are ready to stop earning wages and start making a name.</p>` },
 
-  { id: 'keep',
-    done: () => !!state.base,
-    say: 'A place down here with nothing living in it can be kept. Claim it and what you leave there is still there when you come back, and the sea cannot take it from you the way it takes a hold. It is the only address you will ever have.' },
+  { id: 'ashore', title: 'Over the side',
+    when: () => !!state.foot,
+    body: `<p>You are out of the boat. The crew are with you, and the air on your back is
+      the same air the Erebus was breathing.</p>
+      <p>Tap a square to walk. <b>LOOK</b> reads the room. Everything you lift is carried
+      by hand, and only counts once it is back aboard and banked ashore.</p>
+      <p>If something lives here, it will come for you. You do not have to fight it — the
+      way you came in is still the way out.</p>` },
+
+  { id: 'keep', title: 'An address',
+    when: () => !!state.foot && !state.base && canClaimHere(),
+    body: `<p>A place down here with nothing living in it can be <b>kept</b>.</p>
+      <p>Claim it, and what you leave there is still there when you come back. The sea
+      cannot take it from you the way it takes a hold. Somewhere quiet with one way in is
+      worth more than somewhere rich on a crossroads.</p>
+      <p>It is the only address you will ever have.</p>` },
+
+  { id: 'contact', title: 'Something is out there',
+    when: () => (state.creatures || []).some(c => !c.gone && c.awake
+      && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 3),
+    body: `<p>Something in the water has your bearing.</p>
+      <p>Most of what lives down here hunts by <b>sound</b>. Drop the sonar dial to silent
+      and you go deaf, but it loses your thread — usually the better trade. Running fast
+      is loud. Sitting still is not.</p>
+      <p>Violence is rarely the answer out here. Depth, distance and silence are.</p>` },
+
+  { id: 'hurt', title: 'A hand is down',
+    when: () => (state.crew || []).some(m => !m.lost && ((m.conditions || []).length || m.wounded)),
+    body: `<p>Somebody is hurt. A wound stays with them until a surgeon sees to it, and the
+      port surgeon works for nothing.</p>
+      <p>The roster is under <b>MORE &rarr; Muster</b>. A wounded hand still works the boat
+      but cannot press an attack, and a hand whose nerve breaks walks off into the dark and
+      does not come back.</p>` },
 ];
+
+// Three small predicates the briefings ask about, kept beside them because
+// nothing else needs them — a helper that only one caller uses belongs next to
+// that caller, or it becomes the next dead function.
+function atHomeDock() {
+  const hd = homeDock();
+  return hexDistance({ q: state.q, r: state.r }, hd) <= 1 || !!portNear(state.q, state.r);
+}
+function knownOpeningNear() {
+  const t = getTile(state.q, state.r);
+  if (t && t.poi === 'opening') return true;
+  for (const n of hexNeighbors(state.q, state.r)) {
+    const nt = getTile(n.q, n.r);
+    if (nt && nt.poi === 'opening' && revealed.has(hexKey(n.q, n.r))) return true;
+  }
+  return false;
+}
+function canClaimHere() {
+  const f = state.foot;
+  if (!f || f.dweller) return false;                 // not while somebody is home
+  return f.kind === 'beach' || caveSeg(f.kind) === 0 || f.kind === 'ruin';
+}
+
+let briefOpen = false;
+function showBrief(b) {
+  const card = document.getElementById('brief');
+  // NO CARD, NO SILENCE. If the element is missing — an old cached shell, a
+  // harness with a stub DOM — the briefing still has to reach the captain, so it
+  // falls back to the log rather than evaporating.
+  if (!card) { log(String(b.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), 'tip', 'ORDERS'); return; }
+  document.getElementById('brief-title').textContent = b.title;
+  document.getElementById('brief-body').innerHTML = b.body;
+  card.classList.add('show');
+  briefOpen = true;
+}
+function closeBrief() {
+  const card = document.getElementById('brief');
+  if (card) card.classList.remove('show');
+  briefOpen = false;
+}
+
+// A PANEL IS ALREADY A CONVERSATION. A card over the open harbour window puts
+// two things on screen asking to be read, and the one underneath is the one the
+// captain opened on purpose.
+function anyPanelOpen() {
+  for (const [id] of PANELS) {
+    const e = document.getElementById(id);
+    if (e && e.classList.contains('show')) return true;
+  }
+  return false;
+}
 
 function ordersTick() {
   if (!tipsOn || !gameStarted || !state.alive) return;
+  if (briefOpen || anyPanelOpen()) return;
   if (!state.ordersSaid) state.ordersSaid = [];
-  // ONE LINE PER TURN, WHATEVER ELSE HAPPENS. Without this the opener chained
-  // straight into the first objective and a captain got two paragraphs before
-  // touching anything. A turn is a move; docking or claiming can finish an order
-  // but the next one waits for the boat to do something, which is the difference
-  // between a thread and a lecture.
+  // ONE CARD PER TURN, WHATEVER ELSE HAPPENS — the same rule the log thread had
+  // and for the same reason: a captain who moves once and gets three windows has
+  // been lectured, not taught.
   if (state.ordersAt != null && state.ordersAt === (state.moves || 0)) return;
-  for (const o of ORDERS) {
-    const said = state.ordersSaid.indexOf(o.id) >= 0;
-    // An opener is finished the moment it has been read. An objective is
-    // finished when the campaign says so, and until then the thread waits here
-    // rather than running ahead with advice you have not earned yet.
-    if (o.opener ? said : o.done()) continue;
-    if (said) return;
-    state.ordersSaid.push(o.id);
+  for (const b of BRIEFS) {
+    if (state.ordersSaid.indexOf(b.id) >= 0) continue;
+    let hit = false;
+    try { hit = !!b.when(); } catch (e) { hit = false; }
+    if (!hit) continue;
+    state.ordersSaid.push(b.id);
     state.ordersAt = (state.moves || 0);
-    log(o.say, 'tip', 'ORDERS');
+    showBrief(b);
     scheduleSave();
     return;
   }
@@ -6158,7 +6340,7 @@ function renderOptions() {
     + '<div class="opt"><div class="opt-h"><div class="opt-n">Tutorial</div>'
     + '<button class="opt-b' + (tipsOn ? '' : ' off') + '" data-opt="tips">'
     + (tipsOn ? 'On' : 'Off') + '</button></div>'
-    + '<div class="opt-d">Two things, one switch. STANDING ORDERS are a thread of seven lines telling a new captain what to do next — take work, follow the mark, go down to it, come home and get paid, find a way under the shelf, keep a place of your own. The next only arrives when the last is actually done. TIPS are a line of explanation the first time something happens to you: the sounder, a thermocline, a locked door, a hunter fixing on your noise. Everything here fires once, ever. Nothing interrupts, nothing repeats, and turning it off stops both.</div></div>'
+    + '<div class="opt-d">Two things, one switch. STANDING ORDERS are short cards that appear the first time you are somewhere new — alongside the dock, over a posting, past your first hundred metres, out of the boat and standing on rock — saying what that place is and what you might be trying to do there. Each fires once, on its own situation rather than in a fixed order, so doing things out of turn never loses you the rest. TIPS are a line of explanation the first time something happens to you: the sounder, a thermocline, a locked door, a hunter fixing on your noise. Everything here fires once, ever, and turning it off stops both.</div></div>'
 
     // WHICH BUILD AM I PLAYING? Sean sent a screenshot of a build three commits old and
     // neither of us could tell — I spotted it only because a button I had deleted was
@@ -18721,6 +18903,22 @@ function closeTranscript() { document.getElementById('transcript').classList.rem
 // harness is tapping or calling — mine was calling, and I wrote a redundant
 // second guard inside changeDepth before I checked. It reads the same
 // cellRun this does; it could never disagree, and it is gone.
+// THE ONE DEPTH READOUT LEFT, and it carries what the HUD stat used to say.
+// O3's point still holds — "safe and crush depth were written down NOWHERE" —
+// so the band comes with the number. It sits between the two arrows that change
+// it, which is where a captain is looking when the answer matters.
+function syncDepthReadout() {
+  const r = document.getElementById('dive-depth-readout');
+  if (!r) return;
+  const d = state.currentDepth, safe = safeDepthNow(), crush = crushDepthNow();
+  const band = document.getElementById('dive-depth-band');
+  r.textContent = Math.round(d) + ' m';
+  if (!band) return;
+  if (d > crush) { band.textContent = 'CRUSH ' + crush + ' m'; band.style.color = '#e05a4a'; }
+  else if (d > safe) { band.textContent = 'crush at ' + crush + ' m'; band.style.color = '#e8a050'; tip('depth'); }
+  else { band.textContent = 'safe to ' + safe + ' m'; band.style.color = ''; }
+}
+
 function syncDiveControls() {
   const ids = [['btn-ascend', -1], ['btn-ascend-fast', -1], ['btn-descend', 1], ['btn-descend-fast', 1]];
   const tile = getTile(state.q, state.r);
@@ -18755,26 +18953,10 @@ function updateHUD() {
   document.getElementById('air-bar').style.width = (state.air / sub.air * 100) + '%';
   document.getElementById('hull-val').textContent = state.hull;
   document.getElementById('hull-bar').style.width = (state.hull / sub.hull * 100) + '%';
-  // Depth in meters. Display as "1250 m" or "1.2k m"
-  const d = state.currentDepth;
-  let depthLabel = Math.round(d) + ' m';
-  if (d >= 1000) depthLabel = (d / 1000).toFixed(1) + 'k m';
-  document.getElementById('depth-val').textContent = depthLabel;
-  // Bar scales logarithmically
-  const depthPct = Math.min(100, Math.log10(Math.max(1, d)) * 25);
-  document.getElementById('depth-bar').style.width = depthPct + '%';
-
-  // O3: safe and crush depth were written down NOWHERE. The bar changed colour
-  // and the prose said the hull groaned, but a captain was never once told the
-  // number they were being measured against. Now the gauge names its own band
-  // and, when it matters, the depth that ends the boat.
-  const dr = document.getElementById('depth-rating');
-  if (dr) {
-    const safe = safeDepthNow(), crush = crushDepthNow();
-    if (d > crush) { dr.textContent = 'CRUSH ' + crush + 'm'; dr.style.color = '#e05a4a'; }
-    else if (d > safe) { dr.textContent = 'crush at ' + crush + 'm'; dr.style.color = '#e8a050'; tip('depth'); }
-    else { dr.textContent = 'safe to ' + safe + 'm'; dr.style.color = ''; }
-  }
+  // Depth reads out ONCE, between the arrows that change it, and carries its own
+  // safe/crush band. O3's finding that "safe and crush depth were written down
+  // NOWHERE" is still honoured — the words just live where the thumb is.
+  syncDepthReadout();
   // E9: and it never showed you your own money.
   const hv = document.getElementById('hold-val'), hs = document.getElementById('hold-sub');
   if (hv) hv.textContent = state.cargo + (state.relics ? ' +' + state.relics + 'r' : '');
@@ -18798,15 +18980,10 @@ function updateHUD() {
   if (hullPct < 0.25) { hullEl.classList.add('danger'); hullBar.classList.add('danger'); }
   else if (hullPct < 0.50) { hullEl.classList.add('warn'); hullBar.classList.add('warn'); }
 
-  // Pressure indicator on depth bar
-  const depthBar = document.getElementById('depth-bar');
-  depthBar.className = 'bar-fill';
-  // crushDepthNow(), not the raw hull rating — pressure plating buys 450 m a
-  // level and death already uses the fitted figure. With the fit on, the bar
-  // went red 900 m before anything was wrong, on the same line that prints the
-  // fitted number.
-  if (state.currentDepth > crushDepthNow()) depthBar.classList.add('danger');
-  else if (state.currentDepth > safeDepthNow()) depthBar.classList.add('warn');
+  // The pressure colouring moved with the readout — `syncDepthReadout` sets the
+  // band's colour from crushDepthNow(), not the raw hull rating, for the reason
+  // this comment used to give: pressure plating buys 450 m a level and death
+  // already uses the fitted figure, so the raw number went red 900 m early.
 
   // Update vertical depth strip if present
   updateDepthStrip();
@@ -19701,6 +19878,15 @@ function topPanel() {
 // Bound HERE, after wirePanelHistory has replaced the globals — binding these
 // earlier captured the unwrapped functions and was why two panels stayed
 // invisible to the back button even though they were in the openers map.
+// THE BRIEFING CLOSES ON ANYTHING. Sean asked for cards he can "dismiss without
+// much trouble" — so the button, the backdrop, and Escape all do it, and the
+// backdrop is the whole screen minus the card.
+document.getElementById('brief-ok').addEventListener('click', closeBrief);
+document.getElementById('brief').addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'brief') closeBrief();   // the backdrop, not the card
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && briefOpen) closeBrief(); });
+
 document.getElementById('btn-hold').addEventListener('click', () => openInventory());
 document.getElementById('btn-chart').addEventListener('click', () => openSeaChart());
 
@@ -20072,8 +20258,7 @@ function updateDepthStrip() {
   crushLine.style.top = pct(sub.crushDepth) + '%';
   marker.style.top = `calc(${pct(state.currentDepth)}% - 2px)`;
 
-  const r = document.getElementById('dive-depth-readout');
-  if (r) r.textContent = Math.round(state.currentDepth) + ' m';
+  syncDepthReadout();
 }
 
 window.addEventListener('resize', () => { setViewport(); render(); });

@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v4';   // bumped: error responses no longer poison the document cache
+const VERSION = 'fathom-v5';   // bumped: the briefing cards and the HUD's depth stat
 const SHELL = [
   './',
   'fathom-chart.html',

@@ -1,11 +1,17 @@
-// THE STANDING ORDERS — the tutorial thread, played the way a new captain plays.
+// THE BRIEFINGS. `node tests/orders.test.js`
 //
-// Sean, planning his own first real test: "I will not know how to do many of
-// these things." So this checks the thread does its job and — just as important
-// — that it CANNOT nag. A tutorial that repeats itself is worse than none, and
-// he has already told me once that the log was unreadable.
+// Sean, on what the tutorial has to do: "it does need to tell me what I should
+// be trying to do the first time I find myself at each stage of playing the
+// game... These should be pop up windows I can dismiss without much trouble."
+//
+// This replaced the suite that tested the old seven-line log thread. The
+// property that matters most is the one this project gets wrong most often:
+// EVERY BRIEFING MUST BE REACHABLE. A card that exists in the source and never
+// fires in a game is not a tutorial, it is a document nobody is handed — so each
+// one is driven to its own trigger below and has to actually appear.
 'use strict';
 const fs = require('fs'), vm = require('vm');
+
 function stub() {
   const fn = function () { return s };
   const s = new Proxy(fn, { get(t, p) {
@@ -13,35 +19,21 @@ function stub() {
       if (p === Symbol.iterator) return function* () {};
       if (p === 'length') return 0;
       if (['firstChild', 'lastChild', 'nextSibling', 'parentNode'].includes(p)) return null;
+      if (p === 'classList') return { add() {}, remove() {}, contains() { return false; }, toggle() { return false; } };
+      if (p === 'style') return {};
       return s;
     }, apply() { return s }, set() { return true }, has() { return true } });
   return s;
 }
-const script = fs.readFileSync(process.argv[2] || __dirname + '/../fathom-chart.html', 'utf8')
+const script = fs.readFileSync(process.env.FATHOM_HTML || (__dirname + '/../fathom-chart.html'), 'utf8')
   .match(/<script>([\s\S]*?)<\/script>/)[1];
 const doc = new Proxy({}, { get(t, p) {
   if (['createElementNS', 'createElement', 'getElementById', 'querySelector', 'querySelectorAll'].includes(p)) return () => stub();
   if (p === 'addEventListener') return () => {};
   return stub();
 }});
-// A CLOCK THAT DOES NOT MOVE.
-//
-// `resumeGame` reseeds the gameplay dice with `worldSeed ^ Date.now()` — on
-// purpose, so reloading a save does not replay the same coin flips. The cost is
-// that every suite exercising save/reload became unreproducible from that line
-// on: combat rolls, item detonations and curse bleeds all differed run to run,
-// inside checks written tolerantly enough not to notice. A regression could sit
-// in that wobble indefinitely.
-//
-// Only `now` is pinned. `new Date()` still works, because the transcript export
-// formats real dates and has no business being frozen.
-// MONOTONIC, NOT FROZEN. A clock pinned to one instant is reproducible and also
-// wrong: `restart()` derives a fresh world seed from `Date.now()`, so a stopped
-// clock made every restart regenerate the SAME ocean — and save.test caught it,
-// which is the check doing exactly its job. This advances a fixed step per read,
-// so the Nth call is always the same number across runs while still moving
-// forward within one.
-let _tick = 1754265600000;   // 2025-08-04T00:00:00Z, arbitrary
+
+let _tick = 1754265600000;
 const FrozenDate = new Proxy(Date, { get(t, p) { return p === 'now' ? () => (_tick += 1000) : t[p]; } });
 const sb = { console, Math, JSON, Date: FrozenDate, Array, Object, Map, Set, String, Number, Boolean, Symbol,
   parseInt, parseFloat, isNaN, isFinite, setTimeout: () => 0, clearTimeout: () => {},
@@ -55,11 +47,28 @@ vm.createContext(sb);
 vm.runInContext(script + `
 ;var __L=[]; log=function(t,c,e){ __L.push({t:String(t), e:String(e||'')}) };
 gameStarted = true;
-var __X = { L: __L, state, ORDERS, ordersTick, TIPS,
+// The card is a DOM stub here, so what it SHOWS cannot be read back off the
+// element. Capture it at the door instead — the same information the player
+// gets, taken one function earlier.
+var __shown = [];
+var __origShow = showBrief;
+showBrief = function (b) { __shown.push(b.id); __origShow(b); };
+var __X = {
+  L: __L, shown: __shown, state, BRIEFS, closeBrief, homeDock: homeDock,
+  tileAt: tileAt, reveal(q,r){ revealed.set(hexKey(q,r), new Set([0])); },   // Map<hexKey, Set<depth>>
   setTips(v){ tipsOn = v; },
-  reset(){ state.ordersSaid=[]; state.ordersAt=null; state.moves=0; state.berth=null; state.ticket=0;
-           state.maxDepth=0; state.foot=null; state.base=null; state.deckTook={};
-           state.alive=true; __L.length=0; } };
+  tick(){ ordersTick(); },
+  reset(){
+    state.ordersSaid = []; state.ordersAt = null; state.moves = 0;
+    state.berth = null; state.ticket = 0; state.cargo = 0; state.base = null;
+    state.foot = null; state.creatures = []; state.currentDepth = 0;
+    state.crew = startingCrew();
+    for (const m of state.crew) { m.conditions = []; m.wounded = false; }
+    __shown.length = 0; __L.length = 0; closeBrief();
+  },
+  // A turn: the tick, then the captain dismisses whatever came up.
+  turn(){ state.moves++; ordersTick(); closeBrief(); },
+};
 `, sb, { timeout: 120000 });
 const X = sb.__X;
 
@@ -68,103 +77,129 @@ const check = (c, what, d) => {
   if (c) { ok++; console.log('  PASS  ' + what + (d ? '  — ' + d : '')); }
   else { fail++; console.log('  FAIL  ' + what + (d ? '  — ' + d : '')); }
 };
-const orders = () => X.L.filter(l => l.e === 'ORDERS').map(l => l.t);
 
-console.log('THE STANDING ORDERS — ' + X.ORDERS.length + ' lines, in order\n');
+console.log('THE BRIEFINGS — ' + X.BRIEFS.length + ' cards\n');
 
-//--- 1. ONE LINE AT A TIME, AND ONLY THE CURRENT ONE -------------------------
-console.log('--- 1. ONE AT A TIME ---');
-X.reset();
-for (let i = 0; i < 50; i++) X.ordersTick();
-check(orders().length === 1, 'fifty ticks with nothing achieved says exactly one thing',
-  orders().length + ' lines');
-check(/arrows around the boat/.test(orders()[0] || ''), 'and it is the first order, about the helm',
-  (orders()[0] || '').slice(0, 44) + '...');
-
-//--- 2. THE THREAD ADVANCES ON DEEDS, NOT ON TIME ----------------------------
-console.log('\n--- 2. THE THREAD ADVANCES ON DEEDS ---');
-X.reset();
-const seen = [];
-const step = (label, mutate) => {
-  X.L.length = 0;
-  if (mutate) mutate();
-  X.state.moves = (X.state.moves || 0) + 1;   // a step is a turn
-  for (let i = 0; i < 8; i++) X.ordersTick();
-  const said = orders();
-  seen.push({ label: label, said: said.length, first: (said[0] || '').slice(0, 40) });
-};
-step('cold start', null);
-// A CAPTAIN WHO DOCKS BEFORE WANDERING. The opener used to gate on four moves,
-// so this player was stuck on it for ever and never heard another word. Nothing
-// is mutated here: the next order must arrive on the very next tick regardless.
-step('the next turn', null);
-step('took a posting', () => { X.state.berth = { kind: 'sounding', found: false, q: 5, r: 5, d: 300 };
-                               X.state.q = 0; X.state.r = 0; });
-step('sailed over it', () => { X.state.q = 5; X.state.r = 5; });
-step('dived to it', () => { X.state.berth.found = true; X.state.maxDepth = 300; });
-step('got paid', () => { X.state.ticket = 1; X.state.berth = null; });
-step('went ashore', () => { X.state.foot = { q: 1, r: 1, d: 300, kind: 'beach' }; });
-step('claimed a station', () => { X.state.base = { q: 1, r: 1, d: 300, kind: 'beach' }; });
-for (const s of seen) console.log('    ' + s.label.padEnd(20) + s.said + ' new   ' + (s.first || '—'));
-check(seen.every(s => s.said <= 1), 'never more than one new line for one step of progress',
-  'most in a step: ' + Math.max.apply(null, seen.map(s => s.said)));
-check(X.state.ordersSaid.length === X.ORDERS.length, 'and EVERY order in the thread gets told',
-  X.state.ordersSaid.length + ' of ' + X.ORDERS.length + ' orders given');
-
-//--- 3. IT CANNOT NAG --------------------------------------------------------
-console.log('\n--- 3. IT CANNOT NAG ---');
-X.reset();
-// Four hundred TURNS stuck on the same order — the nag test has to move, or it
-// is only testing the one-per-turn gate it already passed above.
-for (let i = 0; i < 400; i++) { X.state.moves = 99 + i; X.ordersTick(); }
-// The opener, then the objective they are stuck on, and then silence for ever.
-const nag = orders();
-const uniqueNag = new Set(nag).size;
-check(nag.length === 2 && uniqueNag === 2,
-  'four hundred turns stuck on one order says the opener, then it, then nothing',
-  nag.length + ' lines, ' + uniqueNag + ' distinct');
-check(nag.filter(l => /slate of work/.test(l)).length === 1,
-  'and the order they are stuck on is said exactly once across all four hundred',
-  nag.filter(l => /slate of work/.test(l)).length + ' times');
-
-//--- 4. OUT OF ORDER IS STILL IN ORDER ---------------------------------------
-console.log('\n--- 4. A CAPTAIN WHO WANDERS OFF IS NOT CORRECTED ---');
-X.reset();
-// Someone who goes exploring and claims a grotto before ever taking work.
-X.state.moves = 40;
-X.state.base = { q: 1, r: 1, d: 300, kind: 'beach' };
-X.state.foot = { q: 1, r: 1, d: 300, kind: 'beach' };
-X.state.maxDepth = 600;
-// One order per TURN now, so this has to sail rather than stand still.
-for (let i = 0; i < 20; i++) { X.state.moves = 40 + i; X.ordersTick(); }
-const out = orders();
-check(!out.some(l => /put the crew ashore/.test(l)) && !out.some(l => /can be kept/.test(l)),
-  'is never told to do a thing they have already done',
-  out.length + ' lines, none of them stale');
-check(out.some(l => /slate of work/.test(l)),
-  '...but is still told about the work they have not done',
-  out.length ? out[0].slice(0, 42) + '...' : 'silent');
-
-//--- 5. THE SWITCH -----------------------------------------------------------
-console.log('\n--- 5. THE SWITCH IN OPTIONS ---');
-X.reset();
-X.setTips(false);
-for (let i = 0; i < 60; i++) X.ordersTick();
-check(orders().length === 0, 'off means silent', orders().length + ' lines with the tutorial off');
-X.setTips(true);
-X.reset();
-for (let i = 0; i < 5; i++) X.ordersTick();
-check(orders().length === 1, 'and on means it speaks again', orders().length + ' line');
-
-//--- 6. THE LINES THEMSELVES -------------------------------------------------
-console.log('\n--- 6. THE LINES THEMSELVES ---');
-const ids = X.ORDERS.map(o => o.id);
-check(new Set(ids).size === ids.length, 'every order has its own id', ids.join(' -> '));
-const longest = Math.max.apply(null, X.ORDERS.map(o => o.say.length));
-check(longest <= 360, 'and none of them is a wall of text', 'longest ' + longest + ' chars');
-const noVerb = X.ORDERS.filter(o => !/(DOCK|LOOK|PING|arrow|Steer|Take|Claim|down)/.test(o.say));
+//--- 1. SHAPE ----------------------------------------------------------------
+console.log('--- 1. EVERY CARD IS A CARD ---');
+const ids = X.BRIEFS.map(b => b.id);
+check(new Set(ids).size === ids.length, 'every briefing has its own id', ids.join(' -> '));
+check(X.BRIEFS.every(b => b.title && b.title.length > 2 && b.title.length < 30),
+  'and a short title to head the card', X.BRIEFS.map(b => b.title).join(' | '));
+check(X.BRIEFS.every(b => typeof b.when === 'function'),
+  'and a situation it fires on', 'all ' + X.BRIEFS.length + ' have when()');
+const text = (b) => String(b.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const longest = Math.max(...X.BRIEFS.map(b => text(b).length));
+check(longest <= 640, 'and none of them is a wall of text', 'longest ' + longest + ' chars');
+// Sean's actual requirement: say what to TRY, not only what a thing is.
+const noVerb = X.BRIEFS.filter(b => !/\b(tap|take|steer|go|walk|claim|check|come|drop|open|put)\b/i.test(text(b)));
 check(noVerb.length === 0, 'and every one names something to actually do',
-  noVerb.length ? noVerb.map(o => o.id).join(', ') : 'all ' + X.ORDERS.length + ' point at a control or a course');
+  noVerb.length ? noVerb.map(b => b.id).join(', ') : 'all ' + X.BRIEFS.length + ' name an action');
 
-console.log('\n' + (fail === 0 ? 'THE ORDERS HOLD — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
+//--- 2. TURN ONE -------------------------------------------------------------
+console.log('\n--- 2. THE FIRST THING A NEW CAPTAIN SEES ---');
+X.setTips(true); X.reset();
+X.turn();
+check(X.shown.length === 1, 'one card on the first turn, not a stack', X.shown.length + ' shown');
+check(X.shown[0] === 'helm', 'and it is the one about the boat', X.shown[0] || '(none)');
+X.turn(); X.turn(); X.turn();
+check(X.shown.length <= 4, 'and never more than one per turn after that',
+  X.shown.length + ' cards over 4 turns: ' + X.shown.join(', '));
+
+//--- 3. THE DOCK, WHICH SEAN ASKED FOR BY NAME ------------------------------
+console.log('\n--- 3. ALONGSIDE THE DOCK ---');
+X.setTips(true); X.reset();
+const hd = X.homeDock();
+X.state.q = hd.q; X.state.r = hd.r; X.state.currentDepth = 0;
+for (let i = 0; i < 6 && X.shown.indexOf('harbour') < 0; i++) X.turn();
+check(X.shown.indexOf('harbour') >= 0, 'tying up at the dock explains the dock',
+  X.shown.join(', ') || '(nothing fired)');
+const harbour = X.BRIEFS.find(b => b.id === 'harbour');
+const ht = harbour ? text(harbour) : '';
+check(/DOCK/.test(ht), 'and names the control that opens it',
+  /DOCK/.test(ht) ? 'names the DOCK button' : 'NEVER NAMES THE BUTTON');
+check(/ledger|bank/i.test(ht), 'and says what a dock is FOR', 'the ledger');
+check(/yet|for now|grows|later/i.test(ht),
+  'and that there is little in it now but more later', 'sets the expectation Sean asked for');
+
+//--- 4. EVERY CARD CAN ACTUALLY BE REACHED ----------------------------------
+// This project's signature bug is content wired at both ends with nothing in
+// the middle. A briefing nobody can trigger is exactly that.
+console.log('\n--- 4. NO CARD IS UNREACHABLE ---');
+const ashoreAt = () => ({ kind: 'ruin', q: X.state.q, r: X.state.r, d: 300, x: 4, y: 4,
+  crates: 0, relics: 0, steps: 0, tick: 0, seen: [], took: [], water: [], closed: [],
+  dweller: null, dead: [] });
+const scenarios = {
+  helm:     () => {},
+  harbour:  () => { const d = X.homeDock(); X.state.q = d.q; X.state.r = d.r; X.state.currentDepth = 0; },
+  posting:  () => { X.state.berth = { q: 3, r: 3, d: 300, found: false }; },
+  air:      () => { X.state.currentDepth = 240; },
+  collect:  () => { X.state.cargo = 2; },
+  ashore:   () => { X.state.foot = ashoreAt(); },
+  keep:     () => { X.state.foot = ashoreAt(); X.state.base = null; },
+  contact:  () => { X.state.creatures = [{ type: 'lurker', q: X.state.q + 1, r: X.state.r,
+                                           depth: X.state.currentDepth, awake: true, gone: false }]; },
+  hurt:     () => { X.state.crew[0].conditions = ['bruised']; X.state.crew[0].wounded = true; },
+  // `floor` needs a real sinkhole on the chart, so it is driven against the
+  // world below rather than by faking a flag.
+  floor:    null,
+};
+const unreachable = [];
+for (const b of X.BRIEFS) {
+  if (!(b.id in scenarios)) { unreachable.push(b.id + ' (no scenario written)'); continue; }
+  if (scenarios[b.id] === null) continue;
+  X.setTips(true); X.reset();
+  scenarios[b.id]();
+  let fired = false;
+  for (let i = 0; i < 8 && !fired; i++) { X.turn(); fired = X.shown.indexOf(b.id) >= 0; }
+  if (!fired) unreachable.push(b.id);
+}
+check(unreachable.length === 0, 'every scripted briefing fires in its own situation',
+  unreachable.length ? 'UNREACHABLE: ' + unreachable.join(', ') : (X.BRIEFS.length - 1) + ' reached');
+
+// The sinkhole card, driven against the actual world rather than a faked flag.
+X.setTips(true); X.reset();
+let stoodOnOne = false;
+outer:
+for (let q = -14; q <= 14; q++) for (let r = -14; r <= 14; r++) {
+  const t = X.tileAt(q, r);
+  if (!t || t.poi !== 'opening') continue;
+  X.state.q = q; X.state.r = r; X.state.currentDepth = 0;
+  X.reveal(q, r);
+  for (let i = 0; i < 6; i++) { X.turn(); if (X.shown.indexOf('floor') >= 0) { stoodOnOne = true; break outer; } }
+}
+check(stoodOnOne, 'and the sinkhole card fires over a real sinkhole in a real world',
+  stoodOnOne ? 'found one and it fired' : 'NEVER FIRED — no opening in range, or the trigger is wrong');
+
+//--- 5. ONCE, EVER -----------------------------------------------------------
+console.log('\n--- 5. SAID ONCE AND NEVER AGAIN ---');
+X.setTips(true); X.reset();
+X.state.cargo = 3; X.state.berth = { q: 2, r: 2, d: 300, found: false }; X.state.currentDepth = 300;
+for (let i = 0; i < 40; i++) X.turn();
+const counts = {};
+for (const id of X.shown) counts[id] = (counts[id] || 0) + 1;
+const repeated = Object.keys(counts).filter(k => counts[k] > 1);
+check(repeated.length === 0, 'forty turns and nothing repeats',
+  repeated.length ? 'REPEATED: ' + repeated.join(', ') : X.shown.length + ' distinct cards');
+
+//--- 6. THE SWITCH -----------------------------------------------------------
+console.log('\n--- 6. THE SWITCH IN OPTIONS ---');
+X.setTips(false); X.reset();
+for (let i = 0; i < 12; i++) X.turn();
+check(X.shown.length === 0, 'off means not one card', X.shown.length + ' shown with it off');
+X.setTips(true); X.reset();
+X.turn();
+check(X.shown.length === 1, 'and on means it speaks again', X.shown.length + ' card');
+
+//--- 7. IT DOES NOT TALK OVER ITSELF ----------------------------------------
+console.log('\n--- 7. ONE THING ON SCREEN AT A TIME ---');
+X.setTips(true); X.reset();
+X.state.moves++; X.tick();          // a card is up and NOT dismissed
+const upNow = X.shown.length;
+X.state.moves++; X.tick();          // another turn while it is still up
+check(X.shown.length === upNow, 'a second card never opens over the first',
+  upNow + ' up, still ' + X.shown.length + ' after another turn');
+X.closeBrief();
+
+console.log('\n' + (fail === 0 ? 'THE BRIEFINGS HOLD — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);
