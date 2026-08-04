@@ -998,12 +998,27 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // Asserting the field exists is not the same as asserting it reaches the
   // player, and this suite has now shipped that mistake in three different
   // forms. The source must READ it.
+  // ...AND THE RULING CHANGED, so this check changed with it.
+  //
+  // It used to demand that something RENDER the caption, because for months
+  // `.cap` was read by nothing — twenty hand-written captions the player never
+  // saw, with a green tick over them. That was the right check for that bug.
+  //
+  // Sean has since looked at it on the phone and ruled the other way: "The
+  // porthole ... I think the captions should just go away. They're too small to
+  // be legible." He is right — 0.62rem inside a tile 24 characters wide. So the
+  // caption is deliberately not drawn, and `cap` is DOCUMENTATION now: it is
+  // what each drawing is meant to be, it is how the checks above can tell a
+  // cave scene from a hull scene, and it must stay short and accurate for that
+  // reason alone. What must NOT come back is a caption rendered too small to
+  // read, so that is what this asserts.
   const src = html;
-  const capRead = /\bS\.cap\b|\bscene\.cap\b|\bVP_SCENES\[[^\]]+\]\.cap\b/.test(src);
   const capRendered = /vp-cap/.test(src);
-  check(capRead && capRendered, 'and something actually renders that caption',
-    capRead && capRendered ? 'read and written to #vp-cap'
-      : (capRead ? 'read but never rendered' : 'NEVER READ — the captions are dead data'));
+  check(!capRendered, 'the caption is not drawn — it was illegible on a phone and was cut',
+    capRendered ? 'IT IS BACK: #vp-cap is in the source again' : 'no #vp-cap anywhere');
+  check(Object.keys(sandbox.__scenes()).every(k => typeof sandbox.__scenes()[k].cap === 'string'),
+    '...but every scene still carries one, because the suite reads them to tell the drawings apart',
+    Object.keys(sandbox.__scenes()).length + ' scenes described');
 
   // And the selector must always land on a scene that exists, whatever the
   // state — an unknown key would leave the panel frozen on the last picture.
