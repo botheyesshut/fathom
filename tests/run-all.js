@@ -64,18 +64,39 @@ const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'statio
 // at all but the spawn itself dying under load, which the count could not
 // distinguish from a real bug. A gate that cannot tell you what it caught is
 // most of the way to no gate.
+// ...AND "EXIT 1" IS STILL TWO DIFFERENT THINGS.
+//
+// The paragraph above was written after the runner mistook a dying spawn for a
+// failed check. It caught the two loud cases — no spawn, and a signal — and
+// then called EVERY remaining nonzero exit "a check failed", which is exactly
+// the old mistake in a quieter costume: a suite that runs out of memory or
+// throws on the way up also exits 1, and on Windows it does it with a status
+// and no signal. Three battery runs over one unchanged file failed `items`,
+// then `cargo`, then nothing; all four of those suites passed 8/8 standalone.
+// The runner was reporting a verdict it had no way to have reached, because
+// `stdio: 'inherit'` meant it never saw a word the child said.
+//
+// So: capture the output, print it (same as before, from here instead of the
+// child), and let the CHILD'S OWN FAIL LINE decide which of the two it was. A
+// suite that exits nonzero without printing one did not fail a check — it died,
+// and saying so is the difference between "you broke the game" and "re-run it".
 let failed = 0;
 const bad = [];
 for (const s of suites) {
   const file = path.join(__dirname, s + '.test.js');
   process.stdout.write('\n========== ' + s + ' ==========\n');
-  const r = spawnSync(process.execPath, [file], { stdio: 'inherit', timeout: 900000 });
+  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 900000, maxBuffer: 64 * 1024 * 1024 });
+  const out = (r.stdout || '') + (r.stderr || '');
+  process.stdout.write(out);
   if (r.status === 0) continue;
   failed++;
-  // Three different things wear the same exit code. Name them apart.
+  const fails = out.split('\n').filter(l => /\bFAIL\b/.test(l));
   const why = r.error ? 'could not spawn: ' + r.error.message
             : r.signal ? 'killed by ' + r.signal + (r.signal === 'SIGTERM' ? ' — this is the 15-minute timeout, not a failed check' : '')
-            : 'exit status ' + r.status + ' — a check failed; scroll up to the FAIL line in this suite';
+            : fails.length ? fails.length + ' check(s) failed — first: ' + fails[0].trim()
+            : 'exit ' + r.status + ' WITHOUT REPORTING A VERDICT — it did not fail a check, it died on the'
+              + ' way. Usually memory, seventeen VMs deep. Re-run this suite alone before believing it:'
+              + ' node tests/' + s + '.test.js';
   bad.push(s + ' (' + why + ')');
 }
 if (failed === 0) console.log('\nBATTERY: ALL SUITES PASSED');

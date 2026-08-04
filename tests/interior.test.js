@@ -1537,5 +1537,73 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
     bad.length ? bad.join('  |  ') : 'all ' + calls.length + ' call sites clean');
 }
 
+//--- THE OTHER DOOR ----------------------------------------------------------
+// There are two ways onto a deck. `footInto` is how you walk in from a grotto
+// chamber, and it reads `state.deckHurt` and `state.deckDead` — with a comment
+// saying exactly why: without them "a step through the way and back healed the
+// thing completely, for free, and the only limit on doing that was patience."
+//
+// `enterInterior` is the other one — how you enter a wreck or a ruin from the
+// boat, which is most of them — and it wrote `hurt: 0` and had no `dead` field
+// at all. So the exploit the comment describes stayed wide open at the front
+// door, and the missing `dead` was worse than forgetful: `stashDeck` DELETES
+// `deckDead[dk]` when `f.dead` is empty, so walking back in erased the hand who
+// fell there on the way through the doorway.
+//
+// A fix that lands on one of two doors is the shape of bug this suite exists
+// for, so both doors get checked from here on.
+{
+  console.log('\n--- BOTH DOORS ONTO A DECK REMEMBER THE SAME THINGS ---');
+  const st = sandbox.__st();
+  let ruin = null, at = null;
+  outer2:
+  for (let q = -22; q <= 22 && !ruin; q++) for (let r = -22; r <= 22; r++) {
+    const t = sandbox.__tileAt(q, r);
+    if (!t) continue;
+    if (!(t.poi === 'ruin' || (sandbox.__stack(t) || []).some(p => p.type === 'ruin' || p.type === 'hull'))) continue;
+    st.q = q; st.r = r;
+    for (let d = 0; d < 11100; d += 60) {
+      if (!sandbox.__openCell(q, r, d)) continue;
+      st.currentDepth = d;
+      if (sandbox.__prizeDepth(t) != null) { ruin = t; at = d; break outer2; }
+    }
+  }
+  check(!!ruin, 'a deck reachable from the boat exists to test with',
+    ruin ? ruin.q + ',' + ruin.r + ' @' + at + 'm' : 'none found');
+
+  if (ruin) {
+    st.foot = null;
+    sandbox.__enter(ruin.q, ruin.r, at);
+    const f1 = sandbox.__foot();
+    check(!!f1, 'the front door opens', f1 ? 'ashore' : 'DID NOT GET IN');
+    // A deck with no tenant cannot answer the wound question; say so rather
+    // than passing on an empty set, which is how three checks once went green
+    // on 0 of 0.
+    const hadTenant = !!(f1 && f1.dweller);
+    check(hadTenant, 'and there is somebody home to wound',
+      hadTenant ? f1.dweller.kind : 'no tenant on this deck — the wound check below is vacuous');
+
+    if (f1 && hadTenant) {
+      f1.dweller.hurt = 5;                                 // you put five into it
+      f1.dead = [{ name: 'Salt', x: f1.x, y: f1.y }];      // and Salt went down here
+      sandbox.__leave();
+
+      st.currentDepth = at;
+      sandbox.__enter(ruin.q, ruin.r, at);
+      const f2 = sandbox.__foot();
+      check(!!f2, 'and it opens again', f2 ? 'back aboard the deck' : 'BARRED');
+      if (f2) {
+        check(f2.dweller && f2.dweller.hurt === 5,
+          'the tenant is still bleeding from what you put into it',
+          f2.dweller ? 'hurt ' + f2.dweller.hurt + ' of 5' + (f2.dweller.hurt === 0 ? ' — HEALED FOR FREE' : '') : 'no tenant');
+        check((f2.dead || []).some(d => d.name === 'Salt'),
+          'and Salt is still lying where they fell',
+          (f2.dead || []).length ? (f2.dead || []).map(d => d.name).join(', ') : 'THE DECK FORGOT ITS DEAD');
+        sandbox.__leave();
+      }
+    }
+  }
+}
+
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

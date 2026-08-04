@@ -5753,7 +5753,10 @@ function portRows() {
     // whom, and `dweller.worn` and `lostCrew` both key on the name alone. Two
     // Itos means the deep can put your living engineer's face on a hollow man.
     if (!state.portHire) {
-      const taken = new Set([...(state.crew || []).map(m => m.name), ...(state.lostCrew || [])]);
+      // `lostCrew` holds objects; map to names before the Set, and tolerate a
+      // string in case an old save carries one from when endGame wrote them.
+      const taken = new Set([...(state.crew || []).map(m => m.name),
+                             ...(state.lostCrew || []).map(x => (x && x.name) || x)]);
       const free = CREW_NAMES.filter(n => !taken.has(n));
       state.portHire = { name: pick(free.length ? free : CREW_NAMES), role: pick(CREW_ROLES) };
     }
@@ -5882,7 +5885,10 @@ function portBuy(act) {
     state.crew.push(crewVitals({ name: h.name, role: h.role, xp: 0, wounded: false,
                                  gear: { weapon: null, armor: null, kit: null } }));
     state.portHire = null;   // the next hand is a different person, not a re-roll
-    log(`${h.name} signs aboard as ${h.role}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.)`, '', 'CREW');
+    // `h.role` is the internal key. The offer row two hundred lines up says
+    // "the Ear"; the line confirming the sale said "ear". The whole point of
+    // naming the trades was that the game uses the names.
+    log(`${h.name} signs aboard as ${roleName(h.role)}. (${CREW_HIRE_COST} crates; ${state.cargoBanked} banked.)`, '', 'CREW');
     sfx('bell');
   } else if (act.startsWith('gear:')) {
     const [, iS, key] = act.split(':');
@@ -6455,7 +6461,24 @@ function attackShip() {
   }
   // A torpedo is the right tool and it is spent; the harpoon is what you have
   // left when it is gone.
-  const useTorp = hasTorp;
+  //
+  // THE GUN'S OPTION, AND THE ONLY THING crewLvl('gun') HAS EVER BEEN ASKED.
+  // The trade was hireable at five crates and had ZERO call sites in the file —
+  // the game sold a hand it never once consulted. "Lays and serves whatever the
+  // boat is armed with": serving is knowing which tube to open, and the boat
+  // without a Gun opens the expensive one every time, even on a hull lying
+  // alongside that the harpoon reaches perfectly well.
+  //
+  // Not a damage term. The fish that gets kept does the same 16 tomorrow — a
+  // KNACK OPENS AN OPTION, IT NEVER MOVES A NUMBER. Without a Gun, this is the
+  // behaviour that was here before, unchanged.
+  const alongside = arm && hexDistance({ q: sh.q, r: sh.r }, { q: state.q, r: state.r }) <= (arm.range || 1);
+  const served = crewLvl('gun') > 0 && alongside;
+  const useTorp = hasTorp && !served;
+  if (served && hasTorp) {
+    const g = state.crew.find(m => m.role === 'gun' && !m.wounded);
+    log(`${g ? g.name : 'The gun crew'} keeps the fish in the rack — she is close enough for the harpoon.`, '', 'ARMS');
+  }
   const W = useTorp ? WEAPONS.torpedo : arm;
   if (useTorp) state.torpedoes--;
 
@@ -7654,7 +7677,14 @@ function party() { return state.crew.filter(m => !m.lost); }
 // back with "the shakes" instead. The field was written to make exactly this
 // distinction and the picker never learned to ask. Default 'body': a blow is a
 // blow unless the caller says otherwise.
-function inflictCondition(m, severity01, pressure) {
+// `fromNerve` says this condition IS a nerve giving way, inflicted by
+// `frayNerve` at a threshold — see the long note there. It suppresses the row's
+// own nerve echo, for two reasons and both of them mattered. It closes a
+// mutual recursion (frayNerve -> inflictCondition -> frayNerve), and it stops
+// the echo being charged twice: the fray that crossed the line already spent
+// the nerve, and billing the row's -30 on top of it took a hand from 26 to
+// broken in one step. The battery caught that as an empty `state.crew`.
+function inflictCondition(m, severity01, pressure, fromNerve) {
   if (m.lost) return null;   // the gone are inert — no wounding a body already taken
   crewVitals(m);
   const eff = Math.max(0, Math.min(1, severity01 * vigorMult() - crewDef(m) * 0.12));
@@ -7669,7 +7699,7 @@ function inflictCondition(m, severity01, pressure) {
   const key = pool[Math.floor(rand() * pool.length)];
   const c = CONDITIONS[key];
   m.conditions.push(key);
-  if (c.nerve) frayNerve(m, -c.nerve, true);
+  if (c.nerve && !fromNerve) frayNerve(m, -c.nerve, true);
   if (c.incap) m.wounded = true;          // keep the legacy flag honest
   if (c.scar && !m.scars.includes(c.scar)) m.scars.push(c.scar);
   if (c.mortal) m.dying = true;
@@ -7683,9 +7713,31 @@ function inflictCondition(m, severity01, pressure) {
 function frayNerve(m, amount, quiet) {
   if (m.lost) return;        // a nerve that has already gone cannot fray further
   crewVitals(m);
+  const was = m.nerve;
   m.nerve = Math.max(0, Math.min(100, m.nerve - Math.round(amount * vigorMult())));
-  if (m.nerve <= 0 && !m.lost) loseCrew(m, 'broke');
-  else if (!quiet && m.nerve < 25) log(`${m.name} is close to breaking.`, 'warn', 'NERVE');
+  if (m.nerve <= 0 && !m.lost) { loseCrew(m, 'broke'); return; }
+  // THE NERVE HALF OF THE WOUND TABLE, WHICH NOTHING COULD REACH.
+  //
+  // `CONDITIONS` has ten rows and three of them — shaken, the shakes, unstrung —
+  // are `pressure: 'nerve'`. Both callers of `inflictCondition` pass no pressure,
+  // so `want` was always 'body', the body pool was never empty, and the entire
+  // Lovecraft axis of the wound system could not be inflicted by anything. The
+  // rows were written, tiered, given scars and prose, and were unreachable.
+  //
+  // A nerve gives way at a THRESHOLD, not off a blow — so it belongs here, where
+  // the number is already kept, rather than at a call site. Crossing 50 costs a
+  // tier-1 nerve condition and crossing 25 a tier-2; falling further inside a
+  // band you have already crossed does not, or a bad minute would break a hand
+  // outright.
+  // `fromNerve` true: the row's own nerve cost is NOT charged again. Without it
+  // this recursed into itself, and a tier-2 row's -40 at the 25 line broke the
+  // hand outright — an unwinnable spiral, which this file refuses by name a few
+  // hundred lines up. The threshold marks the giving-way; it does not bill for it.
+  for (const [line, sev] of [[50, 0.3], [25, 0.6]]) {
+    if (m.lost) break;
+    if (was > line && m.nerve <= line) inflictCondition(m, sev, 'nerve', true);
+  }
+  if (!quiet && m.nerve < 25) log(`${m.name} is close to breaking.`, 'warn', 'NERVE');
 }
 
 // A crew member is lost — killed, taken, or broken and gone into the dark. The
@@ -7728,9 +7780,27 @@ function tenantHitMember(spec, m) {
       medic.gear.kit.charges--;
       m.dying = false;
       log(`${m.name} is going, and ${medic.name} gets a dressing on it in time. (${medic.gear.kit.charges} left)`, 'warn', 'BOARDING');
-    } else {
-      loseCrew(m, 'taken');
+      return;
     }
+    // THE HAND'S OPTION, AND THE ONLY THING crewLvl('hand') HAS EVER BEEN ASKED.
+    // Same story as the Gun: a trade for sale with no call site anywhere. The
+    // role reads "carries, hauls, and gets people out of rooms they should not
+    // be in," and this is the only room in the game anyone is ever in that they
+    // should not be in.
+    //
+    // It is not a heal and it is not a kit. The wound stands, they are still
+    // going, and the next thing that reaches them still finishes it — a Hand
+    // buys the party one chance to get a dressing on it. ONCE per descent, on
+    // the pattern `f.stole` already sets, so it is a moment and not a shield.
+    const hauler = crewLvl('hand') > 0 && state.foot && !state.foot.hauled
+      && party().find(h => h !== m && h.ashore && !h.wounded && h.role === 'hand');
+    if (hauler) {
+      state.foot.hauled = true;
+      frayNerve(hauler, 6);
+      log(`${hauler.name} gets a fist in ${m.name}'s collar and hauls them back out of it. Not saved — bought a minute.`, 'warn', 'BOARDING');
+      return;
+    }
+    loseCrew(m, 'taken');
     return;
   }
   const severity01 = (spec.hit[0] + randInt(spec.hit[1] - spec.hit[0] + 1)) / 100;
@@ -11674,6 +11744,18 @@ function ping() {
   // A ping is a shout in a dark house. Everything with ears now knows where you are.
   noiseMade(state.q, state.r, lvl.loudness);
   sfx('ping');
+  // AND A SHOUT SCATTERS WHAT IS NERVOUS. `tickShoal`'s own header says "a loud
+  // noise scatters the timid" and the only loud noise that ever set `spooked`
+  // was a weapon hit — so the sentence described a gun, twice, and nothing else.
+  // The bargain is the point: the school comes off you for a few turns and
+  // every other thing with ears has just been handed your position. The bold
+  // ones do not move, which is what makes `boldness` worth rolling.
+  for (const c of state.creatures) {
+    if (c.gone || c.type !== 'shoal') continue;
+    if (hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) > lvl.activeRange) continue;
+    if (c.boldness > 0.5) continue;                    // the bold hold their ring
+    c.spooked = Math.max(c.spooked || 0, 3);
+  }
   // But it also paints them: a boat inside the ping is lit up precisely for a
   // few turns — the active-sonar bargain, a clean fix bought with your position.
   for (const c of state.creatures) {
@@ -13472,7 +13554,15 @@ function enterInterior(tile) {
     // belongs to somebody who is watching you look at it.
     dweller = null;
   } else if (!claimed && !own && ch.dweller && !isDeckCleared(tile.q, tile.r, d, deckKind)) {
-    dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: 0 };
+    // WOUNDS KEEP — AT THIS DOOR TOO. `footInto` reads `state.deckHurt` and
+    // says why: without it "a step through the way and back healed the thing
+    // completely, for free, and the only limit on doing that was patience."
+    // That fix landed on one of the two ways onto a deck. This one — the way
+    // you enter a wreck or a ruin from the boat, which is most of them — still
+    // wrote a flat zero, so the whole exploit stayed open at the front door
+    // while the comment describing it sat in the other function.
+    dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough,
+                hurt: ((state.deckHurt || {})[dk]) || 0 };
     // A HOUSE UNDER A CITY RESISTS WITH ITS OWN. If you are unwelcome among the
     // Deep Ones then this is their house and they are in it — the tenant is theirs,
     // not something that crawled in.
@@ -13482,13 +13572,21 @@ function enterInterior(tile) {
     // the uniform you issued. It reads as a hollow man until the lamp is on it.
     if (dweller.kind === 'hollow' && state.lostCrew && state.lostCrew.length && rand() < 0.4) {
       const idx = Math.floor(rand() * state.lostCrew.length);
-      dweller.worn = state.lostCrew[idx].name;
+      dweller.worn = (state.lostCrew[idx] && state.lostCrew[idx].name) || state.lostCrew[idx];
     }
   }
 
+  // AND THE DECK'S DEAD, WHICH THIS DOOR DID NOT MERELY FORGET — IT ERASED.
+  // `state.foot` had no `dead` field here at all, and the shared exit writes
+  // `deckDead[dk] = f.dead` only when `f.dead` is non-empty and DELETES the key
+  // otherwise. So walking back into a ruin where a hand had fallen destroyed
+  // the record of them on the way in, and the body was gone from a game that
+  // makes a point of letting you come back for it.
+  if (!state.deckDead) state.deckDead = {};
   state.foot = {
     household: household ? household.name : null,
     kind: deckKind,          // a hull and a tower behave differently ashore
+    dead: (state.deckDead[dk] || []).slice(),
     q: tile.q, r: tile.r, d: d,
     x: ch.entry.x, y: ch.entry.y,
     crates: 0, relics: 0, steps: 0, tick: 0,
@@ -13576,14 +13674,25 @@ function footInto(q, r, d, kind, ch, carried) {
   // Your own deck was stripped when you took it, and it does not restock
   // because the substrate still remembers where the piles were.
   if (own) for (const [k, t] of ch.tiles) if (t.loot && took.indexOf(k) < 0) took.push(k);
-  if (ch.dweller && !isDeckCleared(q, r, d, kind)) {
+  // A BREACHED STATION HOLDS WHATEVER FORCED THE LOCK — and a GROTTO station did
+  // not. `enterInterior` places the boarder; this function, which is how you get
+  // into a grotto, never read `base.boarder` at all. So a breached beach station
+  // set the flag, put nothing in the room, gave you nothing to kill, and
+  // `repumpStation` refuses to seat the lock while the flag is set. The station
+  // was unrecoverable, for ever, with no way for a captain to even see why.
+  if (own && state.base && state.base.boarder) {
+    const bd = state.base.boarder;
+    dweller = { x: ch.entry.x, y: ch.entry.y, kind: bd.kind, tough: bd.tough,
+                hurt: bd.hurt || 0, boarder: true };
+  } else if (ch.dweller && !isDeckCleared(q, r, d, kind)) {
     // WOUNDS KEEP. `state.deckHurt` is overlay, saved, per-deck — without it a
     // step through the way and back healed the thing completely, for free, and
     // the only limit on doing that was patience.
     const hurt = ((state.deckHurt || {})[dk]) || 0;
     dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: hurt };
     if (dweller.kind === 'hollow' && state.lostCrew && state.lostCrew.length && rand() < 0.4) {
-      dweller.worn = state.lostCrew[Math.floor(rand() * state.lostCrew.length)].name;
+      const lc = state.lostCrew[Math.floor(rand() * state.lostCrew.length)];
+      dweller.worn = (lc && lc.name) || lc;
     }
   }
   // A DECK REMEMBERS ITS OWN DEAD. Bodies are per-deck (`f.dead`), and a
@@ -14531,7 +14640,12 @@ function stepFoot(x, y) {
   // climb after you. What a cave has instead is no door to put between you and
   // whatever else found the air first.
   const secureHere = stationSecure(f.q, f.r, f.d, f.kind);
-  if (!secureHere && caveSeg(f.kind) < 0 && f.kind !== 'deepruin') {
+  // `inGrotto`, NOT `caveSeg >= 0`. `caveSeg('beach')` is -1 — a beach is its
+  // own kind, not a numbered chamber — so this guard read the sand as open sea
+  // and flooded the one place in the game the paragraph above it names by name.
+  // `inGrotto` exists precisely to hold that distinction in ONE place; the rule
+  // that most needed it was the only one not asking it.
+  if (!secureHere && !inGrotto(f.kind) && f.kind !== 'deepruin') {
     if (f.tick % FLOOD_EVERY === 0 && floodAdvance() && rand() < 0.3) {
       log(pickLoose(FLOOD_GAIN), 'warn', 'WATER');
     }
@@ -15135,7 +15249,11 @@ const CONTACT_LOG_TURNS = 3;   // min player actions between passive-contact lin
 // Called bare it is the old flat envelope — every existing site keeps working,
 // and the sites that know WHOSE depth they are asking about get the trick.
 function passiveContactR(otherDepth, oq, or_) {
-  const base = passiveRange() + 2 + (crewLvl('ear') > 0 ? 1 : 0);
+  // No Ear term. A KNACK OPENS AN OPTION, IT NEVER MOVES A NUMBER — and the
+  // Ear's option is the standing listen (`crewLvl('ear')` at the sounding
+  // report), which tells you where the floor is open. A silent +1 on passive
+  // range on top of that is the exact stat-creep the ruling exists to refuse.
+  const base = passiveRange() + 2;
   if (otherDepth == null) return base;
   return Math.floor(base * layerDamp(state.currentDepth, otherDepth,
                                      oq == null ? state.q : oq, or_ == null ? state.r : or_));
@@ -15218,7 +15336,18 @@ function spawnCreature(type, q, r, depth) {
     c.reload = 0;             // turns until it can fire again
     c.fq = 0; c.fr = 0;       // last fix on you — where it heard you, where it hunts
     c.nerve = rng();          // bolder boats close and fire; timid ones stalk and run
-    c.hostile = rng() < 0.6;  // some rival crews would rather run than fight
+    // TEMPER, NOT A VERDICT — and it can only ever make her LESS willing.
+    //
+    // This was `c.hostile`, the same flag `hitRival` sets when you shoot first,
+    // so a coin flip at spawn jumped the queue in front of standing, of whose
+    // boat she is, and of any treaty you had signed. An alliance is the ONLY
+    // thing standing buys and it was void six times in ten.
+    //
+    // The comment it replaced said "some rival crews would rather run than
+    // fight", which is a fine idea and the wrong direction: a crew's appetite
+    // should let you off, never pick a fight their people have not picked. So
+    // it is `shy` now, and it subtracts.
+    c.shy = rng() < 0.4;
   }
   state.creatures.push(c);
 }
@@ -15533,8 +15662,11 @@ function hitRival(c, power) {
 function rivalHostile(c) {
   if (!c || c.gone || !c.culture) return !!(c && c.hostile);
   if (c.hostile) return true;                       // you shot first; that settles it
-  if (alliedWith(c.culture)) return false;
-  return standingHostile(c.culture);
+  if (alliedWith(c.culture)) return false;          // and a treaty is a treaty
+  // Her people hunt you — unless this particular crew would rather not. Temper
+  // subtracts and never adds: a boat whose people have no quarrel with you never
+  // starts one.
+  return standingHostile(c.culture) && !c.shy;
 }
 
 // AND YOU CAN TALK TO HER. On the surface a hull can be hailed for what it knows; down
@@ -16366,6 +16498,13 @@ function deathCause() {
 }
 function deathTitle() {
   if (state.currentDepth > crushDepthNow()) return 'Crushed.';
+  // THE SAME THREE RUNGS, IN THE SAME ORDER, AS `deathCause` DIRECTLY ABOVE.
+  // This one had two. A boat dying of pressure past her rated depth with
+  // anything at all alongside was titled "Something got in." over a cause that
+  // read "past her rated depth ... starts meaning arithmetic" — the title and
+  // the sentence under it naming two different deaths. The paragraph over
+  // `deathCause` is about exactly this; its sibling was not obeying it.
+  if (state.currentDepth > safeDepthNow()) return 'Past her depth.';
   const biter = (state.creatures || []).find(c => !c.gone && !c.fleeing
     && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1);
   return biter ? 'Something got in.' : 'The hull fails.';
@@ -16625,8 +16764,19 @@ const POI_DESCRIPTIONS = {
   salvage:  'Wreckage on the bottom',
   opening:  'A sinkhole through the seafloor',
   surface:  'The dock and the shore',
-  deadend:  'A dead end',
+  hull:     'A hull on the bottom',
 };
+// `hull` is a live prize type — FLAVOR.hull is written, `tile.poi === 'hull'`
+// is tested in eight places — and it had no row here, so the sounding report
+// fell through to `tile.name || 'an unknown reading'` on one of the eight
+// things the sea actually contains.
+//
+// `deadend` is NOT gone from the game — `spaceClass()` still returns the string
+// for a one-exit space and there are two prose pools keyed on it. What it is
+// not, and has never been, is a POI: nothing anywhere sets `tile.poi` to it, so
+// this row could not be reached from the one line that reads this table. See
+// the note at `deadend` and `base` in the tile-type section, which says in so
+// many words not to restore them as tile types.
 
 //=============================================================================
 // THE WATER, DESCRIBED — Infocom in a diving bell.
@@ -18596,7 +18746,17 @@ function endGame(title, summary) {
   // somebody the deep has a name for, and a deck somewhere may put them in
   // front of you again, wearing what they were wearing.
   if (!state.lostCrew) state.lostCrew = [];
-  for (const m of (state.crew || [])) if (m.name && state.lostCrew.indexOf(m.name) < 0) state.lostCrew.push(m.name);
+  // OBJECTS, LIKE loseCrew WRITES. This pushed bare NAMES, so `state.lostCrew`
+  // could hold both shapes at once inside one campaign — and each reader needs
+  // the other one. The hire-name guard spreads it into a Set of names (a string
+  // reads as a name, an object does not, so the 9.4% collision guard silently
+  // failed for anyone lost mid-run); the hollow-man reader takes `.name` off
+  // each entry (an object works, a string yields `undefined` and a drowned
+  // crewman wearing nobody's face).
+  for (const m of (state.crew || [])) {
+    if (!m.name || state.lostCrew.some(x => (x && x.name) === m.name)) continue;
+    state.lostCrew.push({ name: m.name, role: m.role, how: 'lost with the boat' });
+  }
   state.corpses = [];   // the sea keeps its dead; they do not sail in the next boat
   state.route = ['0,0,0']; state.refuges = { surface: '0,0,0' }; state.autoTarget = null;   // a new hull starts at the pier
   state.foot = null;    // and it does not leave you standing in a ruin the boat is no longer under
@@ -18840,9 +19000,13 @@ function surface() {
       }
       log('The port surgeon sees to the wounded, and a night ashore does the rest. The crew stands whole again — older, and marked, but whole.', '', 'PORT');
     }
-    if (atPort && state.stores < 100) {
+    // TWO STORES, ONE GATE. The decoy rack was restocked inside the food test,
+    // so a captain who kept the larder full and spent every decoy tied up, took
+    // on nothing, and put back to sea with an empty rack. They are different
+    // shelves; ask about them separately.
+    if (atPort && (state.stores < 100 || state.decoys < 3)) {
       state.stores = 100;
-      state.decoys = 3;
+      state.decoys = Math.max(state.decoys || 0, 3);
       log('The boat re-provisions at the dock — water, salt meat, lamp oil, and dry berths.', '', 'PORT');
     }
     if (atPort && state.relics > 0) {
@@ -19252,6 +19416,20 @@ function startGame() {
     title.classList.add('gone');
     setTimeout(() => { title.style.display = 'none'; }, 1200);
   };
+
+  // REFUSED, NOT WIPED — WHICH IS WHAT `loadSave` SAYS AND WHAT IT DID NOT DO.
+  // A save from a NEWER build returns null from `loadSave` exactly like no save
+  // at all, so boot fell through to `restart()` and the next `scheduleSave()`
+  // wrote over the campaign the comment promises to keep. Only the throw path
+  // below ever set anything aside. A player who opens a newer build once and
+  // rolls back loses the sea; that is the case the promise was written for.
+  if (!save && raw) {
+    let tooNew = false;
+    try { const pk = JSON.parse(raw); tooNew = pk && typeof pk.v === 'number' && pk.v > SAVE_V; } catch (e) {}
+    if (tooNew) {
+      try { localStorage.setItem(SAVE_KEY + '-newer', raw); } catch (e) {}
+    }
+  }
 
   if (save) {
     try {
