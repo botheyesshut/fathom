@@ -7699,6 +7699,19 @@ function party() { return state.crew.filter(m => !m.lost); }
 // the echo being charged twice: the fray that crossed the line already spent
 // the nerve, and billing the row's -30 on top of it took a hand from 26 to
 // broken in one step. The battery caught that as an empty `state.crew`.
+// THE GUARD, HELD IN ONE PLACE, BECAUSE THE ARGUMENT WAS NOT ENOUGH.
+//
+// `fromNerve` closes the recursion only on the path that remembers to pass it.
+// The moment wounds stopped duplicating, a body blow that had run out of body
+// rows began reaching nerve rows routinely — and a nerve row echoes through
+// `frayNerve`, which crosses a threshold, which calls back in here. Third time
+// this pair has re-entered itself, second time in one session, and it was found
+// by tests/delve.js within a minute of the change that caused it.
+//
+// So stop relying on callers. While a wound is being inflicted, a nerve
+// threshold does not open a second one. The blow still costs the nerve; it just
+// does not compound into another row on the way down.
+let inflictingWound = false;
 function inflictCondition(m, severity01, pressure, fromNerve) {
   if (m.lost) return null;   // the gone are inert — no wounding a body already taken
   crewVitals(m);
@@ -7707,14 +7720,54 @@ function inflictCondition(m, severity01, pressure, fromNerve) {
   if (maxTier === 0) return null;
   const want = pressure === 'nerve' ? 'nerve' : 'body';
   const inTier = (k) => CONDITIONS[k].tier <= maxTier && CONDITIONS[k].tier >= Math.max(1, maxTier - 1);
-  let pool = Object.keys(CONDITIONS).filter(k => inTier(k) && CONDITIONS[k].pressure === want);
+  // A WOUND YOU ALREADY HAVE IS NOT A NEW WOUND — IT IS A WORSE ONE.
+  //
+  // This pushed the row it rolled whatever was already there, so a hand who
+  // stood beside a tenant collected "bruised, bruised, wrenched, bruised" — one
+  // injury written down four times. Three things were wrong with that. It reads
+  // as nonsense on the muster list, which is the player's only view of who is
+  // still fit. It is mechanically inert past the second copy, because `crewAtk`
+  // and `crewDef` both clamp at zero. And it makes standing in the grinder SAFE:
+  // the tenth blow costs exactly nothing, so the correct play was to stand there.
+  //
+  // A cap would have been worse — a hand at the cap becomes invulnerable, which
+  // rewards the same thing harder. So: no duplicates, and a blow that would have
+  // repeated a wound reaches for a worse one instead. Hold everything the table
+  // can do and the next one is mortal, which opens the dressing window rather
+  // than killing outright.
+  //
+  // This does NOT spiral. `bestWeaponAtk` is decoupled from condition churn by
+  // design and both stat readers clamp at zero, so the party's ability to swing
+  // back is exactly what it was. What changes is that staying is now a decision.
+  const held = new Set(m.conditions);
+  const fresh = (ks) => ks.filter(k => !held.has(k));
+  let pool = fresh(Object.keys(CONDITIONS).filter(k => inTier(k) && CONDITIONS[k].pressure === want));
   // Not every tier has a row of both kinds — fall back rather than return null,
   // because a blow that lands must do something.
-  if (!pool.length) pool = Object.keys(CONDITIONS).filter(inTier);
+  if (!pool.length) pool = fresh(Object.keys(CONDITIONS).filter(inTier));
+  // ESCALATION. Nothing left at this severity that they have not already got, so
+  // the blow reaches past it. This is the whole of the change: the same number of
+  // blows land, and a body already marked takes a worse mark rather than the same
+  // one twice.
+  if (!pool.length) pool = fresh(Object.keys(CONDITIONS).filter(k => CONDITIONS[k].tier > maxTier && CONDITIONS[k].pressure === want));
+  if (!pool.length) pool = fresh(Object.keys(CONDITIONS).filter(k => CONDITIONS[k].tier > maxTier));
+  if (!pool.length) {
+    // Everything this table can do to a person has been done to them. The blow
+    // still lands — it opens the window `tenantHitMember` already knows how to
+    // close with a dressing, and does not take them outright.
+    if (!m.dying) {
+      m.dying = true;
+      log(`${m.name} has nothing left to break, and the next one will do it.`, 'danger', 'WOUND');
+    }
+    return null;
+  }
   const key = pool[Math.floor(rand() * pool.length)];
   const c = CONDITIONS[key];
   m.conditions.push(key);
-  if (c.nerve && !fromNerve) frayNerve(m, -c.nerve, true);
+  if (c.nerve && !fromNerve) {
+    inflictingWound = true;
+    try { frayNerve(m, -c.nerve, true); } finally { inflictingWound = false; }
+  }
   if (c.incap) m.wounded = true;          // keep the legacy flag honest
   if (c.scar && !m.scars.includes(c.scar)) m.scars.push(c.scar);
   if (c.mortal) m.dying = true;
@@ -7748,8 +7801,10 @@ function frayNerve(m, amount, quiet) {
   // this recursed into itself, and a tier-2 row's -40 at the 25 line broke the
   // hand outright — an unwinnable spiral, which this file refuses by name a few
   // hundred lines up. The threshold marks the giving-way; it does not bill for it.
+  // `inflictingWound` — the structural half of the guard. See the note above
+  // `inflictCondition`. A wound's own nerve echo must not open a second wound.
   for (const [line, sev] of [[50, 0.3], [25, 0.6]]) {
-    if (m.lost) break;
+    if (m.lost || inflictingWound) break;
     if (was > line && m.nerve <= line) inflictCondition(m, sev, 'nerve', true);
   }
   if (!quiet && m.nerve < 25) log(`${m.name} is close to breaking.`, 'warn', 'NERVE');

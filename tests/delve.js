@@ -183,6 +183,18 @@ function assertSane(s, where) {
         key + ' went ' + prev + ' -> ' + nc + ' between steps', where);
     }
     lastCond.set(m, nc);
+    // NO WOUND TWICE. A repeat is not a second injury, it is the same one
+    // written down again — it reads as nonsense on the muster list, does nothing
+    // past the clamp, and made standing beside a tenant free after the second
+    // copy. `inflictCondition` now escalates instead of repeating; this is the
+    // rule that says so, so it cannot quietly come back.
+    if (nc > 1) {
+      const seen = new Set();
+      for (const c of m.conditions) {
+        if (seen.has(c)) { bad('the same wound inflicted twice', key + ' carries two ' + c, where); break; }
+        seen.add(c);
+      }
+    }
     // A NOTICE, NOT A VIOLATION, and the difference was worth checking rather
     // than assuming. Conditions stack without a cap and duplicates are allowed,
     // so a hand parked beside a tenant for a hundred rounds — which this
