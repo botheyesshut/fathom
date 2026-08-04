@@ -1,4 +1,71 @@
-# FATHOM — START HERE (last updated 2026-07-30)
+# FATHOM — START HERE (last updated 2026-08-04)
+
+## THE HOUSEKEEPING PASS, PART TWO (2026-08-04, `fbfc807`..`6cbdfc2`)
+
+Sean, asleep: *"cross-reference all our intended gameplay design and user
+experience design against our code... find all kinds of things that don't make
+sense and take them out"* — then *"keep going."* This is the continuation. Both
+commits shipped on ALL SUITES PASSED, run twice each, with the file hash checked
+before and after so no run raced an edit.
+
+**THE GATE WAS LYING, AND THAT MATTERED MOST.** The battery failed a *different
+suite on every run over an unchanged file* — `items`, then `cargo`, then nothing
+— and reported "a check failed" every time. It could not have known that:
+`stdio: 'inherit'` meant the runner never saw a word the child said, so a suite
+that DIED (out of memory, a throw on the way up) was indistinguishable from one
+that caught a bug. It now captures the output and lets the child's own FAIL line
+decide, and says so in as many words when there isn't one. The classifier was
+proved against two synthetic children that differ only in how they exit 1.
+
+Under that, the "flake" was one real bug of mine, intermittent only because it
+needed the RNG to roll a cursed item. **Do not trust a suite name from this
+runner's older form if you find one in an old log.**
+
+**What was fixed** (each verified, several proved red-then-green):
+
+| | |
+|---|---|
+| the nerve half of `CONDITIONS` | 3 of 10 rows were `pressure: 'nerve'` and no caller passed a pressure — the whole Lovecraft axis was uninflictable. Now fires at nerve thresholds 50 and 25 |
+| the Gun, the Hand | `crewLvl('gun')` and `crewLvl('hand')` had **zero call sites**. Both for sale at 5 crates, never consulted. One option each, additive |
+| both doors onto a deck | `enterInterior` wrote `hurt: 0` and had no `dead` field; `footInto` reads both. The tenant healed for free at the front door, and re-entering **erased** your dead (`stashDeck` deletes the key when `f.dead` is empty) |
+| a beach flooded | the flood guard asked `caveSeg` (−1 for `'beach'`) instead of `inGrotto`, which exists for exactly this |
+| `deathTitle` | had 2 of the 3 rungs `deathCause` has — a boat dying of pressure was titled "Something got in." |
+| a newer save | was refused and then written over. `loadSave` promises "refused, not wiped"; only the throw path set anything aside |
+| two hands on the helm | `autoStart` didn't stop a set course, so two intervals called `move()` a second apart toward different hexes |
+| the trade panel | in `PANELS` but not in the openers map: it popped a history entry it never pushed, so closing Trade closed the Port with it |
+| the ceiling strike | took hull damage and skipped `noiseMade`, `sfx` and `creatureTick` — the only collision no hunter could hear |
+| `POI_DESCRIPTIONS` | no row for `hull` or `chasm` (both in PRIZE_TYPES), a dead row for `deadend`. Now cross-checked both ways |
+| the Ear's flat +1 | passive range bump removed — A KNACK OPENS AN OPTION |
+| decoys | restocked inside the `stores < 100` test, so a full larder meant an empty rack |
+| the hire line | printed the role slug: "signs aboard as ear" |
+| the ping | now scatters the timid, which `tickShoal`'s own header has claimed all along |
+
+**Did NOT reproduce — left alone rather than "fixed":** found-ness is depth-keyed
+correctly (`poiKey` uses `here.d` whenever you are at a stack prize; the bare hex
+key is the legacy channel and is right). `sw.js` genuinely never caches the
+music, but that is deliberate and documented — `cache.put` throws on the 206 an
+`<audio>` element provokes, and unguarded that took the music down entirely.
+
+**`current` IS A VESTIGIAL TILE TYPE.** Nothing places one — not `PRIZE_TYPES`,
+no `poi`, no `setTile`. The current *mechanic* is real and live, but it is a
+FIELD over the water (`favour` in the move path), not a tile. It is now marked
+in place. **Do not resolve this by adding a placement pass** — that would apply
+the set twice on any tile that had both.
+
+**`cap` is dead data on all 48 viewport scenes.** Nothing reads it since the
+captions came out at Sean's request. The strings are kept (authored prose; a
+caption may return as a long-press or a Look line) and both the game and the
+items.test check that guards their length now say so out loud. If Sean wants
+them gone for good, that is a one-pass deletion.
+
+**MY OWN LESSON, TWICE, AND IT IS THE PROJECT'S OLDEST ONE.** I proved the nerve
+fix with a probe that counted which rows appeared — and never checked whether
+the hand survived. It didn't: `inflictCondition` calls `frayNerve` back, so the
+threshold hook made a mutual recursion, and a tier-2 row's −40 nerve at the 25
+line broke a hand outright. The battery caught what my probe was built not to
+see. Then the door checks I added failed on the runs where the sweep landed on
+an untenanted deck — a legal deck — reporting a game bug that was a test picking
+badly. **A probe that only measures the thing you added is not a check.**
 
 ## FOUR AUDITORS (2026-08-01, second session) — what they found and what is left
 
