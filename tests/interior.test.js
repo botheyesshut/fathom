@@ -1555,9 +1555,15 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
 {
   console.log('\n--- BOTH DOORS ONTO A DECK REMEMBER THE SAME THINGS ---');
   const st = sandbox.__st();
-  let ruin = null, at = null;
+  // A DECK THAT CAN ANSWER THE QUESTION, not merely the first one on the map.
+  // The first cut took whatever deck the sweep hit first and then checked that
+  // somebody was home — but an empty deck is a perfectly legal deck, so that
+  // check failed on the runs where the sweep landed on one, reporting a game
+  // bug that was really a test picking badly. Keep looking until a deck has a
+  // tenant; only having NO tenanted deck anywhere is worth failing over.
+  let ruin = null, at = null, f1 = null, examined = 0;
   outer2:
-  for (let q = -22; q <= 22 && !ruin; q++) for (let r = -22; r <= 22; r++) {
+  for (let q = -22; q <= 22; q++) for (let r = -22; r <= 22; r++) {
     const t = sandbox.__tileAt(q, r);
     if (!t) continue;
     if (!(t.poi === 'ruin' || (sandbox.__stack(t) || []).some(p => p.type === 'ruin' || p.type === 'hull'))) continue;
@@ -1565,25 +1571,24 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
     for (let d = 0; d < 11100; d += 60) {
       if (!sandbox.__openCell(q, r, d)) continue;
       st.currentDepth = d;
-      if (sandbox.__prizeDepth(t) != null) { ruin = t; at = d; break outer2; }
+      if (sandbox.__prizeDepth(t) == null) continue;
+      examined++;
+      st.foot = null;
+      sandbox.__enter(t.q, t.r, d);
+      const f = sandbox.__foot();
+      if (f && f.dweller) { ruin = t; at = d; f1 = f; break outer2; }
+      if (f) sandbox.__leave();
+      break;                       // this hex is settled; try the next one
     }
   }
-  check(!!ruin, 'a deck reachable from the boat exists to test with',
-    ruin ? ruin.q + ',' + ruin.r + ' @' + at + 'm' : 'none found');
+  check(!!ruin, 'a deck with somebody home exists to test with',
+    ruin ? ruin.q + ',' + ruin.r + ' @' + at + 'm, tenant ' + f1.dweller.kind
+         : 'NONE of the ' + examined + ' decks examined had a tenant');
 
   if (ruin) {
-    st.foot = null;
-    sandbox.__enter(ruin.q, ruin.r, at);
-    const f1 = sandbox.__foot();
     check(!!f1, 'the front door opens', f1 ? 'ashore' : 'DID NOT GET IN');
-    // A deck with no tenant cannot answer the wound question; say so rather
-    // than passing on an empty set, which is how three checks once went green
-    // on 0 of 0.
-    const hadTenant = !!(f1 && f1.dweller);
-    check(hadTenant, 'and there is somebody home to wound',
-      hadTenant ? f1.dweller.kind : 'no tenant on this deck — the wound check below is vacuous');
 
-    if (f1 && hadTenant) {
+    {
       f1.dweller.hurt = 5;                                 // you put five into it
       f1.dead = [{ name: 'Salt', x: f1.x, y: f1.y }];      // and Salt went down here
       sandbox.__leave();

@@ -1471,6 +1471,11 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
     'and the boat is only in the picture where the boat actually is',
     'cave1: ' + byKind.cave1.join(', '));
   // Every caption must still fit the porthole on a 360px phone.
+  // A GUARD ON A FIELD NOTHING RENDERS. `cap` is read by no line in the game —
+  // the caption renderer came out when Sean said they were too small to read.
+  // The check is kept because the strings are kept and a caption may return
+  // somewhere legible, but it is not protecting anything a player can see
+  // today, and it should not be read as evidence that captions work.
   const long = caveScenes.map(sc => [sc, sandbox.__cap(sc)]).filter(x => (x[1] || '').length > 29);
   check(long.length === 0, 'and every new caption fits the frame',
     long.length ? long.map(x => x[0] + ' ' + x[1].length).join(', ')

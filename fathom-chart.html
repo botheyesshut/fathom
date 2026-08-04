@@ -511,9 +511,11 @@
     max-width: 45vw;
     /* The porthole floats over the top-left of the chart and was eating every
        tap that landed under it — 10.4% of the drawn hexes, including legal
-       moves. `pointer-events: none` on the box with `auto` on the art itself
-       gives the padding and the backdrop back to the chart while keeping the
-       tap-to-hide gesture on the picture. */
+       moves. `pointer-events: none` gives the chart back every one of them.
+       This first shipped as `none` on the box with `auto` on the art, to keep
+       a tap-to-hide gesture on the picture; the rule below then took that away
+       too, and this comment went on describing it. There is no gesture. The
+       switch is in Options, which is where Sean asked for it. */
     pointer-events: none;
   }
   /* THE WHOLE THING IS CLICK-THROUGH, art included. Giving the picture back its
@@ -1309,9 +1311,9 @@
        you." So it floats over the map and costs the game no layout at all. -->
   <div id="viewport">
     <pre id="vp-art" aria-hidden="true"></pre>
-    <!-- Tapping the tile has always dismissed it, but an invisible affordance
-         is not an affordance. Sean asked for "a way to turn it off" for a
-         feature that already had one, which is the answer. -->
+    <!-- No handler, on purpose. Tapping the tile used to dismiss it, and that
+         cost the chart 4.9% of its legal move targets to save a settings trip
+         nobody could have guessed was there. The switch lives in Options. -->
   </div>
   <!-- Vertical depth strip overlay -->
   <div id="depth-strip">
@@ -2739,8 +2741,10 @@ function drawSeaChart() {
 // adding a thirtieth scene costs one static drawing.
 //
 // Foreground-only, classic 16-colour DOS palette, shading carried by the block
-// characters ░▒▓█ the way real ANSI art carried it. 36 columns because that is
-// the widest thing that stays legible on the 360 px phone Sean plays on.
+// characters ░▒▓█ the way real ANSI art carried it. 24 columns because that is
+// the widest thing that stays legible on the 360 px phone Sean plays on — the
+// CSS that sizes the frame does the same arithmetic and says 24 too. This read
+// 36 for as long as `VP_W` has read 24, one line below it.
 const VP_W = 24, VP_H = 10;
 const ANSI16 = ['#0a0a12','#1a3a7a','#1a7a3a','#1a7a8a','#8a2a20','#6a2a7a','#8a5a1a','#9aa0a8',
                 '#3a4048','#4a7ad8','#5ad87a','#6ad8e0','#e05a4a','#c05ad0','#e8d060','#eef0f4'];
@@ -2785,8 +2789,19 @@ const VP_KEY = { '█':'8', '▓':'8', '▒':'1', '░':'1', '▄':'8', '▀':'8
                  '~':'3', '¤':'e', '│':'6', '╲':'f', '╱':'f', '▐':'7', '▌':'7',
                  '.':'8', '·':'8', '˙':'8', ',':'8' };
 
-// art: what is drawn.  col: one hex palette digit per cell.  pulse: colour keys
-// that breathe.  Both grids are VP_W x VP_H and the battery enforces it.
+// frames: the drawings, looped.  key: which palette digit each CHARACTER takes.
+// hold: frames held per step.  wet: drawn with the underwater wash.
+//
+// Not `art`/`col`/`pulse` — colour stopped being a parallel grid a long time
+// ago (a second grid could go ragged independently of the first, which is the
+// failure this replaced), and no scene of the 48 uses the single-drawing `art`
+// form. Every frame is VP_W x VP_H and the battery does enforce that much.
+//
+// `cap` is authored on all 48 and READ BY NOTHING. Sean: "the captions should
+// just go away. They're too small to be legible." What went away was the
+// renderer; the strings are kept because they are written prose and a caption
+// may yet come back somewhere legible — a long-press, or a line in Look. Until
+// then nothing here reaches a player, so do not spend effort on them.
 const VP_SCENES = {
 
   // THE WATER PRESSES. This was a still, and it is the second-most-seen picture
@@ -7894,6 +7909,17 @@ const TILES = {
   chamber:  { name: 'an open chamber',     char: '',   cost: 1,  color: '#0e1c2c' },
   sea:      { name: 'an open sea',         char: '',   cost: 1,  color: '#0a1828' },
   beach:    { name: 'a cavern beach',      char: '',   cost: 1,  color: '#0e1c2c' },
+  // SUPERSEDED, AND KEPT ONLY SO THE GLYPH AND COLOUR ARE NOT REUSED. Nothing
+  // places a `current` tile: it is not in PRIZE_TYPES, it has no `poi`, and no
+  // `setTile` call names it. The current mechanic is real and live, but it is a
+  // FIELD over the water, not a tile — `favour` in the move path, which already
+  // does the directional cost, the din when you punch into it, and the TIPS
+  // entry. Two orphans still reference this row (a colour branch in the chart
+  // draw, a case arm in the arrival prose) and both are harmless.
+  //
+  // Do NOT resolve this by giving currents a placement pass. That would make
+  // the set apply twice on a tile that has both, which is every tile that would
+  // ever be worth marking.
   current:  { name: 'a swift current',     char: '≈',  cost: 2,  color: '#0e2840', strange: true },
   kelp:     { name: 'a forest of kelp',    char: 'Ψ',  cost: 2,  color: '#0e2018' },
   chasm:    { name: 'a chasm',             char: '▼',  cost: 1,  color: '#000408', poi: 'chasm' },
@@ -16583,6 +16609,16 @@ function changeDepth(deltaMeters) {
         log(`${pickLoose(WALL_OVER)}. -${dmg} hull.`, 'danger', 'IMPACT');
         flagMoveFail(state.q, state.r, '#a04030');
         state.lastMoveTime = performance.now();
+        // THE SAME THREE LINES THE FLOOR STRIKE HAS, twenty lines up, under a
+        // comment whose whole point is that these are one act: "driving the sub
+        // into a chamber ceiling is just as much striking rock as driving it
+        // into a side wall." It took the hull damage and none of the rest, so
+        // ramming a cave roof was the only collision in the game that made no
+        // sound, played nothing, and cost the sea no turn — every hunter in
+        // earshot heard the floor and not the ceiling.
+        noiseMade(state.q, state.r, 2); // impacts ring through the water
+        sfx('impact');
+        creatureTick();
         checkDeath();
       }
     }
@@ -16765,6 +16801,7 @@ const POI_DESCRIPTIONS = {
   opening:  'A sinkhole through the seafloor',
   surface:  'The dock and the shore',
   hull:     'A hull on the bottom',
+  chasm:    'A crack that keeps going down',
 };
 // `hull` is a live prize type — FLAVOR.hull is written, `tile.poi === 'hull'`
 // is tested in eight places — and it had no row here, so the sounding report
@@ -17817,6 +17854,12 @@ function autoStep() {
 }
 
 function autoStart(kind) {
+  // ONE HAND ON THE HELM AT A TIME — and only one of the two functions that
+  // take it knew that. `travelTo` stops the autopilot before setting a course;
+  // nothing stopped a set course when the autopilot started, so both timers ran
+  // and two intervals called `move()` on the same boat, a second apart, toward
+  // different hexes.
+  if (state.travel) travelStop(null);
   state.autoTarget = kind;
   const stop = autoHazard();
   if (stop) { state.autoTarget = null; syncAutoBtn(); log('Not while ' + stop + '.', 'warn', 'HELM'); return; }
@@ -19512,10 +19555,16 @@ function topPanel() {
 }
 // Wrap each opener so history tracks what is actually on screen.
 (function wirePanelHistory() {
+  // `trade` BELONGS HERE. It is in `PANELS` — the back button knows how to
+  // close it — but it was not in this map, so opening it pushed no history
+  // entry while the shared `*-close` handler below still decremented on
+  // `trade-close` and called `history.back()`. The entry that came back was
+  // somebody else's: open the Port, open the Trade window, shut the Trade
+  // window, and the Port shut with it.
   const openers = { port: openPort, muster: openMuster,
                     inventory: openInventory, seachart: openSeaChart,
                     options: openOptions, bestiary: openBestiary,
-                    transcript: openTranscript };
+                    transcript: openTranscript, trade: openTrade };
   for (const key of Object.keys(openers)) {
     const orig = openers[key];
     if (typeof orig !== 'function') continue;
