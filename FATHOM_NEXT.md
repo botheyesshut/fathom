@@ -1,5 +1,81 @@
 # FATHOM — START HERE (last updated 2026-08-04)
 
+## HOW TO CHECK YOUR WORK HERE (2026-08-04, `01b0590`) — READ BEFORE VERIFYING ANYTHING
+
+Sean asked whether more checking helps or whether it can be pushed into
+overcorrection. The answer, as work, is three tools and one finding.
+
+**The command list:**
+
+```bash
+node tests/run-all.js      # the gate. 18 suites. Ship only on ALL SUITES PASSED.
+node tests/moved.js        # what ELSE moved, vs HEAD. ~2 min. Run before committing.
+node tests/moved.js --full # ...including playtest/firsthour/reasons. ~25 min.
+node tests/delve.js        # the on-foot layer, walked directly. Also in the battery.
+```
+
+**THE FINDING, AND IT IS THE IMPORTANT PART: the sea-going bot reaches a deck in
+3% of its runs.** One in thirty. Not for want of trying — every persona in
+`playtest.js` carries `enterRuin` between 0.6 and 1.0 — it simply never finds one
+in the turns it has. So tenants, wounds, nerve, conditions, bodies, the flood and
+the way out have been covered by three runs in a hundred, and the on-foot layer
+is where this project's design conversation keeps going. `tests/delve.js` exists
+to walk it: 60 decks, ~7,000 steps, asserting the whole way. **If you are
+changing anything ashore, playtest will not see it. delve will.**
+
+*(That 3% is also worth reading as a gameplay signal, not only a coverage one.
+It is Sean's call whether a captain should find a deck more often than a bot with
+`enterRuin: 1.0` and 300 turns manages to.)*
+
+**REPRODUCIBILITY — everything below was broken, and is now fixed. Do not undo
+any of it.**
+
+| what | why it mattered |
+|---|---|
+| four instruments rolled unseeded `Math.random` | an instrument that rolls unseeded dice reports a SAMPLE and reads like a FACT |
+| **all fourteen `__seed` helpers reset `worldSeed` and `rng` but NOT `interiorSalt`** | it is read in three places deciding mouths, layout and doors — so "the same seed" NEVER meant the same building, in any test, ever |
+| `resumeGame` reseeds the dice from `Date.now()` | deliberate in the game; it made every suite unreproducible from its first save/reload on. Harnesses now run a MONOTONIC fake clock |
+| a frozen clock was the obvious fix and the wrong one | `restart()` derives a new world seed from the clock, so a stopped clock regenerated the same ocean every restart. save.test caught it |
+| three instruments had absolute paths | worked on Sean's machine only. All 15 honour `FATHOM_HTML` now |
+
+11 of 12 suites are byte-identical run to run. The twelfth is `flip.test`, which
+measures wall-clock performance and *should* vary.
+
+**WHAT ACTUALLY CATCHES A BUG — established by experiment, not assertion.** I
+planted the nerve-recursion bug back into a scratch build and measured what
+noticed. It took four tries:
+
+- playtest's per-turn invariants — **no.** The bot never walks that code.
+- `moved.js` — **no.** A diffuse scatter of shifted encounter rates that says
+  *something* changed and not what. `crew lost` read 0 on **both** builds.
+- delve's invariants — **no, and worse:** the BROKEN build reported FEWER
+  violations, because hands break and leave the roster before they can pile up
+  conditions. The bug hides behind its own symptom.
+- **a re-entrancy assertion** wrapping `inflictCondition` and `frayNerve` in the
+  game's own scope — **yes.** Silent on the sound build, 57 nested calls on the
+  broken one. It is in `delve.js`. **When a bug is "X called Y called X", assert
+  non-reentrancy directly; nothing statistical will find it.**
+
+I had written the opposite of most of that into the file headers as fact before
+testing any of it. The corrections sit next to what they correct.
+
+**MY OWN INSTRUMENTS LIED TWICE, both caught before being believed.** delve's
+first cut wandered at random and called `fightTenant` anyway — which refuses
+unless something is toe-to-toe — producing 1,673 rounds "fought", 0 wounds, and
+a confident "none violated" over a path never entered. Then it reported 1,486
+condition bursts that were all phantoms, because it named replacement hands by
+roster length and two hands shared a name. **A probe that measures nothing passes
+everything. Check that your check can fail.**
+
+**Open, and Sean's calls:** `depthBand` is declared on all four cultures and read
+by nothing — and there is a live global function of the same name, so grepping it
+finds 8 hits and looks wired. Either delete the four fields or make faction
+encounters respect their declared band. Separately: conditions stack without a
+cap and duplicates are allowed (a hand parked by a tenant collects a dozen). It
+is NOT the unwinnable spiral it looks like — `crewAtk`/`crewDef` clamp at zero
+and `bestWeaponAtk` is decoupled — so delve reports it as a NOTICE, not a
+failure.
+
 ## THE HOUSEKEEPING PASS, PART TWO (2026-08-04, `fbfc807`..`6cbdfc2`)
 
 Sean, asleep: *"cross-reference all our intended gameplay design and user
