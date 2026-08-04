@@ -396,7 +396,7 @@
   }
 
   #chart-close, #transcript-close, #inv-close, #muster-close, #port-close,
-  #options-close, #bestiary-close, #pages-close, #trade-close {
+  #options-close, #bestiary-close, #trade-close {
     min-height: 44px;
     min-width: 72px;
   }
@@ -1015,29 +1015,12 @@
   .bst-t { font-size: 0.78rem; line-height: 1.4; color: #9a8f72; }
   .bst-k { font-size: 0.78rem; line-height: 1.4; color: #7fae8a; margin-top: 0.25rem; }
   .bst-u { font-size: 0.75rem; font-style: italic; color: #5a5140; }
-  /* The account reads as a DOCUMENT, not a menu: serif body, generous leading,
-     numbered pages, and a dim rule where a page has not been found yet — the
-     gaps are honest about how much of the descent is still out there. */
+  /* The bestiary's subtitle. The id is a leftover from when the account shared
+     this styling; the account is gone and this is the only thing wearing it now. */
   #pages-sub {
     padding: 0.35rem 0.9rem; border-bottom: 1px solid rgba(160,140,100,0.2);
     font-family: 'Cormorant Garamond', serif; font-style: italic;
     font-size: 0.8rem; color: #8a7a58;
-  }
-  #pages-list { overflow-y: auto; padding: 0.3rem 0.9rem 0.8rem; -webkit-overflow-scrolling: touch; }
-  .pg { padding: 0.6rem 0 0.7rem; border-bottom: 1px solid rgba(160,140,100,0.12); }
-  .pg:last-child { border-bottom: none; }
-  .pg-n {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.55rem;
-    letter-spacing: 0.14em; color: #6f8496; margin-bottom: 0.25rem;
-  }
-  .pg-x {
-    font-family: 'Cormorant Garamond', serif; font-size: 0.98rem;
-    line-height: 1.45; color: #d8c9a4;
-  }
-  .pg-missing {
-    font-family: 'Cormorant Garamond', serif; font-style: italic;
-    font-size: 0.78rem; color: #5a5140; padding: 0.45rem 0;
-    border-bottom: 1px solid rgba(160,140,100,0.12);
   }
   #port-ledger {
     padding: 0.4rem 0.7rem; border-bottom: 1px solid rgba(160,140,100,0.2);
@@ -1254,15 +1237,6 @@
   </div>
 </div>
 
-<!-- THE ACCOUNT — the recovered pages of The Dark Way Down, for rereading.
-     The moment of finding prints to the log; this is the shelf it lives on. -->
-<div id="pages">
-  <div id="inv-panel">
-    <div id="inv-head"><span>The Dark Way Down</span><button class="btn" id="pages-close">Close</button></div>
-    <div id="pages-sub">an account, recovered in pieces</div>
-    <div id="pages-list"></div>
-  </div>
-</div>
 
 <!-- TRADE (with an enclave) -->
 <div id="trade">
@@ -1393,7 +1367,6 @@
        captain presses every turn. -->
   <div id="controls-more" style="display:none">
     <button class="btn" id="btn-muster" title="The muster — who is aboard, how long they have served, and what that has made them">Muster</button>
-    <button class="btn" id="btn-pages" style="display:none" title="The recovered pages of an account somebody wrote on the way down">Account</button>
     <button class="btn" id="btn-bestiary" style="display:none" title="The bestiary — what the boat has met down here, and what it learned by surviving it">Bestiary</button>
     <button class="btn" id="btn-options" title="Sound, the porthole, the tutorial, and starting over">Options</button>
   </div>
@@ -5925,23 +5898,6 @@ function portBuy(act) {
 function openPort() { renderPort(); document.getElementById('port').classList.add('show'); }
 function closePort() { document.getElementById('port').classList.remove('show'); }
 
-// THE ACCOUNT, for rereading. Found pages in full; unfound ones as a dim rule,
-// so the shape of what is still out there is honest without being a checklist.
-function renderPages() {
-  const el = document.getElementById('pages-list');
-  if (!el) return;
-  const found = state.pagesFound || [];
-  const rows = [];
-  for (let i = 0; i < PAGES.length; i++) {
-    if (i < found.length) {
-      rows.push('<div class="pg"><div class="pg-n">PAGE ' + ROMAN[i] + '</div>'
-        + '<div class="pg-x">' + PAGES[i] + '</div></div>');
-    } else {
-      rows.push('<div class="pg-missing">page ' + ROMAN[i].toLowerCase() + ' — not yet recovered</div>');
-    }
-  }
-  el.innerHTML = rows.join('');
-}
 // THE BESTIARY, as a document. Entries you have filled in read in full; ones
 // you have met but not learned show what you know and say what is still
 // missing, because "you have not survived enough of these yet" is itself
@@ -6005,7 +5961,6 @@ const TIPS = {
   // were banked — a receipt, not a lesson — and its first clause repeated the
   // opening paragraph nearly verbatim.
   port:    'That is in the hold, not on the ledger. Lose the boat and you lose the hold with her. Surface within sight of the dock and it goes ashore — the Port sells hull work, hands, gear and the next boat.',
-  pages:   'Somebody went down before you and wrote it down. The marks that pay in knowledge rather than cargo are how you recover the rest of it.',
   jettison:'Anything you are carrying can go over the side. Some of it will insist, eventually.',
   // The one place in the world where anything but trade happens. Sean drew that line
   // himself: the surface towns are for basic trade and nothing else.
@@ -6235,8 +6190,6 @@ function closeOptions() { document.getElementById('options').classList.remove('s
 function openBestiary() { renderBestiary(); document.getElementById('bestiary').classList.add('show'); }
 function closeBestiary() { document.getElementById('bestiary').classList.remove('show'); }
 
-function openPages() { renderPages(); document.getElementById('pages').classList.add('show'); }
-function closePages() { document.getElementById('pages').classList.remove('show'); }
 
 function openInventory() { renderInventory(); document.getElementById('inventory').classList.add('show'); }
 function closeInventory() { document.getElementById('inventory').classList.remove('show'); }
@@ -7416,75 +7369,6 @@ function resolveLead(L) {
   updateHUD(); render(); scheduleSave();
 }
 
-//=============================================================================
-// THE ACCOUNT — found text. Somebody went down before you and wrote it.
-//
-// The pages are from THE DARK WAY DOWN, the gamebook Sean wrote in 2016 and a
-// collaborator orphaned. Nothing here is pastiche: every page is his prose,
-// verbatim except for trimmed choice-mechanics and two copy-edits. The fish-men
-// waiting under the waterline and the trick of reading their ripples — the
-// Children of Dagon, and passive sonar — were in this account years before
-// this game existed. It is not an easter egg. It is the game's own prehistory,
-// recovered in pieces.
-//
-// The account is written in the SECOND PERSON, because the gamebook was — and
-// found text that says "you" is worth more here than any rewrite: a dead man's
-// pages that read as though they describe whoever holds them. The game frames
-// that once, on the first page, and never comments again.
-//
-// Pages are recovered IN ORDER, one per resolved `word` lead — the account is
-// one document, and every captain reassembles the same descent. Sean's ruling
-// holds: word leads are chance-gated, so the story is never guaranteed, only
-// earned. The writer's name surfaces on its own page; the game never says it.
-const PAGES = [
-  "A large, warped piece of plywood covers a slab of concrete here. It's probably covering a few hundred spiders, too, but you're pretty curious as to what else might be under it. You could move it if you wanted to. On the other hand, you've already found the cat, and there's a fresh, delicious pitcher of lemonade in the fridge. When you take no risks, the same thing always happens to you.",
-  "The passageway immediately begins sloping downward. This does not surprise you. In fact, it's almost like down is the only meaningful direction in this place. Down, down, down... How can anything go down so far? Surely there must be a limit to such delving, an end to what can reasonably be? Yet you've plumbed miles toward the center of the earth, and there seems no end to what lies beneath. Crack apart the pavement and look inside the globe, and there's a world of madness and decline that's been lurking beneath everyone's sneakers all along.",
-  "The first exit is an archway with a large keystone bearing two carved, worn words that you can barely make out, but they are not in your native English: NAUE TOURN, they say. There seems to be light down there, real light that comes from fire or maybe even electricity, but that would suggest people, people who live far underground and know what naue tourn means. Such people are likely reclusive, and may not appreciate your visit.",
-  "You find yourself standing at the end of an underwater quay that stretches off along the rock wall. Strange, blue light comes from a bowl in the wall up near the ceiling, the source of which is anyone's guess. You get the impression that it's been burning for a long, long time. Thick ropes lie in ancient, cobwebbed coils here and there along the dock, some of them trailing into the black, shimmering water. A rusted anchor rests beside a gaff with a rotten, wooden handle. There are no boats docked here.",
-  "Against one wall sits an old, metal lunchbox, the kind you've seen in photographs of construction workers in the nineteen-twenties. It is open and entirely empty. Beside it is a stack of clothing, neatly folded and covered with perhaps a quarter-inch of dust. The dust comes off in a single sheet when you brush it away, then disintegrates into the air. It is as though somebody took his lunch and decided to go for a swim, but never got back to work.",
-  "You drop the paddle into the bottom of the canoe and stretch. The clatter resounds and reverberates throughout the cavern. Every move you make is the loudest sound here, accompanied only by your ragged breathing and the dripping of water into the lake all around you, like a slow rain. When you catch your breath, you realize that you're actually very lost now, even more lost than you've been so far.",
-  // The 2016 original read "on your phone" — a fourth-wall gag that worked for
-  // a gamebook and breaks here, because a captain may be at a desk. Replaced
-  // with the contrast the sentence was always reaching for: warm and dry,
-  // against a freezing underground lake. Device-agnostic, and it does more work
-  // than the gag did.
-  "It is as if these very words were written in a book somewhere by someone else entirely, as if you were only reading them somewhere warm and dry, for your own pleasure. You do hear the voice of the thoughts that pretend to be yours, and it is increasingly difficult to continue. Half of you thinks, almost screaming, Pay attention and paddle, Aeneas! Keep moving forward! But the other half cannot ignore the voice that repeats like an echo in your brain: it's just a book – never mind – just put it down and you'll be home.",
-  "Behind you and ten feet to your right, the leg of your unfortunate comrade, Mikhail, is being gnawed by a hominid fish with webbed hands and feet. He has been dead for days and so does not feel it, but you feel it vicariously. You know that it knows you are here, here just a few feet away from it, carving into the rock wall. It's not the least bit concerned you might escape. It merely sucks on Mikhail's leg as if it were a chicken bone and stares out of its round, white, vestigial eyes at nothing.",
-  "You note that by waiting a few seconds at each step of the way, you can tell what side of your canoe the fish-men are on by subtle ripples on the surface of the lake.",
-  "You stop looking at the walls and the falls and the firelight, and start searching beneath the surface of the water with sharp, intent eyes. There, just beneath the waterline, gape a crowd of wide, open mouths full of sharp, triangular teeth, a standing group of gray-skinned fish-beings with infinite patience, their heads thrown back to catch whatever it might be that occasionally comes over the falls and across the lake into their waiting mouths.",
-  "The mural tells the story of the beginning of life on earth, except that it is far more disturbing than any creation myth you have studied. In time immeasurably long ago, the great Old Ones seeped down from their roosts in the empty blackness of remote space. They were not accustomed to living on hard land. They descended into the watery deeps of the ocean trenches, where they scooped up what gelatinous life forms were there and modified them to their purposes. Like clockwork dolls, ancient man came out of the water and began to fearfully work for his creators. The Old Ones overran the earth several times by water, and several times by ice, to cull the burgeoning herd of their human stock.",
-  "In a place where the only direction is down, relativity does not exist. You can't shake the feeling that you're going inward, rather than downward. The thought is strangely comforting. Inward is more like forward – and you are progressing, aren't you? The question is, progressing into what, exactly?",
-  "You consider the ubiquity of dust, the crumbs of a thousand ages sealing up all the world's little cracks. Even stones heal. Everything is crumbling apart, sloughing off, becoming the ash and the clay, and meanwhile the ash and clay are patching every little fracture in creation.",
-  "You dive in, and the cold takes the wind right out of you. The tingle that hits your body is like tangible, bright light, and you almost lose consciousness. You swim, break the surface, take a gulp of air, and can see nothing. Darkness envelops you, but you hear the noise of water – white water. You suddenly become aware of velocity. You hear a wave slap stone with a loud smack just a moment before you are smashed into a sharp edge of the cavern wall. You sink and do not come up.",
-];
-const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI'];
-
-// Recover the next page in sequence. The moment of finding IS the payoff, so
-// the page prints in full, to the log, right then — the panel is only for
-// rereading. Returns the index recovered, or -1 when the account is complete.
-function recoverPage() {
-  if (!state.pagesFound) state.pagesFound = [];
-  const idx = state.pagesFound.length;
-  if (idx >= PAGES.length) return -1;
-  state.pagesFound.push(idx);
-  if (idx === 0) {
-    log('Folded into the packet, sealed in oilskin: a page in a small, hard hand. The first sheet bears a title, pressed through the paper: THE DARK WAY DOWN.', 'strange', 'PAGE');
-  } else {
-    log(`Folded into the packet, sealed in oilskin: another page of the account, numbered ${ROMAN[idx]} in the same small, hard hand.`, 'strange', 'PAGE');
-  }
-  log(`"${PAGES[idx]}"`, '', 'PAGE');
-  tip('pages');
-  if (idx === 0) {
-    log('It is written as though it happened to whoever reads it.', 'strange', 'PAGE');
-  }
-  if (idx === PAGES.length - 1) {
-    log('The account ends there.', 'strange', 'PAGE');
-  }
-  const pb = document.getElementById('btn-pages');
-  if (pb) pb.style.display = '';
-  sfx('relic');
-  return idx;
-}
 
 // WORD — information, and nothing you can put in the hold. It pays in the only
 // currency a charting session should pay in: knowing where things are. Sean's
@@ -7509,10 +7393,6 @@ function resolveWord(L, tier) {
   log(`No cache. A slate, wedged where the current would not take it, and a survey scratched into it in a hand that gave out partway. ${n} hex${n === 1 ? '' : 'es'} of water you have never seen, ${bearing(state.q, state.r, cq, cr)}, ${km} km off — on your chart now, and paid for with nothing but the going.`,
       'strange', 'WORD');
   sfx('bell');
-  // And with the survey, a page. The account is why a charting run is worth
-  // making even when the chain never turns to cargo: the word lead pays in
-  // knowledge, and this is the knowledge.
-  recoverPage();
   // Word begets word. Information is the thing that most reliably leads to more
   // information — and the chain can turn into cargo, which is how a charting
   // run eventually becomes a paying run without ever having to be one.
@@ -10105,10 +9985,6 @@ const state = {
   maxDepth: 0,          // session record (in meters)
   moves: 0,
   poisFound: [],
-  // The recovered pages of the account. Deliberately NOT reset by restart():
-  // like the bank and the vault, what you have read survives the boat — pages
-  // are campaign knowledge, and the sea cannot take back what you know.
-  pagesFound: [],
   // The boat's own boarding axe. Reissued with every hull — a new boat comes
   // with one in the locker, which is why this is set on death and on restart
   // rather than saved as a possession you could lose.
@@ -11550,8 +11426,8 @@ const CREATURE_TOUGH = { drifter: 6, lurker: 10, eel: 4, shoal: 3, silt: 12, bar
 // THE BESTIARY — what the boat has learned about what lives down here.
 //
 // This game's real currency is knowledge: the chart shows only what you have
-// sounded, a layer must be felt before it is known, and the account arrives a
-// page at a time. The creatures were the hole in that. A captain could be hunted
+// sounded, and a layer must be felt before it is known. The creatures were the
+// hole in that. A captain could be hunted
 // by the same thing for forty voyages and never be told what wakes it, what
 // drives it off, or that going quiet works — the sound grammar is the deepest
 // system in the game and nothing ever taught it.
@@ -18991,7 +18867,6 @@ function doSave(force) {
       corpses: state.corpses,
       layersFelt: state.layersFelt,
       portHire: state.portHire,
-      pagesFound: state.pagesFound,
       bestiary: state.bestiary,
       tipsSeen: state.tipsSeen,
       ordersSaid: state.ordersSaid,
@@ -19128,7 +19003,6 @@ function resumeGame(save) {
   state.base = save.base || null;
   state.layersFelt = arr(save.layersFelt);   // the water you have felt, remembered
   state.portHire = save.portHire || null;    // the hand waiting on the dock does not re-roll
-  state.pagesFound = arr(save.pagesFound);  // the account, as far as you have got
   state.bestiary = obj(save.bestiary);      // what you have learned about what lives here
   state.tipsSeen = arr(save.tipsSeen);
   state.ordersSaid = arr(save.ordersSaid);
@@ -19148,8 +19022,6 @@ function resumeGame(save) {
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
   state.lockerWeapon = save.lockerWeapon || 'axe';
-  const __pgBtn = document.getElementById('btn-pages');
-  if (__pgBtn) __pgBtn.style.display = state.pagesFound.length ? '' : 'none';
   state.quarryCache = obj(save.quarryCache);  // a cache you walked away from is still there
   if (state.base) {
     // Stations saved before the siege existed still have to load.
@@ -19339,7 +19211,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
 // panel pushes a history entry on open; back pops it and closes the topmost.
 // Closing by button consumes the entry so the two can never drift apart.
 const PANELS = [
-  ['options', closeOptions], ['bestiary', closeBestiary], ['pages', closePages], ['port', closePort], ['muster', closeMuster],
+  ['options', closeOptions], ['bestiary', closeBestiary], ['port', closePort], ['muster', closeMuster],
   ['trade', () => { const t = document.getElementById('trade'); if (t) t.classList.remove('show'); }],
   ['inventory', closeInventory], ['seachart', closeSeaChart],
   ['transcript', () => { const t = document.getElementById('transcript'); if (t) t.classList.remove('show'); }],
@@ -19354,7 +19226,7 @@ function topPanel() {
 }
 // Wrap each opener so history tracks what is actually on screen.
 (function wirePanelHistory() {
-  const openers = { pages: openPages, port: openPort, muster: openMuster,
+  const openers = { port: openPort, muster: openMuster,
                     inventory: openInventory, seachart: openSeaChart,
                     options: openOptions, bestiary: openBestiary,
                     transcript: openTranscript };
@@ -19454,7 +19326,6 @@ vpBoot();
 var __mb = document.getElementById('btn-muster'); if (__mb) __mb.addEventListener('click', openMuster);
 var __mc = document.getElementById('muster-close'); if (__mc) __mc.addEventListener('click', closeMuster);
 var __pc = document.getElementById('port-close'); if (__pc) __pc.addEventListener('click', closePort);
-var __pgb = document.getElementById('btn-pages'); if (__pgb) __pgb.addEventListener('click', openPages);
 var __bsb = document.getElementById('btn-bestiary'); if (__bsb) __bsb.addEventListener('click', openBestiary);
 var __ob = document.getElementById('btn-options'); if (__ob) __ob.addEventListener('click', openOptions);
 
@@ -19524,7 +19395,6 @@ if (__mo) __mo.addEventListener('click', () => {
 })();
 var __oc = document.getElementById('options-close'); if (__oc) __oc.addEventListener('click', closeOptions);
 var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEventListener('click', closeBestiary);
-var __pgc = document.getElementById('pages-close'); if (__pgc) __pgc.addEventListener('click', closePages);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('chart-fit').addEventListener('click', chartReset);
 document.getElementById('chart-up').addEventListener('click', () => chartLayerStep(-1));
