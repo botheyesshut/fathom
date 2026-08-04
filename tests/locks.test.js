@@ -59,9 +59,9 @@ vm.runInContext(script + `
 ;var __L=[]; log=function(t,c,e){ __L.push(String(t)) };
 gameStarted = true;
 var __X = { L: __L, state, interiorAt, tileAt, ITEMS, giveItem, itemCount, takeItem,
-  stepFoot, lockOpened, noteLockOpened, deckKey, deckSuffix, LOCK_CHANCE,
+  stepFoot, lockOpened, noteLockOpened, siteKey, siteSuffix, LOCK_CHANCE,
   seedTo(v){ worldSeed=v; interiorSalt=':'+v; resetWorldCaches(); interiorCache.clear();
-             state.items={}; state.deckTook={}; state.foot=null; } };
+             state.items={}; state.siteTook={}; state.foot=null; } };
 `, sb, { timeout: 180000 });
 const X = sb.__X;
 
@@ -133,12 +133,12 @@ if (sample) {
 
   console.log('\n--- 3. A DOOR YOU OPENED STAYS OPEN ---');
   const wasOpen = X.lockOpened(X.state.foot, sample.k);
-  check(wasOpen, 'the deck remembers the lock was turned', 'recorded in deckTook');
+  check(wasOpen, 'the deck remembers the lock was turned', 'recorded in siteTook');
   // surface and come back: a whole new foot, the interior regenerated
-  const keep = JSON.parse(JSON.stringify(X.state.deckTook));
+  const keep = JSON.parse(JSON.stringify(X.state.siteTook));
   X.state.foot = null;
   X.interiorCache && X.interiorCache.clear && X.interiorCache.clear();
-  X.state.deckTook = keep;
+  X.state.siteTook = keep;
   X.state.foot = { q: sample.q, r: sample.r, d: sample.d, kind: sample.kind,
     x: lx, y: ly - 1, closed: [], water: [], seen: [], took: [], opened: [], crates: 0, relics: 0, steps: 0, tick: 0, dweller: null };
   X.state.items = {};

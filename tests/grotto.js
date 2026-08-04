@@ -64,7 +64,7 @@ vm.runInContext(script +
   '\nfunction __mouths(q,r,d){ return beachMouths(q,r,d); }' +
   '\nfunction __onward(q,r,d,k){ return caveOnward({q:q,r:r,d:d,kind:k}); }' +
   '\nfunction __back(q,r,d,k){ return caveBack({q:q,r:r,d:d,kind:k}); }' +
-  '\nfunction __suffix(k){ return deckSuffix(k); }' +
+  '\nfunction __suffix(k){ return siteSuffix(k); }' +
   '\nfunction __seed(s){ worldSeed=s; interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s); resetWorldCaches(); }' +
   '\nfunction __ensure(q,r){ tileAt(q,r); }' +
   '\nfunction __cells(){ return cells; }',

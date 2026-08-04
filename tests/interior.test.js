@@ -118,7 +118,7 @@ try { vm.runInContext(script +
   '\nfunction __mouths(q,r,d){ return beachMouths(q,r,d); }' +
   '\nfunction __onward(q,r,d,k){ return caveOnward({q:q,r:r,d:d,kind:k}); }' +
   '\nfunction __back(q,r,d,k){ return caveBack({q:q,r:r,d:d,kind:k}); }' +
-  '\nfunction __suffix(k){ return deckSuffix(k); }' +
+  '\nfunction __suffix(k){ return siteSuffix(k); }' +
   '\nfunction __setCell(q,r,d,k){ tileAt(q,r); cells.set(cellKey(q,r,d),{type:k,kind:k}); }' +
   '\nfunction __beach(){ maybeBeach(); }' +
   '\nfunction __subAir(){ return activeSub().air; }' +
@@ -551,7 +551,7 @@ check(sandbox.__base() && sandbox.__base().stores.crates === 7 && sandbox.__base
 // possible, and the reward is that the deck becomes claimable at all.
 sandbox.__st().foot = null;
 sandbox.__st().base = null;
-sandbox.__st().clearedDecks = [];
+sandbox.__st().clearedSites = [];
 sandbox.__st().alive = true;
 sandbox.__st().crew = [];
 sandbox.__st().air = 200000;
@@ -621,8 +621,8 @@ check(sandbox.__foot() && !sandbox.__foot().dweller, 'an armed party can drive a
 check(rounds >= 2, 'and a heavy tenant is not a one-punch affair', rounds + ' rounds to break it');
 check(sandbox.__st().air < airAtBoarding, 'it answers every round you fail to finish it',
   'air ' + airAtBoarding + ' -> ' + sandbox.__st().air);
-check(sandbox.__st().clearedDecks.includes(site2.q + ',7,660'),
-  'and the deck is recorded as cleared', sandbox.__st().clearedDecks.join(' | '));
+check(sandbox.__st().clearedSites.includes(site2.q + ',7,660'),
+  'and the deck is recorded as cleared', sandbox.__st().clearedSites.join(' | '));
 
 // It stays driven off.
 sandbox.__st().foot = null;
@@ -638,10 +638,10 @@ check(!!sandbox.__base() && sandbox.__base().q === site2.q,
 
 sandbox.__st().foot = null;
 sandbox.__save();
-sandbox.__st().clearedDecks = [];
+sandbox.__st().clearedSites = [];
 sandbox.__resume();
-check(sandbox.__st().clearedDecks.includes(site2.q + ',7,660'),
-  'cleared decks survive a reload', sandbox.__st().clearedDecks.length + ' recorded');
+check(sandbox.__st().clearedSites.includes(site2.q + ',7,660'),
+  'cleared decks survive a reload', sandbox.__st().clearedSites.length + ' recorded');
 
 //--- 11. Stage 6: the siege --------------------------------------------------
 // A station has to be losable, or holding one means nothing.
@@ -936,7 +936,7 @@ for (let q = 0; q < 200 && !worn; q++) {
   const c = sandbox.__int(q, 17, 900);
   if (c.dweller && c.dweller.kind === 'hollow') {
     sandbox.__st().foot = null;
-    sandbox.__st().clearedDecks = [];
+    sandbox.__st().clearedSites = [];
     sandbox.__enter(q, 17, 900);
     if (sandbox.__foot().dweller && sandbox.__foot().dweller.worn) worn = sandbox.__foot().dweller.worn;
   }
@@ -1056,7 +1056,7 @@ let psite = null;
 for (let q = 0; q < 60 && !psite; q++) { const c = sandbox.__int(q, 25, 660); if (c.dweller) psite = { q: q, ch: c }; }
 check(!!psite, 'a tenanted deck to fight over', psite ? 'q=' + psite.q : 'none');
 
-sandbox.__st().foot = null; sandbox.__st().base = null; sandbox.__st().clearedDecks = [];
+sandbox.__st().foot = null; sandbox.__st().base = null; sandbox.__st().clearedSites = [];
 sandbox.__st().alive = true; sandbox.__st().air = 200000; sandbox.__st().stores = 100;
 sandbox.__st().crew = [
   { name: 'Ash',   role: 'diver', xp: 0, nerve: 70, conditions: [], scars: [], dying: false, gear: { weapon: 'speargun', armor: 'wardsuit', kit: null } },
@@ -1256,7 +1256,7 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
 // door meant a room that refilled. That restock faucet has been fixed twice in
 // this project already, once at 20 crates from a single hex and once unbounded.
 //
-// `state.deckTook` remembers per deck, so re-entry is safe BY CONSTRUCTION
+// `state.siteTook` remembers per deck, so re-entry is safe BY CONSTRUCTION
 // rather than by a lock. Both halves are asserted here, because either one
 // alone is a bug: the door must open again, AND the room must be empty when it
 // does.
@@ -1264,7 +1264,7 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
   console.log('\n--- REVISITABLE RUINS ---');
   sandbox.__seed(90210);
   const st = sandbox.__st();
-  st.poisFound = []; st.deckTook = {}; st.clearedDecks = [];
+  st.poisFound = []; st.siteTook = {}; st.clearedSites = [];
   st.air = 99999; st.hull = 100; st.cargo = 0; st.relics = 0; st.crew = [];
 
   // ANYWHERE IN THE COLUMN, not just on top of it. `t.poi` is the SHALLOWEST prize
@@ -1327,12 +1327,12 @@ check(rell && rell.ashore && rell.fx === 7 && rell.hold === true, 'a hand\'s pos
       regrew ? regrew + ' piles REGREW — the restock faucet is back' : 'the deck stayed empty');
 
     // And the record has to outlive the session, or the faucet returns on reload.
-    const before = JSON.stringify(st.deckTook);
+    const before = JSON.stringify(st.siteTook);
     sandbox.__save();
     sandbox.__resume();
-    const after = JSON.stringify(sandbox.__st().deckTook);
+    const after = JSON.stringify(sandbox.__st().siteTook);
     check(after === before && after !== '{}', 'and the record survives a reload',
-      after === before ? Object.keys(sandbox.__st().deckTook).length + ' decks remembered' : 'LOST ON RELOAD');
+      after === before ? Object.keys(sandbox.__st().siteTook).length + ' decks remembered' : 'LOST ON RELOAD');
   }
 }
 
@@ -1558,15 +1558,15 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
 
 //--- THE OTHER DOOR ----------------------------------------------------------
 // There are two ways onto a deck. `footInto` is how you walk in from a grotto
-// chamber, and it reads `state.deckHurt` and `state.deckDead` — with a comment
+// chamber, and it reads `state.siteHurt` and `state.siteDead` — with a comment
 // saying exactly why: without them "a step through the way and back healed the
 // thing completely, for free, and the only limit on doing that was patience."
 //
 // `enterInterior` is the other one — how you enter a wreck or a ruin from the
 // boat, which is most of them — and it wrote `hurt: 0` and had no `dead` field
 // at all. So the exploit the comment describes stayed wide open at the front
-// door, and the missing `dead` was worse than forgetful: `stashDeck` DELETES
-// `deckDead[dk]` when `f.dead` is empty, so walking back in erased the hand who
+// door, and the missing `dead` was worse than forgetful: `stashSite` DELETES
+// `siteDead[dk]` when `f.dead` is empty, so walking back in erased the hand who
 // fell there on the way through the doorway.
 //
 // A fix that lands on one of two doors is the shape of bug this suite exists
@@ -1627,6 +1627,70 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
       }
     }
   }
+}
+
+//--- "DECK" IS A BOAT WORD -------------------------------------------------
+// Sean, twice, the second time with visible patience: "decks should only be
+// boats floating and populated or deserted and sunk or some combination of the
+// two, but submarines and ships only. When you talk about a dock or a base or a
+// cave or a ruin as a 'deck,' it's very confusing to me and probably going to
+// end up being confusing in the code, too, as we have already seen."
+//
+// He was right about the code — `deckKey`, `deckTook`, `deckHurt`, `deckDead`,
+// `clearedDecks`, `isBaseDeck`, `stashDeck` and the rest all kept records for
+// caverns and drowned halls under a submarine's noun, and `placeWord()` existed
+// to fix the prose while the identifiers went on leaking. They are `site*` now.
+//
+// This is the guard that stops it coming back a third time. It is a STATIC read
+// of the source, not a play-through, because the failure is a word rather than
+// a behaviour: any line the player can be shown that says "deck" has to be one
+// the game has already established is a boat. `placeWord()` (which returns
+// "deck" only for a hull), an explicit `hull` test on the same line, or the
+// caller naming a deckhead all count as establishing it.
+{
+  console.log('\n--- "DECK" IS A BOAT WORD, AND ONLY A BOAT WORD ---');
+  const src = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
+  const body = src.match(/<script>([\s\S]*?)<\/script>/)[1];
+  // REPORT FILE LINES, NOT SCRIPT LINES. The first cut printed offsets into the
+  // extracted <script> body, so every number it gave was ~600 short and reading
+  // the "offending" line showed unrelated CSS. A finding you cannot look up is
+  // not a finding.
+  const OFFSET = src.slice(0, src.indexOf(body)).split('\n').length - 1;
+  const offenders = [];
+  body.split('\n').forEach((ln, i) => {
+    if (!/\bdecks?\b/i.test(ln)) return;
+    const t = ln.trim();
+    if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;   // prose about the rule
+    // Only lines that can reach a player: something being logged or shown.
+    if (!/\blog\s*\(|textContent|innerHTML|TIPS\b|: '/.test(ln)) return;
+    // Established as a boat on the same line?
+    // A line that CHOOSES the word at runtime is already doing the right thing:
+    // `(boat ? 'deck' : 'floor')` is the same rule `placeWord` encodes, inline.
+    if (/placeWord|'hull'|"hull"|deckhead|claimdeck|A DECK/.test(ln)) return;
+    // TWO PLACES THE WORD IS RIGHT AND ALWAYS WILL BE. The Con-Fed's creed —
+    // "every deck its own republic" — is about SHIP crews governing themselves,
+    // which is the whole of that culture; and a merchant hull's viewport scene is
+    // captioned for the ship it draws. Both are boats. Named rather than pattern-
+    // matched, so adding a third has to be a decision somebody makes on purpose.
+    if (/^creed:|^\s*creed:|marMerchant|'Deck Cargo'/.test(t)) return;
+    if (/\?\s*'deck'|\?\s*"deck"|boat\s*\?/.test(ln)) return;
+    offenders.push((i + 1 + OFFSET) + ': ' + t.slice(0, 96));
+  });
+  check(offenders.length === 0,
+    'no line a player can see calls a cave, a ruin or a station a deck',
+    offenders.length ? offenders.join('\n        ') : 'clean — every surviving "deck" is gated to a hull');
+
+  // And the identifiers, so the next rename does not have to be archaeology.
+  const ids = new Set();
+  for (const m of body.matchAll(/\b([a-zA-Z]*[Dd]eck[a-zA-Z]*)\b/g)) ids.add(m[1]);
+  // The four legacy SAVE keys are read on purpose so old campaigns survive; the
+  // two boat words are correct. Everything else would be a regression.
+  const allowed = new Set(['deck', 'decks', 'Deck', 'Decks', 'deckhead', 'claimdeck',
+                           'deckTook', 'deckHurt', 'deckDead', 'clearedDecks']);
+  const strays = [...ids].filter(x => !allowed.has(x));
+  check(strays.length === 0,
+    'and no identifier names a cavern record after a submarine',
+    strays.length ? 'STRAYS: ' + strays.join(', ') : 'the records are site*, the boat words are boat words');
 }
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

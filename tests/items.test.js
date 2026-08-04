@@ -133,7 +133,7 @@ try { vm.runInContext(script +
   '\nfunction __vpDims(){ return [VP_W, VP_H]; }' +
   '\nfunction __sceneNow(){ return sceneForNow(); }' +
   '\nfunction __describe(m){ return describeSpace(m); }' +
-  '\nfunction __describeDeck(){ return describeDeck(); }' +
+  '\nfunction __describeDeck(){ return describeSite(); }' +
   '\nfunction __scene(){ return sceneForNow(); }' +
   '\nfunction __unfoot(){ state.foot = null; }' +
   '\nfunction __cap(k){ return VP_SCENES[k] ? VP_SCENES[k].cap : null; }' +
@@ -1387,7 +1387,7 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
 // three kinds of place that were all being described by one set of sentences
 // written for a rusted metal interior.
 //
-// Measured before the fix: `describeDeck()` was byte-identical across ruin,
+// Measured before the fix: `describeSite()` was byte-identical across ruin,
 // hull, cave and deepruin over 259,215 samples. "Plate underfoot" in a natural
 // cave. "A corner of the structure" in something nobody built. And a flat lie —
 // "No water yet, though you can hear it working somewhere behind you" — in the

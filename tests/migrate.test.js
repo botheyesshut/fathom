@@ -2,7 +2,9 @@
 //
 // Two key-schema changes shipped without moving SAVE_V:
 //
-//   1. Deck records were keyed on bare coordinates until `deckSuffix` landed.
+//   1. Site records were keyed on bare coordinates until `siteSuffix` landed
+//      (it was called `deckSuffix` then — "deck" is a boat word, and these
+//      records are kept for caverns and drowned halls too).
 //      The interior CACHE already carried ':h' for a hull before that, so a
 //      hull's stripped loot and driven-off tenant went under a key nothing
 //      reads any more. Measured on real bytes: 0 of 2 recorded takes survived,
@@ -81,9 +83,9 @@ function freshContext(store) {
     '\nfunction __beach(){ maybeBeach(); }' +
     '\nfunction __handle(t){ handleTile(t); }' +
     '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
-    '\nfunction __isBase(q,r,d,k){ return isBaseDeck(q,r,d,k); }' +
-    '\nfunction __ownDeck(){ return onOwnDeck(); }' +
-    '\nfunction __suffix(k){ return deckSuffix(k); }' +
+    '\nfunction __isBase(q,r,d,k){ return isBaseSite(q,r,d,k); }' +
+    '\nfunction __ownSite(){ return onOwnSite(); }' +
+    '\nfunction __suffix(k){ return siteSuffix(k); }' +
     '\nfunction __poiAt(q,r,d){ const t=tileAt(q,r); const a=t?poiAtDepth(t,d):null; return a?a.type:(t?t.poi:null); }',
     sandbox, { timeout: 20000 });
   return sandbox;
@@ -127,7 +129,7 @@ console.log('\n--- 1. AN OLD STATION STILL OPENS ---');
     // (a) It must still be recognised as yours from inside the cave.
     must(sb.__isBase(q, r, d, 'cave') === true,
       'a kindless station still answers to the deck it is actually on',
-      'isBaseDeck(...,"cave") = ' + sb.__isBase(q, r, d, 'cave'));
+      'isBaseSite(...,"cave") = ' + sb.__isBase(q, r, d, 'cave'));
 
     // (b) Sailing home must open the cave, not build a phantom ruin over it.
     st.q = q; st.r = r; st.currentDepth = d; st.air = 900; st.alive = true;
@@ -146,7 +148,7 @@ console.log('\n--- 1. AN OLD STATION STILL OPENS ---');
   }
 }
 
-//--- 2. A HULL STRIPPED BEFORE deckSuffix EXISTED ---------------------------
+//--- 2. A HULL STRIPPED BEFORE siteSuffix EXISTED ---------------------------
 console.log('\n--- 2. A WRECK YOU ALREADY STRIPPED STAYS STRIPPED ---');
 {
   const probe = freshContext(makeStore(null));
@@ -172,7 +174,7 @@ console.log('\n--- 2. A WRECK YOU ALREADY STRIPPED STAYS STRIPPED ---');
     must(loot.length > 0, 'and it has loot on it to strip', loot.length + ' squares');
 
     // The OLD shape: a hull's record filed under a bare key, because
-    // deckSuffix did not exist when it was written.
+    // siteSuffix did not exist when it was written.
     const bytes = JSON.stringify({
       v: 2, seed: 20260728, q: 0, r: 0, currentDepth: 0, hull: 130, air: 400,
       alive: true, crew: [], visited: [], revealed: [], poisFound: [],
@@ -183,14 +185,14 @@ console.log('\n--- 2. A WRECK YOU ALREADY STRIPPED STAYS STRIPPED ---');
     sb2.startGame();
     const st2 = sb2.__st();
     const suffixed = q + ',' + r + ',' + d + ':h';
-    say('after loading, the record lives under', Object.keys(st2.deckTook).join(', '));
-    const kept = (st2.deckTook[suffixed] || []).length;
+    say('after loading, the record lives under', Object.keys(st2.siteTook).join(', '));
+    const kept = (st2.siteTook[suffixed] || []).length;
     must(kept === loot.length,
       'the wreck\'s stripped squares are re-filed under its own key',
       kept + '/' + loot.length + ' survived');
-    must((st2.clearedDecks || []).indexOf(suffixed) >= 0,
+    must((st2.clearedSites || []).indexOf(suffixed) >= 0,
       'and the tenant you drove off stays driven off',
-      st2.clearedDecks.join(', ') || 'EMPTY');
+      st2.clearedSites.join(', ') || 'EMPTY');
   }
 }
 
@@ -221,9 +223,9 @@ console.log('\n--- 3. AND A RUIN IS NOT TOUCHED ---');
     const sb3 = freshContext(makeStore(bytes));
     sb3.startGame();
     const st3 = sb3.__st();
-    must((st3.deckTook[key] || []).length === 2 && (st3.clearedDecks || []).indexOf(key) >= 0,
+    must((st3.siteTook[key] || []).length === 2 && (st3.clearedSites || []).indexOf(key) >= 0,
       'a ruin\'s record stays exactly where it was',
-      'deckTook keys: ' + Object.keys(st3.deckTook).join(', '));
+      'siteTook keys: ' + Object.keys(st3.siteTook).join(', '));
   }
 }
 

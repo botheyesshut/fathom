@@ -65,7 +65,7 @@ gameStarted = true;
 var __X = { L: __L, state, WORKS, workByKey, baseHold, caveExposure, nextWork, weakFace,
   migrateBaseWorks, DEFENCE_LEGACY, placeWord, baseTick, startSiege, breachStation,
   networkNear, digHolesThrough, DIG_SAFE_TILES,
-  fortifyBase, onOwnDeckNow, plural };
+  fortifyBase, onOwnSiteNow, plural };
 `, sb, { timeout: 120000 });
 const X = sb.__X;
 

@@ -6084,7 +6084,8 @@ const TIPS = {
   // buttons appear the moment you are ashore and neither said what it was for.
   bulkhead: 'A bulkhead beside you can be dogged shut. It holds back water and whatever is walking in it — and everything on the far side is lost to you while it holds.',
   anchorhere: 'A grotto with nothing living in it can be kept: warp the boat in against the sand, run lamps up the beach, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one station.',
-  claimdeck: 'A deck with nothing living on it can be claimed as your station: the breach becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
+  claimdeck: 'A DECK with nothing living on it can be claimed as your station: the breach becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
+  claimruin: 'A drowned hall with nothing living in it can be claimed as your station: the doorway becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
   locks:   'Some doors are locked rather than stuck. A hull wreck takes a corroded hatch key; a drowned building takes the bone kind. Both turn up in the deep, both sell well at an enclave, and both are spent the moment they open something — so the question is always whether this is the door worth spending it on.',
   chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. The boat carries no positioning gear, so it cannot mark itself — you dead-reckon, until you find something that can.',
 };
@@ -10387,17 +10388,17 @@ const state = {
   // The station, once a deck has been claimed and pumped dry. One only, for
   // now. What is stowed here is NOT aboard, so the sea cannot take it.
   base: null,
-  // Decks whose tenant has been driven off. The substrate goes on generating
+  // Sites whose tenant has been driven off. The substrate goes on generating
   // the thing; this is the overlay record that says you already dealt with it.
-  clearedDecks: [],
+  clearedSites: [],
   // WHAT HAS ALREADY BEEN LIFTED OFF EACH DECK, by deck key. `f.took` lives on
   // `state.foot` and dies when you surface, so before this the game had no way
   // to remember a stripped room — which is the whole reason a ruin had to be
   // one-shot. With the memory, re-entry is safe BY CONSTRUCTION rather than by
   // a lock: you can walk back in, and there is nothing there.
-  deckTook: {},
-  deckHurt: {},   // what each deck's tenant is still bleeding from
-  deckDead: {},   // and who is lying on it
+  siteTook: {},
+  siteHurt: {},   // what each deck's tenant is still bleeding from
+  siteDead: {},   // and who is lying on it
   beachDrawn: {}, // when each trapped pocket was last drawn down
   ships: [],      // traffic on the surface. NOT saved — weather, not landmarks
   standing: {},   // what each people thinks of you. Saved: it is the campaign.
@@ -10535,7 +10536,7 @@ function syncFootControls(inside) {
   // widest control in the row — promising precisely what the code forbids.
   const f0 = state.foot;
   const claimable = inside && f0 &&
-    (isBaseDeck(f0.q, f0.r, f0.d, f0.kind) ||
+    (isBaseSite(f0.q, f0.r, f0.d, f0.kind) ||
      (f0.kind === 'beach' || (f0.kind !== 'hull' && f0.kind !== 'deepruin' && caveSeg(f0.kind) <= 0)));
   // RECENTRE is mute ashore. Its handler zeroes state.panX/panY, and
   // renderInterior computes its camera from f.x/f.y and never reads pan.
@@ -10549,7 +10550,7 @@ function syncFootControls(inside) {
   const f = state.foot;
   if (!f) return;
   // One control, four meanings, chosen by where you stand and what you hold.
-  const own = onOwnDeckNow();
+  const own = onOwnSiteNow();
   if (!own) claim.textContent = inCave ? 'Anchor Here' : ('Claim ' + ucfirst(placeWord(f.kind)));
   else if (state.base.breached) claim.textContent = 'Repump Station';
   else if (f.crates + f.relics + state.cargo + state.relics + Object.keys(state.items || {}).length > 0) claim.textContent = 'Stow Goods';
@@ -11148,7 +11149,7 @@ function render() {
         else if (tile.poi === 'salvage') color = '#f4b860';
         else if (tile.poi === 'surface') color = '#f4b860';
         else if (tile.poi === 'opening') color = '#f4b860'; // warm — the way back up
-        else if (isBaseDeck(tile.q, tile.r, state.currentDepth)) color = '#6ecfae';  // your own hatch light
+        else if (isBaseSite(tile.q, tile.r, state.currentDepth)) color = '#6ecfae';  // your own hatch light
         else if (tile.type === 'kelp') color = '#3a6850';
         else if (tile.type === 'current') color = '#4090c8';
         else if (tile.type === 'chasm') color = '#7050a0';
@@ -12932,8 +12933,12 @@ const TENANTS = {
   },
   warden: {
     name: 'a warden', glyph: 'Ψ', color: '#a8d68c', tough: 22, hit: [28, 45],
-    look: ['It was built to keep people out of this deck, and it is still doing the job.',
-           'It fills the passage from deck to deckhead, and it has been here longer than the rust.',
+    // Place-neutral on purpose: a warden stands in flooded hulls AND in rock,
+    // and this pool used to describe a submarine in both. "Deck to deckhead" is
+    // a boat measured floor to overhead — true in a wreck, meaningless in a
+    // cavern, and the player is told which they are in by everything else.
+    look: ['It was built to keep people out of here, and it is still doing the job.',
+           'It fills the passage from floor to roof, and it has been here longer than the rust.',
            'Somebody made this, and made it for one job, and it is still on shift.',
            'It does not look at you. It steps into the doorway and stops, and that is all it intends to do.'],
     hurt: ['It goes down on one side, gives up the passage, and withdraws into the deep of the structure.',
@@ -12943,7 +12948,7 @@ const TENANTS = {
     near: ['Something enormous is moving through the structure, and it is not in a hurry.',
            'The deck takes a weight somewhere forward, and gives, and takes it again.',
            'A bulkhead somewhere ahead of you swings, and something dogs it shut again.',
-           'Rust comes down off the deckhead in a fine rain. Something is walking above you.'],
+           'A fine rain of grit comes down from above. Something is walking up there.'],
   },
 };
 
@@ -13157,7 +13162,7 @@ function interiorAt(q, r, d, kind) {
   if (!isCave && !isBeach && kind !== 'hull' && kind !== 'deepruin') kind = 'ruin';
   // The kind is part of the key: a hull and a tower at the same coordinates
   // are different places and must not share a cached layout.
-  const key = q + ',' + r + ',' + d + deckSuffix(kind);
+  const key = q + ',' + r + ',' + d + siteSuffix(kind);
   const hit = interiorCache.get(key);
   if (hit) return hit;
 
@@ -13619,7 +13624,7 @@ function footChunk() {
 // deck grid is read, which is the whole trick: one accessor, and the tunnels
 // you cut are real.
 function baseCarved() { return (state.base && state.base.carved) || []; }
-function onOwnDeck() { return onOwnDeckNow(); }
+function onOwnSite() { return onOwnSiteNow(); }
 
 function footTile(x, y) {
   const ch = footChunk();
@@ -13627,7 +13632,7 @@ function footTile(x, y) {
   const k = x + ',' + y;
   const t = ch.tiles.get(k);
   if (t) return t;
-  if (onOwnDeck() && baseCarved().includes(k)) return { t: 'carved' };
+  if (onOwnSite() && baseCarved().includes(k)) return { t: 'carved' };
   return null;
 }
 
@@ -13680,7 +13685,7 @@ const CLAIM_COST = 6;   // crates of plate, valves and pumps, hauled down and sp
 // deck at those coordinates. The consequences were all silent and all bad:
 //
 //   - You claim a grotto, sail one hex out, and sail back. `handleTile` sees
-//     `isBaseDeck` and calls `enterInterior`, which can only build a ruin or a
+//     `isBaseSite` and calls `enterInterior`, which can only build a ruin or a
 //     hull — so you arrive in a phantom RUIN standing where your station was.
 //     Measured 94 of 94 returns, across 6 seeds. Because `own` was true, that
 //     phantom's loot was marked taken and written to the save.
@@ -13695,7 +13700,7 @@ const CLAIM_COST = 6;   // crates of plate, valves and pumps, hauled down and sp
 //
 // An old save has no `kind`; treat it as the ruin it must have been, since a
 // grotto could not be claimed before the field existed.
-function isBaseDeck(q, r, d, kind) {
+function isBaseSite(q, r, d, kind) {
   const b = state.base;
   if (!b || b.q !== q || b.r !== r || b.d !== d) return false;
   if (kind === undefined) return true;              // asking about the hex, not the deck
@@ -13707,7 +13712,7 @@ function isBaseDeck(q, r, d, kind) {
   // permissive behaviour — until `resolveBaseKind` can look at the world and
   // settle it for good.
   if (b.kind == null) return true;
-  return deckSuffix(b.kind) === deckSuffix(kind);
+  return siteSuffix(b.kind) === siteSuffix(kind);
 }
 
 // Settle an old station's kind by looking at the water it sits in, and write it
@@ -13730,16 +13735,16 @@ function resolveBaseKind() {
 }
 
 // The deck the captain is standing on IS the station — kind and all.
-function onOwnDeckNow() {
+function onOwnSiteNow() {
   const f = state.foot;
-  return !!f && isBaseDeck(f.q, f.r, f.d, f.kind);
+  return !!f && isBaseSite(f.q, f.r, f.d, f.kind);
 }
 
-function deckKey(q, r, d) { return q + ',' + r + ',' + d; }
+function siteKey(q, r, d) { return q + ',' + r + ',' + d; }
 // A hull, a tower, and every link of a grotto can share one set of coordinates
 // and they are not the same place. The suffix is what keeps their layouts, their
 // stripped loot and their cleared tenants apart.
-function deckSuffix(kind) {
+function siteSuffix(kind) {
   if (kind === 'hull') return ':h';
   if (kind === 'deepruin') return ':dr';
   if (kind === 'beach') return ':b';
@@ -13753,14 +13758,14 @@ function deckSuffix(kind) {
 // name only — the sea is in it and it behaves like any other drowning ruin
 // until you pump it out and reseat the lock.
 function stationSecure(q, r, d, kind) {
-  return isBaseDeck(q, r, d, kind) && !(state.base && state.base.breached);
+  return isBaseSite(q, r, d, kind) && !(state.base && state.base.breached);
 }
 
 // A deck whose tenant you drove off stays driven off. Overlay, saved — the
 // substrate goes on generating the thing; this is the record that says you
 // already dealt with it.
-function isDeckCleared(q, r, d, kind) {
-  return (state.clearedDecks || []).includes(deckKey(q, r, d) + deckSuffix(kind));
+function isSiteCleared(q, r, d, kind) {
+  return (state.clearedSites || []).includes(siteKey(q, r, d) + siteSuffix(kind));
 }
 
 const GROTTO_ARRIVE = [
@@ -13786,16 +13791,16 @@ function enterInterior(tile) {
   // three separate cleared-deck records to go with them. A ruin is one place.
   const anchor = poiAtDepth(tile, state.currentDepth);
   const d = anchor ? anchor.d : state.currentDepth;
-  const deckKind = (anchor && anchor.type === 'hull') ? 'hull' : (tile.poi === 'hull' ? 'hull' : 'ruin');
-  const ch = interiorAt(tile.q, tile.r, d, deckKind);
-  const claimed = stationSecure(tile.q, tile.r, d, deckKind);
-  const own = isBaseDeck(tile.q, tile.r, d, deckKind);
+  const siteKind = (anchor && anchor.type === 'hull') ? 'hull' : (tile.poi === 'hull' ? 'hull' : 'ruin');
+  const ch = interiorAt(tile.q, tile.r, d, siteKind);
+  const claimed = stationSecure(tile.q, tile.r, d, siteKind);
+  const own = isBaseSite(tile.q, tile.r, d, siteKind);
   // A station deck was stripped when you cleared it — its loot does not grow
   // back just because the substrate still remembers where it was, and a breach
   // does not restock it either.
   // Everything this deck has already given up, on any previous visit.
-  const dk = deckKey(tile.q, tile.r, d) + deckSuffix(deckKind);
-  const took = ((state.deckTook || {})[dk] || []).slice();
+  const dk = siteKey(tile.q, tile.r, d) + siteSuffix(siteKind);
+  const took = ((state.siteTook || {})[dk] || []).slice();
   // A station deck was stripped when you cleared it — its loot does not grow
   // back just because the substrate still remembers where it was.
   if (own) for (const [k, t] of ch.tiles) if (t.loot && took.indexOf(k) < 0) took.push(k);
@@ -13804,7 +13809,7 @@ function enterInterior(tile) {
   // whether that is a fight depends entirely on you: hostile to them and they resist
   // with what they have; otherwise they stand aside and let you look, which is worse
   // in its way, because everything in here belongs to somebody who is watching.
-  const household = inhabitedBy(tile.q, tile.r, d, deckKind);
+  const household = inhabitedBy(tile.q, tile.r, d, siteKind);
   // Who is on the deck. A breached station holds whatever forced the lock, in
   // residence at the breach until you clear it — that overrides the substrate's
   // own tenant. Otherwise it is the deck's generated tenant, unless cleared.
@@ -13816,8 +13821,8 @@ function enterInterior(tile) {
     // THEY STAND ASIDE. No tenant at all: the house is open and everything in it
     // belongs to somebody who is watching you look at it.
     dweller = null;
-  } else if (!claimed && !own && ch.dweller && !isDeckCleared(tile.q, tile.r, d, deckKind)) {
-    // WOUNDS KEEP — AT THIS DOOR TOO. `footInto` reads `state.deckHurt` and
+  } else if (!claimed && !own && ch.dweller && !isSiteCleared(tile.q, tile.r, d, siteKind)) {
+    // WOUNDS KEEP — AT THIS DOOR TOO. `footInto` reads `state.siteHurt` and
     // says why: without it "a step through the way and back healed the thing
     // completely, for free, and the only limit on doing that was patience."
     // That fix landed on one of the two ways onto a deck. This one — the way
@@ -13825,7 +13830,7 @@ function enterInterior(tile) {
     // wrote a flat zero, so the whole exploit stayed open at the front door
     // while the comment describing it sat in the other function.
     dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough,
-                hurt: ((state.deckHurt || {})[dk]) || 0 };
+                hurt: ((state.siteHurt || {})[dk]) || 0 };
     // A HOUSE UNDER A CITY RESISTS WITH ITS OWN. If you are unwelcome among the
     // Deep Ones then this is their house and they are in it — the tenant is theirs,
     // not something that crawled in.
@@ -13841,15 +13846,15 @@ function enterInterior(tile) {
 
   // AND THE DECK'S DEAD, WHICH THIS DOOR DID NOT MERELY FORGET — IT ERASED.
   // `state.foot` had no `dead` field here at all, and the shared exit writes
-  // `deckDead[dk] = f.dead` only when `f.dead` is non-empty and DELETES the key
+  // `siteDead[dk] = f.dead` only when `f.dead` is non-empty and DELETES the key
   // otherwise. So walking back into a ruin where a hand had fallen destroyed
   // the record of them on the way in, and the body was gone from a game that
   // makes a point of letting you come back for it.
-  if (!state.deckDead) state.deckDead = {};
+  if (!state.siteDead) state.siteDead = {};
   state.foot = {
     household: household ? household.name : null,
-    kind: deckKind,          // a hull and a tower behave differently ashore
-    dead: (state.deckDead[dk] || []).slice(),
+    kind: siteKind,          // a hull and a tower behave differently ashore
+    dead: (state.siteDead[dk] || []).slice(),
     q: tile.q, r: tile.r, d: d,
     x: ch.entry.x, y: ch.entry.y,
     crates: 0, relics: 0, steps: 0, tick: 0,
@@ -13867,7 +13872,7 @@ function enterInterior(tile) {
     log(`${partyN === 1 ? 'One hand goes' : partyN + ' hands go'} over the side with you, lamps swinging. Tap a crewman to hold their ground, or let them follow.`, '', 'DIVE TEAM');
   }
   if (claimed) {
-    log('You cycle the lock and step into your own station. Dry deck, and the pumps muttering somewhere below.', '', 'STATION');
+    log(`You cycle the lock and step into your own station. Dry ${placeWord(siteKind)}, and the pumps muttering somewhere below.`, '', 'STATION');
     if (state.stores < 90) { state.stores = Math.min(100, state.stores + 40); log('The station\'s lockers put something back in the boat — a stay here is nearly as good as a run home.', '', 'STORES'); }
   } else {
     log('You go over the side with them. The lamp finds a breach in the structure — and past it, trapped air, and a floor nobody has walked in a very long time.', 'strange', 'ASHORE');
@@ -13890,7 +13895,7 @@ function enterGrotto(kind) {
   kind = kind || 'beach';
   const ch = interiorAt(state.q, state.r, d, kind);
   if (!ch || !ch.entry) return;
-  const own = isBaseDeck(state.q, state.r, d, kind);
+  const own = isBaseSite(state.q, state.r, d, kind);
   const mouths = beachMouths(state.q, state.r, d);
   footInto(state.q, state.r, d, kind, ch);
   if (own) {
@@ -13930,9 +13935,9 @@ function carryOver(f) {
 
 // Shared by the mouth and by every way on: put the party on a deck.
 function footInto(q, r, d, kind, ch, carried) {
-  const dk = deckKey(q, r, d) + deckSuffix(kind);
-  const took = ((state.deckTook || {})[dk] || []).slice();
-  const own = isBaseDeck(q, r, d, kind);
+  const dk = siteKey(q, r, d) + siteSuffix(kind);
+  const took = ((state.siteTook || {})[dk] || []).slice();
+  const own = isBaseSite(q, r, d, kind);
   let dweller = null;
   // Your own deck was stripped when you took it, and it does not restock
   // because the substrate still remembers where the piles were.
@@ -13947,11 +13952,11 @@ function footInto(q, r, d, kind, ch, carried) {
     const bd = state.base.boarder;
     dweller = { x: ch.entry.x, y: ch.entry.y, kind: bd.kind, tough: bd.tough,
                 hurt: bd.hurt || 0, boarder: true };
-  } else if (ch.dweller && !isDeckCleared(q, r, d, kind)) {
-    // WOUNDS KEEP. `state.deckHurt` is overlay, saved, per-deck — without it a
+  } else if (ch.dweller && !isSiteCleared(q, r, d, kind)) {
+    // WOUNDS KEEP. `state.siteHurt` is overlay, saved, per-deck — without it a
     // step through the way and back healed the thing completely, for free, and
     // the only limit on doing that was patience.
-    const hurt = ((state.deckHurt || {})[dk]) || 0;
+    const hurt = ((state.siteHurt || {})[dk]) || 0;
     dweller = { x: ch.dweller.x, y: ch.dweller.y, kind: ch.dweller.kind, tough: ch.dweller.tough, hurt: hurt };
     if (dweller.kind === 'hollow' && state.lostCrew && state.lostCrew.length && rand() < 0.4) {
       const lc = state.lostCrew[Math.floor(rand() * state.lostCrew.length)];
@@ -13961,8 +13966,8 @@ function footInto(q, r, d, kind, ch, carried) {
   // A DECK REMEMBERS ITS OWN DEAD. Bodies are per-deck (`f.dead`), and a
   // grotto is explicitly somewhere you come back to — so a hand who fell three
   // chambers in has to still be lying there when you return for them.
-  if (!state.deckDead) state.deckDead = {};
-  const dead = (state.deckDead[dk] || []).slice();
+  if (!state.siteDead) state.siteDead = {};
+  const dead = (state.siteDead[dk] || []).slice();
   state.foot = {
     kind: kind,
     q: q, r: r, d: d,
@@ -13997,7 +14002,7 @@ function followWay(named) {
   // block when it hands off to here, so the crossing was free — 73 of 73 at
   // 0.00 air against 2.10 for walking one ordinary tile.
   state.air = Math.max(0, state.air - FOOT_AIR * 2);
-  stashDeck(f);
+  stashSite(f);
   const carried = carryOver(f);
   footInto(f.q, f.r, f.d, onward, ch, carried);
   if (onward === 'deepruin') state.foot.drFrom = f.kind;   // the way back out
@@ -14022,7 +14027,7 @@ function followFar() {
     render(); return;
   }
   state.air = Math.max(0, state.air - FOOT_AIR * 4);   // a long way through
-  stashDeck(f);
+  stashSite(f);
   const ch = interiorAt(far.q, far.r, far.d, 'beach');
   if (!ch || !ch.entry) return;
   const carried = carryOver(f);
@@ -14050,7 +14055,7 @@ function returnThroughPassage() {
   const ch = interiorAt(b.q, b.r, b.d, b.kind);
   if (!ch || !ch.entry) return;
   state.air = Math.max(0, state.air - FOOT_AIR * 4);
-  stashDeck(f);
+  stashSite(f);
   const carried = carryOver(f);
   footInto(b.q, b.r, b.d, b.kind, ch, carried);
   log('You go back into the rock and walk it the other way. It is no shorter for knowing where it goes.', '', 'GROTTO');
@@ -14066,7 +14071,7 @@ function retreatWay() {
   const ch = interiorAt(f.q, f.r, f.d, back);
   if (!ch || !ch.entry) return false;
   state.air = Math.max(0, state.air - FOOT_AIR * 2);   // a link is a step
-  stashDeck(f);
+  stashSite(f);
   const carried = carryOver(f);
   footInto(f.q, f.r, f.d, back, ch, carried);
   // You come out where you WENT IN — the far end of that chamber, not its mouth.
@@ -14091,20 +14096,20 @@ function retreatWay() {
 
 // Everything this deck owns, written down before you step off it: what it has
 // given up, what it is still bleeding from, and who is lying on it.
-function stashDeck(f) {
+function stashSite(f) {
   if (!f) return;
-  if (!state.deckTook) state.deckTook = {};
-  if (!state.deckHurt) state.deckHurt = {};
-  if (!state.deckDead) state.deckDead = {};
-  const dk = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
-  const prev = state.deckTook[dk] || [];
+  if (!state.siteTook) state.siteTook = {};
+  if (!state.siteHurt) state.siteHurt = {};
+  if (!state.siteDead) state.siteDead = {};
+  const dk = siteKey(f.q, f.r, f.d) + siteSuffix(f.kind);
+  const prev = state.siteTook[dk] || [];
   const merged = prev.slice();
   for (const k of (f.took || [])) if (merged.indexOf(k) < 0) merged.push(k);
-  state.deckTook[dk] = merged;
-  if (f.dweller && !f.dweller.boarder) state.deckHurt[dk] = f.dweller.hurt || 0;
-  else if (!f.dweller) delete state.deckHurt[dk];
-  if (f.dead && f.dead.length) state.deckDead[dk] = f.dead.map(b => ({ name: b.name, x: b.x, y: b.y }));
-  else delete state.deckDead[dk];
+  state.siteTook[dk] = merged;
+  if (f.dweller && !f.dweller.boarder) state.siteHurt[dk] = f.dweller.hurt || 0;
+  else if (!f.dweller) delete state.siteHurt[dk];
+  if (f.dead && f.dead.length) state.siteDead[dk] = f.dead.map(b => ({ name: b.name, x: b.x, y: b.y }));
+  else delete state.siteDead[dk];
 }
 
 // One button, three jobs, decided by where you are standing and what you are
@@ -14113,7 +14118,7 @@ function claimOrStore() {
   const f = state.foot;
   const ch = footChunk();
   if (!f || !ch || !state.alive) return;
-  if (onOwnDeckNow()) {
+  if (onOwnSiteNow()) {
     return state.base.breached ? repumpStation() : storeAtBase();
   }
   if (state.base) {
@@ -14135,7 +14140,7 @@ function claimOrStore() {
   // Ask the LIVE tenant, not the generator — a deck you drove something off
   // still has a dweller in its substrate, and always will.
   if (f.dweller) {
-    log('Something still lives on this deck. You are not about to seal yourself in with it.', 'warn', 'STATION');
+    log(`Something still lives here. You are not about to seal yourself in with it.`, 'warn', 'STATION');
     return;
   }
   const fromHold = Math.min(state.cargo, CLAIM_COST);
@@ -14160,7 +14165,9 @@ function claimOrStore() {
   // watch and rock on every other side. There is nothing to pump — it is dry.
   log(inGrotto(f.kind)
     ? 'You run a line to the rock and warp her in against the sand. Lamps up the beach, the stores off her back, a watch on the mouth. Nothing needs pumping out. It was dry before you got here and it is yours now.'
-    : 'You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
+    : f.kind === 'hull'
+    ? 'You seal the breach behind you and set the pumps running. It takes hours. What is left when they stop is a dry deck, a working lock, and the first thing down here that is yours.'
+    : 'You seal the doorway behind you and set the pumps running. It takes hours. What is left when they stop is a dry stone floor, a working lock, and the first thing down here that is yours.', 'strange', 'STATION');
   sfx('bell');
   updateHUD();
   render();
@@ -14373,7 +14380,7 @@ function breachStation() {
   // If the captain is standing in it when it goes, both the water AND the thing
   // come down the passage at them, then and there.
   const f = state.foot;
-  if (f && onOwnDeckNow()) {
+  if (f && onOwnSiteNow()) {
     const ch = footChunk();
     if (ch) {
       f.water = [ch.entry.x + ',' + ch.entry.y];
@@ -14472,7 +14479,8 @@ function digAdjacent() {
   }
   if (!b.carved) b.carved = [];
   const target = digTargetNear();
-  if (!target) { log('Nothing but open deck within reach. Move up against a wall to cut into it.', 'warn', 'DIG'); return; }
+  // You cut into ROCK. There was never a deck involved in digging.
+  if (!target) { log('Nothing but open floor within reach. Move up against a wall to cut into it.', 'warn', 'DIG'); return; }
   if (b.stores.crates < DIG_COST) {
     log(`Cutting rock takes ${plural(DIG_COST, 'crate')} of tools and shoring, struck below. The station holds ${b.stores.crates}.`, 'warn', 'DIG');
     return;
@@ -14510,7 +14518,7 @@ function digAdjacent() {
 function fortifyBase() {
   const b = state.base;
   const f = state.foot;
-  if (!b || !f || !onOwnDeckNow()) return;
+  if (!b || !f || !onOwnSiteNow()) return;
   if (b.breached) { log('Pump the station out and reseat the lock before you bolt anything else to it.', 'warn', 'STATION'); return; }
   migrateBaseWorks(b);
   const face = weakFace();
@@ -14558,7 +14566,7 @@ function repumpStation() {
   state.cargo -= owed;
   b.breached = false;
   f.water = [];
-  log('You reseat the lock, dog it down, and set the pumps going again. The deck comes back out of the water an inch at a time.', '', 'STATION');
+  log(`You reseat the lock, dog it down, and set the pumps going again. The ${placeWord(f.kind)} comes back out of the water an inch at a time.`, '', 'STATION');
   sfx('bell');
   updateHUD(); render(); scheduleSave();
 }
@@ -14609,7 +14617,7 @@ function floodAdvance() {
   if (!f || !ch) return 0;
   const wet = new Set(f.water);
   const added = [];
-  const carved = onOwnDeck() ? baseCarved() : [];
+  const carved = onOwnSite() ? baseCarved() : [];
   const open = (kk) => ch.tiles.has(kk) || carved.includes(kk);   // the sea takes dug tunnels too
   for (const k of f.water) {
     const c = k.indexOf(',');
@@ -14690,22 +14698,22 @@ function dwellerStep() {
   }
 }
 
-// A turned lock is recorded against the DECK, not the visit. `deckTook` already
+// A turned lock is recorded against the DECK, not the visit. `siteTook` already
 // carries per-deck facts across surfacing and reloads, so a lock rides in it
 // under a key no tile coordinate can collide with.
 const LOCK_CHANCE = 0.22;   // decks with a door that get a locked one
 function lockKey(nk) { return 'lock:' + nk; }
 function lockOpened(f, nk) {
   if (!f) return false;
-  const dk = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
-  return ((state.deckTook || {})[dk] || []).indexOf(lockKey(nk)) >= 0;
+  const dk = siteKey(f.q, f.r, f.d) + siteSuffix(f.kind);
+  return ((state.siteTook || {})[dk] || []).indexOf(lockKey(nk)) >= 0;
 }
 function noteLockOpened(f, nk) {
   if (!f) return;
-  if (!state.deckTook) state.deckTook = {};
-  const dk = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
-  const prev = state.deckTook[dk] || [];
-  if (prev.indexOf(lockKey(nk)) < 0) state.deckTook[dk] = prev.concat([lockKey(nk)]);
+  if (!state.siteTook) state.siteTook = {};
+  const dk = siteKey(f.q, f.r, f.d) + siteSuffix(f.kind);
+  const prev = state.siteTook[dk] || [];
+  if (prev.indexOf(lockKey(nk)) < 0) state.siteTook[dk] = prev.concat([lockKey(nk)]);
 }
 
 function stepFoot(x, y) {
@@ -14728,7 +14736,7 @@ function stepFoot(x, y) {
   // A LOCKED DOOR, AND THE KEY IS SPENT TURNING IT. The whole point of a key
   // that opens something is that it stops being a key afterwards — otherwise it
   // is a permit, and the roster already had two of those pretending to be keys.
-  // A LOCK STAYS OPEN ONCE IT IS OPEN. Remembered in `deckTook` — the same
+  // A LOCK STAYS OPEN ONCE IT IS OPEN. Remembered in `siteTook` — the same
   // per-deck overlay that stops a looted room restocking — and NOT on the foot,
   // which dies when you surface. On the foot it would have re-locked itself
   // every visit and charged a second key for a door you had already opened.
@@ -14796,7 +14804,10 @@ function stepFoot(x, y) {
   // Two kinds of place, two things the same button means — and the tip has to
   // describe the one you are standing in, not the other one.
   if (!state.foot.dweller && !state.base)
-    tip(inGrotto(state.foot.kind) ? 'anchorhere' : 'claimdeck');
+    // THREE PLACES, THREE WORDS. This was two branches, and the second used a
+    // boat's vocabulary for a drowned stone hall as well as for a wreck.
+    tip(inGrotto(state.foot.kind) ? 'anchorhere'
+      : state.foot.kind === 'hull' ? 'claimdeck' : 'claimruin');
 
   // DROWNED WATER. A flooded passage is a wall to a body that breathes air —
   // and no wall at all to something that does not. Going under costs dearly and
@@ -14842,7 +14853,9 @@ function stepFoot(x, y) {
       ? (inGrotto(f.kind)
           // There is no deck above a grotto. 150 of 507 caves carry a fall.
           ? 'Water comes down off the rock above in a cold, steady roar. You wade under it.'
-          : 'Water comes down through the broken deck above in a cold, steady roar. You wade under it.')
+          : f.kind === 'hull'
+          ? 'Water comes down through the broken deck above in a cold, steady roar. You wade under it.'
+          : 'Water comes down through the broken vault above in a cold, steady roar. You wade under it.')
       : 'You wade through running water, ankle-deep and colder than the air.', '', 'WATER');
   }
   lampSweep();
@@ -15098,12 +15111,12 @@ function applyTenantDamage(dmg, by) {
     log(pickLoose(spec.hurt), 'warn', 'BOARDING');
     if (t.boarder) {
       state.base.boarder = null;
-      log('It goes down in the flooded passage of your own station. The deck is yours again — now get the water out.', '', 'BOARDING');
+      log(`It goes down in the flooded passage of your own station. The ${placeWord(state.foot ? state.foot.kind : 'ruin')} is yours again — now get the water out.`, '', 'BOARDING');
     } else {
       log('The place is yours. Whatever else it holds, it no longer holds that.', '', 'BOARDING');
-      if (!state.clearedDecks) state.clearedDecks = [];
-      const k = deckKey(f.q, f.r, f.d) + deckSuffix(f.kind);
-      if (!state.clearedDecks.includes(k)) state.clearedDecks.push(k);
+      if (!state.clearedSites) state.clearedSites = [];
+      const k = siteKey(f.q, f.r, f.d) + siteSuffix(f.kind);
+      if (!state.clearedSites.includes(k)) state.clearedSites.push(k);
     }
     f.dweller = null; sfx('bell');
     return true;
@@ -15215,7 +15228,7 @@ function leaveInterior(prefix) {
   // has nothing left in it.
   // STASH THE WHOLE DECK, NOT JUST WHAT YOU TOOK OFF IT. This used to be an
   // inline merge of `f.took` and nothing else — so the ORDINARY exit, swimming
-  // up to the boat, was the one way out that did not call `stashDeck`. The four
+  // up to the boat, was the one way out that did not call `stashSite`. The four
   // lateral moves (followWay, followFar, returnThroughPassage, retreatWay) all
   // did. Two things died here every time:
   //
@@ -15227,10 +15240,10 @@ function leaveInterior(prefix) {
   //   you can go back for it, and the Deep Ones pay for the recovered. On a hull
   //   or a ruin that body was destroyed the moment you went up the ladder.
   //
-  // `stashDeck` writes all three overlays (took, hurt, dead) and does the same
+  // `stashSite` writes all three overlays (took, hurt, dead) and does the same
   // merge this did. One way out, one record.
-  const own = onOwnDeckNow();      // ASKED BEFORE THE FOOT IS NULLED — see below
-  stashDeck(f);
+  const own = onOwnSiteNow();      // ASKED BEFORE THE FOOT IS NULLED — see below
+  stashSite(f);
   recallParty();   // the hands that are still standing come up through the breach with you
   state.foot = null;
   state.cargo += f.crates;
@@ -15265,7 +15278,7 @@ function leaveInterior(prefix) {
   // being ordinary water.
   //
   // `own` IS COMPUTED ABOVE, BEFORE state.foot IS NULLED. It used to be asked
-  // here, and `onOwnDeckNow()` reads `state.foot` — which is null by this line,
+  // here, and `onOwnSiteNow()` reads `state.foot` — which is null by this line,
   // so it was ALWAYS false. Three things followed: the homecoming line below
   // could never print (you were told your own station was worked out), the
   // station hex was overwritten with 'passage' whose TILES entry has char '',
@@ -15343,13 +15356,13 @@ function renderInterior() {
     return el;
   };
 
-  const baseDeck = onOwnDeck();
-  const carvedHere = baseDeck ? baseCarved() : [];
+  const ownSite = onOwnSite();
+  const carvedHere = ownSite ? baseCarved() : [];
   const LR = effLampR();
   for (const k of f.seen) {
     const c = k.indexOf(',');
     const x = +k.slice(0, c), y = +k.slice(c + 1);
-    const t = ch.tiles.get(k) || ((baseDeck && carvedHere.includes(k)) ? { t: 'carved' } : null);
+    const t = ch.tiles.get(k) || ((ownSite && carvedHere.includes(k)) ? { t: 'carved' } : null);
     const lit = Math.hypot(x - f.x, y - f.y) <= LR;
     const dim = lit ? 1 : 0.4;                // memory is dimmer than lamplight
     // Walls sit just above the void so the shape of the room reads; lamplit
@@ -17724,7 +17737,7 @@ function describeSpace(mode) {
 
 // The deck, described. On foot the same rules apply, one rung down: lamplight
 // and memory, and the water is a character in the room.
-function describeDeck() {
+function describeSite() {
   const f = state.foot;
   const ch = footChunk();
   if (!f || !ch) return '';
@@ -17814,7 +17827,7 @@ function describeDeck() {
 
 function lookAround() {
   if (!state.alive) return;
-  if (state.foot) { log(describeDeck(), '', 'LOOK'); return; }
+  if (state.foot) { log(describeSite(), '', 'LOOK'); return; }
   // WHO IS TELLING YOU. With a mate aboard this is what you already got on arrival, so
   // say so plainly rather than repeat it as though it were news — and with nobody, this
   // is you going and looking, which is the point of the button.
@@ -18234,7 +18247,7 @@ function settledDepth(tile, p) {
 function poiStack(tile) {
   if (!tile) return [];
   const s = cellPois.get(hexKey(tile.q, tile.r));
-  // `d` IS THE IDENTITY and never moves — poisFound, clearedDecks and the
+  // `d` IS THE IDENTITY and never moves — poisFound, clearedSites and the
   // interior generator all key on it. `at` is where the thing rests, and it
   // is the only depth anything physical should read.
   if (s && s.length) return s.map(p => (p.at === undefined || p._for !== cellsEpoch)
@@ -18343,7 +18356,7 @@ function handleTile(tile) {
 
   // Your own station opens to you every time, at the depth you cut it — no
   // first-visit gate, because you are meant to keep coming back.
-  if (!state.foot && isBaseDeck(tile.q, tile.r, state.currentDepth)) {
+  if (!state.foot && isBaseSite(tile.q, tile.r, state.currentDepth)) {
     // A grotto has no lock and was never wet, so the ruin's homecoming lines
     // are a lie there.
     log(inGrotto(resolveBaseKind()) ? pickLoose(GROTTO_ARRIVE) : pickLoose(STATION_ARRIVE), '', 'STATION');
@@ -18450,7 +18463,7 @@ function handleTile(tile) {
                 && (tile.poi === 'salvage' || tile.poi === 'ruin' || tile.poi === 'hull' || tile.poi === 'air');
   // A WORKED RUIN IS STILL A PLACE. Re-entry used to be barred with the
   // announcement, because loot lived only for the length of a visit and an
-  // open door meant a restocking room. `deckTook` remembers, so the door can
+  // open door meant a restocking room. `siteTook` remembers, so the door can
   // stand open: you may go back into somewhere you have stripped, which is
   // what a station, or a cave that leads on from it, is going to need.
   if (!unworked && (tile.poi === 'ruin' || tile.poi === 'hull') && atReachableBottom(tile)
@@ -19127,7 +19140,7 @@ function restart() {
   state.expedition = null;
   state.foot = null;
   state.base = null;   // a new ocean is a new seed; the old station is not in it
-  state.clearedDecks = []; state.deckTook = {}; state.deckHurt = {}; state.deckDead = {}; state.beachDrawn = {};
+  state.clearedSites = []; state.siteTook = {}; state.siteHurt = {}; state.siteDead = {}; state.beachDrawn = {};
   state.standing = {}; state.hailed = [];   // a new ocean has never heard of you
   state.stores = 100;
   state.lostCrew = [];
@@ -19347,7 +19360,7 @@ const SAVE_KEY = 'fathom-save-v1';
 // CEILING, not a set: `loadSave` accepts anything at or below it so an older
 // campaign still opens, and refuses anything above it WITHOUT deleting it, so
 // a player who touches a newer build and rolls back keeps their sea.
-// 3: decks are keyed by KIND as well as coordinates (`deckSuffix`), and a
+// 3: decks are keyed by KIND as well as coordinates (`siteSuffix`), and a
 //    station records which kind of place it is. Both landed without moving this
 //    number, which is why `migrateSave` below exists and why it has to guess.
 //    Move this the moment a key schema changes, not the session after.
@@ -19382,16 +19395,16 @@ function doSave(force) {
       expedition: state.expedition,
       foot: state.foot,
       base: state.base,
-      clearedDecks: state.clearedDecks,
-      deckTook: state.deckTook,      // what each deck has already given up
+      clearedSites: state.clearedSites,
+      siteTook: state.siteTook,      // what each deck has already given up
       survey: state.survey || 0,     // how far toward the next thing the sheets show
       mission: state.mission || null, // an arrangement outstanding with a city
       commission: state.commission || null,  // ...and a letter of marque, if any
       aiMate: !!state.aiMate,        // ...and whether there is brass on the chart table
       warTerm: state._warTerm == null ? null : state._warTerm,
       allies: state.allies || [],     // ...and the ones already in writing
-      deckHurt: state.deckHurt,      // ...what its tenant is still bleeding from
-      deckDead: state.deckDead,      // ...and who is lying on it
+      siteHurt: state.siteHurt,      // ...what its tenant is still bleeding from
+      siteDead: state.siteDead,      // ...and who is lying on it
       beachDrawn: state.beachDrawn,  // ...and when each pocket was last drawn
       standing: state.standing,      // what the peoples think of you
       stores: state.stores,
@@ -19455,7 +19468,7 @@ function clearSave() {
 // resources back exactly where they were.
 // WHAT AN OLDER SAVE MEANT BY A KEY.
 //
-// Deck records were keyed on bare coordinates until `deckSuffix` landed, and
+// Deck records were keyed on bare coordinates until `siteSuffix` landed, and
 // the interior CACHE had already carried ':h' for a hull before that — so a
 // hull's stripped loot and driven-off tenant were written under a key nothing
 // reads any more. Measured on real bytes: 0 of 2 recorded takes survived a
@@ -19482,11 +19495,11 @@ function migrateSave(save) {
       return isHull ? k + ':h' : null;
     };
     let moved = 0;
-    for (const k of Object.keys(state.deckTook)) {
+    for (const k of Object.keys(state.siteTook)) {
       const nk = rekey(k);
-      if (nk && !state.deckTook[nk]) { state.deckTook[nk] = state.deckTook[k]; delete state.deckTook[k]; moved++; }
+      if (nk && !state.siteTook[nk]) { state.siteTook[nk] = state.siteTook[k]; delete state.siteTook[k]; moved++; }
     }
-    const cleared = state.clearedDecks || [];
+    const cleared = state.clearedSites || [];
     for (let i = 0; i < cleared.length; i++) {
       const nk = rekey(cleared[i]);
       if (nk && cleared.indexOf(nk) < 0) { cleared[i] = nk; moved++; }
@@ -19576,16 +19589,22 @@ function resumeGame(save) {
     if (!b.stores) b.stores = { crates: 0, relics: 0, items: {} };
     if (!b.stores.items) b.stores.items = {};
   }
-  state.clearedDecks = save.clearedDecks || [];
-  state.deckTook = obj(save.deckTook);
+  // FOUR RENAMED SAVE KEYS, AND EVERY CAMPAIGN IN PROGRESS STILL HAS THE OLD
+  // ONES. "Deck" is a boat word — Sean, twice — and these four records are kept
+  // for caverns and drowned halls as much as for wrecks, so they are `site*`
+  // now. A save written before this rename must not lose what it has already
+  // cleared, stripped, wounded or buried, so the old spellings are still read.
+  // Written only under the new names, so this fades on its own.
+  state.clearedSites = save.clearedSites || save.clearedDecks || [];
+  state.siteTook = obj(save.siteTook || save.deckTook);
   state.survey = +save.survey || 0;
   state.mission = save.mission || null;
   state.commission = save.commission || null;
   state.aiMate = !!save.aiMate;
   state._warTerm = save.warTerm == null ? null : +save.warTerm;
   state.allies = arr(save.allies);
-  state.deckHurt = obj(save.deckHurt);
-  state.deckDead = obj(save.deckDead);
+  state.siteHurt = obj(save.siteHurt || save.deckHurt);
+  state.siteDead = obj(save.siteDead || save.deckDead);
   state.beachDrawn = obj(save.beachDrawn);
   state.standing = obj(save.standing);
   // A NEW SESSION MAY HAIL THE SAME SURFACE HULL AGAIN — and that reasoning is

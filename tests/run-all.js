@@ -8,18 +8,18 @@
 //                   blocking, 60-tick stone-violation sweep, save v2/v1
 //   cargo.test    — dive-to-the-prize collection, port banking, the yard
 //   ping.test     — soundColumn: sonar is not X-ray
-//   interior.test — the resolution ladder: deck determinism, hull integrity,
+//   interior.test — the resolution ladder: interior determinism, hull integrity,
 //                   FULL reachability from the entry, loot taken once, reload
 //                   mid-dive, and the helm locked out while ashore
 //   station.test  — a station is a PLACE and a place has a KIND: the round trip
-//                   out and back lands on the deck you claimed, one anchor
-//                   claims one deck, and the boat has to be able to reach it
+//                   out and back lands on the place you claimed, one anchor
+//                   claims one place, and the boat has to be able to reach it
 const { spawnSync } = require('child_process');
 const path = require('path');
 //   links.test    — a link between grotto chambers is a STEP: it costs air, it
 //                   does not heal the tenant, the hands come with you, and the
-//                   deck keeps its own dead
-//   migrate.test  — an older save is still somebody's campaign: deck records
+//                   chamber keeps its own dead
+//   migrate.test  — an older save is still somebody's campaign: interior records
 //                   rekeyed by kind, and a station that predates knowing what
 //                   kind of place it is
 //   crew.test     — the roster: no trade is named for a sex and none of them
@@ -37,10 +37,12 @@ const path = require('path');
 //                   once. Checks the same event is one line with or without a
 //                   mate, and that every call site is a decision (sail, hull
 //                   strike, air) rather than ambient prose
-//   orders.test   — the tutorial thread: seven lines in order, the next only
-//                   when the last is actually DONE, never repeated, never stale
-//                   for a captain who wandered off and did it early, and the
-//                   switch in Options silences the lot
+//   orders.test   — the tutorial: ten dismissible cards, each fired the first
+//                   time a captain is somewhere that asks a new question of
+//                   them. Situation-triggered rather than sequenced, so doing
+//                   things out of order never loses you the rest. Checks every
+//                   card is REACHABLE, that none repeats, and that the switch
+//                   in Options silences the lot
 //   locks.test    — the first lock in the game: hatchkey and bonekey were
 //                   `kind: 'key'` and nothing in the world had a keyhole. Checks
 //                   they open something, that opening SPENDS them, and that a
@@ -58,9 +60,9 @@ const path = require('path');
 //                   that the functions run. This is the early game now; if it
 //                   breaks there is nothing to do in the first hour.
 //   delve         — THE ON-FOOT LAYER, WHICH NOTHING ELSE HERE WALKS. The sea
-//                   bot in playtest.js reaches a deck in 3% of its runs, so
+//                   bot in playtest.js reaches an interior in 3% of its runs, so
 //                   tenants, wounds, nerve and bodies were covered by three runs
-//                   in a hundred. This walks 60 decks directly and asserts, every
+//                   in a hundred. This walks 60 interiors directly and asserts, every
 //                   step, that nothing impossible happened — including that
 //                   `inflictCondition` and `frayNerve` never re-enter themselves,
 //                   which is the one check that reliably catches the recursion

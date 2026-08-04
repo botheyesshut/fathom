@@ -1,7 +1,7 @@
-// THE ON-FOOT LAYER, ACTUALLY EXERCISED.  `node tests/delve.js [decks] [steps]`
+// THE ON-FOOT LAYER, ACTUALLY EXERCISED.  `node tests/delve.js [sites] [steps]`
 //
 // WHY THIS EXISTS, MEASURED RATHER THAN ASSUMED. The sea-going bot in
-// tests/playtest.js reaches a deck in 3% of its runs — one in thirty — and it is
+// tests/playtest.js reaches an interior in 3% of its runs — one in thirty — and it is
 // not for want of trying: every persona carries `enterRuin` between 0.6 and 1.0.
 // It simply never finds one in the time it has. So the entire on-foot layer —
 // tenants, wounds, nerve, conditions, bodies, the flood, the way out — is
@@ -12,7 +12,7 @@
 // both: not one invariant fired, `crew lost` read 0 on each, and the two builds
 // were indistinguishable. The bug lived in code the bot does not walk.
 //
-// This instrument walks it. It does not sail — it finds decks, steps onto them,
+// This instrument walks it. It does not sail — it finds interiors, steps into them,
 // wanders, fights what is home, takes what is there, and leaves; thousands of
 // times; asserting the whole way that nothing impossible has happened. It is
 // not a model of how anyone plays. It is a way of being in the room.
@@ -20,7 +20,7 @@
 const fs = require('fs');
 const vm = require('vm');
 
-const DECKS = parseInt(process.argv[2] || '60', 10);
+const SITES = parseInt(process.argv[2] || '60', 10);
 const STEPS = parseInt(process.argv[3] || '120', 10);
 
 function mk() {
@@ -239,7 +239,7 @@ for (const seed of seeds) {
   sb.__seed(seed);
   for (let q = -20; q <= 20; q++) {
     for (let r = -20; r <= 20; r++) {
-      if (entered >= DECKS) break outer;
+      if (entered >= SITES) break outer;
       const t = sb.__tile(q, r);
       if (!t) continue;
       let stack = [];
@@ -264,7 +264,7 @@ for (const seed of seeds) {
       if (!f) continue;
       entered++;
       if (f.dweller) tenantsMet++;
-      assertSane(s, 'seed ' + seed + ' deck ' + q + ',' + r + ' on entry');
+      assertSane(s, 'seed ' + seed + ' site ' + q + ',' + r + ' on entry');
 
       const ch = sb.__chunk();
       const tiles = ch ? [...ch.tiles.keys()] : [];
@@ -317,7 +317,7 @@ for (const seed of seeds) {
             bad('stepFoot threw', String(e && e.message).slice(0, 70), 'seed ' + seed);
           }
         }
-        assertSane(s, 'seed ' + seed + ' deck ' + q + ',' + r + ' step ' + step);
+        assertSane(s, 'seed ' + seed + ' site ' + q + ',' + r + ' step ' + step);
       }
 
       const ff = s.foot;
@@ -327,20 +327,20 @@ for (const seed of seeds) {
       wounds += (s.crew || []).reduce((n, m) => n + ((m.conditions || []).length), 0);
 
       try { sb.__leave(); } catch (e) {}
-      assertSane(s, 'seed ' + seed + ' deck ' + q + ',' + r + ' after leaving');
+      assertSane(s, 'seed ' + seed + ' site ' + q + ',' + r + ' after leaving');
     }
   }
 }
 
 //--- WHAT IT SAW -------------------------------------------------------------
-console.log('THE ON-FOOT LAYER — ' + entered + ' decks walked, ' + stepsTaken + ' steps, ' + fights + ' rounds fought');
-console.log('  decks with somebody home   ' + tenantsMet + '/' + entered);
+console.log('THE ON-FOOT LAYER — ' + entered + ' interiors walked, ' + stepsTaken + ' steps, ' + fights + ' rounds fought');
+console.log('  with somebody home        ' + tenantsMet + '/' + entered);
 console.log('  wounds carried at the end  ' + wounds);
 console.log('  nerve spent                ' + nerveLost);
-console.log('  bodies left on decks       ' + bodiesSeen);
+console.log('  bodies left behind         ' + bodiesSeen);
 console.log('  assertions made            ' + checks);
 if (entered === 0) {
-  console.log('\n  NO DECK WAS ENTERED AT ALL. That is a finding, not a quiet pass —');
+  console.log('\n  NOTHING WAS ENTERED AT ALL. That is a finding, not a quiet pass —');
   console.log('  this instrument proved nothing about anything. Do not read the zero');
   console.log('  below as good news.');
 }

@@ -1,6 +1,6 @@
 // A STATION IS A PLACE, AND A PLACE HAS A KIND.
 //
-// `state.base` recorded {q,r,d} and nothing else. `isBaseDeck` therefore matched
+// `state.base` recorded {q,r,d} and nothing else. `isBaseSite` therefore matched
 // EVERY kind of deck at those coordinates, and the on-foot layer had by then
 // grown four of them. The failure was total and silent: you claimed a grotto,
 // sailed one hex out, sailed back, and arrived in a PHANTOM RUIN standing where
@@ -74,9 +74,9 @@ vm.runInContext(script +
   '\nfunction __claim(){ claimOrStore(); }' +
   '\nfunction __handle(t){ handleTile(t); }' +
   '\nfunction __int(q,r,d,k){ return interiorAt(q,r,d,k); }' +
-  '\nfunction __isBase(q,r,d,k){ return isBaseDeck(q,r,d,k); }' +
+  '\nfunction __isBase(q,r,d,k){ return isBaseSite(q,r,d,k); }' +
   '\nfunction __secure(q,r,d,k){ return stationSecure(q,r,d,k); }' +
-  '\nfunction __suffix(k){ return deckSuffix(k); }',
+  '\nfunction __suffix(k){ return siteSuffix(k); }',
   sandbox, { timeout: 20000 });
 
 let bad = 0;
