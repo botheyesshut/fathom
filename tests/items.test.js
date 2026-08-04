@@ -1029,16 +1029,31 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   //
   // Sean has since looked at it on the phone and ruled the other way: "The
   // porthole ... I think the captions should just go away. They're too small to
-  // be legible." He is right — 0.62rem inside a tile 24 characters wide. So the
-  // caption is deliberately not drawn, and `cap` is DOCUMENTATION now: it is
-  // what each drawing is meant to be, it is how the checks above can tell a
-  // cave scene from a hull scene, and it must stay short and accurate for that
-  // reason alone. What must NOT come back is a caption rendered too small to
-  // read, so that is what this asserts.
+  // be legible." He was right about 0.62 rem inside a tile 24 characters wide.
+  //
+  // THEN HE REVERSED IT, and the reversal is the interesting part: "let's keep
+  // authoring porthole captions, but they only appear when user clicks or taps
+  // on the porthole. we can make a window large enough to read the caption fade
+  // in for a moment, then fade out." The objection was never the words — it was
+  // printing them permanently at a size nobody could read.
+  //
+  // So the rule this guards has flipped. The caption must EXIST, must be big
+  // enough to read, and must not be drawn until asked for.
   const src = html;
-  const capRendered = /vp-cap/.test(src);
-  check(!capRendered, 'the caption is not drawn — it was illegible on a phone and was cut',
-    capRendered ? 'IT IS BACK: #vp-cap is in the source again' : 'no #vp-cap anywhere');
+  const capEl = /id="vp-cap"/.test(src);
+  check(capEl, 'the caption has a window of its own', capEl ? '#vp-cap is in the markup' : 'NO #vp-cap');
+  const capHidden = /#vp-cap\s*\{[^}]*opacity:\s*0/.test(src);
+  check(capHidden, 'and it is invisible until something asks for it',
+    capHidden ? 'starts at opacity 0' : 'IT IS DRAWN BY DEFAULT — that is the thing that was cut');
+  const capShown = /vpShowCaption/.test(src) && /addEventListener\('click', \(e\) => \{ e\.stopPropagation\(\); vpShowCaption\(\); \}\)/.test(src);
+  check(capShown, 'and a tap on the picture is what asks',
+    capShown ? 'the art is wired to vpShowCaption' : 'NOTHING CALLS IT — the captions would be unreachable again');
+  // The size objection, in numbers. The old caption was 0.62 rem; anything in
+  // that neighbourhood is the same mistake with a different trigger.
+  const m = src.match(/#vp-cap\s*\{[\s\S]*?font-size:\s*([0-9.]+)rem/);
+  const rem = m ? parseFloat(m[1]) : 0;
+  check(rem >= 0.85, 'and it is large enough to actually read',
+    rem ? rem + ' rem (the caption that was cut was 0.62)' : 'NO FONT SIZE FOUND');
   check(Object.keys(sandbox.__scenes()).every(k => typeof sandbox.__scenes()[k].cap === 'string'),
     '...but every scene still carries one, because the suite reads them to tell the drawings apart',
     Object.keys(sandbox.__scenes()).length + ' scenes described');

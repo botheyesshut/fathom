@@ -518,21 +518,46 @@
        caption can wrap, so its min-content is only its longest word. */
     width: min-content;
     max-width: 45vw;
-    /* The porthole floats over the top-left of the chart and was eating every
-       tap that landed under it — 10.4% of the drawn hexes, including legal
-       moves. `pointer-events: none` gives the chart back every one of them.
-       This first shipped as `none` on the box with `auto` on the art, to keep
-       a tap-to-hide gesture on the picture; the rule below then took that away
-       too, and this comment went on describing it. There is no gesture. The
-       switch is in Options, which is where Sean asked for it. */
+    /* The BOX stays click-through — its padding and backdrop are chart, not
+       control. Only the picture itself takes a tap, which is the smallest hit
+       area that still matches "tap the porthole". */
     pointer-events: none;
   }
-  /* THE WHOLE THING IS CLICK-THROUGH, art included. Giving the picture back its
-     own taps still left it eating 4.9% of the chart's legal move targets — and
-     the gesture it was keeping (tap the porthole to hide it) is the same switch
-     that already sits in Options, where Sean asked for it. A decoration does
-     not get to take moves off the board to save a settings trip. */
+  /* IT TAKES TAPS AGAIN, AND THIS TIME IT EARNS THEM. Click-through was right
+     while the only gesture on offer was hide-me, which Options already does —
+     a decoration does not get to take moves off the board to save a settings
+     trip. Naming the view is a different bargain: Sean asked for the captions
+     back on tap, so the picture is a control again. Measured cost is reported
+     in the commit; the box is the art's size and sits in the top-left corner,
+     so what it covers is distant course-setting rather than the six hexes
+     around the boat. */
   #viewport.hidden { display: none; }
+  #vp-art { pointer-events: auto; cursor: pointer; }
+  /* THE CAPTION WINDOW. Absolutely positioned against the porthole so it costs
+     the chart no layout at all, sized for reading rather than for the 24-column
+     picture above it, and it fades rather than appearing — a thing that blinks
+     into existence over a map reads as an error. */
+  #vp-cap {
+    position: absolute;
+    left: 0; top: calc(100% + 4px);
+    /* `white-space: nowrap`, and NOT `width: max-content`. The porthole is sized
+       `width: min-content` so the picture sets it, and that intrinsic constraint
+       propagates into an absolutely-positioned child: max-content resolved to
+       21 px and the caption rendered one character per line, vertically. Nowrap
+       sizes to the sentence and the max-width still catches a long one. */
+    white-space: nowrap; width: auto; max-width: 66vw; overflow: hidden; text-overflow: ellipsis;
+    padding: 0.45rem 0.6rem;
+    background: rgba(4, 8, 16, 0.9);
+    border: 1px solid var(--sonar-dim);
+    border-radius: 2px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 0.95rem; line-height: 1.35; letter-spacing: 0.01em;
+    color: var(--bone);
+    opacity: 0; transform: translateY(-3px);
+    transition: opacity 260ms ease, transform 260ms ease;
+    pointer-events: none;
+  }
+  #vp-cap.show { opacity: 1; transform: translateY(0); }
   #vp-art {
     margin: 0;
     font-family: 'Courier New', Consolas, monospace;
@@ -1377,6 +1402,14 @@
        you." So it floats over the map and costs the game no layout at all. -->
   <div id="viewport">
     <pre id="vp-art" aria-hidden="true"></pre>
+    <!-- THE CAPTION, ON DEMAND. Sean: "keep authoring porthole captions, but
+         they only appear when user clicks or taps on the porthole. we can make
+         a window large enough to read the caption fade in for a moment, then
+         fade out." It is a sibling of the art rather than a child, so the
+         picture never reflows to make room for the words — the reason the
+         permanent caption was cut in the first place was that it took layout
+         the chart wanted. -->
+    <div id="vp-cap" aria-live="polite"></div>
     <!-- No handler, on purpose. Tapping the tile used to dismiss it, and that
          cost the chart 4.9% of its legal move targets to save a settings trip
          nobody could have guessed was there. The switch lives in Options. -->
@@ -2041,6 +2074,9 @@ const CULTURES = {
     buys: { sigs: ['confluence'], keys: ['ingot', 'hatchkey', 'seachart', 'logbook', 'warhead', 'ambergris'],
             kinds: ['chart'], mult: 2.1 },
     sells: ['patchkit', 'weldkit', 'oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still', 'pressurehull', 'hydrophone', 'inertiallog'],
+    // Grown, distilled or milled in air, and carried down. Without a Liner town
+    // in reach these shelves are bare — see `surfaceSupplied`.
+    fromSurface: ['oxygen', 'freshwater', 'rations', 'dressing', 'antivenom', 'still'],
     markup: 1.8, danger: false,
   },
   // THE MARINERS. Sean's fourth people, and the one that makes the trade triad
@@ -2082,6 +2118,9 @@ const CULTURES = {
             // bought anywhere can be sold on to them for a gain.
             floor: 0.9 },
     sells: ['rations', 'freshwater', 'patchkit', 'flare', 'oxygen'],
+    // The carrying trade carries. Almost everything on their shelf came down in
+    // one of their own hulls, which is the whole of what they are.
+    fromSurface: ['rations', 'freshwater', 'oxygen', 'flare'],
     markup: 2.0, danger: false,
   },
   // THE CON-FED. Sean: "based on modern US libertarian ideals, hence they are
@@ -2103,6 +2142,9 @@ const CULTURES = {
     buys: { sigs: ['libertines'], keys: ['ingot', 'scrimshaw', 'idol', 'blackpearl', 'effigy', 'specimenjar'],
             kinds: ['valuable', 'fit'], relics: true, mult: 1.8 },
     sells: ['torpedo', 'warhead', 'sonararray', 'bafflegear', 'trimtanks', 'flare', 'lumen'],
+    // Ordnance is made in yards, and yards are in air. The listening gear they
+    // build down here; the things that explode come from home.
+    fromSurface: ['torpedo', 'warhead', 'flare'],
     markup: 2.2, danger: false,
   },
 };
@@ -5289,6 +5331,35 @@ function vpInitSnow() {
 
 // One frame. Rows are emitted as merged colour runs so a redraw is ~100 spans,
 // not 432 — which is what keeps this cheap enough to run on a phone.
+// NAMING THE VIEW. Every one of the 48 scenes carries a `cap` — "The Weight",
+// "The Cold Floor", "Squared by Hands" — and for a while nothing read them: the
+// permanent caption came out because at 0.5 rem under a 24-column picture it
+// was, in Sean's words, too small to be legible. The words were always fine. The
+// place they were printed was not.
+//
+// So they are on demand now. Tap the picture, the name fades up under it big
+// enough to read, holds, and fades out on its own. Nothing is gated behind
+// this — it is the game telling you what it just drew you.
+let vpCapTimer = 0, vpCapFade = 0;
+function vpShowCaption() {
+  const el = document.getElementById('vp-cap');
+  if (!el || !vpOn) return;
+  const S = VP_SCENES[vpScene];
+  const words = S && S.cap ? S.cap : null;
+  if (!words) return;
+  el.textContent = words;
+  el.classList.add('show');
+  // Re-tapping restarts the dwell rather than stacking timers — otherwise a
+  // second tap fades it out while the first tap's timer is still counting.
+  clearTimeout(vpCapTimer); clearTimeout(vpCapFade);
+  vpCapTimer = setTimeout(() => {
+    el.classList.remove('show');
+    // Left in the DOM until the fade finishes, then emptied, so a screen reader
+    // does not announce a caption nobody can see.
+    vpCapFade = setTimeout(() => { el.textContent = ''; }, 320);
+  }, 2400);
+}
+
 function vpDraw() {
   const el = document.getElementById('vp-art');
   if (!el || !vpOn) return;
@@ -6841,6 +6912,30 @@ function syncDockBtn() {
 
 function relicCrates(cultureKey) { return Math.round(4 * (CULTURES[cultureKey].buys.mult || 1)); }
 
+// A TOWN IN REACH, OR THE SHELF IS BARE.
+//
+// Sean: "all the human factions will need to travel to and from their
+// faction-aligned towns at the surface in order to receive political news and
+// surface-originating goods." So a human enclave's air-made stock is not a
+// property of the people — it is a property of whether their own flag flies on
+// a harbour close enough to run to. No town, no oxygen, no rations, no
+// ordnance; what they make down here they still have.
+//
+// Reach is generous — this is a trade route, not a day trip — and it is
+// measured against the harbours the world has actually generated, which is the
+// same horizon the ships that would sail it are drawn within.
+const SUPPLY_REACH = 40;
+function surfaceSupplied(culture, q, r) {
+  // The Deep Ones are exempt by their nature: nothing they sell was made in air,
+  // and they have no towns up there to be cut off from.
+  if (culture === 'dagon') return true;
+  for (const [, p] of ports) {
+    if (p.holder !== culture) continue;
+    if (hexDistance({ q: p.q, r: p.r }, { q: q, r: r }) <= SUPPLY_REACH) return true;
+  }
+  return false;
+}
+
 function renderTrade(e) {
   const cu = CULTURES[e.culture];
   document.getElementById('trade-name').textContent = e.port ? e.port : cu.name;
@@ -6848,7 +6943,12 @@ function renderTrade(e) {
   document.getElementById('trade-crates').textContent = state.cargo + ' crates aboard' + (state.relics ? ` · ${state.relics} relics` : '');
   const buyEl = document.getElementById('trade-buy'), sellEl = document.getElementById('trade-sell');
 
-  const buyRows = cu.sells.map(k => {
+  // A port IS the town, so its own shelves are never cut off from themselves.
+  // Only an enclave down in the water has to have things brought to it.
+  const supplied = e.port ? true : surfaceSupplied(e.culture, e.q, e.r);
+  const shelf = supplied ? cu.sells
+    : cu.sells.filter(k => (cu.fromSurface || []).indexOf(k) < 0);
+  const buyRows = shelf.map(k => {
     const it = ITEMS[k], p = buyPriceFrom(e.culture, k), can = state.cargo >= p;
     // M2: an unaffordable row used to render a dead button showing only the
     // price, so tapping it did nothing and said nothing — the top complaint in
@@ -6861,7 +6961,13 @@ function renderTrade(e) {
       (can ? `<button class="act" data-buy="${k}">${p} cr</button>`
            : `<button class="act none">${short} more<br>in the hold</button>`) + `</div>`;
   }).join('');
-  buyEl.innerHTML = buyRows || '<div id="inv-empty">They have nothing to sell just now.</div>';
+  buyEl.innerHTML = (buyRows ||
+      '<div id="inv-empty">They have nothing to sell just now.</div>')
+    + (supplied ? ''
+      : '<div id="inv-empty">Nothing here came down from the air. No ' +
+        CULTURES[e.culture].short + ' harbour lies within reach of this place, ' +
+        'and what a town sends — food, water, breathing gas, ordnance, and the ' +
+        'news of who is at war with whom — is not sent this far.</div>');
 
   const owned = Object.keys(state.items || {}).filter(k => state.items[k] > 0 && buyMult(e.culture, k) > 0);
   let sellRows = owned.map(k => {
@@ -9677,8 +9783,21 @@ function generateChunk(cq, cr) {
           // which is the thing this economy has never had.
           const pick = crand();
           const humanOdds = depth >= 3000 ? 0 : depth >= 1800 ? 0.25 : depth >= 900 ? 0.6 : 0.9;
+          // AND WHICH HUMANS. `depthBand` has been declared on all four peoples
+          // since the very first cultures commit and read by NOTHING — the
+          // original hard depth-to-culture lookup was replaced by the pressure
+          // model above and the field was left behind, with a live global
+          // function of the same name to make grepping it look wired.
+          //
+          // Sean, asked what it was for: "I have no problem with factions having
+          // a preference for or origination from a certain depth." So it is a
+          // WEIGHT, not a switch — the overlap the comment above prizes is the
+          // whole point, and a Liner can still turn up deep. The Long Line hold
+          // the shelf, the Con-Fed the middle water, and the Mariners are the
+          // carrying trade and are therefore everywhere.
+          const band = depth >= 1800 ? 'deep' : depth >= 900 ? 'mid' : 'shelf';
           const culture = pick > humanOdds ? 'dagon'
-            : SURFACE_PEOPLES[Math.floor(crand() * SURFACE_PEOPLES.length)];
+            : weightedPeople(band, crand());
           spawnEnclave(culture, h.q, h.r, depth);
         }
       }
@@ -10192,6 +10311,25 @@ function shipsTick() {
 // it is somewhere you go, down a trench, on purpose.
 const CITY_DEPTH = 3600;
 const CITY_CHANCE = 0.35;      // of deep Dagon enclaves. Rare: a few in a world.
+
+// The three surface peoples, weighted by the water they favour. A people whose
+// `depthBand` matches gets three times the pull; 'any' is at home anywhere and
+// takes a middling share everywhere. Reads `CULTURES[..].depthBand`, which is
+// the entire reason that field exists.
+function weightedPeople(band, roll) {
+  const w = SURFACE_PEOPLES.map(k => {
+    const b = CULTURES[k] && CULTURES[k].depthBand;
+    if (b === 'any') return 2;
+    return b === band ? 3 : 1;
+  });
+  const total = w.reduce((a, x) => a + x, 0);
+  let t = roll * total;
+  for (let i = 0; i < SURFACE_PEOPLES.length; i++) {
+    t -= w[i];
+    if (t <= 0) return SURFACE_PEOPLES[i];
+  }
+  return SURFACE_PEOPLES[SURFACE_PEOPLES.length - 1];
+}
 
 function spawnEnclave(culture, q, r, depth) {
   if (!state.enclaves) state.enclaves = [];
@@ -19905,6 +20043,13 @@ document.getElementById('brief').addEventListener('click', (e) => {
   if (e.target && e.target.id === 'brief') closeBrief();   // the backdrop, not the card
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && briefOpen) closeBrief(); });
+
+// The picture names itself when you ask it to. Bound here with the rest, after
+// the panel-history wrapper has finished replacing globals.
+(function () {
+  const art = document.getElementById('vp-art');
+  if (art) art.addEventListener('click', (e) => { e.stopPropagation(); vpShowCaption(); });
+})();
 
 document.getElementById('btn-hold').addEventListener('click', () => openInventory());
 document.getElementById('btn-chart').addEventListener('click', () => openSeaChart());
