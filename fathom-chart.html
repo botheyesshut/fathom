@@ -1481,6 +1481,7 @@
     <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
     <button class="btn primary" id="btn-sail" title="Close on the sail you have sighted to read her colours, then hail her for news. Holding your course lets her go - unless somebody out here is already hunting you" style="display:none">Close</button>
     <button class="btn" id="btn-attack" title="Open fire on her. Her people will not forget it, and a submarine in a surface gun action is in the wrong place - but a merchant's hold has to come from somewhere" style="display:none">Attack</button>
+    <button class="btn" id="btn-hunt" style="display:none" title="Put hands in the water, lay them where it will run, then drive it. Sunlit water only. It flees the boat and any hand it has noticed, and never sees the rest.">Hunt</button>
     <button class="btn" id="btn-more" title="The rest of the boat — the muster, the bestiary and the settings. Tap again to put them away.">MORE</button>
   </div>
   <!-- THE REST OF THE BOAT. Sean: "The buttons... either need to be nested in
@@ -1500,7 +1501,16 @@
 // Phase 1 prototype: feel of frontier exploration on a phone screen.
 //=============================================================================
 
-const HEX_SIZE = 16; // smaller so we see a wider expanse of the labyrinth
+// THE HEX IS 16 PX AT SEA AND 10 PX DURING A DRIVE, and it is a `let` for that
+// one reason. Measured in the browser at 375x812, which is the phone this game
+// is actually played on: with a 16 px hex, ring 4 of the hunt arena is FOUR of
+// its twenty-four hexes on screen and ring 5 — the line the quarry escapes
+// across — is ZERO of thirty. The entire decision surface of the puzzle sat off
+// the edge of the display. Shrinking the arena instead is not available: a
+// marlin bolts three hexes, so the arena has to clear its starting ring by more
+// than that or nothing fast is catchable, and that is measured too (tests/quarry.js).
+let HEX_SIZE = 16;
+const HEX_SIZE_SEA = 16, HEX_SIZE_HUNT = 8;
 const SQRT3 = Math.sqrt(3);
 
 // Hex math (pointy-top, axial coordinates q,r)
@@ -6346,6 +6356,18 @@ const BRIEFS = [
       worth more than somewhere rich on a crossroads.</p>
       <p>It is the only address you will ever have.</p>` },
 
+  { id: 'hunt', title: 'Hands in the water',
+    when: () => !!state.hunt,
+    body: `<p>The lines are over the side and there is something out there worth eating.
+      Nobody is chasing it — a hand swims one hex and a marlin swims three, so a chase
+      is arithmetic you lose.</p>
+      <p><b>It cannot see your hands</b> — only the boat. <b>Tap the sea</b> to put them
+      over the side and walk them a hex at a time. It holds still while you do, until one
+      comes right alongside it.</p>
+      <p>Then <b>DRIVE IT</b>. It bolts away from the boat and from any hand it has
+      noticed. If that run takes it past a net, you have it. Bigger fish are faster fish.
+      Tap her own hull to call them in.</p>` },
+
   { id: 'teeth', title: 'The harpoon gun',
     when: () => !!state.armament && !state.foot && (state.creatures || []).some(c =>
       !c.gone && c.awake && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
@@ -6681,6 +6703,311 @@ function dockHere() {
   if (state.stores < 100) { state.stores = Math.min(100, state.stores + 35); log('Stores off the quay — bread, water, oil.', '', 'STORES'); }
   sfx('bell');
   openTrade({ id: k, culture: port.holder, q: port.q, r: port.r, depth: 0, port: nm });
+  updateHUD(); render(); scheduleSave();
+}
+
+
+//=============================================================================
+// THE HUNT — a drive, and the only way to eat without buying it
+//=============================================================================
+//
+// Sean asked for a hunt in the Sunlit Zone and then threw out my first two
+// designs, correctly. Push-your-luck: "A game where I just need to hedge bets
+// to win is not really a game to me." An arcade version: he had misgivings
+// himself, and the game has 65 click handlers and ZERO frame-timed input —
+// it would have been the first real-time thing in a turn-based text game.
+//
+// So it is an AMBUSH, and it is deterministic end to end.
+//
+// The first build had hands CHASE — and a headless driver measured it before a
+// human ever saw it: every species escaped, every time, including a mackerel
+// that never moves at all. Two faults, both fatal and neither tunable. Hands
+// swim one hex a turn and a marlin swims three, so pursuit is arithmetic that
+// cannot be won; and "caught" demanded all six neighbours blocked, which three
+// hands and a hull cannot do. No amount of number-fiddling saves either.
+//
+// So the hands stop chasing. THE FISH DOES NOT SEE THEM — they are quiet, in
+// the water, with nets. What it sees is the boat, and it only runs when you
+// MAKE it run. That inverts the whole thing into a problem worth thinking about:
+//   - walk your hands out while it sits there, and it holds still for you;
+//   - come inside two hexes and it notices THAT hand, and starts routing round
+//     it, so a net laid carelessly pushes the fish away from your other nets;
+//   - when you are ready, DRIVE IT. It bolts `move` hexes, away from every
+//     threat it knows about, and if the bolt takes it alongside a hand, that
+//     hand has it.
+// You are not catching the fish. You are choosing where it will decide to go.
+//
+// Nothing rolls a die anywhere in here, which was his condition.
+//
+// SPEED IS IN RATIO TO VALUE — his rule, and the best idea in the feature. A
+// marlin moves 3 and is worth 70; a school of mackerel moves 0 and is worth 14.
+// Difficulty needs no knob of its own because the reward IS the knob: the thing
+// that feeds the boat for a week is the thing that can outrun your hands.
+//
+// The risk is a RULE, not a roll: a shark, cornered, turns on the nearest hand.
+// Driving one is a decision to accept that for meat.
+const HUNT_ARENA = 5;     // hexes from the boat; beyond this it is open sea and gone
+const HUNT_HANDS = 3;     // most hands the water will take at once
+const HUNT_NOTICE = 2;    // a hand this close is a thing it has seen and will avoid
+const HUNT_TURNS = 16;    // hand-moves before the cold brings them up empty
+const HUNT_REST = 400;    // moves before a ground you have fished holds fish again
+
+function huntable() {
+  return state.alive && gameStarted && !state.foot && !state.hunt
+    && state.currentDepth <= SUNLIT
+    && groundRested(state.q, state.r)
+    && (state.crew || []).some(m => !m.lost && !m.wounded);
+}
+
+// WHAT IS IN THIS WATER. Deterministic in the hex and the world, so the same
+// patch of sea holds the same fish until you take it — a captain can learn a
+// ground. Richer quarry is rarer, which is the other half of his ratio.
+// A GROUND YOU HAVE FISHED IS A GROUND YOU HAVE FISHED. Without this the water
+// is a pure function of the hex, so one lucky tile feeds the boat forever and
+// the whole provisions economy is a vending machine — which is precisely the
+// shape of exploit `tests/greed.test.js` exists to refuse. It recovers, because
+// the sea does; HUNT_REST moves is long enough that fishing means MOVING.
+function groundRested(q, r) {
+  const taken = (state.fished || {})[q + ',' + r];
+  return taken == null || (state.moves || 0) - taken >= HUNT_REST;
+}
+
+function quarryHere(q, r) {
+  if (!groundRested(q, r)) return null;
+  const keys = Object.keys(QUARRY);
+  const h = hashStr(worldSeed + ':quarry:' + q + ':' + r);
+  const roll = (h % 10000) / 10000;
+  // Weighted toward the small stuff; a marlin is a day you remember.
+  const table = [
+    ['mackerel', 0.26], ['herring', 0.22], ['cod', 0.18],
+    ['tuna', 0.13], ['shark', 0.10], ['swordfish', 0.07], ['marlin', 0.04],
+  ];
+  let t = 0;
+  for (const [k, w] of table) { t += w; if (roll < t) return k; }
+  return keys[0];
+}
+
+// tileAt AND NOT getTile, EVERYWHERE IN HERE. getTile is a raw read of the
+// generated cache; the arena reaches five hexes off the hull, which crosses
+// chunk borders the boat has never visited. With getTile every one of those
+// hexes read as undefined and therefore as ROCK — the drive refused to start in
+// open sea, hands could not be placed, and the quarry would have fled from walls
+// that are not there. Found by the briefing suite, which could not reach the
+// hunt card from anywhere in twelve rings of ocean.
+function huntStart() {
+  if (!huntable()) {
+    if (state.foot) log('Not from ashore.', 'warn', 'HUNT');
+    else if (!groundRested(state.q, state.r)) log('This water has been worked already. Whatever was here has gone or been taken. Try new ground.', 'warn', 'HUNT');
+    else if (state.currentDepth > SUNLIT) log(`Nothing to take this deep. The sunlit water is ${SUNLIT} m and above — go up to fish.`, 'warn', 'HUNT');
+    else log('Nobody aboard is fit to go over the side.', 'warn', 'HUNT');
+    return;
+  }
+  const key = quarryHere(state.q, state.r);
+  if (!key) {
+    log('This water has been worked already. Whatever was here has gone or been taken — try new ground.', 'warn', 'HUNT');
+    return;
+  }
+  const Q = QUARRY[key];
+  // It starts at the edge of the arena, on a bearing decided by the water, not
+  // by chance-at-the-moment: the same ground fishes the same way.
+  const ring = [];
+  for (const n of hexNeighbors(state.q, state.r)) {
+    for (const n2 of hexNeighbors(n.q, n.r)) {
+      if (hexDistance(n2, { q: state.q, r: state.r }) !== 2) continue;
+      const t = tileAt(n2.q, n2.r);
+      if (!t || t.wall || t.land) continue;
+      if (!ring.some(x => x.q === n2.q && x.r === n2.r)) ring.push(n2);
+    }
+  }
+  if (!ring.length) { log('No open water alongside to work in.', 'warn', 'HUNT'); return; }
+  const at = ring[hashStr(worldSeed + ':qpos:' + state.q + ':' + state.r) % ring.length];
+  const hands = (state.crew || []).filter(m => !m.lost && !m.wounded).slice(0, HUNT_HANDS);
+  state.hunt = {
+    key: key, q: at.q, r: at.r, sighted: false, turns: 0,
+    hands: hands.map((m, i) => ({ name: m.name, q: null, r: null, idx: i })),
+    from: state.q + ',' + state.r,
+  };
+  log(`Lines and a net over the side. ${hands.length === 1 ? 'One hand goes' : hands.length + ' hands go'} into the water — ${hands.map(m => m.name).join(', ')}.`, '', 'HUNT');
+  const ear = (state.crew || []).find(m => m.role === 'ear' && !m.lost && !m.wounded);
+  const tell = Q.tell + ', ' + bearing(state.q, state.r, at.q, at.r) + ' of her';
+  log(ear ? ear.name + ': “' + ucfirst(tell) + '.”' : ucfirst(tell) + '.', '', 'HUNT');
+  log('Tap the water to put hands over the side and walk them out. It will not run until you make it. Lay a net where it will go, then DRIVE IT. Tap her own hull to call them in.', 'tip', 'HUNT');
+  updateHUD(); render(); scheduleSave();
+}
+
+// A hand goes where you point, one hex at a time. The nearest hand answers, so
+// a tap is an order to the boat and not to a particular person.
+function huntTap(q, r) {
+  const H = state.hunt;
+  if (!H) return false;
+  const boat = { q: state.q, r: state.r };
+  if (hexDistance({ q: q, r: r }, boat) > HUNT_ARENA) {
+    log('Too far off the hull. A hand in the water stays where a line can reach.', 'warn', 'HUNT');
+    return true;
+  }
+  const t = tileAt(q, r);
+  if (!t || t.wall || t.land) { log('Rock. Nothing to swim through there.', 'warn', 'HUNT'); return true; }
+  // TAPPING HER OWN HULL CALLS THEM IN. A second button for a rare act is
+  // clutter, and Sean asked for a minimum of it.
+  if (q === state.q && r === state.r) { huntRecall(); return true; }
+  // The unplaced go in first, then the nearest one steps toward the tap.
+  let hand = H.hands.find(h => h.q == null);
+  if (hand) { hand.q = q; hand.r = r; }
+  else {
+    let best = null, bd = 99;
+    for (const h of H.hands) {
+      const d = hexDistance({ q: h.q, r: h.r }, { q: q, r: r });
+      if (d < bd) { bd = d; best = h; }
+    }
+    if (!best) return true;
+    if (bd === 0) { log('Already there.', 'warn', 'HUNT'); return true; }
+    // One hex, toward the tap, and never onto another hand or the hull.
+    let step = null, sd = 99;
+    for (const n of hexNeighbors(best.q, best.r)) {
+      if (hexDistance(n, boat) > HUNT_ARENA) continue;
+      if (n.q === state.q && n.r === state.r) continue;
+      const nt = tileAt(n.q, n.r);
+      if (!nt || nt.wall || nt.land) continue;
+      if (H.hands.some(h => h !== best && h.q === n.q && h.r === n.r)) continue;
+      const d = hexDistance(n, { q: q, r: r });
+      if (d < sd) { sd = d; step = n; }
+    }
+    if (!step) { log('No way through for that hand.', 'warn', 'HUNT'); return true; }
+    best.q = step.q; best.r = step.r;
+  }
+  // The cold does what a turn limit does, and says so in the right language.
+  if (++H.turns >= HUNT_TURNS) {
+    log('They have been over the side too long. The hands come up shaking, with nothing.', 'warn', 'HUNT');
+    state.hunt = null; updateHUD(); render(); scheduleSave(); return true;
+  }
+  // Come inside its notice and you have made the decision for it.
+  const spotted = H.hands.some(h => h.q != null
+    && hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r }) <= 1);
+  if (spotted) huntBolt(true);
+  else { huntReport(); updateHUD(); render(); scheduleSave(); }
+  return true;
+}
+
+// THE DRIVE ITSELF. Everything before this is placement; this is the commitment.
+function huntSpook() {
+  const H = state.hunt;
+  if (!H) return;
+  if (!H.hands.some(h => h.q != null)) {
+    log('Nobody is in the water yet. Tap the sea to put a hand over the side.', 'warn', 'HUNT');
+    return;
+  }
+  log('You beat the hull once, hard, and the water carries it.', '', 'HUNT');
+  huntBolt(false);
+}
+
+// THE BOLT, AND IT IS ENTIRELY PREDICTABLE ON PURPOSE. It runs from every threat
+// it knows about - the boat always, and any hand that came inside HUNT_NOTICE -
+// taking `move` hexes in one go. Ties keep the heading it already had, so a
+// captain who watches one bolt can predict every bolt after it, which is the
+// whole point. If the run puts it alongside a hand, that hand has it.
+function huntBolt(startled) {
+  const H = state.hunt;
+  if (!H) return;
+  const Q = QUARRY[H.key];
+  const boat = { q: state.q, r: state.r };
+  const handAt = (n) => H.hands.some(h => h.q === n.q && h.r === n.r);
+  const alongside = () => H.hands.some(h => h.q != null
+    && hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r }) === 1);
+  // What it is running FROM. It cannot fear a hand it has not noticed, which is
+  // the entire reason an ambush works and a chase does not.
+  const threats = () => {
+    const list = [boat];
+    for (const h of H.hands) {
+      if (h.q == null) continue;
+      if (hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r }) <= HUNT_NOTICE) list.push({ q: h.q, r: h.r });
+    }
+    return list;
+  };
+  const clear = (at, ts) => { let d = 99; for (const t of ts) d = Math.min(d, hexDistance(at, t)); return d; };
+
+  H.bolts = (H.bolts || 0) + 1;
+  const steps = Q.move || 0;
+  // A school does not bolt. It mills, and a hand that reaches it simply nets it.
+  if (!steps) {
+    if (alongside()) { huntCaught(); return; }
+    huntReport(); updateHUD(); render(); scheduleSave(); return;
+  }
+  if (startled) log(ucfirst(Q.name) + ' has seen the hand nearest it.', 'warn', 'HUNT');
+  for (let step = 0; step < steps; step++) {
+    const here = { q: H.q, r: H.r };
+    const ts = threats();
+    const opts = [];
+    for (const n of hexNeighbors(H.q, H.r)) {
+      if (n.q === state.q && n.r === state.r) continue;   // the hull is a wall
+      if (handAt(n)) continue;                            // it will not swim into a net
+      const t = tileAt(n.q, n.r);
+      if (!t || t.wall || t.land) continue;               // and rock is rock
+      opts.push(n);
+    }
+    if (!opts.length) { huntCaught(); return; }           // driven into a corner
+    let best = null, bs = -99;
+    for (const n of opts) {
+      const sc = clear(n, ts) * 10 + hexDistance(n, boat)
+        + (H.lastDir && n.q - here.q === H.lastDir.dq && n.r - here.r === H.lastDir.dr ? 0.5 : 0);
+      if (sc > bs) { bs = sc; best = n; }
+    }
+    H.lastDir = { dq: best.q - H.q, dr: best.r - H.r };
+    H.q = best.q; H.r = best.r;
+    if (alongside()) { huntCaught(); return; }            // it ran into the net
+    if (hexDistance({ q: H.q, r: H.r }, boat) > HUNT_ARENA) { huntEscaped(); return; }
+  }
+  log('It settles again, ' + bearing(state.q, state.r, H.q, H.r) + ' of her. Whatever you do next, it has your measure now.', '', 'HUNT');
+  huntReport();
+  updateHUD(); render(); scheduleSave();
+}
+
+function huntReport() {
+  const H = state.hunt;
+  const Q = QUARRY[H.key];
+  const d = hexDistance({ q: H.q, r: H.r }, { q: state.q, r: state.r });
+  if (d >= HUNT_ARENA) log(`${ucfirst(Q.name)} is running for open water — ${bearing(state.q, state.r, H.q, H.r)}, and one more like that and it is gone.`, 'warn', 'HUNT');
+  else if (H.turns % 3 === 0) log(`${ucfirst(Q.name)}, ${bearing(state.q, state.r, H.q, H.r)} of her, ${d} hex${d === 1 ? '' : 'es'} out. ${HUNT_TURNS - H.turns} moves before the cold.`, '', 'HUNT');
+}
+
+function huntCaught() {
+  const H = state.hunt, Q = QUARRY[H.key];
+  // THE SHARK'S RULE. Cornered, it goes through the nearest hand rather than
+  // into the net. Not a roll — the price of driving one, known in advance.
+  if (Q.bites) {
+    let victim = null, bd = 99;
+    for (const h of H.hands) {
+      if (h.q == null) continue;
+      const d = hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r });
+      if (d < bd) { bd = d; victim = h; }
+    }
+    const m = victim && (state.crew || []).find(c => c.name === victim.name && !c.lost);
+    if (m) {
+      inflictCondition(m, 0.55);
+      frayNerve(m, 10);
+      log(`It will not be driven. It comes through the ring at ${m.name} and takes them on the way past.`, 'danger', 'HUNT');
+    }
+  }
+  const got = Q.stores;
+  state.stores = Math.min(100, (state.stores == null ? 100 : state.stores) + got);
+  if (!state.fished) state.fished = {};
+  state.fished[H.from] = state.moves || 0;
+  log(`The net comes up taut. ${ucfirst(Q.name)} comes aboard — the lockers are ${Math.round(state.stores)}% full.`, 'good', 'HUNT');
+  sfx('relic');
+  state.hunt = null;
+  updateHUD(); render(); scheduleSave();
+}
+
+function huntEscaped() {
+  const Q = QUARRY[state.hunt.key];
+  log(`${ucfirst(Q.name)} finds the gap and is into open water in three beats. The hands come back up with nothing.`, 'warn', 'HUNT');
+  state.hunt = null;
+  updateHUD(); render(); scheduleSave();
+}
+
+function huntRecall() {
+  if (!state.hunt) return;
+  log('You call them in. Whatever was down there is still down there.', '', 'HUNT');
+  state.hunt = null;
   updateHUD(); render(); scheduleSave();
 }
 
@@ -9741,10 +10068,12 @@ function tileAt(q, r) {
 // ruling is against. At 0.0015 it is 113 -> 135, about +19%, filling water that
 // held literally nothing without touching what the deep is for.
 //
-// STILL OPEN, and honestly so: a shelf wreck currently pays what any hull pays.
-// It should pay LESS — this is the picked-over water, sunk in sight of shore
-// and salvaged by everyone who came before. That is a yield change, not a
-// placement one, and it is not done.
+// AND THEY PAY LESS, which was the open item here for a week. This is the
+// picked-over water: sunk in sight of shore, in daylight, and salvaged by
+// everyone who came before you. A `picked` flag rides on the POI and thins the
+// loot inside — see `interiorAt`. That is what turns +19% placement into a
+// REDISTRIBUTION rather than a raise, which is the whole doctrine: more places
+// worth going, not more money for going nowhere.
 const SHELF_WRECK_MAX = 900;     // below this the shelf is just dark water again
 const SHELF_WRECK_RATE = 0.0015; // at the surface; falls off with depth
 function maybeShelfWreck(q, r, seafloor) {
@@ -9758,7 +10087,7 @@ function maybeShelfWreck(q, r, seafloor) {
   let stack = cellPois.get(hk);
   if (!stack) { stack = []; cellPois.set(hk, stack); }
   if (stack.some(pp => pp.d === d)) return;          // something already rests there
-  stack.push({ d: d, type: 'hull' });
+  stack.push({ d: d, type: 'hull', picked: true });
   stack.sort((a, b) => a.d - b.d);
   setTile(q, r, stack[0].type, true);
 }
@@ -10845,6 +11174,10 @@ const state = {
   // captain try it, rather than by withholding the option.
   //
   // The knob: null here puts the old unarmed start back.
+  // The drive, while it is happening. Null the rest of the time — a hunt is a
+  // situation the boat is in, not a place it goes.
+  hunt: null,
+  fished: {},       // "q,r" -> the move you took a fish out of it
   armament: STARTING_ARMAMENT,   // null | 'harpoon' (reusable, adjacent)
   torpedoes: 0,                  // consumable, ranged, heavy
 
@@ -10917,6 +11250,11 @@ function syncFootControls(inside) {
   }
   // The rest have their own rules — armament, a threat, a harbour, a sail. Being
   // afloat is a precondition for those rules, never a reason on its own.
+  const huntBtn = document.getElementById('btn-hunt');
+  if (huntBtn && !inside) {
+    huntBtn.style.display = (state.hunt || huntable()) ? '' : 'none';
+    huntBtn.textContent = state.hunt ? 'Drive it' : 'Hunt';
+  }
   for (const id of ['btn-fire', 'btn-launch', 'btn-dock', 'btn-sail', 'btn-attack']) {
     const el = document.getElementById(id);
     if (el && inside) el.style.display = 'none';
@@ -11068,6 +11406,14 @@ function render() {
     if (n !== svgDefs) svg.removeChild(n);
   }
 
+  // One place decides the scale, so no ending has to remember to put it back.
+  const wantHex = state.hunt ? HEX_SIZE_HUNT : HEX_SIZE_SEA;
+  if (wantHex !== HEX_SIZE) {
+    HEX_SIZE = wantHex;
+    const snap = hexToPixel(state.q, state.r);      // pixel space just changed under us
+    state.cameraX = snap.x; state.cameraY = snap.y;
+    state.panX = 0; state.panY = 0;
+  }
   // Camera target follows player smoothly. User-applied pan is layered on top.
   const playerPx = hexToPixel(state.q, state.r);
   state.cameraX += (playerPx.x - state.cameraX) * 0.3;
@@ -11919,12 +12265,48 @@ function render() {
     // So a hex with something ON it answers first. Anywhere else still starts a
     // voyage, which is what tap-to-travel is for.
     far.addEventListener('click', () => {
+      if (state.hunt && huntTap(tl.q, tl.r)) return;   // a hunt owns the water
       const poiHere = tl.poi && !((tl.poi === 'air' || tl.poi === 'salvage')
         && state.poisFound.includes(k));
       if (poiHere) { identifyPoi(tl); return; }
       travelTo(tl.q, tl.r);
     });
     g.appendChild(far);
+  }
+
+  // THE DRIVE, DRAWN. A puzzle you cannot see is not a puzzle — the hands and
+  // (once sighted) the quarry go on the chart as glyphs, because working out
+  // where to close the ring IS the game and it has to be legible at a glance.
+  if (state.hunt) {
+    const H = state.hunt, Q = QUARRY[H.key];
+    for (const h of H.hands) {
+      if (h.q == null) continue;
+      const hp = hexToPixel(h.q, h.r);
+      const mk = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      mk.setAttribute('x', hp.x); mk.setAttribute('y', hp.y + 4);
+      mk.setAttribute('text-anchor', 'middle');
+      mk.setAttribute('font-size', Math.max(10, HEX_SIZE * 0.7));
+      mk.setAttribute('fill', '#7fce9a');
+      mk.textContent = '⚭';
+      g.appendChild(mk);
+    }
+    // The quarry shows once anything of yours is close enough to see it — the
+    // same epistemic rule as everything else: you know what you could know.
+    // ALWAYS DRAWN, and that is a deliberate exception to the epistemic rule.
+    // The ear calls its bearing the moment the lines go over, and a positioning
+    // puzzle you cannot see the board of is not a puzzle, it is a guess.
+    {
+      H.sighted = true;
+      H.sighted = true;
+      const qp = hexToPixel(H.q, H.r);
+      const qm = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      qm.setAttribute('x', qp.x); qm.setAttribute('y', qp.y + 4);
+      qm.setAttribute('text-anchor', 'middle');
+      qm.setAttribute('font-size', Math.max(11, HEX_SIZE * 0.8));
+      qm.setAttribute('fill', Q.bites ? '#e0604a' : '#f4b860');
+      qm.textContent = Q.glyph;
+      g.appendChild(qm);
+    }
   }
 
   // Tap-to-move hit areas on adjacent passable tiles
@@ -11941,7 +12323,14 @@ function render() {
       hit.setAttribute('fill', 'rgba(0,0,0,0.001)'); // invisible but tappable
       hit.setAttribute('stroke', 'none');
       hit.style.cursor = 'not-allowed';
-      hit.addEventListener('click', () => move(n.q, n.r));
+      // A HUNT OWNS THE WATER AROUND THE HULL. The ring you are closing is
+      // mostly adjacent hexes, so these taps have to reach the drive — without
+      // it the only reachable part of the arena was the far ring, and a tap
+      // meant to work a hand across sailed the boat instead.
+      hit.addEventListener('click', () => {
+        if (state.hunt && huntTap(n.q, n.r)) return;
+        move(n.q, n.r);
+      });
       g.appendChild(hit);
       continue;
     }
@@ -11961,7 +12350,14 @@ function render() {
       hit.setAttribute('stroke-width', '0.8');
       hit.setAttribute('stroke-dasharray', '2 2');
       hit.style.cursor = 'pointer';
-      hit.addEventListener('click', () => move(n.q, n.r));
+      // A HUNT OWNS THE WATER AROUND THE HULL. The ring you are closing is
+      // mostly adjacent hexes, so these taps have to reach the drive — without
+      // it the only reachable part of the arena was the far ring, and a tap
+      // meant to work a hand across sailed the boat instead.
+      hit.addEventListener('click', () => {
+        if (state.hunt && huntTap(n.q, n.r)) return;
+        move(n.q, n.r);
+      });
       g.appendChild(hit);
     } else {
       // Depth-locked: invisible but tappable. Collision behavior in move().
@@ -11970,7 +12366,14 @@ function render() {
       hit.setAttribute('fill', 'rgba(0,0,0,0.001)');
       hit.setAttribute('stroke', 'none');
       hit.style.cursor = 'not-allowed';
-      hit.addEventListener('click', () => move(n.q, n.r));
+      // A HUNT OWNS THE WATER AROUND THE HULL. The ring you are closing is
+      // mostly adjacent hexes, so these taps have to reach the drive — without
+      // it the only reachable part of the arena was the far ring, and a tap
+      // meant to work a hand across sailed the boat instead.
+      hit.addEventListener('click', () => {
+        if (state.hunt && huntTap(n.q, n.r)) return;
+        move(n.q, n.r);
+      });
       g.appendChild(hit);
     }
   }
@@ -13623,6 +14026,13 @@ function interiorAt(q, r, d, kind) {
 
   const rnd = mulberry32(hashStr('interior:' + key + interiorSalt));
   const mouthType = mouthTypeAt(q, r, d, kind);
+  // PICKED OVER. A hull that `maybeShelfWreck` put in the sunlit shelf carries a
+  // flag saying so, and it holds markedly less: shallow, visible, and worked by
+  // a century of people with better boats than yours. Read off the POI rather
+  // than recomputed from the hash, so there is exactly one place that decides
+  // which wrecks these are.
+  const picked = kind === 'hull'
+    && (cellPois.get(hexKey(q, r)) || []).some(pp => pp.d === d && pp.picked);
   const tiles = new Map();
   let caveSize = null;
   // The outer ring stays solid — a deck needs a hull. The entry is punched
@@ -13956,6 +14366,8 @@ function interiorAt(q, r, d, kind) {
         // loot like air". A pocket at the end of a blind passage holding a
         // crate of salvage makes no sense — nobody carried it there. A flask,
         // a case of rations, a patch kit: things a body left behind.
+        // Nearly half of it is gone before you got there.
+        if (picked && rnd() < 0.45) continue;
         if (caveSize === 'tiny') {
           if (rnd() < 0.34) continue;           // and a third of them hold nothing
           t.loot = ['airflask', 'rations', 'patchkit', 'dressing'][Math.floor(rnd() * 4)];
@@ -19563,6 +19975,7 @@ function endGame(title, summary) {
   state.threats = [];   // nor anything the old boat had in the water
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
+  state.hunt = null; state.fished = {};
   state.armament = STARTING_ARMAMENT; state.torpedoes = 0;
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.decoys = 3;
@@ -19645,6 +20058,7 @@ function restart() {
   state.moves = 0; state.poisFound = [];
   state.cargo = 0; state.cargoBanked = 0;
   state.relics = 0; state.relicsBanked = 0;
+  state.hunt = null; state.fished = {};
   state.armament = STARTING_ARMAMENT; state.torpedoes = 0;
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.decoys = 3;
@@ -20553,6 +20967,7 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 // the hatch, and air fills itself now. What only `surface()` does — putting the hold
 // ashore, the surgeon, re-provisioning — happens when the boat actually reaches the top,
 // which is where it always should have happened.
+document.getElementById('btn-hunt').addEventListener('click', () => { if (state.hunt) huntSpook(); else huntStart(); });
 document.getElementById('btn-dock').addEventListener('click', dockHere);
 // One control, two seas: a sail on the surface, a lamp under it.
 document.getElementById('btn-sail').addEventListener('click', () => {

@@ -1,5 +1,152 @@
 # FATHOM — START HERE (last updated 2026-08-05)
 
+## THE HUNT — built 2026-08-05, and it took three designs to find one that works
+
+Sean asked for "a '20,000 Leagues Under the Sea'-style minigame in which captains
+can go to the Sunlit Zone (160 m or higher) and go hunting... more crew is better
+but leaves the sub less protected", and then threw out two designs, correctly:
+
+- **push-your-luck dice** — *"I'd much prefer something that could be considered
+  both intellectually challenging in some mild way and also not luck based. A game
+  where I just need to hedge bets to win is not really a game to me."*
+- **an arcade variant** — he had misgivings about the style break himself, and the
+  game has 65 click handlers and zero frame-timed input. It would have been the
+  first real-time thing in a turn-based text game.
+
+His rule is the best idea in the feature and it is what the whole thing hangs on:
+**speed in ratio to value.** *"there's more meat on a marlin than on a netted
+school of mackerel."* So difficulty needs no knob — the reward IS the knob.
+
+| | move | stores | |
+|---|---|---|---|
+| a school of mackerel | 0 | 14 | the tutorial catch |
+| a run of herring | 0 | 18 | |
+| a cod | 1 | 26 | |
+| a bluefin | 2 | 44 | |
+| a swordfish | 2 | 52 | |
+| a shark | 2 | 58 | **cornered, it goes through the nearest hand** |
+| a marlin | 3 | 70 | the fastest thing in this water |
+
+No dolphins, no turtles, at his instruction: *"people won't like that."*
+
+### The first build was unwinnable, and no suite in the battery would have said so
+
+Hands chased. Every function was defined, every function was called, the syntax
+was clean, `run-all` was green — and a headless driver measured this before a
+human ever touched it:
+
+```
+  mackerel   move 0  ->  unresolved after 24 turns
+  cod        move 1  ->  escaped
+  tuna       move 2  ->  escaped
+  swordfish  move 2  ->  escaped
+  marlin     move 3  ->  escaped
+  shark      move 2  ->  escaped
+```
+
+Two faults, both fatal and **neither tunable**:
+
+1. A hand swims one hex and a marlin swims three. Pursuit is arithmetic you lose.
+2. "Caught" demanded all six neighbours blocked — three hands and a hull can block
+   four. *Nothing* could ever be caught, including a mackerel that never moves.
+
+**Reachability is not playability.** This is the same family as the 3% on-foot
+coverage hole: content wired at both ends, believed to work, never measured.
+
+### What it is now: an ambush
+
+The hands stop chasing. **The fish cannot see them** — they are quiet, in the
+water, with nets. What it sees is the boat, and it only runs when you make it.
+
+- walk hands out and it holds still for you;
+- come inside two hexes and it notices *that* hand and starts routing round it, so
+  a net laid carelessly pushes the fish away from your other nets;
+- when ready, **DRIVE IT**. It bolts `move` hexes away from the boat and from
+  every hand it has noticed. If the run takes it alongside a net, that net has it.
+
+You are not catching the fish. You are choosing where it will decide to go. Not
+one die is rolled anywhere in it, which was his condition.
+
+`tests/quarry.js` plays it with a competent-not-optimal captain over 12 grounds a
+species — placements tested against the real `huntSpook()` by snapshot-and-restore,
+so nothing in the instrument re-implements a rule it is checking:
+
+```
+  mackerel  12/12    cod   12/12    tuna  9/12    marlin 8/12
+  herring   12/12                   sword 9/12    shark  9/12
+  overall  85% caught, 15% escaped, 0% lost to the cold
+```
+
+Read that as a floor. The ladder is monotonic in speed, which is the whole rule
+made real, and nothing sits at 0/12 (a tease) or 12/12 above move 0 (free food).
+
+**The arena cannot shrink.** Margin must exceed the fastest bolt or nothing fast
+is catchable: arena 5, start ring 2, marlin 3. Measured — arena 4 puts the marlin
+at 0/12.
+
+### Three things measurement caught after that
+
+- **A fished ground never emptied.** `quarryHere` is a pure function of the hex, so
+  one lucky tile fed the boat forever — a vending machine, the exact shape of
+  exploit `greed.test` exists to refuse. Now a ground rests `HUNT_REST` = 400 moves.
+  *(And the first patch for it cleared the ledger at all six `state.hunt = null`
+  sites, including every hunt ending — which would have wiped the record after
+  every catch. Only the two campaign restarts should clear it.)*
+- **`getTile` where it needed `tileAt`.** `getTile` is a raw cache read; the arena
+  reaches five hexes off the hull, across chunk borders the boat has never visited.
+  Every one of those hexes read as undefined and therefore as ROCK — the drive
+  refused to start in open sea and the quarry fled from walls that are not there.
+  Found by `orders.test`, which could not reach the hunt briefing from anywhere in
+  twelve rings of ocean.
+- **The puzzle was played off the edge of the screen.** Measured in the browser at
+  375x812, which is the phone this game is actually played on: at the sea's 16 px
+  hex, ring 4 of the arena is 4 of its 24 hexes visible and ring 5 — the line the
+  quarry escapes across — is **0 of 30**. The camera now pulls back to an 8 px hex
+  for a drive and puts the whole arena on screen (ring 4 24/24, ring 5 30/30) with
+  a 34x39 px tap target. One line in `render()` decides the scale, so no ending has
+  to remember to put it back.
+
+### Also done in the same pass
+
+- **Shelf wrecks now pay less**, which was an open item flagged in the source for a
+  week. A hull `maybeShelfWreck` puts in the sunlit shelf carries a `picked` flag
+  and holds markedly less: shallow, visible, worked by a century of people with
+  better boats than yours. Measured at **0.51x** the value of an unpicked hull at
+  the same depths. That is what turns +19% placement into a redistribution rather
+  than a raise.
+- **`tests/picked.js`, and why it had to exist.** When the yield change landed,
+  `moved.js` reported *nothing moved* across nine instruments and 136 numbers — not
+  because the change was dead, but because **not one of them ever opens a wreck in
+  shelf water**. "Nothing moved" reads exactly like "nothing happened". It is in the
+  FAST list now.
+- **The `flip` perf gate stopped being flaky** — it straddled 60 ms and failed about
+  half the time on unchanged code, which teaches you to skim past a red battery.
+  Best of three now, 46-49 ms. *(Worth recording: the first attempt at that fix
+  built a cold context per pass and skipped the origin burst, so it timed a heavier
+  job than the threshold was ever set against, failed three times running, and
+  looked exactly like a real regression. Reducing a measurement's noise must not
+  change what is being measured.)*
+- A **`hunt` briefing card**, driven to its own scenario in `orders.test` — that
+  suite fails any card a player cannot reach, and it caught this one twice (once
+  unreachable, once as an 852-character wall of text).
+
+### Knobs
+
+`HUNT_ARENA` 5 · `HUNT_HANDS` 3 · `HUNT_NOTICE` 2 · `HUNT_TURNS` 16 ·
+`HUNT_REST` 400 · `HEX_SIZE_HUNT` 8 · `SUNLIT` 160
+
+### Still open, honestly
+
+- **The strike** — the quick alternative to the drive (harpoon/net/line chosen by
+  knowledge, instant, no dice). Designed, not built.
+- **More crew is better but leaves the sub less protected** — the second half of
+  Sean's sentence. Hands in the water are not yet absent from anything that
+  matters aboard, so the trade he asked for is not real yet.
+- The shark's bite is a rule and not a roll, as intended, but it has only ever
+  fired in a sandbox. Nobody has been hurt by one on a phone.
+
+---
+
 ## THE SUNLIT ZONE IS EMPTY — measured 2026-08-05, and it reframes the hunt
 
 Sean asked for a 20,000-Leagues hunting minigame in the Sunlit Zone (<=160 m)

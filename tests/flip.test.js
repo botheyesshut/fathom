@@ -251,12 +251,28 @@ check(vc.bad === 0, 'verifyCells internal soundness', vc.bad + ' bad tiles, ' + 
   const t0 = Date.now();
   sb.tileAt(0, 0); // origin burst: 9 chunks
   const originMs = Date.now() - t0;
-  const t1 = Date.now();
-  let n = 0;
-  for (let cq = 4; cq <= 8; cq++) for (let cr = 4; cr <= 8; cr++) { sb.ensureChunk(cq, cr); n++; }
-  const perChunk = (Date.now() - t1) / n;
+  // BEST OF THREE, AND NOT ONE SHOT. A single pass straddled the 60 ms line and
+  // failed about half the time on UNCHANGED code — a gate that fails at random
+  // is worse than no gate, because it teaches you to skim past a red battery.
+  // Noise only ever adds time, so the floor of several passes is the honest read.
+  //
+  // AND THE WORKLOAD IS THE ORIGINAL ONE, WHICH TOOK TWO GOES TO GET RIGHT. The
+  // first attempt built a cold context per pass and skipped the origin burst, so
+  // it was timing a heavier job than the 60 ms threshold was ever set against —
+  // it then failed three times running and looked exactly like a real regression.
+  // Reducing a measurement's noise must not change what is being measured.
+  let perChunk = Infinity, n = 0;
+  for (let pass = 0; pass < 3; pass++) {
+    const s2 = freshContext();
+    s2.__reset(SEED);
+    s2.tileAt(0, 0);             // same warm-up the original had before it timed anything
+    const t1 = Date.now();
+    n = 0;
+    for (let cq = 4; cq <= 8; cq++) for (let cr = 4; cr <= 8; cr++) { s2.ensureChunk(cq, cr); n++; }
+    perChunk = Math.min(perChunk, (Date.now() - t1) / n);
+  }
   check(originMs < 2500, 'origin 9-chunk burst time', originMs + ' ms (Android ~3-4x)');
-  check(perChunk < 60, 'steady-state per-chunk time', perChunk.toFixed(1) + ' ms/chunk over ' + n);
+  check(perChunk < 60, 'steady-state per-chunk time', perChunk.toFixed(1) + ' ms/chunk over ' + n + ', best of 3');
   console.log('      (info) run A total: ' + runA.ms + ' ms for 49 chunks (' + (runA.ms / 49).toFixed(1) + ' ms/chunk)');
 }
 

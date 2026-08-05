@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v7';   // bumped: she sails armed, and the hunter migrates
+const VERSION = 'fathom-v8';   // bumped: the hunt, and a ground you have fished
 const SHELL = [
   './',
   'fathom-chart.html',

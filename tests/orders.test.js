@@ -54,7 +54,7 @@ var __shown = [];
 var __origShow = showBrief;
 showBrief = function (b) { __shown.push(b.id); __origShow(b); };
 var __X = {
-  L: __L, shown: __shown, state, BRIEFS, closeBrief, homeDock: homeDock,
+  L: __L, shown: __shown, state, BRIEFS, closeBrief, homeDock: homeDock, huntStart: huntStart,
   tileAt: tileAt, reveal(q,r){ revealed.set(hexKey(q,r), new Set([0])); },   // Map<hexKey, Set<depth>>
   setTips(v){ tipsOn = v; },
   tick(){ ordersTick(); },
@@ -145,6 +145,20 @@ const scenarios = {
   teeth:    () => { X.state.armament = 'harpoon';
                     X.state.creatures = [{ type: 'shoal', q: X.state.q + 1, r: X.state.r,
                                            depth: X.state.currentDepth, awake: true, gone: false }]; },
+  // The hunt card wants hands actually in the water, so it is driven by starting
+  // a real one in real sunlit water rather than by faking `state.hunt`.
+  hunt:     () => { X.state.currentDepth = 0; X.state.foot = null; X.state.fished = {};
+                    // The boat starts at the home dock, which is walled in — a drive
+                    // needs open water two hexes off, so put her out to sea first.
+                    const q0 = X.state.q, r0 = X.state.r;
+                    for (let ring = 1; ring <= 12 && !X.state.hunt; ring++) {
+                      for (const [dq, dr] of [[ring, -ring], [ring, 0], [0, ring],
+                                              [-ring, ring], [-ring, 0], [0, -ring]]) {
+                        X.state.q = q0 + dq; X.state.r = r0 + dr;
+                        X.huntStart();
+                        if (X.state.hunt) break;
+                      }
+                    } },
   hurt:     () => { X.state.crew[0].conditions = ['bruised']; X.state.crew[0].wounded = true; },
   // `floor` needs a real sinkhole on the chart, so it is driven against the
   // world below rather than by faking a flag.
