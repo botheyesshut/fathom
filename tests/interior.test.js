@@ -1672,7 +1672,11 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
     // which is the whole of that culture; and a merchant hull's viewport scene is
     // captioned for the ship it draws. Both are boats. Named rather than pattern-
     // matched, so adding a third has to be a decision somebody makes on purpose.
-    if (/^creed:|^\s*creed:|marMerchant|'Deck Cargo'/.test(t)) return;
+    if (/^creed:|^\s*creed:/.test(t)) return;
+    // A VESSEL'S OWN SCENE ROW IS A BOAT BY KEY. hullup/hullbreak/hullside and
+    // every ship|line|cf|mar scene caption may say deck — that is what they
+    // are captions OF. The key names the vessel even when the line does not.
+    if (/^(hull|ship|line[A-Z]|cf[A-Z]|mar[A-Z])\w*: \{ cap:/.test(t)) return;
     if (/\?\s*'deck'|\?\s*"deck"|boat\s*\?/.test(ln)) return;
     offenders.push((i + 1 + OFFSET) + ': ' + t.slice(0, 96));
   });

@@ -154,7 +154,11 @@ const src = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
 const callTags = [...src.matchAll(/mateSays\(([\s\S]*?)\);/g)]
   .map(m => (m[1].match(/'([A-Z ]+)'\s*$/) || [])[1])
   .filter(Boolean);
-const allowed = ['SAIL', 'STRIKE', 'AIR'];
+// HELM joined the list with Angelshark #9: "we just need it more obvious that
+// these are people. 'Helm: course made good' does not sound like a person."
+// Course-made-good and helm-returned are decisions (keep steering or not), so
+// they belong in the mate's mouth and in this list.
+const allowed = ['SAIL', 'STRIKE', 'AIR', 'HELM'];
 const stray = callTags.filter(t => allowed.indexOf(t) < 0);
 console.log('    the mate speaks under: ' + (callTags.join(', ') || '(none found)'));
 check(callTags.length >= 3, 'the mate has something to report at all', callTags.length + ' call sites');

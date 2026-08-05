@@ -1,4 +1,51 @@
-# FATHOM — START HERE (last updated 2026-08-04)
+# FATHOM — START HERE (last updated 2026-08-05)
+
+## PLAYTEST ANGELSHARK (2026-08-05) — Sean's 22, and what became of each
+
+His first real session with the cards/captions build. Numbered items, his
+numbering. Root causes collapsed several: **8/15/18 were ONE bug** (checkLeads
+ran on horizontal moves only, so DIVING onto a mark arrived unannounced; the
+"flag beside the spot" was the announcement firing one sideways step later).
+
+| # | finding | disposition |
+|---|---|---|
+| 1 | DOCK dead on first screen | FIXED — home pier absent from `ports`, so `dockHere` returned silently. Home answers now; out-of-reach says why |
+| 2 | tutorial claims arrow movement | FIXED — card says tap-adjacent / tap-far-sets-course, which is what the game does |
+| 3 | boot message is chart philosophy | FIXED — boot line is now a bearing to the pier; the creed survives as the `chart` tip |
+| 4 | dock brief after one hex | LEFT — he judged it fine |
+| 5 | ▲▲ teleported him into Port; Boring Rig row shattered | FIXED both — the Port WINDOW only opens alongside (banking at ≤4 hexes stays); `.prow-b` capped at 44% width + why-string shortened |
+| 6 | "three crates" → "nothing" | FIXED |
+| 7 | Tips belong as popups | FIXED — tip() queues into the same card window as the briefings, one per turn, never over a panel; titles authored per tip |
+| 8 | wreck arrival unannounced | FIXED at root — `checkLeads()` now runs on depth change |
+| 9 | crew should sound like people | FIXED — helm lines through the Mate ("Course made good, cap'n"), screws report in the Ear's voice; mate.test allows HELM |
+| 10 | BUY on missions | FIXED — Sign / Collect / Hand back / Sign on |
+| 11 | captions title-case; can be poetic now | FIXED — all 48 rewritten as prose; window wraps at min(72vw,21rem); tests guard the NEW ruling (≤72 chars, no Title Register) |
+| 12 | brown passable hex in tunnel | OPEN — not reproduced from the report. Best hypothesis: a stack-prize hex charted at that depth for the first time paints its prize tile colour where plain tunnel had drawn. NEEDS his seed + position next sighting |
+| 13 | LOOK repeats the Ear | FIXED — second LOOK in unchanged water draws from a look-again pool |
+| 14 | "something is close" opaque, blocks helm, often false | FIXED — hazard needs an AWAKE contact within 3 depth bands, and the refusal names a bearing |
+| 15 | mark beside intended position | = #8 |
+| 16 | screws heard, sea empty on surfacing | FIXED — report now carries range ("about 1.3 km"), so the expectation matches the weather-model ships |
+| 17 | ping prose → sonar info | FIXED — "Sounder: hard floor… Break in the floor N, 300 m." |
+| 18 | "Whatever is here" for a KNOWN posting | FIXED — a board posting is named ("The wreck the board posted lies 240 m below — take her down to it") |
+| 19 | surface screws audible at 600 m | FIXED — gated by passiveContactR(0,…), the same hearing model as every other contact |
+| 20 | floor drawn at cave ceiling | FIXED — in the LEGIT roof/column block: pressed to the top of a tight chamber, stone wins the tie. (My first fix was an early return that drew lids over cathedrals — the columns mistake again; the cathedral check caught it before it shipped) |
+| 21 | motionless anchor, no interaction, wrong porthole | FIXED ×3 — a harbour introduces itself once in the Mate's voice when first sighted; alongside a FOREIGN port the porthole shows the harbour; HAIL-at-6-hexes is the separate, working merchant encounter |
+| 22 | deaths as a ghost-game plot | RECORDED below. Not built |
+
+**#22, THE SEED (his):** "I like that we just keep coming back. This is not
+unlike Torment. We could make a plot out of this. It could be a ghost game."
+The material is already half-present: the respawn line is "another boat on the
+same sea", lost crew persist as hollow men wearing the uniforms you issued, and
+`state.lostCrew` survives the boat. A plot that OWNS the looping — the sea
+keeps you, and the game slowly admits it — costs prose and a thread, not
+systems. Strong candidate for the next design conversation.
+
+**Process note (his question, answered in-session):** a 22-item batch was NOT
+too big — numbered, self-diagnosed (his #15 EDIT solved #8), with screenshots.
+That is the ideal shape. The only thing that would damage the process is fixing
+without triage, which is what the root-cause table above exists to prevent.
+
+
 
 ## HOW TO CHECK YOUR WORK HERE (2026-08-04, `01b0590`) — READ BEFORE VERIFYING ANYTHING
 

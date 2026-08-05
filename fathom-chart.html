@@ -545,7 +545,10 @@
        propagates into an absolutely-positioned child: max-content resolved to
        21 px and the caption rendered one character per line, vertically. Nowrap
        sizes to the sentence and the max-width still catches a long one. */
-    white-space: nowrap; width: auto; max-width: 66vw; overflow: hidden; text-overflow: ellipsis;
+    /* ANGELSHARK #11: captions are prose now, not titles — give them a line
+       or two of width and let them wrap. vw units, because the porthole's own
+       min-content width squeezes any percentage to the width of the art. */
+    white-space: normal; width: min(72vw, 21rem); text-transform: none;
     padding: 0.45rem 0.6rem;
     background: rgba(4, 8, 16, 0.9);
     border: 1px solid var(--sonar-dim);
@@ -1122,14 +1125,20 @@
   .prow-n { font-size: 0.82rem; color: #d8c9a4; }
   .prow-d { font-size: 0.66rem; color: #7a6d50; }
   .prow-b {
-    flex: none; padding: 0.42rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.06em;
+    /* ANGELSHARK #5: a long why-string ("the board must rate you trusted with
+       a hold") took ALL the row's width, squeezing the name to one word per
+       line. The button side is capped and allowed to wrap; the name keeps the
+       room. */
+    flex: none; max-width: 44%; white-space: normal; line-height: 1.3; text-align: center;
+    padding: 0.42rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.06em;
     text-transform: uppercase; border: 1px solid #6b5a3e; border-radius: 2px;
     background: rgba(40,52,40,0.5); color: #cfe0c8; cursor: pointer;
     /* M9: the Port's own buttons are .prow-b, not .inv-row .act — raising one
        class and assuming the other followed is how a fix half-lands. */
     min-height: 40px; min-width: 44px;
   }
-  .prow-b.no { border-color: #4a4436; background: transparent; color: #6a6250; cursor: default; }
+  .prow-b.no { border-color: #4a4436; background: transparent; color: #6a6250; cursor: default;
+    font-size: 0.55rem; letter-spacing: 0.03em; }
   #muster-list { overflow-y: auto; padding: 0.4rem 0.6rem; -webkit-overflow-scrolling: touch; }
   .mus { padding: 0.55rem 0.2rem; border-bottom: 1px solid rgba(160,140,100,0.18); }
   .mus:last-child { border-bottom: none; }
@@ -2919,7 +2928,7 @@ const VP_SCENES = {
   // in the game — the walls of a scene about pressure never moved. Now they
   // breathe by one cell on a slow eight-beat, and motes fall through the clear
   // middle of it, which is what a porthole actually shows you down there.
-  deep: { cap: 'The Weight', wet: true, hold: 5,
+  deep: { cap: 'The weight of it, pressing at the glass', wet: true, hold: 5,
     key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7' },
     frames: [
        ['█████▓▒░        ░▒▓█████',
@@ -3008,7 +3017,7 @@ const VP_SCENES = {
   // five specks that never went anywhere, so the ocean read as a photograph of
   // an ocean. Five tracks, drifting down and aft, eight frames at hold 4 — long
   // enough that you never catch the loop.
-  open: { cap: 'Open Water', wet: true, hold: 4,
+  open: { cap: 'Open water, and nothing to measure it by', wet: true, hold: 4,
     key: { '░': '1', '·': '7' },
     frames: [
        ['                        ',
@@ -3093,7 +3102,7 @@ const VP_SCENES = {
         '                        '],
     ] },
 
-  layer: { cap: 'The Cold Floor', wet: true, hold: 3,
+  layer: { cap: 'Cold water lying under warm, like a floor', wet: true, hold: 3,
     // FIRST PERSON. This used to draw the Erebus in profile with her name
     // on the hull — a third-person shot of your own boat in a window whose
     // whole premise is that you are looking OUT of it. What you actually
@@ -3170,7 +3179,7 @@ const VP_SCENES = {
   // point of it. The silt going past moves, and a drift of it crosses the one
   // gap in the frontage, which is the only thing that tells you the gap is a
   // hole and not a shadow.
-  ruin: { cap: 'Squared by Hands', hold: 5,
+  ruin: { cap: 'Squared stone. Hands made this, once', hold: 5,
     key: { '█': '8', '▄': '6', '▀': '6', '▓': '8', '▒': '1', '░': '1', '·': '7' },
     frames: [
        ['                     ░  ',
@@ -3243,7 +3252,7 @@ const VP_SCENES = {
   // running light blinking, a big thing breathing. TW2002 did exactly this,
   // and it is why those sequences had so much life for so few bytes.
 
-  lurker: { cap: 'Never Hurries', hold: 3,
+  lurker: { cap: 'It never hurries. It has never needed to', hold: 3,
     pulse: ['c'],
     key: { '█': '4', '▄': '4', '▀': '4', '●': 'c' },
     frames: [
@@ -3289,7 +3298,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  angler: { cap: 'The False Light', hold: 2,
+  angler: { cap: 'A light where no light should be', hold: 2,
     pulse: ['e', 'c'],
     key: { '█': '4', '▄': '4', '▀': 'c', '^': 'f', 'v': 'f', '¤': 'e', '│': '6', '·': '6' },
     frames: [
@@ -3335,7 +3344,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  rival: { cap: 'Running Dark', hold: 3,
+  rival: { cap: 'Another boat, running dark', hold: 3,
     pulse: ['c'],
     key: { '█': '8', '▄': '8', '▀': '8', '◘': 'c', '·': '4' },
     frames: [
@@ -3381,7 +3390,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  shoal: { cap: 'Small and Many', hold: 2,
+  shoal: { cap: 'Small teeth, and a great many of them', hold: 2,
     key: { '»': 'a', '«': 'a', '█': '8', '▄': '8', '▀': '8' },
     frames: [
       ['                        ',
@@ -3426,7 +3435,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  silt: { cap: 'The False Ridge', hold: 3,
+  silt: { cap: 'A ridge that was not there yesterday', hold: 3,
     key: { '─': '6', '▄': '6', '▄': '6', '▄': '6', '█': '6', '█': '6', '▓': '6', '◦': 'c', '●': 'c' },
     frames: [
       ['                        ',
@@ -3481,7 +3490,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  baro: { cap: 'Pacing You', hold: 4,
+  baro: { cap: 'Pacing you, just past the lamp', hold: 4,
     key: { '█': '5' },
     frames: [
       ['                        ',
@@ -3526,7 +3535,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  chorus: { cap: 'The Chorus', hold: 3,
+  chorus: { cap: 'The chorus, singing to no one', hold: 3,
     key: { '¤': 'b' },
     frames: [
       ['                        ',
@@ -3561,7 +3570,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  eel: { cap: 'Something Narrow', hold: 2,
+  eel: { cap: 'Something narrow, watching the light', hold: 2,
     key: { '~': 'e' },
     frames: [
       ['                        ',
@@ -3596,7 +3605,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  hulk: { cap: 'A Mountain, Moving', hold: 4,
+  hulk: { cap: 'A mountain, moving, and not for you', hold: 4,
     key: { '█': '8', '▄': '8' },
     frames: [
       ['                        ',
@@ -3621,7 +3630,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  drifter: { cap: 'Not Hunting', hold: 5,
+  drifter: { cap: 'Not hunting. Not anything', hold: 5,
     key: { '█': '2', '▄': '2', '▀': '2' },
     frames: [
       ['                        ',
@@ -3672,7 +3681,7 @@ const VP_SCENES = {
   // its own coordinates. A drowned boat and a drowned building are not the
   // same thing to look at, and until now the game drew one picture for both.
 
-  hullbreak: { cap: 'Her Back Broken', hold: 5, wet: 1,
+  hullbreak: { cap: 'Her back broken on the stone', hold: 5, wet: 1,
     key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7' },
     frames: [
       ['                        ',
@@ -3717,7 +3726,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  hullup: { cap: 'On Her Nose', hold: 5, wet: 1,
+  hullup: { cap: 'Down at the bow, decks aslant', hold: 5, wet: 1,
     key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7' },
     frames: [
       ['   ·    ▓▓▓▓▓           ',
@@ -3766,7 +3775,7 @@ const VP_SCENES = {
   // same here, and so were two and four. The ports stay dark — a light in one
   // of them would be a story beat, and a false one. What moves is silt on two
   // tracks at different speeds, and the muck she has settled into stirring.
-  hullside: { cap: 'All Dark', hold: 5, wet: 1,
+  hullside: { cap: 'On her side, every window dark', hold: 5, wet: 1,
     key: { '█': '8', '▓': '8', '▒': '1', '░': '1', '·': '7', '○': '0' },
     frames: [
        ['     ·                  ',
@@ -3831,7 +3840,7 @@ const VP_SCENES = {
         '      ░      ░      ░   '],
     ] },
 
-  ruintower: { cap: 'Still Standing', hold: 5, wet: 1,
+  ruintower: { cap: 'A tower, still standing in the dark', hold: 5, wet: 1,
     key: { '█': '6', '▓': '6', '▒': '1', '·': '7' },
     frames: [
       ['  ·    ▓▓▓▓▓▓           ',
@@ -3876,7 +3885,7 @@ const VP_SCENES = {
        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
     ] },
 
-  ruinwall: { cap: 'Dark Past It', hold: 5, wet: 1,
+  ruinwall: { cap: 'A wall, and the dark going on past it', hold: 5, wet: 1,
     key: { '▓': '6', '▒': '1', '░': '1', '·': '7', '▄': '6' },
     frames: [
       ['                        ',
@@ -3927,7 +3936,7 @@ const VP_SCENES = {
   // lines after the log told them there was not a door in the whole of it.
   // This file's own law: the picture can never disagree with the prose.
 
-  cavewall: { cap: 'Wet Rock', hold: 5, wet: 1,
+  cavewall: { cap: 'Wet rock, near enough to touch', hold: 5, wet: 1,
     key: { '▓': '6', '▒': '1', '·': '7', '≈': '0' },
     frames: [
       ['▓▓▓▓     ·          ▓▓▓▓',
@@ -3972,7 +3981,7 @@ const VP_SCENES = {
        '▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
     ] },
 
-  cavebeach: { cap: 'Pale Sand', hold: 6, wet: 1,
+  cavebeach: { cap: 'Pale sand, and air over black water', hold: 6, wet: 1,
     key: { '▓': '6', '░': '3', '·': '7', '≈': '0', '▄': '8' },
     frames: [
       ['▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
@@ -4017,7 +4026,7 @@ const VP_SCENES = {
        '░░░░░░░░░░░░░░░░░░░░░░░░'],
     ] },
 
-  cavethroat: { cap: 'The Throat', hold: 5, wet: 1,
+  cavethroat: { cap: 'The throat of it, going back and down', hold: 5, wet: 1,
     key: { '▓': '6', '▒': '1', '·': '7' },
     frames: [
       ['▓▓▓▓·▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓',
@@ -4068,7 +4077,7 @@ const VP_SCENES = {
   // look like WHOSE it is, or three peoples holding three kinds of harbour is
   // a fact in the data and not a thing you can see.
 
-  landfall: { cap: 'Landfall', hold: 6, wet: 0,
+  landfall: { cap: 'Grey rock standing out of grey sea', hold: 6, wet: 0,
     key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', '~': '0' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4113,7 +4122,7 @@ const VP_SCENES = {
        '≈≈≈≈≈~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  portconfed: { cap: 'A Working Harbour', hold: 6, wet: 0,
+  portconfed: { cap: 'A working harbour, cranes still turning', hold: 6, wet: 0,
     key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', '|': '3', '─': '3', 'n': '3', '◘': '8' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4158,7 +4167,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈◘≈≈≈≈≈'],
     ] },
 
-  portyard: { cap: 'The Slipways', hold: 5, wet: 0,
+  portyard: { cap: 'Slipways, and the sound of riveting', hold: 5, wet: 0,
     key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', '*': '9', '^': '3', 'v': '3', '[': '3', ']': '3', '▒': '3', '─': '3', '~': '0' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4203,7 +4212,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~≈≈≈≈'],
     ] },
 
-  portbar: { cap: 'The Jetty', hold: 6, wet: 0,
+  portbar: { cap: 'A jetty, and one lit window', hold: 6, wet: 0,
     key: { '█': '6', '▓': '6', '░': '4', '≈': '0', '▄': '6', 'n': '3', '|': '3', '─': '3', '◘': '8' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4262,7 +4271,7 @@ const VP_SCENES = {
   // (`¦`), both swapped in at draw time — see CULT_INK and CULT_MARK. Four
   // drawings, sixteen ships a player can tell apart at a glance.
 
-  shipcourier: { cap: 'Low and Long', hold: 4, wet: 0,
+  shipcourier: { cap: 'Low and long, built to be elsewhere', hold: 4, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '▄': '7', '¦': 'f', '~': '0' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4307,7 +4316,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  shipmerchant: { cap: 'In No Hurry', hold: 6, wet: 0,
+  shipmerchant: { cap: 'Riding deep, in no hurry at all', hold: 6, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '▀': '7', '¦': 'f', '│': '8', '┬': '8', '─': '8', '~': '0' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4352,7 +4361,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  shipnaval: { cap: 'Fore and Aft', hold: 5, wet: 0,
+  shipnaval: { cap: 'Guns fore and aft, squared away', hold: 5, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '▀': '7', '¦': 'f', '│': '8', '┼': '8', '┬': '8', '●': 'f', '~': '0' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4397,7 +4406,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  shipdestroyer: { cap: 'The Racks', hold: 5, wet: 0,
+  shipdestroyer: { cap: 'Her racks are full, and she knows it', hold: 5, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '▀': '7', '¦': 'f', '│': '8', '┴': '8', '●': 'f', '○': 'c', '~': '0', '·': 'f' },
     frames: [
       ['░░░░░░░░░¦░░░░░░░░░░░░░░',
@@ -4464,7 +4473,7 @@ const VP_SCENES = {
   // do not exist to draw. The tint stays for the masthead device and the
   // plating, and for any hull whose owner has no drawing of its own.
 
-  lineMerchant: { cap: 'High-Sided', hold: 6, wet: 0,
+  lineMerchant: { cap: 'High-sided, patched, still working', hold: 6, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '┬': '8', '─': '8', '▀': '7', '+': '6' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4509,7 +4518,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  lineDestroyer: { cap: 'Made Hard', hold: 5, wet: 0,
+  lineDestroyer: { cap: 'Made hard, and holding the line', hold: 5, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '┴': '8', '▀': '7', '●': 'f', '○': 'c', '+': '6', '·': 'f' },
     frames: [
       ['░░░░░░░░¦░░░░░░░░░░░░░░░',
@@ -4554,7 +4563,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈·≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  lineNaval: { cap: 'Slow to Anger', hold: 6, wet: 0,
+  lineNaval: { cap: 'Slow to anger, and long remembering', hold: 6, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '┌': '8', '┼': '8', '┐': '8', '▀': '7', '●': 'f', '+': '6' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4599,7 +4608,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  lineCourier: { cap: 'The Launch', hold: 5, wet: 0,
+  lineCourier: { cap: 'The launch, outrunning the news', hold: 5, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '▄': '7', '▀': '7' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4644,7 +4653,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  cfMerchant: { cap: 'A Runner, Armed', hold: 5, wet: 0,
+  cfMerchant: { cap: 'A runner, armed, and open to trade', hold: 5, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '▀': '7', '●': 'f', '/': '7', '>': '7' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4689,7 +4698,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  cfDestroyer: { cap: 'Raked and Low', hold: 4, wet: 0,
+  cfDestroyer: { cap: 'Raked and low, all business', hold: 4, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '^': '8', '▀': '7', '●': 'f', '○': 'c', '/': '7', '>': '7', '·': 'f' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4734,7 +4743,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  cfNaval: { cap: 'Mostly Gun', hold: 5, wet: 0,
+  cfNaval: { cap: 'Mostly gun, the rest of her engine', hold: 5, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '^': '8', '▀': '7', '●': 'f', '/': '7', '>': '7' },
     frames: [
       ['░░░░░░░░░░░¦░░░░░░░░░░░░',
@@ -4779,7 +4788,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  cfCourier: { cap: 'All Engine', hold: 3, wet: 0,
+  cfCourier: { cap: 'All engine, and somewhere to be', hold: 3, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '▀': '7', '/': '7', '>': '7' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4824,7 +4833,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  marMerchant: { cap: 'Deck Cargo', hold: 6, wet: 0,
+  marMerchant: { cap: 'Deck cargo lashed high, riding the swell', hold: 6, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '│': '8', '▀': '7', '¤': '6' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4869,7 +4878,7 @@ const VP_SCENES = {
        '≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈'],
     ] },
 
-  marCourier: { cap: 'Nobody\'s Flag', hold: 4, wet: 0,
+  marCourier: { cap: 'No colours flown, and none needed', hold: 4, wet: 0,
     key: { '░': '4', '≈': '0', '▓': '7', '¦': 'f', '~': '0', '▀': '7' },
     frames: [
       ['░░░░░░░░░░░░░░░░░░░░░░░░',
@@ -4920,7 +4929,7 @@ const VP_SCENES = {
   // Whitelisted glyphs ONLY — the rim characters that would have framed
   // these nicely are the same ones that tore the frame on Sean's phone.
 
-  roof: { cap: 'Rock Overhead', hold: 5, wet: 1,
+  roof: { cap: 'Stone overhead, water under the keel', hold: 5, wet: 1,
     key: { '█': '8', '▓': '8', '▒': '8', '░': '1', '·': '7', '∙': '7' },
     frames: [
       ['████████████████████████',
@@ -4965,7 +4974,7 @@ const VP_SCENES = {
        '                        '],
     ] },
 
-  column: { cap: 'Water Both Ways', hold: 5, wet: 1,
+  column: { cap: 'Water above, water below, nothing near', hold: 5, wet: 1,
     key: { '·': '7', '∙': '8' },
     frames: [
       ['    ·                   ',
@@ -5026,7 +5035,7 @@ const VP_SCENES = {
   // share a composition deliberately — a captain should recognise a surface
   // instantly, and only then notice that the sky above this one is stone.
 
-  dock: { cap: 'Last Solid Ground', hold: 4, porthole: true, snowFrom: 7,
+  dock: { cap: 'The pier. The last solid ground there is', hold: 4, porthole: true, snowFrom: 7,
     key: { '▄': '6', '║': '6', '~': '3', '≈': 'b', '░': '1', 'ᵛ': '7', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -5071,7 +5080,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  surface: { cap: 'Glass Half Under', hold: 3, porthole: true, snowFrom: 7,
+  surface: { cap: 'The glass half under, sky on the water', hold: 3, porthole: true, snowFrom: 7,
     pulse: ['e'],
     key: { '☼': 'e', '~': 'b', '≈': 'f', '░': '3', '▒': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
@@ -5117,7 +5126,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  shallow: { cap: 'Light Still Reaches', wet: true, hold: 3, porthole: true, snowFrom: 1,
+  shallow: { cap: 'Shallow water, the light still reaching', wet: true, hold: 3, porthole: true, snowFrom: 1,
     key: { '│': 'b', '>': 'a', '<': 'a', '░': '3', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -5166,7 +5175,7 @@ const VP_SCENES = {
   // depth scenes all draw the same two rows whether the keel is IN the silt
   // or a step above it, so the window said nothing the sounder had not.
   // `wet` dims it with depth, so this one picture serves every band.
-  seabed: { cap: 'Keel in Silt', wet: true, hold: 3, porthole: true, snowFrom: 1,
+  seabed: { cap: 'Keel over silt, at the bottom of the day', wet: true, hold: 3, porthole: true, snowFrom: 1,
     key: { '·': '3', '░': '1', '▒': '1', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -5211,7 +5220,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  midwater: { cap: 'Colour Going', wet: true, hold: 4, porthole: true, snowFrom: 1,
+  midwater: { cap: 'Mid-water, the colour going out of it', wet: true, hold: 4, porthole: true, snowFrom: 1,
     key: { '·': '3', '>': '2', '<': '2', '▒': '1', '░': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -5256,7 +5265,7 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
-  cavernlake: { cap: 'A Sky of Stone', wet: true, hold: 4, porthole: true, snowFrom: 6,
+  cavernlake: { cap: 'A sky of stone over still black water', wet: true, hold: 4, porthole: true, snowFrom: 6,
     key: { '▓': '8', '▒': '8', '~': '1', '≈': '9', '░': '1', '^': '8', 'v': '8', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
@@ -5562,8 +5571,11 @@ function sceneForNow() {
     // ALONGSIDE, not "somewhere in the bay". This was a radius of 4 hexes
     // around the pier, so the porthole drew pilings and gulls from open water
     // with no dock in sight. You see the dock when you could touch it.
-    const alongside = hexNeighbors(state.q, state.r).concat([{ q: state.q, r: state.r }])
+    let alongside = hexNeighbors(state.q, state.r).concat([{ q: state.q, r: state.r }])
       .some(n => { const nt = getTile(n.q, n.r); return nt && nt.type === 'dock'; });
+    // ANGELSHARK #21: a foreign harbour's hex is not type 'dock', so alongside
+    // one of THEIRS the porthole showed open sea. A port is a port.
+    if (!alongside && portNear(state.q, state.r)) alongside = true;
     if (alongside) {
       // WHOSE HARBOUR IS IT. Home is home; every other town belongs to a
       // people, and three peoples holding three kinds of port is a fact in the
@@ -5660,7 +5672,13 @@ function sceneForNow() {
   }
   const skyAbove = !runHere || runHere.ceiling <= 0;
   const nearRoof = above <= 0 && !skyAbove && openestAbove <= 2 * DEPTH_GRID;
-  if (nearRoof && !nearFloor) return 'roof';       // stone over the sail, water under the keel
+  // ANGELSHARK #20: in a TIGHT chamber — roof AND floor both in reach — the
+  // tie fell through to the depth-band scenes, which draw seabeds: a floor,
+  // shown at the ceiling. When the boat is pressed to the top of the water,
+  // the stone it is touching wins the picture. My first fix was an early
+  // return that skipped `openestAbove` entirely and drew a lid over
+  // cathedrals — the column mistake again, caught by the check that guards it.
+  if (nearRoof && (!nearFloor || atTop)) return 'roof'; // stone over the sail
   if (!nearRoof && !nearFloor) return 'column';    // suspended, neither in reach
 
   // IN THE SILT versus A STEP ABOVE IT. Sean, playing at 720 m with "the floor
@@ -5880,7 +5898,7 @@ function portRows() {
         ? 'Cuts rooms out of live rock. Bolts into a station of your own · ' + MINER_COST + ' crates'
         : 'The yard will not build one for a captain it has not seen finish work · ' + MINER_COST + ' crates',
       ok: rated && canPay(MINER_COST, 0),
-      why: !rated ? 'the board must rate you ' + BOARD_RANKS.find(b => b.at === MINER_TICKET).word
+      why: !rated ? 'needs a board rating: ' + BOARD_RANKS.find(b => b.at === MINER_TICKET).word
                   : shortfall(MINER_COST, 0),
       act: 'miner' });
   } else {
@@ -5961,8 +5979,15 @@ function renderPort() {
     + ' relics  ·  HULL ' + Math.round(state.hull) + '/' + sub.hull;
   el.innerHTML = portRows().map(r => {
     if (r.head) return '<div class="pshop-h">' + r.head + '</div><div class="pshop-n">' + (r.note || '') + '</div>';
+    // ANGELSHARK #10: every row said Buy, including the work. You do not buy
+    // a posting — you sign against it.
+    const label = !r.act ? 'Buy'
+      : r.act.indexOf('berth:') === 0 ? 'Sign'
+      : r.act === 'berthpay' ? 'Collect'
+      : r.act === 'berthdrop' ? 'Hand back'
+      : r.act === 'hire' ? 'Sign on' : 'Buy';
     const btn = r.act && r.ok
-      ? '<button class="prow-b" data-port="' + r.act + '">Buy</button>'
+      ? '<button class="prow-b" data-port="' + r.act + '">' + label + '</button>'
       : '<span class="prow-b no">' + (r.why || '—') + '</span>';
     return '<div class="prow"><div class="prow-t"><div class="prow-n">' + r.name
       + '</div><div class="prow-d">' + r.desc + '</div></div>' + btn + '</div>';
@@ -6205,7 +6230,8 @@ const BRIEFS = [
   { id: 'helm', title: 'The Erebus',
     when: () => true,
     body: `<p>She is yours, she leaks, and she is the only one you are getting.</p>
-      <p>The <b>arrows around the boat</b> on the chart move her a hex at a time. The
+      <p><b>Tap the water beside her</b> and she moves one hex. Tap further off and the
+      helm sets a course and walks her there, a hex at a time. The
       <b>&#9650; &#9660;</b> below take her up and down; the number between them is your
       depth, and under it the depth this hull can stand.</p>
       <p><b>LOOK</b> costs nothing and tells you where you are standing. <b>PING</b> costs
@@ -6236,7 +6262,7 @@ const BRIEFS = [
       Pinging spends more. Running fast spends more still.</p>
       <p>Coming up to daylight fills the tanks right off, free, every time. There is no
       penalty for surfacing and no prize for staying down — the boat that comes home with
-      three crates beats the boat that does not come home.</p>` },
+      nothing beats the boat that does not come home.</p>` },
 
   { id: 'collect', title: 'Nothing is yours yet',
     when: () => (state.cargo || 0) > 0 || (state.ticket || 0) > 0,
@@ -6359,14 +6385,39 @@ function ordersTick() {
     scheduleSave();
     return;
   }
+  // No brief owed this turn — a queued tip may take the slot instead.
+  maybeShowTip();
 }
 
+// ANGELSHARK #7: "There are Tips in the info window. These should be tutorial
+// pop ups, instead." A tip is a CARD now — same window, same dismissal, same
+// switch as the Standing Orders. The queue exists because tips fire from the
+// middle of actions, when a card may already be up; one thing on screen at a
+// time is the rule, so a tip waits its turn rather than stacking.
+const TIP_TITLES = {
+  log: 'The log', sounder: 'The sounder', silent: 'Running silent',
+  layer: 'A thermocline', current: 'The set of the water', depth: 'Past her rating',
+  crush: 'Crush depth', port: 'The hold and the bank', jettison: 'Jettison',
+  city: 'A city of the deep', shelf: 'The shelf floor', impact: 'That was rock',
+  bulkhead: 'Bulkheads', anchorhere: 'A place to keep', claimdeck: 'A deck to claim',
+  claimruin: 'Walls to claim', locks: 'Locks and keys', chart: 'The chart',
+};
+let pendingTips = [];
+function maybeShowTip() {
+  if (!pendingTips.length || briefOpen || anyPanelOpen()) return;
+  if (state.ordersAt != null && state.ordersAt === (state.moves || 0)) return;
+  const key = pendingTips.shift();
+  state.ordersAt = (state.moves || 0);
+  showBrief({ id: 'tip:' + key, title: TIP_TITLES[key] || 'A word from the boat',
+              body: '<p>' + TIPS[key] + '</p>' });
+}
 function tip(key) {
   if (!tipsOn || !TIPS[key]) return;
   if (!state.tipsSeen) state.tipsSeen = [];
   if (state.tipsSeen.indexOf(key) >= 0) return;
   state.tipsSeen.push(key);
-  log(TIPS[key], 'tip', 'TIP');
+  pendingTips.push(key);
+  maybeShowTip();
   scheduleSave();
 }
 
@@ -6531,7 +6582,19 @@ function checkEnclave() {
 function dockHere() {
   if (!state.alive || ashore()) return;
   const port = portNear(state.q, state.r);
-  if (!port) return;
+  // ANGELSHARK #1: at the home pier `portNear` finds nothing — the home dock
+  // is not in the ports map — so the button did NOTHING, silently, on the
+  // very first screen of the game. The home pier answers now, and a press
+  // that cannot dock says why instead of saying nothing at all.
+  if (!port) {
+    const hd = homeDock();
+    if (hexDistance({ q: state.q, r: state.r }, hd) <= 1) {
+      if (state.currentDepth !== 0) { log('You would have to be on the surface to come alongside.', 'warn', 'PORT'); return; }
+      openPort(); return;
+    }
+    log('No quay within reach of her lines.', 'warn', 'PORT');
+    return;
+  }
   if (state.currentDepth !== 0) {
     log('You would have to be on the surface to come alongside.', 'warn', 'PORT');
     return;
@@ -7582,7 +7645,12 @@ function checkLeads() {
       remaining.push(L);
       if (near && !atDepth) {
         const dz = Math.round(L.d - state.currentDepth);
-        log(`You are over the marked position. Whatever is here is ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} you.`, 'warn', 'CHART');
+        // ANGELSHARK #18: the board TOLD you what this is. "Whatever is here"
+        // is for marks made off a bare sounding; a posting has a name.
+        const noun = (L.kind === 'berth' && state.berth)
+          ? (state.berth.kind === 'salvage' ? 'The wreck the board posted' : 'The sounding position the board posted')
+          : 'Whatever is here';
+        log(`You are over the marked position. ${noun} lies ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} you — take her ${dz > 0 ? 'down' : 'up'} to it.`, 'warn', 'CHART');
       }
       // A nudge as you close, so the thread never goes cold in the dark.
       const d = hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r });
@@ -10325,8 +10393,35 @@ function shipsTick() {
                `Sail, ${bearing(state.q, state.r, sh.q, sh.r)} of you. ${H.flavor}`,
                '', 'SAIL');
       log('Close on her to read her colours, or hold your course and let her go.', '', 'SAIL');
-    } else {
-      log(`Screws on the surface, ${bearing(state.q, state.r, sh.q, sh.r)} — fast and shallow. Something is crossing up there.`, '', 'SONAR');
+    } else if (d <= passiveContactR(0, sh.q, sh.r)) {
+      // ANGELSHARK #19: surface screws were audible from 600 m down as if the
+      // thermocline were a rumour. passiveContactR(0, ...) IS the hearing
+      // model every other contact obeys; this one obeys it now. And the report
+      // carries range as well as bearing (#16) — "somewhere west" sent Sean
+      // surfacing into an empty sea with no idea how far to look.
+      const earHand = state.crew.find(m => m.role === 'ear' && !m.lost && !m.wounded);
+      const km2 = (d * 60 / 1000).toFixed(1);
+      const screws = `Screws on the surface — ${bearing(state.q, state.r, sh.q, sh.r)}, about ${km2} km, fast and shallow.`;
+      log(earHand ? earHand.name + ': \u201C' + screws + '\u201D' : screws, '', 'SONAR');
+    }
+  }
+
+  // ANGELSHARK #21: Sean sat looking at an anchor glyph for a long minute,
+  // waiting for it to move, took it for a ship, and had no way to ask what it
+  // was. A harbour introduces itself ONCE, when it first comes in sight, in the
+  // Mate's voice — and names the mark, so the glyph and the words meet.
+  if (state.currentDepth === 0) {
+    for (const [, hp] of ports) {
+      const pd = hexDistance(hp, here);
+      if (pd > 9) continue;
+      const pk = 'portseen:' + hp.q + ',' + hp.r;
+      if (state.poisFound.includes(pk)) continue;
+      state.poisFound.push(pk);
+      const pcu = CULTURES[hp.holder];
+      mateSays(`Harbour${mateAddress()} — ${portName(hp)}, ${pcu.short}, ${bearing(state.q, state.r, hp.q, hp.r)}. The anchor on the chart is hers.`,
+               `A harbour: ${portName(hp)}, ${pcu.short}, ${bearing(state.q, state.r, hp.q, hp.r)}. The anchor mark on the chart is hers.`,
+               '', 'SAIL');
+      break;
     }
   }
 }
@@ -12349,9 +12444,9 @@ function ping() {
       log(`The water is open above it. You could go straight down.`, 'good', echo);
     } else {
       const w = nearestOpeningKnown(lvl.activeRange);
-      log(`There is rock between you and it — no way down from this water.`
-        + (w ? ` The nearest break in the floor is ${bearing(state.q, state.r, w.q, w.r)}, ${w.d * 60} m.`
-             : ` You would have to find a way in.`), 'warn', echo);
+      log(`Sounder: hard floor under her — no way down from this water.`
+        + (w ? ` Break in the floor ${bearing(state.q, state.r, w.q, w.r)}, ${w.d * 60} m.`
+             : ` No break in the floor inside this sweep.`), 'warn', 'SONAR');
     }
   } else if (atSurface) {
     // Surface pings detect bottom contours and openings — no walls up here.
@@ -17063,6 +17158,11 @@ function changeDepth(deltaMeters) {
   state.lastMoveTime = performance.now();
   state.pingArrows = null; // depth-relative distances now stale
   tickPingMemory();
+  // ANGELSHARK #8/#15. checkLeads ran on horizontal moves only, so a captain
+  // who DIVED onto the marked position arrived unannounced — nothing fired
+  // until the next sideways step, one hex off the flag, which read as "the
+  // mark is beside the real spot". Arriving vertically is arriving.
+  checkLeads();
 
   // Vertical air cost (free at depth 0)
   if (state.currentDepth > 0) {
@@ -17993,7 +18093,22 @@ function describeSite() {
   return lead + ' ' + water + near;
 }
 
+// ANGELSHARK #13: LOOK, asked twice in the same water, handed back the same
+// sentence — which reads as the game not listening. The second look owns up to
+// being a second look; move, dive, or step ashore and the full description
+// returns.
+const LOOK_AGAIN = [
+  'You look again. The water has nothing new to say.',
+  'The lamp finds what it found before, and nothing else.',
+  'Same water, same dark. The sea does not repeat itself for emphasis.',
+  'Nothing has moved that the glass can show.',
+  'A second look buys you certainty, and nothing else.',
+];
 function lookAround() {
+  const _sig = state.q + ',' + state.r + ',' + state.currentDepth + ','
+    + (state.foot ? state.foot.x + '_' + state.foot.y : 'boat');
+  if (state._lastLookSig === _sig) { log(pickLoose(LOOK_AGAIN), '', 'LOOK'); return; }
+  state._lastLookSig = _sig;
   if (!state.alive) return;
   if (state.foot) { log(describeSite(), '', 'LOOK'); return; }
   // WHO IS TELLING YOU. With a mate aboard this is what you already got on arrival, so
@@ -18114,9 +18229,15 @@ function autoHazard() {
   if (state.foot) return 'you are not aboard';
   for (const c of (state.creatures || [])) {
     if (c.gone) continue;
+    // ANGELSHARK #14: a sleeping silt three bands under the keel held the helm
+    // hostage — "something is close", forever, with nothing to see and nothing
+    // coming. A contact only takes the helm if it is AWAKE and in your water,
+    // and the refusal names a bearing, so it is a situation and not a curse.
+    if (!c.awake) continue;
+    if (Math.abs((c.depth || 0) - state.currentDepth) > DEPTH_GRID * 3) continue;
     const d = hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r });
     if (d <= passiveRange() + 1 && (c.type !== 'lurker' || (c.interest || 0) >= LURK_STALK))
-      return 'something is close';
+      return 'something is close, ' + bearing(state.q, state.r, c.q, c.r) + ' of her';
   }
   if ((state.threats || []).length) return 'there is a weapon in the water';
   if (state.hull <= 30) return 'the hull will not take much more';
@@ -18137,7 +18258,8 @@ function autoStop(why) {
   const was = state.autoTarget;
   state.autoTarget = null;
   syncAutoBtn();
-  if (why && was) log('The helm is yours again — ' + why + '.', 'warn', 'HELM');
+  if (why && was) mateSays(`Helm answers to you again${mateAddress()} — ${why}.`,
+    'The helm is yours again — ' + why + '.', 'warn', 'HELM');
   render();
 }
 
@@ -18200,7 +18322,8 @@ function travelStop(why) {
   if (travelTimer) { clearInterval(travelTimer); travelTimer = 0; }
   const had = state.travel && state.travel.length;
   state.travel = null;
-  if (why && had) log('You take the helm back — ' + why + '.', 'warn', 'HELM');
+  if (why && had) mateSays(`Helm is yours${mateAddress()} — ${why}.`,
+    'You take the helm back — ' + why + '.', 'warn', 'HELM');
   render();
 }
 
@@ -18221,7 +18344,7 @@ function travelStep() {
   state.travel.shift();
   if (!state.travel.length) {
     travelStop(null);
-    log('Course made good.', '', 'HELM');
+    mateSays(`Course made good${mateAddress()}.`, 'Course made good.', '', 'HELM');
   }
 }
 
@@ -19382,8 +19505,11 @@ function restart() {
   // the chart" — told about the other half before the first half existed.
   log(`The trade is salvage. Take the boat down, find what the Fall left on the bottom, and bring it back to this dock — nothing counts until it is ashore. Two things end you down there: the air runs out, or the pressure finds a seam. Both are on the gauges.`,
       '', 'THE TRADE');
-  log(`The other half of the work is the chart. Water you have sounded stays sounded, and a captain who comes home with nothing but new water has still come home with something. Nothing else is promised, and the sea keeps no ledger of what you meant to do.`,
-      '', 'THE CHART');
+  // ANGELSHARK #3. The fourth thing a captain ever read was a philosophy of
+  // cartography. What they need first is a bearing — where the one solid thing
+  // in the world stands. The chart's creed survives as the `chart` tip.
+  { const hd0 = homeDock();
+    log(`Grey water, and a pier standing out of it ${bearing(state.q, state.r, hd0.q, hd0.r)} of you. The dock is the one solid thing there is — everything else is past it.`, '', 'CHART'); }
   document.getElementById('gameover').classList.remove('show');
   // Cap ping power slider at sub's max
   const pp = document.getElementById('ping-power');
@@ -19485,7 +19611,12 @@ function surface() {
     // All of that is gone. Everything the port sells is now visible at once,
     // priced, and bought when you say so. Nothing expires, nothing is hidden
     // behind anything else, and nothing spends your crates without a tap.
-    if (atPort) openPort();
+    // ANGELSHARK #5: Sean surfaced over a sinkhole two hexes off and was
+    // "suddenly at Port". Banking at hailing distance is a mechanic and stays;
+    // the WINDOW opening is an act, and only happens alongside.
+    const alongsideNow = hexDistance({ q: state.q, r: state.r }, hd) <= 1 || !!portNear(state.q, state.r);
+    if (alongsideNow) openPort();
+    else if (atPort) log('The quay is a short run off — bring her alongside and DOCK to put in.', '', 'PORT');
 
     if (state.air >= sub.air) {
       log('Already at full air. The hatch is sealed and the boat waits.', 'warn', 'AIR');

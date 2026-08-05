@@ -994,11 +994,23 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   const noCap = names.filter(k => !S[k].cap || !S[k].cap.trim());
   check(noCap.length === 0, 'every scene is captioned', noCap.join(', ') || 'all captioned');
   const tooWide = names.filter(k => (S[k].cap || '').length > 24);
-  check(tooWide.length === 0, 'and no caption is wider than the frame',
-    tooWide.length ? tooWide.map(k => k + ' (' + S[k].cap.length + ')').join(', ') : 'all inside 24 columns');
-  const tooMany = names.filter(k => (S[k].cap || '').trim().split(/\s+/).length > 4);
-  check(tooMany.length === 0, 'and none of them is a sentence',
-    tooMany.length ? tooMany.map(k => '"' + S[k].cap + '"').join(', ') : 'all four words or fewer');
+  // Angelshark #11: captions are PROSE in a sized popup now, not a line under
+  // a 24-column tile. Width stopped being the constraint; tone and length are.
+  const tooLongCap = names.filter(k => (S[k].cap || '').length > 72);
+  check(tooLongCap.length === 0, 'and no caption outgrows its window',
+    tooLongCap.length ? tooLongCap.join(', ') : 'all fit at 72 chars or fewer');
+  const shouting = names.filter(k => /[A-Z]{4}/.test(S[k].cap || ''));
+  check(shouting.length === 0, 'and none of them shouts in all caps',
+    shouting.length ? shouting.join(', ') : 'prose, not titles');
+  // Angelshark #11 REVERSED the four-word rule: "since the text fades in and
+  // out, we can go back to more poetic descriptions." What must not return is
+  // the TITLE register — Every Word Capitalised Like A Heading.
+  const titled = names.filter(k => {
+    const ws = (S[k].cap || '').trim().split(/\s+/);
+    return ws.length > 2 && ws.every(w => /^[A-Z‘’']/.test(w));
+  });
+  check(titled.length === 0, 'and none of them reads as a Title',
+    titled.length ? titled.map(k => '"' + S[k].cap + '"').join(', ') : 'prose register throughout');
 
   // ...IN ONE LINE. These were written as prose by someone who knew nobody
   // would read them, so they grew into clauses with commas. The moment they
@@ -1008,9 +1020,7 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // tile's width, and the picture does the rest.
   const tooLong = names.filter(k => S[k].cap && S[k].cap.length > 29)
     .map(k => k + ' (' + S[k].cap.length + ')');
-  check(tooLong.length === 0, 'and says it in one line under the picture',
-    tooLong.length ? tooLong.join(', ')
-      : 'longest is ' + Math.max(...names.map(k => (S[k].cap || '').length)) + ' chars');
+  // (the one-line rule went with the inline caption — see above)
 
   // ...AND SOMETHING ACTUALLY SHOWS IT. The check above passed for months
   // while `.cap` was read by NOTHING — twenty hand-written captions and the
@@ -1510,7 +1520,7 @@ check(r.leads.length === 1 && r.leads[0].tier === 2, 'the trail you were followi
   // The check is kept because the strings are kept and a caption may return
   // somewhere legible, but it is not protecting anything a player can see
   // today, and it should not be read as evidence that captions work.
-  const long = caveScenes.map(sc => [sc, sandbox.__cap(sc)]).filter(x => (x[1] || '').length > 29);
+  const long = caveScenes.map(sc => [sc, sandbox.__cap(sc)]).filter(x => (x[1] || '').length > 72);
   check(long.length === 0, 'and every new caption fits the frame',
     long.length ? long.map(x => x[0] + ' ' + x[1].length).join(', ')
                 : caveScenes.map(sc => (sandbox.__cap(sc) || '').length).join('/') + ' chars');
