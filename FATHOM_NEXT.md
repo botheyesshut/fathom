@@ -40,6 +40,16 @@ same sea", lost crew persist as hollow men wearing the uniforms you issued, and
 keeps you, and the game slowly admits it — costs prose and a thread, not
 systems. Strong candidate for the next design conversation.
 
+**DOOR FOLLOW-UP (same day, browser-proven):** entry into a wreck/ruin was
+ALSO horizontal-only — and the vertical gate that did exist (changeDepth, "the
+prize is at a depth") keyed on `tileHere.poi`, which the first visit consumes
+while the stack entry stands for ever. So a REVISIT that arrived by diving found
+no door. Fixed at that gate (stack-aware), with a `_noReboard` latch so leaving
+an interior does not re-board on the next bob of depth; one horizontal step
+re-arms the door. Verified live, five cases: first vertical entry, clean leave,
+latch holds, horizontal re-board, vertical revisit. My first fix was a redundant
+block around the WRONG joint that never fired — deleted, not patched.
+
 **Process note (his question, answered in-session):** a 22-item batch was NOT
 too big — numbered, self-diagnosed (his #15 EDIT solved #8), with screenshots.
 That is the ideal shape. The only thing that would damage the process is fixing

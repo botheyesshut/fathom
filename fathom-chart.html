@@ -12549,6 +12549,7 @@ function wait() {
 }
 
 function move(q, r) {
+  state._noReboard = null;   // a horizontal step re-arms the interior door
   if (!state.alive || ashore()) return;
   const tile = tileAt(q, r);
   // Only allow attempted moves to actual adjacent hexes
@@ -15509,6 +15510,7 @@ function leaveInterior(prefix) {
   stashSite(f);
   recallParty();   // the hands that are still standing come up through the breach with you
   state.foot = null;
+  state._noReboard = hexKey(state.q, state.r);   // the door does not revolve — see changeDepth
   state.cargo += f.crates;
   state.relics += f.relics;
   // Divers learn most from a dive. Everyone else crewed the boat that got
@@ -17207,7 +17209,17 @@ function changeDepth(deltaMeters) {
   // which strands the entire salvage economy. (Found by the bot captain: only
   // 3% of runs ever picked up any cargo at all.)
   const tileHere = getTile(state.q, state.r);
-  if (tileHere && tileHere.poi && !state.foot) handleTile(tileHere);
+  // ANGELSHARK follow-up: `tileHere.poi` is CONSUMED by the first visit while
+  // the stack entry stands for ever — so a REVISIT that arrived by diving
+  // found poi undefined and no door, and only a sideways step re-boarded.
+  // handleTile itself already rebinds poi from the stack, so the only faulty
+  // part was this gate. The `_noReboard` latch stops the door revolving:
+  // leaving an interior must not re-enter it on the next bob of depth; one
+  // horizontal step (which clears the latch in move()) re-arms the door,
+  // which is exactly the old contract for coming back.
+  const stackHere = tileHere && !tileHere.poi && poiAtDepth(tileHere, state.currentDepth);
+  const latched = state._noReboard === hexKey(state.q, state.r);
+  if (tileHere && !state.foot && (tileHere.poi || (stackHere && !latched))) handleTile(tileHere);
 
   // E7: AN ENCLAVE IS AT A DEPTH TOO. checkEnclave() had exactly one call site,
   // in move(), so a captain who dived onto one of the peoples sat inside their
