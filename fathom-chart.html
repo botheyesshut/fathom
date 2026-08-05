@@ -9396,20 +9396,55 @@ function baseSeafloorRaw(q, r) {
 // caves inside a mountain. Same infinite-lattice idiom as the cave nodes —
 // one candidate per lattice cell, hash-derived, so the world stays a pure
 // function of the seed and generates locally forever.
-// Tuned by measurement, not by feel. Across 6 seeds, islands within 60 hexes
-// of the dock and the average gap between neighbours:
+// HOW FAR APART, AND THE ANSWER IS "FURTHER THAN YOU THINK".
 //
-//     cell 26  0-3 islands   gap 34   <- ONE SEED HAD NONE AT ALL
-//     cell 20  2-4           gap 22
-//     cell 16  4-8           gap 14   <- here
-//     cell 13  9-12          gap 10
-//     cell 11  12-16         gap  9
+// Sean, 2026-08-05: "getting water at ports is already very easy because there
+// are ports everywhere. Maybe we need to spread the ports out? I'm very much in
+// favour of large distances because I like the creepy aspect of lots of space in
+// the ocean, and I like lots of travel, too, like Final Fantasy or in long
+// Dungeons and Dragons campaigns."
 //
-// A gap of 14 hexes is a real crossing without being a slog, and no world is
-// left empty — the same failure the beach rate had, where one world in five
-// had nowhere to put a station.
-const ISLE_CELL = 16;          // one candidate island per 16x16 hexes
-const ISLE_CHANCE = 0.7;       // ...and not every candidate becomes one
+// He was right and it was worse than "very easy". Measured at the old spacing:
+// ~84 ports within 70 hexes of the dock, and the median run from open water to
+// the nearest one was NINE TURNS. Against a larder that drains 0.4 a turn — 250
+// turns from full to empty — provisions could not be made to matter by any
+// mechanic at all. That is why this changed before anything was built for water:
+// no supply system is felt until this ratio is.
+//
+// Every island carries a harbour, so island spacing IS port spacing. Swept over
+// 8 seeds; "turns" is the median hexes from open water to the nearest port:
+//
+//     cell 16  chance 0.70   84 ports   gap 12   turns  9   <- was here
+//     cell 26  chance 0.70   31         gap 20   turns 15
+//     cell 46  chance 1.00   15         gap 32   turns 21
+//     cell 54  chance 1.00   11         gap 38   turns 26   <- here
+//     cell 60  chance 1.00    8         gap 43   turns 28
+//     cell 70  chance 1.00    7         gap 52   turns 33
+//
+// AND THE CHANCE WENT TO 1.0 ON PURPOSE, because the old comment here recorded
+// the failure this invites: at cell 26 with chance 0.7, "ONE SEED HAD NONE AT
+// ALL". Spacing the world out multiplies that risk — a coin flip skipped at
+// cell 16 costs you an island 16 hexes wide, and at cell 54 it costs a void 54
+// hexes wide. So the randomness comes out of the lattice and the emptiness comes
+// from the CELL BEING BIG, which cannot fail.
+//
+// It is not a hard guarantee and should not be read as one: `islandRoll` still
+// rejects a candidate that lands on the southern landmass, in shallow water, or
+// inside the home bay, all of which are geography rather than chance. What can
+// be said is measured — across 8 seeds the emptiest world still held 9 ports
+// within 70 hexes, against 12 at cell 46 and 7 at cell 60.
+//
+// Nor is it a grid: the jitter is a full cell wide, so a neighbour gap runs from
+// a few hexes to fifty-odd, and the measured median gap of 38 against a cell of
+// 54 is the proof — a lattice you could see would put every gap at 54.
+//
+// The worst case is the one that decides whether this is cruel: the furthest any
+// sampled water sat from a harbour was 82 turns, and the larder holds 250. So a
+// long crossing is now a thing you provision FOR, and never a thing that strands
+// you. That headroom is also why the home dock is untouched — it is the tutorial
+// and it is tested, and `islandRoll` has always refused to build inside the bay.
+const ISLE_CELL = 54;          // one candidate island per 54x54 hexes
+const ISLE_CHANCE = 1.0;       // ...and the lattice no longer skips any of them
 
 // Same discipline as `nodeCache`: the lattice roll is a hash, and this is asked
 // once per hex of every chunk generated. Uncached it froze the battery outright.
@@ -10478,6 +10513,54 @@ function portNear(q, r) {
 const SHIP_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const SHIP_CAP = 7;          // how many are afloat near you at once
 const SHIP_RANGE = 26;       // beyond this nobody could tell there was a ship
+// HOW FAR A HARBOUR WILL SEND A HULL, which is NOT the same question as how far
+// away you can perceive one, and used to be the same number.
+//
+// Spreading the islands (ISLE_CELL 16 -> 54) took the median gap between
+// harbours from 12 hexes to 40, and both ends of a route were drawn from
+// SHIP_RANGE = 26. So the origin had to be within 26 of the BOAT, which it now
+// rarely is, and the destination within 26 of the ORIGIN, which most harbours no
+// longer have at all. Measured, and it was close to total: turns with a sail in
+// sight alone in open water 27.7% -> 0.0%, beside a harbour 58% -> 21.4%, hulls
+// afloat median 6 -> 1 and a low of NONE. The whole encounter layer — the
+// fleets, the Pirates! flow, "another boat is somebody" — went quiet, and the
+// battery passed, because nothing in it counts sails.
+const SHIP_LANE = 90;        // ...and this is trade, which crosses open water
+
+// ONE STEPPING RULE, USED BY BOTH THE MOVER AND THE SPAWN. A hull now enters the
+// world partway along her voyage, so the spawn has to walk the course — and if
+// it walked it by different arithmetic than `shipsTick` uses to sail it, she
+// would appear on a hex her own route never visits.
+function shipStepToward(q, r, tq, tr) {
+  const dq = tq - q, dr = tr - r, ds = -dq - dr;
+  const aq = Math.abs(dq), ar = Math.abs(dr), as = Math.abs(ds);
+  let mq = 0, mr = 0;
+  if (aq >= ar && aq >= as) { mq = dq > 0 ? 1 : -1; mr = dr > 0 && ar >= as ? 1 : (dr < 0 && ar >= as ? -1 : 0); }
+  else if (ar >= as) { mr = dr > 0 ? 1 : -1; mq = dq > 0 && aq >= as ? 1 : (dq < 0 && aq >= as ? -1 : 0); }
+  else { mq = dq > 0 ? 1 : -1; mr = dr > 0 ? 1 : -1; }
+  if (mq === 0 && mr === 0) return null;
+  return { q: q + mq, r: r + mr };
+}
+
+// WHERE SHE COMES INTO YOUR WATER. Walk the course she will actually sail and
+// return the first hex of it you could plausibly become aware of — which is the
+// harbour itself when the harbour is close, so "she casts off before you see
+// her" still reads exactly as it did in the old dense sea. A course that never
+// comes within reach puts nothing in your water and is simply not used.
+function shipLaneEntry(from, to, here) {
+  let q = from.q, r = from.r;
+  for (let step = 0; step < SHIP_LANE * 2; step++) {
+    if (hexDistance({ q: q, r: r }, here) <= SHIP_RANGE) {
+      const t = getTile(q, r);
+      if (t && !t.wall && !t.land) return { q: q, r: r };
+    }
+    const nxt = shipStepToward(q, r, to.q, to.r);
+    if (!nxt) return null;
+    q = nxt.q; r = nxt.r;
+    if (q === to.q && r === to.r) return null;   // she is home before she is seen
+  }
+  return null;
+}
 
 // WHO IS AT EACH OTHER, AND IT CHANGES. This was a constant — the Long Line against
 // the Con-Fed, for ever. Sean asked for "a wartime thing, like in Sid Meier's
@@ -10661,7 +10744,7 @@ function shipsTick() {
   // the sea between them carries what they send each other.
   const near = [];
   for (const p of ports.values()) {
-    if (hexDistance(p, here) <= SHIP_RANGE) near.push(p);
+    if (hexDistance(p, here) <= SHIP_LANE) near.push(p);
   }
   for (let attempt = 0; state.ships.length < SHIP_CAP && attempt < SHIP_CAP * 2; attempt++) {
     if (near.length >= 1) {
@@ -10672,7 +10755,7 @@ function shipsTick() {
       // ship sailing to nowhere.
       const partners = [];
       for (const p of ports.values()) {
-        if (p !== from && hexDistance(p, from) <= SHIP_RANGE) partners.push(p);
+        if (p !== from && hexDistance(p, from) <= SHIP_LANE) partners.push(p);
       }
       if (!partners.length) continue;      // a harbour with nobody to trade with sends nothing
       const to = partners[Math.floor(rr() * partners.length)];
@@ -10685,6 +10768,16 @@ function shipsTick() {
         for (const [dq, dr] of SHIP_DIRS) {
           const wt = getTile(from.q + dq, from.r + dr);
           if (wt && !wt.wall) { sq = from.q + dq; sr = from.r + dr; break; }
+        }
+        // ...AND IN A BIG OCEAN YOU MEET HER UNDERWAY INSTEAD. Her harbour can now
+        // be sixty hexes over the horizon; a hull put into the world there is culled
+        // on the same tick for being out of range, which is how the sea emptied.
+        // So if the quay is too far off to watch, she enters where her course
+        // crosses into your water, already at sea and already going somewhere.
+        if (hexDistance({ q: sq, r: sr }, here) > SHIP_RANGE) {
+          const entry = shipLaneEntry(from, to, here);
+          if (!entry) continue;            // this course never comes near you
+          sq = entry.q; sr = entry.r;
         }
         const hull = fleetPick(from.holder, rr);
         const st2 = shipStats(from.holder, hull);
@@ -10727,13 +10820,9 @@ function shipsTick() {
       const d = hexDistance(sh, { q: tq, r: tr });
       if (d <= 0) { sh.arrived = !hunt; break; }
       // one hex toward the destination, by the cube-coordinate difference
-      const dq = tq - sh.q, dr = tr - sh.r, ds = -dq - dr;
-      const aq = Math.abs(dq), ar = Math.abs(dr), as = Math.abs(ds);
-      let mq = 0, mr = 0;
-      if (aq >= ar && aq >= as) { mq = dq > 0 ? 1 : -1; mr = dr > 0 && ar >= as ? 1 : (dr < 0 && ar >= as ? -1 : 0); }
-      else if (ar >= as) { mr = dr > 0 ? 1 : -1; mq = dq > 0 && aq >= as ? 1 : (dq < 0 && aq >= as ? -1 : 0); }
-      else { mq = dq > 0 ? 1 : -1; mr = dr > 0 ? 1 : -1; }
-      if (mq === 0 && mr === 0) { sh.arrived = !hunt; break; }
+      const nxt = shipStepToward(sh.q, sh.r, tq, tr);
+      if (!nxt) { sh.arrived = !hunt; break; }
+      const mq = nxt.q - sh.q, mr = nxt.r - sh.r;
       // A HULL LEFT STANDING ON A HARBOUR. If the spawn could find no water beside a
       // port — a one-hex inlet, a dock walled in by its own island — she is on land and
       // has nowhere to be. Retire her; the harbour will put out another.

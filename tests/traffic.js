@@ -87,7 +87,21 @@ function watch(q, r) {
   return { seen: seen };
 }
 
-let atPort = 0, atPortN = 0, openWater = 0, openWaterN = 0;
+// A THIRD PLACE TO STAND, ADDED WHEN THE OCEAN GOT BIG.
+//
+// This file had two categories: beside a harbour, and the single most remote
+// hex of water it could find. That was a fair split when ISLE_CELL was 16 and
+// "most remote" meant about thirteen hexes off a quay. At ISLE_CELL 54 the same
+// search returns somewhere sixty-odd hexes from any trade at all — so the
+// instrument quietly changed what it was asking while the label stayed the same,
+// and reported 0.0% as though a regression had happened.
+//
+// It had not. Nobody should meet shipping in the emptiest water in the world;
+// that reading is kept because it is the right floor. What was missing is the
+// case a captain is actually in most of the time now — CROSSING, on the line
+// between two harbours that trade with each other. In the old dense sea that
+// case barely existed, because everywhere was near a port.
+let atPort = 0, atPortN = 0, openWater = 0, openWaterN = 0, crossing = 0, crossingN = 0;
 const portNeighbours = [];
 for (const seed of SEEDS) {
   X.seedTo(seed);
@@ -111,6 +125,28 @@ for (const seed of SEEDS) {
     atPort += res.seen; atPortN++;
   }
 
+  // CROSSING — halfway along a real route, which is where the game now is.
+  {
+    let best = null, bestD = 0;
+    for (const a of all) for (const b of all) {
+      if (a === b) continue;
+      const d = X.hexDistance(a, b);
+      if (d <= 6 || d > 120) continue;
+      if (d > bestD) { bestD = d; best = [a, b]; }
+    }
+    if (best) {
+      const mq = Math.round((best[0].q + best[1].q) / 2), mr = Math.round((best[0].r + best[1].r) / 2);
+      let w = null;
+      for (let ring = 0; ring <= 6 && !w; ring++) {
+        for (const [dq, dr] of [[ring,0],[-ring,0],[0,ring],[0,-ring],[ring,-ring],[-ring,ring]]) {
+          const t = X.getTile(mq + dq, mr + dr);
+          if (t && !t.wall && !t.land) { w = { q: mq + dq, r: mr + dr }; break; }
+        }
+      }
+      if (w) { const res = watch(w.q, w.r); crossing += res.seen; crossingN++; }
+    }
+  }
+
   // IN OPEN WATER — a long way from any harbour at all.
   let far = null, bestD = 0;
   for (let dq = -34; dq <= 34 && !far; dq += 6) for (let dr = -34; dr <= 34; dr += 6) {
@@ -128,12 +164,16 @@ const pc = (n, d) => d ? (100 * n / (d * TURNS)).toFixed(1) + '%' : '-';
 console.log('TRAFFIC — ' + SEEDS.length + ' worlds, ' + TURNS + ' turns per watch, a sail within '
   + SIGHT + ' hexes counts as seen\n');
 console.log('  tied up beside a harbour   ' + pc(atPort, atPortN) + '   (' + atPortN + ' watches)');
+console.log('  crossing between two       ' + pc(crossing, crossingN) + '   (' + crossingN + ' watches)');
 console.log('  alone in open water        ' + pc(openWater, openWaterN) + '   (' + openWaterN + ' watches)');
 console.log('\n  harbours within SHIP_RANGE of the harbour you are at:');
 portNeighbours.sort((a, b) => a - b);
 console.log('    fewest ' + (portNeighbours[0] || 0)
   + '   median ' + (portNeighbours[Math.floor(portNeighbours.length / 2)] || 0)
   + '   most ' + (portNeighbours[portNeighbours.length - 1] || 0));
+console.log('\n  Wanted: busiest at a harbour, real traffic on a crossing, quiet in');
+console.log('  the empty places. A crossing at 0% means the lanes are drawn too');
+console.log('  short for the distances between harbours and the sea is dead.');
 console.log('\n  A harbour with neighbours should be busy and open water should not.');
 console.log('  If open water is busier, routes are being drawn around the PLAYER');
 console.log('  rather than between harbours that actually trade with each other.');

@@ -1,5 +1,154 @@
 # FATHOM — START HERE (last updated 2026-08-05)
 
+## THE OCEAN GETS BIG (2026-08-05) — and there is no water in Fathom
+
+Sean asked two things: silence the game when I am driving it remotely, and
+"deal with water collection", proposing a weather system, storm-chasing, a
+Dune-style windtrap, or spreading the ports out.
+
+### The premise was wrong, and the measurement is the answer
+
+**There is no water in Fathom.** There is ONE meter, `state.stores`, and food and
+water are the same number inside it. The dock line reads *"Stores off the quay —
+bread, water, oil."* A cask of fresh water is an item that adds 60 to the larder,
+exactly as a case of rations adds 45.
+
+And that meter could not be made to matter:
+
+| | |
+|---|---|
+| larder drain | 0.4/turn → **250 turns** full to empty |
+| ports within 60 hexes of the dock | ~84 |
+| median gap between harbours | 12 hexes |
+| **open water → nearest port** | **median 9 turns** |
+
+You carried twenty-seven times more supply than the longest run to a shop. Any
+water mechanic built on top of that would have been a system nobody ever feels —
+so the ratio had to change before anything else was worth building. He chose
+that, and no new meter.
+
+### Spreading them
+
+`ISLE_CELL` 16 → **54**, `ISLE_CHANCE` 0.7 → **1.0**. Every island carries a
+harbour, so island spacing IS port spacing. Swept over 8 seeds:
+
+```
+  cell 16  chance 0.70   84 ports   gap 12   turns  9   <- was here
+  cell 26  chance 0.70   31         gap 20   turns 15
+  cell 46  chance 1.00   15         gap 32   turns 21
+  cell 54  chance 1.00   11         gap 38   turns 26   <- here
+  cell 60  chance 1.00    8         gap 43   turns 28
+  cell 70  chance 1.00    7         gap 52   turns 33
+```
+
+**The chance went to 1.0 on purpose.** The old comment in that spot recorded the
+exact failure spreading invites — at cell 26 with chance 0.7, *"ONE SEED HAD NONE
+AT ALL"*. A coin flip skipped at cell 16 costs an island; skipped at cell 54 it
+costs a void 54 hexes wide. So the randomness came out of the lattice and the
+emptiness comes from the cell being big, which cannot fail. Not a hard guarantee
+and it is not written as one — `islandRoll` still rejects candidates on the
+southern landmass, in shallow water, or inside the home bay, all geography rather
+than chance. Measured: the emptiest of 8 worlds still held 9 harbours within 70
+hexes.
+
+Nor is it a grid — the jitter is a full cell wide, so measured gaps run 11 to 96
+against a cell of 54. A lattice you could see would put every gap at 54.
+
+**Worst case is what decides whether this is cruel**: the furthest sampled water
+sat 101 turns from a harbour, against a larder of 250. A long crossing is now a
+thing you provision FOR and never a thing that strands you. The home dock is
+untouched — banking still works from one hex away, and the first hour measures
+unchanged (0 deaths in 40 cold boots, 0 hull lost to land).
+
+### It emptied the sea of ships, and the battery had nothing to say about it
+
+`moved.js` caught what 18 green suites could not:
+
+```
+  tied up beside a harbour   58%  -> 21.4%
+  alone in open water      27.7%  ->  0.0%
+  hulls afloat: median 6 -> 1, and a low of NONE
+```
+
+Both ends of a shipping route were drawn from `SHIP_RANGE` = 26: the origin had
+to be within 26 of the BOAT, and the destination within 26 of the ORIGIN. At a
+median gap of 40 neither usually exists. The whole encounter layer — the fleets,
+the Pirates! flow, "another boat is somebody" — went quiet, silently, because
+nothing in the battery counts sails.
+
+Fixed by separating two questions that had shared one number:
+
+- `SHIP_RANGE` 26 stays PERCEPTION — how far off you could tell there was a ship.
+- `SHIP_LANE` 90 is TRADE — how far a harbour will send a hull.
+- A hull whose harbour is over the horizon now **enters the world underway**, at
+  the point where her course crosses into your water, already at sea and already
+  going somewhere. When the quay is close she still casts off from it, so the old
+  behaviour reads exactly as it did.
+- `shipStepToward` was extracted so the spawn walks the course by the same
+  arithmetic the mover sails it — otherwise she appears on a hex her own route
+  never visits.
+
+### The instrument had to grow a category
+
+After the fix, traffic read 76.1% beside a harbour and still **0.0%** in "open
+water" — and that was not a regression. `traffic.js` picks the single most remote
+hex it can find; at cell 16 that meant about thirteen hexes off a quay, and at
+cell 54 it means sixty-odd. **The instrument quietly changed what it was asking
+while its label stayed the same** — the same mistake as the `flip` perf workload,
+twice in one day.
+
+Nobody should meet shipping in the emptiest water in the world, so that reading is
+kept as the floor. What was missing was the case a captain is now in most of the
+time: CROSSING, on the line between two harbours that trade. Added, and it reads:
+
+```
+  tied up beside a harbour   76.1%
+  crossing between two       19.9%
+  alone in open water         0.0%
+```
+
+Harbours busy, lanes carrying real traffic, the empty places genuinely empty —
+which is the thing he actually asked for: "I like the creepy aspect of lots of
+space in the ocean."
+
+### The theme song
+
+The mute existed and the music honoured it; the DEFAULT was the fault. `false`,
+and a preview server is a fresh origin that has never stored a preference, so
+every reload came up loud. Now the origin decides: `localhost`, a bare IP and
+`file://` default to silent; `botheyesshut.github.io` does not. His phone loads
+the second and cannot reach the first. An explicit toggle still wins both ways.
+
+The first version was unguarded and took down three suites — a throw at the top
+level of a 20,000-line script does not fail loudly, it aborts the rest of the file
+and something dies thousands of lines away with "cannot access saveTimer before
+initialization". Not every harness stubs `location`, and none of them needs to.
+
+### Knobs
+
+`ISLE_CELL` 54 · `ISLE_CHANCE` 1.0 · `SHIP_LANE` 90 · `SHIP_RANGE` 26 ·
+`SHIP_CAP` 7 · larder drain 0.4/turn
+
+### What this unblocks, and what I would build next
+
+Water can now be made to matter, because distance finally exists. The shape I
+would give it, unbuilt and his call:
+
+- **Water becomes its own resource** only if it makes a DIFFERENT decision from
+  food. Food already costs TIME (the hunt). Water should cost SILENCE — a still is
+  loud and hot, and loud is how things find you. That is the axis this game models
+  most deeply (lurkers, decoys, the thermocline) and spends least.
+- **Weather as a MODIFIER, not a minigame.** Storm cells drift; rain makes the
+  still fast, free and silent; the surface in a storm is exposed and beats the
+  hull. Storm-chasing behaviour with no new game mode — which also keeps the
+  style, the same objection that killed the arcade hunt.
+- **No second minigame.** The hunt is a week old. A second placement puzzle at
+  the surface makes food and water the same errand twice.
+- The open risk to say out loud: a fourth survival meter beside air, hull and
+  stores, against his standing "I want a minimum of clutter".
+
+---
+
 ## THE HUNT — built 2026-08-05, and it took three designs to find one that works
 
 Sean asked for "a '20,000 Leagues Under the Sea'-style minigame in which captains
