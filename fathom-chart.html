@@ -13393,8 +13393,42 @@ function pregenTick() {
 
 let audioCtx = null;
 let audioMaster = null;
-let audioMuted = false;
-try { audioMuted = localStorage.getItem('fathom-audio') === '0'; } catch (e) {}
+// A LOCAL BUILD IS SILENT UNTIL SOMEBODY ASKS IT NOT TO BE.
+//
+// Sean, 2026-08-05: "Sometimes I work through your remote-control command and
+// the sound goes off while my wife is innocently here on the couch in the
+// living room, and it plays our scary theme song and creeps her the hell out."
+//
+// The mute already existed and the music already honoured it; the fault was the
+// DEFAULT. It starts false, and a preview server is a fresh origin that has
+// never stored a preference, so every reload I do comes up loud — and I reload
+// a great many times.
+//
+// So the default is decided by where the page came from. localhost, a bare IP
+// and file:// are a build being driven by somebody with a terminal open; the
+// hosted copy on botheyesshut.github.io is somebody PLAYING. His phone loads
+// from the second and cannot reach the first, so this can never silence the
+// real game by accident.
+//
+// An explicit choice still wins in BOTH directions: flip the toggle on a local
+// build and it stores '1' and stays audible, because a rule you cannot override
+// locally is just a different kind of annoyance.
+// GUARDED, because this runs at the top level of a 20,000-line script and a
+// throw here does not fail loudly — it aborts the rest of the file, leaving
+// every `let` below undeclared, and the next thing to touch one dies with
+// "cannot access X before initialization" hundreds of lines from the cause.
+// Three suites went down that way when this landed unguarded: not every test
+// harness stubs `location`, and it need not.
+let audioLocalBuild = false;
+try {
+  audioLocalBuild = location.protocol === 'file:'
+    || /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(location.hostname || '');
+} catch (e) {}
+let audioMuted = audioLocalBuild;
+try {
+  const pref = localStorage.getItem('fathom-audio');
+  if (pref !== null) audioMuted = pref === '0';
+} catch (e) {}
 
 function audioEnsure() {
   if (audioMuted) return null;
