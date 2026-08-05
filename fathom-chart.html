@@ -9650,12 +9650,23 @@ const HOME_DOOR = 4.0;      // what hull and ruin weights are multiplied by ther
 function prizeTypeAt(q, r, d) {
   const t = Math.min(1, Math.max(0, d / 6000));
   const home = d <= HOME_CEIL && hexDistance({ q: q, r: r }, { q: 0, r: 0 }) <= HOME_REACH;
+  // THE SUNLIT SHELF IS A GRAVEYARD, and Sean's reason is the right one: "there
+  // would be more sunken vessels on the shelf at this level than any other
+  // because of all the highly visible traffic and war at the surface." Things
+  // that sink in shallow water sank where they could be SEEN, and shot at.
+  //
+  // Confined to the top band rather than raising the shelf weight generally —
+  // the weights interpolate linearly to the abyss, so a shelf raise would have
+  // leaked hulls all the way down to 6,000 m for a reason that only applies to
+  // water you can see the sky through.
+  const sunlit = d <= SUNLIT;
   let total = 0;
   const w = [];
   for (const k of PRIZE_TYPES) {
     const pair = PRIZE_WEIGHTS[k];
     let v = pair ? pair[0] + (pair[1] - pair[0]) * t : 1;
     if (home && (k === 'hull' || k === 'ruin')) v *= HOME_DOOR;
+    if (sunlit && k === 'hull') v *= 2.2;   // the war happened where it could be seen
     total += v;
     w.push(v);
   }
@@ -9704,6 +9715,54 @@ function tileAt(q, r) {
   return world.get(k);
 }
 
+// WRECKS ON THE SHELF, WHERE THE WAR COULD BE SEEN.
+//
+// Sean: "there would be more sunken vessels on the shelf at this level than any
+// other because of all the highly visible traffic and war at the surface."
+//
+// MEASURED FIRST, and the measurement changed the job. Prizes are attached to
+// cave CHAMBERS, and the shelf has none — so the shallowest prize anywhere in
+// three seeds was 480 m and the sunlit zone held NOTHING, across 3,898 of 4,628
+// hexes of perfectly good open water. My first attempt at his note was a weight
+// multiplier inside `prizeTypeAt`, which reweighted a set with nothing in it:
+// dead code that measured as a no-op, correctly. This places the wrecks the
+// weight was pretending to bias.
+//
+// A wreck rests on the BOTTOM, so the depth is the shelf floor, snapped to the
+// grid. Shallower water gets more of them — that is his reason, expressed as a
+// curve rather than a constant. Deterministic per hex, so chunk order cannot
+// matter, which is what flip.test exists to enforce.
+//
+// THIN, AND THE NUMBER WAS MEASURED RATHER THAN FELT. This is the water
+// everybody else can reach too, so the deep has to stay where the real salvage
+// is or the trench stops meaning anything. My first rate looked modest in the
+// source and `moved.js` read it as 113 -> 179 prizes, +58%, most of it in the
+// easiest water in the game to reach — a wage, exactly the thing Sean's actual
+// ruling is against. At 0.0015 it is 113 -> 135, about +19%, filling water that
+// held literally nothing without touching what the deep is for.
+//
+// STILL OPEN, and honestly so: a shelf wreck currently pays what any hull pays.
+// It should pay LESS — this is the picked-over water, sunk in sight of shore
+// and salvaged by everyone who came before. That is a yield change, not a
+// placement one, and it is not done.
+const SHELF_WRECK_MAX = 900;     // below this the shelf is just dark water again
+const SHELF_WRECK_RATE = 0.0015; // at the surface; falls off with depth
+function maybeShelfWreck(q, r, seafloor) {
+  if (seafloor == null || seafloor < DEPTH_GRID || seafloor > SHELF_WRECK_MAX) return;
+  // Sunlit water carries the most, and it thins as the light goes.
+  const shallowness = 1 - Math.min(1, seafloor / SHELF_WRECK_MAX);
+  const chance = SHELF_WRECK_RATE * (0.25 + shallowness * 1.75);
+  if ((hashStr(worldSeed + ':shelfwreck:' + q + ':' + r) % 100000) / 100000 >= chance) return;
+  const d = Math.max(DEPTH_GRID, Math.floor(seafloor / DEPTH_GRID) * DEPTH_GRID);
+  const hk = hexKey(q, r);
+  let stack = cellPois.get(hk);
+  if (!stack) { stack = []; cellPois.set(hk, stack); }
+  if (stack.some(pp => pp.d === d)) return;          // something already rests there
+  stack.push({ d: d, type: 'hull' });
+  stack.sort((a, b) => a.d - b.d);
+  setTile(q, r, stack[0].type, true);
+}
+
 function ensureChunk(cq, cr) {
   const k = chunkKey(cq, cr);
   if (generatedChunks.has(k)) return;
@@ -9736,6 +9795,7 @@ function generateChunk(cq, cr) {
       const seafloor = shelfSeafloorDepth(q, r);
       if (seafloor != null) {
         addVolume(q, r, 'water', 'water', 0, seafloor);
+        maybeShelfWreck(q, r, seafloor);
       } else {
         // AN ISLAND HAS TO BE MARKED AS LAND, not merely left without water.
         // Suppressing the water column made the surface impassable but left
@@ -12132,6 +12192,42 @@ const WEAPONS = {
   harpoon: { power: 6,  range: 1, loud: 3 }, // reusable, adjacent, moderate
   torpedo: { power: 16, range: 3, loud: 5 }, // consumable, ranged, heavy
 };
+// THE SUNLIT ZONE, AND WHAT IS WORTH TAKING OUT OF IT.
+//
+// Sean's rule, and it is the good one: "sharks and swordfish and tuna and any
+// other largish fish you can imagine eating move in ratio to their value
+// (there's more meat on a marlin than on a netted school of mackerel)."
+//
+// So SPEED IS THE DIFFICULTY DIAL AND VALUE SETS IT. A marlin is hard because a
+// marlin is fast because a marlin is worth the trouble — the hunt gets no
+// separate difficulty knob, because it does not need one. `move` is hexes per
+// turn during the drive; a school that moves 0 is a thing you simply swim up to
+// and net, which is the tutorial case.
+//
+// No dolphins and no turtles, at his instruction: "people won't like that."
+// Everything here is a food fish or a shark, which is what a hungry boat in a
+// dead world would actually be taking.
+const SUNLIT = 160;            // metres. His line: the Sunlit Zone, 160 m or higher.
+const QUARRY = {
+  mackerel:  { name: 'a school of mackerel', glyph: '∴', move: 0, stores: 14, val: 1,
+               tell: 'a shoal of small silver, turning all at once' },
+  herring:   { name: 'a run of herring',     glyph: '∵', move: 0, stores: 18, val: 1,
+               tell: 'a long ribbon of them, going the same way' },
+  cod:       { name: 'a cod',                glyph: 'c', move: 1, stores: 26, val: 2,
+               tell: 'something heavy and unhurried, close to the bottom' },
+  tuna:      { name: 'a bluefin',            glyph: 'T', move: 2, stores: 44, val: 4,
+               tell: 'a fast shape, deep-bodied, running level' },
+  swordfish: { name: 'a swordfish',          glyph: 'Y', move: 2, stores: 52, val: 5,
+               tell: 'a bill and a shadow, and it has already seen the lamp' },
+  marlin:    { name: 'a marlin',             glyph: 'M', move: 3, stores: 70, val: 7,
+               tell: 'the fastest thing in this water, and it knows the water better' },
+  // The shark is the risk, and the risk is NOT a die roll: cornered, it turns
+  // on the nearest hand. Driving one is a decision to accept that, for meat.
+  shark:     { name: 'a shark',              glyph: 'S', move: 2, stores: 58, val: 5,
+               bites: true,
+               tell: 'something that is not running from the lamp' },
+};
+
 const CREATURE_TOUGH = { drifter: 6, lurker: 10, eel: 4, shoal: 3, silt: 12, baro: 26, angler: 10, chorus: 8, hulk: 999 };
 
 //=============================================================================

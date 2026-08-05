@@ -1,5 +1,62 @@
 # FATHOM — START HERE (last updated 2026-08-05)
 
+## THE SUNLIT ZONE IS EMPTY — measured 2026-08-05, and it reframes the hunt
+
+Sean asked for a 20,000-Leagues hunting minigame in the Sunlit Zone (<=160 m)
+and noted, as lore, that "there would be more sunken vessels on the shelf at
+this level than any other because of all the highly visible traffic and war at
+the surface."
+
+**Measuring that turned up something bigger.** Prizes are attached to cave
+CHAMBERS, and the shelf has none:
+
+| | |
+|---|---|
+| hexes with open water at 0–160 m | **3,898 of 4,628** (84%) |
+| prizes anywhere at or above 160 m | **0** |
+| shallowest prize in three seeds | **480 m** |
+
+So the sunlit zone is real, large, swimmable, crossed constantly on every
+transit — and held nothing at all. My first pass at his note was a weight
+multiplier inside `prizeTypeAt`, which reweighted a set with no members: dead
+code that measured, correctly, as a no-op. `maybeShelfWreck` now PLACES them,
+in Step 1 of `ensureChunk` beside the shelf water, deterministic per hex.
+
+**And the density had to be measured, not felt.** The first rate looked modest
+in source and `moved.js` read it as **113 → 179 prizes, +58%** — most of it in
+the easiest water in the game to reach, which is a wage. Settled at 0.0015:
+113 → 135, about +19%, filling empty water without touching what the deep is
+for. **Still open and honestly so:** a shelf wreck pays what any hull pays, and
+it should pay LESS — picked-over water, sunk in sight of shore. Yield, not
+placement, and not done.
+
+### THE HUNT — designed, not built
+
+`QUARRY` is in the source: mackerel/herring (move 0) through cod, bluefin,
+swordfish, shark, to marlin (move 3). **Sean's rule, and it is the good one:**
+speed is in ratio to value — "there's more meat on a marlin than on a netted
+school of mackerel" — so difficulty scales with reward by nature and the hunt
+needs no separate difficulty knob. No dolphins, no turtles, at his instruction.
+
+He rejected push-your-luck outright: *"A game where I just need to hedge bets to
+win is not really a game to me."* The agreed shape is two puzzles, neither
+dice-driven:
+
+1. **THE FIX.** Passive listening gives BEARING ONLY (the game already reports
+   contacts this way); a ping buys range but shouts. Two bearings from two
+   positions intersect. The patient play is the quiet play; impatience is what
+   draws danger — risk is player-generated, not rolled.
+2. **THE DRIVE** (proposed, awaiting his word). Hands are placed; the quarry
+   moves away from the nearest hand by a stated rule, `move` hexes per turn.
+   You corner it against the hull, a kelp bed, or a wreck. Deterministic
+   tie-breaks so a good player can predict perfectly. A shark, cornered, turns
+   on the nearest hand — the risk is a RULE, not a roll.
+
+**The knot:** shelf wrecks are the terrain you pin fish against, so his lore
+note and the minigame are the same feature. You fish above the dead.
+
+
+
 ## PLAYTEST ANGELSHARK (2026-08-05) — Sean's 22, and what became of each
 
 His first real session with the cards/captions build. Numbered items, his
