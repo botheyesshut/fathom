@@ -50,6 +50,39 @@ re-arms the door. Verified live, five cases: first vertical entry, clean leave,
 latch holds, horizontal re-board, vertical revisit. My first fix was a redundant
 block around the WRONG joint that never fired — deleted, not patched.
 
+**THE EREBUS SAILS ARMED (2026-08-05).** Sean: "I don't know how submarine
+battles actually work because the starting sub comes out unarmed. I'm wondering
+if that's really best. I think maybe it isn't." He is right, and for this
+session's recurring reason: `btn-fire` HIDES on an unarmed boat, so a new
+captain never learned the verb existed — combat was wired at both ends with
+nothing in the middle. Buying a weapon for a fight you have never seen is a
+purchase nobody makes.
+
+The harpoon, not the torpedo, deliberately: adjacent-only (you must already be
+in trouble), loud (using it calls more), and `fireWeapon` refuses to point it at
+another boat — "it takes beasts, never a hull" — so boat-against-boat stays
+something you deliberately arm for. At power 6 it settles a shoal (3) or an eel
+(4) and merely ANGERS a lurker (10), so "violence is rarely the answer" is now
+taught by letting a captain try it. Knob: `STARTING_ARMAMENT = null` restores
+the old start. A `teeth` briefing fires the first time something is alongside.
+
+`STARTING_ARMAMENT` is declared ABOVE the state literal on purpose — the literal
+is evaluated before the combat constants, and a `const` read before declaration
+throws on boot: a whole game that does not start, for one misplaced line.
+
+**TWO BUGS THE FIRST SHOT FOUND, neither findable before** (nothing had ever
+fired a harpoon in a browser, because the boat had none):
+- `'the ' + BESTIARY[c.type].name` — every bestiary name already carries its
+  article, so the log read **"You put 4 into the the hunter"**. Fixed at the one
+  caller; creature.test now forbids prepending an article.
+- **A hunter from an older save could never hunt again.** `state.creatures` is
+  saved and restored RAW. The migration line back-filled `interest` and stopped
+  there, while the arithmetic below reads `tenacity` — so a lurker from a save
+  written before temperament existed got `3 - Math.round(undefined * 2)`, its
+  interest became NaN, and every band test (`NaN >= LURK_STALK`) went false
+  for the rest of that campaign. An inert monster, silently. Now migrated as a
+  whole animal, seeded from where it was born. Verified red-then-green.
+
 **Process note (his question, answered in-session):** a 22-item batch was NOT
 too big — numbered, self-diagnosed (his #15 EDIT solved #8), with screenshots.
 That is the ideal shape. The only thing that would damage the process is fixing

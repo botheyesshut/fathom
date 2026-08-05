@@ -463,5 +463,42 @@ check(rivalStone === 0 && st.creatures.length === 1, 'rival stays in open water 
   check(Array.isArray(raw2.threats) && raw2.threats.length === 1, 'torpedoes in the water survive a save', raw2.threats.length + ' saved');
 }
 
+//--- A HUNTER FROM AN OLDER SAVE IS STILL A HUNTER --------------------------
+// `state.creatures` is saved and restored RAW, so a lurker written before
+// temperament existed loads with no `tenacity`/`aggression` — and
+// `3 - Math.round(undefined * 2)` makes its interest NaN, after which every
+// band test (`NaN >= LURK_STALK`) is false and the animal can never stalk or
+// hunt again. Found by firing the new starting harpoon at one in a browser.
+{
+  st.q = 0; st.r = -6; st.currentDepth = 0;
+  st.creatures = [{ id: 'old', type: 'lurker', q: 1, r: -6, depth: 0,
+                    awake: true, gone: false, dmgTaken: 0, interest: 60 }];  // an old save's hunter
+  sb.creatureTick();
+  const c = st.creatures[0];
+  const sane = c && typeof c.interest === 'number' && !isNaN(c.interest);
+  check(sane, 'a hunter with no temperament is given one rather than going NaN',
+    c ? 'interest=' + c.interest + ' tenacity=' + (typeof c.tenacity) + ' aggression=' + (typeof c.aggression) : 'no creature');
+  check(!!c && typeof c.tenacity === 'number' && typeof c.aggression === 'number',
+    'and the temperament is a real animal, seeded from where it was born',
+    c ? 'tenacity ' + (c.tenacity || 0).toFixed(2) + ', aggression ' + (c.aggression || 0).toFixed(2) : '—');
+}
+
+//--- NOBODY IS CALLED "THE THE HUNTER" --------------------------------------
+// Every BESTIARY name carries its own article ('the hunter', 'another boat'),
+// so a caller that prepends one produces "the the hunter" — which shipped, and
+// was only seen when the starting boat first had a gun to fire. Static, because
+// the failure is a string concatenation and not a behaviour.
+{
+  const srcAll = fs.readFileSync(__dirname + '/../fathom-chart.html', 'utf8');
+  const doubled = srcAll.split(/\r?\n/)
+    .map((ln, i) => [i + 1, ln])
+    .filter(([, ln]) => /['"]the ['"]\s*\+\s*BESTIARY|['"]a ['"]\s*\+\s*BESTIARY/.test(ln))
+    .map(([n, ln]) => n + ': ' + ln.trim().slice(0, 70));
+  check(doubled.length === 0, 'nothing prepends an article to a bestiary name',
+    doubled.length ? doubled.join(' | ') : 'names carry their own article');
+  const named = (srcAll.match(/name: '(?:the |a |an |another )[^']*'/g) || []).length;
+  check(named >= 8, 'and the names still carry one themselves', named + ' articled names');
+}
+
 console.log(failures === 0 ? '\nALL CREATURE CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);

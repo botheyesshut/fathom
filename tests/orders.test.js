@@ -62,6 +62,7 @@ var __X = {
     state.ordersSaid = []; state.ordersAt = null; state.moves = 0;
     state.berth = null; state.ticket = 0; state.cargo = 0; state.base = null;
     state.foot = null; state.creatures = []; state.currentDepth = 0;
+    state.armament = STARTING_ARMAMENT;
     state.crew = startingCrew();
     for (const m of state.crew) { m.conditions = []; m.wounded = false; }
     __shown.length = 0; __L.length = 0; closeBrief();
@@ -138,6 +139,11 @@ const scenarios = {
   ashore:   () => { X.state.foot = ashoreAt(); },
   keep:     () => { X.state.foot = ashoreAt(); X.state.base = null; },
   contact:  () => { X.state.creatures = [{ type: 'lurker', q: X.state.q + 1, r: X.state.r,
+                                           depth: X.state.currentDepth, awake: true, gone: false }]; },
+  // The Erebus sails with a harpoon now, so the card that explains it needs
+  // something ALONGSIDE — one hex, awake, in the same water.
+  teeth:    () => { X.state.armament = 'harpoon';
+                    X.state.creatures = [{ type: 'shoal', q: X.state.q + 1, r: X.state.r,
                                            depth: X.state.currentDepth, awake: true, gone: false }]; },
   hurt:     () => { X.state.crew[0].conditions = ['bruised']; X.state.crew[0].wounded = true; },
   // `floor` needs a real sinkhole on the chart, so it is driven against the

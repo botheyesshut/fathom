@@ -5965,7 +5965,11 @@ function portRows() {
     rows.push({ name: 'Harpoon gun', desc: 'Bolted to the bow. Adjacent targets. · 8 crates',
       ok: canPay(8, 0), why: shortfall(8, 0), act: 'harpoon' });
   } else {
-    rows.push({ name: 'Torpedoes ×3', desc: 'Relic-work, and the only thing that reaches. · 2 relics',
+    // SHE COMES WITH THE HARPOON NOW, so this row is no longer the second rung
+    // of a ladder a captain is climbing — it is the first thing the Armourer
+    // has to say to them. Name what the harpoon CANNOT do, because that is the
+    // whole reason to want a torpedo: reach, and a hull.
+    rows.push({ name: 'Torpedoes ×3', desc: 'Reaches three hexes, and the only thing aboard that will open another boat. Relic-work. · 2 relics',
       ok: canPay(0, 2), why: shortfall(0, 2), act: 'torps' });
   }
   return rows;
@@ -6296,6 +6300,20 @@ const BRIEFS = [
       cannot take it from you the way it takes a hold. Somewhere quiet with one way in is
       worth more than somewhere rich on a crossroads.</p>
       <p>It is the only address you will ever have.</p>` },
+
+  { id: 'teeth', title: 'The harpoon gun',
+    when: () => !!state.armament && !state.foot && (state.creatures || []).some(c =>
+      !c.gone && c.awake && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
+      && Math.abs((c.depth || 0) - state.currentDepth) <= DEPTH_GRID),
+    body: `<p>Something is alongside, and the Erebus does carry one gun: a harpoon
+      bolted to the bow. <b>FIRE</b> arms it, and a second tap shoots — because the
+      whole dark hears you do it.</p>
+      <p>It reaches one hex. It takes <b>beasts, never boats</b>. And it is a whaling
+      gun, not an answer: it will settle something small and it will only make a
+      lurker angry.</p>
+      <p>The torpedoes the Armourer sells are the ones that reach, and the only thing
+      aboard that opens another hull. Everything else down here is answered with
+      depth, distance and silence.</p>` },
 
   { id: 'contact', title: 'Something is out there',
     when: () => (state.creatures || []).some(c => !c.gone && c.awake
@@ -10587,6 +10605,12 @@ function enclaveHere() {
 // GAME STATE
 //=============================================================================
 
+// WHAT SHE SAILS WITH. Declared up here rather than beside the other combat
+// constants because the `state` literal below is evaluated before them, and a
+// `const` read before its declaration throws on boot — which is a whole game
+// that does not start, in exchange for one misplaced line.
+const STARTING_ARMAMENT = 'harpoon';   // null puts the old unarmed start back
+
 const state = {
   // ---- Entities: every actor in the water, the player's boat first. ------
   // entities[0] IS the player — a sub entity with position and depth. The
@@ -10693,9 +10717,29 @@ const state = {
   crew: [],
   // Decoy buoys in the water: { q, r, depth, turns }. Transient — not saved.
   buoys: [],
-  // Boat armaments (fight the bestiary). Bought at the dock; lost with the boat.
-  armament: null,   // null | 'harpoon' (reusable, adjacent)
-  torpedoes: 0,     // consumable, ranged, heavy
+  // Boat armaments (fight the bestiary). Lost with the boat.
+  //
+  // SHE SAILS WITH THE HARPOON ON HER. Sean: "I don't know how submarine
+  // battles actually work because the starting sub comes out unarmed. I'm
+  // wondering if that's really best. I think maybe it isn't."
+  //
+  // He is right, and for the reason this session keeps finding: the FIRE button
+  // HIDES itself on an unarmed boat, so a new captain never learns the verb
+  // exists — combat was content wired at both ends with nothing in the middle,
+  // exactly like the on-foot layer was. Buying a weapon for a fight you have
+  // never seen is a purchase nobody makes.
+  //
+  // The harpoon and not the torpedo, deliberately. It is adjacent-only, so you
+  // must already be in trouble to use it; it is loud, so using it calls more;
+  // and `fireWeapon` will not point it at another boat — "it takes beasts,
+  // never a hull" — so boat-against-boat stays a thing you deliberately arm
+  // for. At power 6 it settles a shoal (3) or an eel (4) and merely ANGERS a
+  // lurker (10), which teaches "violence is rarely the answer" by letting a
+  // captain try it, rather than by withholding the option.
+  //
+  // The knob: null here puts the old unarmed start back.
+  armament: STARTING_ARMAMENT,   // null | 'harpoon' (reusable, adjacent)
+  torpedoes: 0,                  // consumable, ranged, heavy
 
 };
 
@@ -12135,7 +12179,11 @@ function hitCreature(c, power) {
   // and "leviathan" appears in no other line in the game. The hulk's entry is
   // the one that teaches you do not fight weather; the line that repeats the
   // lesson when you shoot it called it something else. Ask the bestiary.
-  const nm = (BESTIARY[c.type] && BESTIARY[c.type].name) ? 'the ' + BESTIARY[c.type].name : 'it';
+  // EVERY BESTIARY NAME ALREADY CARRIES ITS ARTICLE — 'the hunter', 'the lure',
+  // 'another boat' — and this prepended a second one: "You put 4 into the the
+  // hunter". Found by firing the harpoon in a browser, which nothing had ever
+  // done, because until now the boat sailed with no gun to fire.
+  const nm = (BESTIARY[c.type] && BESTIARY[c.type].name) || 'it';
   if (c.dmgTaken < creatureTough(c)) {
     if (c.type === 'hulk') { log('The leviathan takes the hit and does not so much as turn. You will not kill this with what you carry.', 'warn', 'FIRE'); return; }
     if (c.type === 'lurker') c.interest = Math.min(100, (c.interest || 0) + 25); // a wound only enrages it
@@ -16572,7 +16620,24 @@ function lurkerStrike(c) {
 // The predator's turn. Interest is the whole game: noise and nearness raise it,
 // silence and distance let it bleed away, and its level chooses the behavior.
 function tickLurker(c, dPlayer, silent) {
-  if (c.interest === undefined) c.interest = c.awake ? 80 : 0; // migrate old saves
+  // MIGRATE THE WHOLE ANIMAL, NOT ONE FIELD OF IT. This line has always
+  // back-filled `interest` for a save written before interest existed — and
+  // stopped there, while the arithmetic below reads `tenacity` and `aggression`
+  // too. Creatures are SAVED RAW (`creatures: state.creatures`) and restored
+  // raw, so a hunter from an older campaign came back without a temperament,
+  // `3 - Math.round(undefined * 2)` made its interest NaN, and every band test
+  // after that (`NaN >= LURK_STALK`) is false: the thing could never stalk and
+  // never hunt again. An inert monster, silently, for the rest of that save.
+  //
+  // Seeded from where it was born, exactly as `spawnCreature` does it, so a
+  // migrated hunter is the same animal it would have been.
+  if (c.interest === undefined) c.interest = c.awake ? 80 : 0;
+  if (c.tenacity === undefined || c.aggression === undefined || c.cunning === undefined) {
+    const rng0 = mulberry32(hashStr(worldSeed + ':crt:' + c.q + ':' + c.r + ':' + c.depth));
+    if (c.cunning === undefined) c.cunning = rng0(); else rng0();
+    if (c.tenacity === undefined) c.tenacity = rng0(); else rng0();
+    if (c.aggression === undefined) c.aggression = rng0();
+  }
   const sameSlice = Math.abs(c.depth - state.currentDepth) < DEPTH_GRID;
 
   // FLEEING overrides all — a beaten beast wants only out (see lurkerFlee).
@@ -19355,7 +19420,7 @@ function endGame(title, summary) {
   state.threats = [];   // nor anything the old boat had in the water
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
-  state.armament = null; state.torpedoes = 0;
+  state.armament = STARTING_ARMAMENT; state.torpedoes = 0;
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.decoys = 3;
   state.items = {}; state.fits = {};   // the hold and every fitting go down with the boat
@@ -19437,7 +19502,7 @@ function restart() {
   state.moves = 0; state.poisFound = [];
   state.cargo = 0; state.cargoBanked = 0;
   state.relics = 0; state.relicsBanked = 0;
-  state.armament = null; state.torpedoes = 0;
+  state.armament = STARTING_ARMAMENT; state.torpedoes = 0;
   state.lockerWeapon = 'axe';   // the new hull comes with an axe in the locker
   state.decoys = 3;
   state.expedition = null;
