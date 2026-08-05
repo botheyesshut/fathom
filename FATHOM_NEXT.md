@@ -112,14 +112,43 @@ of the map. At 0.34/-0.19 a front passes in about 60 turns.
 `STILL_NOISE` 2 · `STILL_AIR` 0.5 · `STORM_CELL` 34 · `STORM_CHANCE` 0.62 ·
 `WIND_Q` 0.34 / `WIND_R` -0.19
 
+### AND THEN THE TWO COSTS I HAD PROMISED AND NOT BUILT
+
+Both of these were the missing half of a trade already shipped, which is worse
+than an unstarted feature: the benefit was live and the price was a comment.
+
+**"More crew is better but leaves the sub less protected."** His condition on the
+hunt, built at last. The choice was always the player's — a hand only goes over
+the side when you tap one into the water — it simply cost nothing. Now a hand in
+the water is not at their post, and  skips them. Measured:
+
+
+
+Send three and you will take the marlin, and for as long as it takes the Erebus
+is a deaf, unarmed tube with two people in it. Indexed into , never
+matched by name — two hands can share one, and that exact bug cost an afternoon
+in . You also cannot dive away from your own people any more; without
+that the boat could sink away from an open hunt and leave three hands floating
+at the old depth, still drawn, still driving a fish.
+
+*Found on the way:*  returned **NaN** for any crew member without an
+ field — one such hand would have made the whole boat's competence NaN.
+Hardened to .
+
+**"Collect rain at the surface while a little defenceless."** Rain shipped as
+pure gift; the only price was being visible to shipping, which is what surfacing
+costs anyway and not what the WEATHER charges. A sea running under her now works
+her seams —  0.22/turn. Measured in a browser: **8.8 hull over 40
+turns** lying in a storm, and **0** at sixty metres down. Entirely avoidable by
+diving, and diving is exactly the thing that stops the water coming in. Both
+sides of the trade exist now.
+
 ### Still open
 
-- **More crew is better but leaves the sub less protected** — the second half of
-  his hunt sentence. Hands in the water are still not missed anywhere aboard.
-- **The strike** — the quick alternative to the drive.
-- The storm does not yet punish you for sitting in it. Rain is currently pure
-  gift plus exposure-to-shipping; the hull-battering half of "a little
-  defenceless" is designed and not built.
+- **The strike** — the quick alternative to the drive (harpoon/net/line chosen by
+  knowledge, instant, no dice). Designed, not built.
+- The **ghost thread** (Angelshark #22), recorded not built.
+- **Angelshark #12** — a brown passable hex in a tunnel; never reproduced.
 
 ---
 

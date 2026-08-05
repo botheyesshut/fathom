@@ -57,6 +57,7 @@ const probe = [
   'function __tile(q,r){return tileAt(q,r)}function __hunt(){return state.hunt}',
   'function __huntStart(){huntStart()}function __tap(q,r){return huntTap(q,r)}function __spook(){huntSpook()}',
   'function __nbrs(q,r){return hexNeighbors(q,r)}function __dist(a,b){return hexDistance(a,b)}',
+  'function __crewLvl(r){return crewLvl(r)}function __roles(){return state.crew.map(function(m){return m.role})}',
   'function __QUARRY(){return QUARRY}function __K(){return{ARENA:HUNT_ARENA,NOTICE:HUNT_NOTICE,TURNS:HUNT_TURNS,HANDS:HUNT_HANDS}}',
 ].join('\n');
 try { vm.runInContext(script + '\n' + probe, sb, { timeout: 30000 }) } catch (e) { if (typeof sb.state === 'undefined') throw e }
@@ -71,7 +72,11 @@ function setup(key, seed) {
   sb.__seed(seed);
   st.q = 0; st.r = -6; st.currentDepth = 0; st.alive = true; st.foot = null; st.hunt = null; st.stores = 40;
   st.fished = {};
-  st.crew = ['A', 'B', 'C'].map(n => ({ name: n, role: 'hand', lost: false, wounded: false, conditions: [], nerve: 100, scars: [], gear: {} }));
+  // A REAL SPREAD OF ROLES, not three identical hands: the point of the drive is
+  // that sending them empties their stations, and three hands can only ever show
+  // one station going empty.
+  st.crew = [['A','hand'],['B','gun'],['C','ear']].map(([n, role]) =>
+    ({ name: n, role: role, xp: 0, lost: false, wounded: false, conditions: [], nerve: 100, scars: [], gear: {} }));
   sb.__tile(0, -6);
   L.length = 0;
   sb.__huntStart();
@@ -135,6 +140,40 @@ function play(key, seed, verbose) {
   if (verbose) console.log(L.join('\n'));
   return res;
 }
+
+// -- WHAT IT COSTS TO SEND THEM ------------------------------------------------
+// Sean asked for the hunt with a condition: "more crew is better but leaves the
+// sub less protected." A hand only goes over the side when you tap one into the
+// water, so the choice was always the player's; this measures whether it has
+// ever cost anything. If the boat is exactly as capable with three hands in the
+// sea as with none, the second half of his sentence is not implemented.
+console.log('WHAT THE BOAT LOSES WHILE THEY ARE IN THE WATER');
+{
+  setup(null, 90210);
+  const H = sb.__hunt();
+  if (!H) { console.log('  no hunt started — cannot measure'); }
+  else {
+    const roles = [...new Set(sb.__roles())];
+    const before = {};
+    for (const r of roles) before[r] = sb.__crewLvl(r);
+    const line = (n) => roles.map(r => r + ' ' + sb.__crewLvl(r)).join('   ');
+    console.log('  hands in the water: 0   ' + line());
+    let put = 0;
+    for (const h of H.hands) {
+      const spot = sb.__nbrs(st.q, st.r).find(n => open_(n.q, n.r) && !H.hands.some(x => x.q === n.q && x.r === n.r));
+      if (!spot) break;
+      h.q = spot.q; h.r = spot.r; put++;
+      console.log('  hands in the water: ' + put + '   ' + line());
+    }
+    const after = {};
+    for (const r of roles) after[r] = sb.__crewLvl(r);
+    const lost = roles.filter(r => after[r] < before[r]);
+    console.log('  ');
+    if (!lost.length) console.log('  NOTHING CHANGED — the sub is not less protected and his rule is not built.');
+    else console.log('  stations left empty: ' + lost.join(', ') + '  (of ' + roles.join(', ') + ')');
+  }
+}
+console.log();
 
 const keys = ['mackerel', 'herring', 'cod', 'tuna', 'swordfish', 'marlin', 'shark'];
 const seeds = [90210, 4242, 77, 1234, 5150, 8888, 31337, 606, 1111, 2718, 3141, 1618];

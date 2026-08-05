@@ -1854,11 +1854,43 @@ function startingCrew() {
   return [hand('ear'), hand('hand')];
 }
 
+// WHO IS ACTUALLY ABOARD TO DO THE JOB.
+//
+// Sean asked for the hunt with a condition attached that I built the first half
+// of and not the second: "more crew is better but leaves the sub less
+// protected." The choice was already in the player's hands and had no teeth —
+// a hand only goes over the side when you TAP one into the water, so how many
+// are out there is already a decision, and until now it cost nothing.
+//
+// It costs their station. The gun goes unserved, the ear stops hearing, the
+// engineer is not at the trim — every dial a role turns is turned by somebody,
+// and that somebody is fifty feet away in the cold holding a net. Send three
+// hands and you will take the marlin; send three hands and the Erebus is a
+// deaf, unarmed tube with two people in it for as long as it takes.
+//
+// Indexed into `state.crew`, never matched by name. Two hands can be called the
+// same thing — that exact bug cost an afternoon in `delve.js`, where a WeakMap
+// had to replace a name key after 1,486 phantom readings.
+function handsOverSide() {
+  const H = state.hunt;
+  if (!H || !H.hands) return null;
+  let out = null;
+  for (const h of H.hands) {
+    if (h.q == null || h.ci == null) continue;
+    if (!out) out = new Set();
+    out.add(h.ci);
+  }
+  return out;
+}
+
 function crewLvl(role) {
   let s = 0;
-  for (const m of state.crew) {
-    if (m.role !== role || m.wounded) continue; // the wounded work no dials
-    s += Math.min(3, 1 + Math.floor(m.xp / 3));
+  const over = handsOverSide();
+  for (let i = 0; i < state.crew.length; i++) {
+    const m = state.crew[i];
+    if (over && over.has(i)) continue;           // in the water, not at their post
+    if (m.role !== role || m.wounded) continue;  // the wounded work no dials
+    s += Math.min(3, 1 + Math.floor((m.xp || 0) / 3));   // a hand with no xp yet is still a hand
   }
   return s;
 }
@@ -6846,10 +6878,15 @@ function huntStart() {
   }
   if (!ring.length) { log('No open water alongside to work in.', 'warn', 'HUNT'); return; }
   const at = ring[hashStr(worldSeed + ':qpos:' + state.q + ':' + state.r) % ring.length];
-  const hands = (state.crew || []).filter(m => !m.lost && !m.wounded).slice(0, HUNT_HANDS);
+  // Indexed, so `handsOverSide` can say who is missing from their post without
+  // matching on a name two people might share.
+  const fit = [];
+  (state.crew || []).forEach((m, i) => { if (!m.lost && !m.wounded) fit.push({ m: m, i: i }); });
+  const chosen = fit.slice(0, HUNT_HANDS);
+  const hands = chosen.map(x => x.m);
   state.hunt = {
     key: key, q: at.q, r: at.r, sighted: false, turns: 0,
-    hands: hands.map((m, i) => ({ name: m.name, q: null, r: null, idx: i })),
+    hands: chosen.map((x, i) => ({ name: x.m.name, ci: x.i, q: null, r: null, idx: i })),
     from: state.q + ',' + state.r,
   };
   log(`Lines and a net over the side. ${hands.length === 1 ? 'One hand goes' : hands.length + ' hands go'} into the water — ${hands.map(m => m.name).join(', ')}.`, '', 'HUNT');
@@ -8490,6 +8527,29 @@ function rainHere() {
 
 // Said once on the way in and once on the way out, and never again in between —
 // the boat talks too much was a finding and it is not being relitigated.
+// WHAT A STORM COSTS, which is the half of it Sean asked for and I shipped
+// without: "collect rain at the surface while a little defenseless."
+//
+// Rain went in as pure gift — free water, no heat, no noise — and the only
+// price was being visible to shipping, which is a price you pay for surfacing
+// at all and not one the WEATHER charges. So: a sea running under her works the
+// hull. It is small (STORM_HULL a turn, against a hull of 100 and a front that
+// passes in about sixty), it is entirely avoidable by going down sixty metres,
+// and going down sixty metres is exactly the thing that stops the water coming
+// in. That is the trade, and now both sides of it exist.
+const STORM_HULL = 0.22;      // hull worked off per turn lying in a sea, at the surface
+
+function stormTick() {
+  if (!gameStarted || !state.alive || state.foot) return;
+  if (state.currentDepth !== 0 || !rainHere()) return;
+  const before = state.hull;
+  state.hull = Math.max(1, state.hull - STORM_HULL);
+  // Said once per storm, when it has actually taken something worth naming.
+  if (Math.floor(before) !== Math.floor(state.hull) && Math.floor(state.hull) % 5 === 0) {
+    log('She lies over and comes back, and lies over again. The sea is working her seams while you sit in it.', 'warn', 'WEATHER');
+  }
+}
+
 function weatherTick() {
   if (!gameStarted || !state.alive) return;
   const wet = rainHere();
@@ -13452,6 +13512,7 @@ function wait() {
   airCounsel();
   provisionTick();  // and the boat eats
   weatherTick();    // the sky, which is only ever news at the surface
+  stormTick();      // ...and a sea running under her costs hull to sit in
   waterTick();      // ...and drinks, and decides whether to be heard doing it
   checkDeath();
   updateHUD();
@@ -18057,6 +18118,13 @@ function checkDeath() {
 // been merged or there's an opening shaft connecting them).
 function changeDepth(deltaMeters) {
   if (!state.alive || ashore()) return;
+  // NOT WITH YOUR PEOPLE IN THE WATER. Without this the boat could sink away
+  // from an open hunt and leave three hands floating at the old depth, still
+  // drawn, still driving a fish, on a chart the boat was no longer on.
+  if (state.hunt && (state.hunt.hands || []).some(h => h.q != null)) {
+    log('Not with hands over the side. Call them in first — tap her own hull.', 'warn', 'HUNT');
+    return;
+  }
   const sub = activeSub();
   const tile = getTile(state.q, state.r);
   if (!tile || tile.wall) return;
