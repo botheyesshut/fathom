@@ -120,25 +120,30 @@ than an unstarted feature: the benefit was live and the price was a comment.
 **"More crew is better but leaves the sub less protected."** His condition on the
 hunt, built at last. The choice was always the player's — a hand only goes over
 the side when you tap one into the water — it simply cost nothing. Now a hand in
-the water is not at their post, and  skips them. Measured:
+the water is not at their post, and `crewLvl` skips them. Measured:
 
-
+```
+  hands in the water: 0   hand 1   gun 1   ear 1
+  hands in the water: 1   hand 0   gun 1   ear 1
+  hands in the water: 2   hand 0   gun 0   ear 1
+  hands in the water: 3   hand 0   gun 0   ear 0
+```
 
 Send three and you will take the marlin, and for as long as it takes the Erebus
-is a deaf, unarmed tube with two people in it. Indexed into , never
+is a deaf, unarmed tube with two people in it. Indexed into `state.crew`, never
 matched by name — two hands can share one, and that exact bug cost an afternoon
-in . You also cannot dive away from your own people any more; without
-that the boat could sink away from an open hunt and leave three hands floating
-at the old depth, still drawn, still driving a fish.
+in `delve.js`. You also cannot dive away from your own people any more; without
+that the boat could sink away from an open hunt and leave three hands floating at
+the old depth, still drawn, still driving a fish on a chart she was no longer on.
 
-*Found on the way:*  returned **NaN** for any crew member without an
- field — one such hand would have made the whole boat's competence NaN.
-Hardened to .
+*Found on the way:* `crewLvl` returned **NaN** for any crew member without an
+`xp` field — one such hand would have made the whole boat's competence NaN.
+Hardened to `(m.xp || 0)`.
 
 **"Collect rain at the surface while a little defenceless."** Rain shipped as
 pure gift; the only price was being visible to shipping, which is what surfacing
 costs anyway and not what the WEATHER charges. A sea running under her now works
-her seams —  0.22/turn. Measured in a browser: **8.8 hull over 40
+her seams — `STORM_HULL` 0.22/turn. Measured in a browser: **8.8 hull over 40
 turns** lying in a storm, and **0** at sixty metres down. Entirely avoidable by
 diving, and diving is exactly the thing that stops the water coming in. Both
 sides of the trade exist now.
