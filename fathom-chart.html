@@ -32,6 +32,7 @@
     --stone: #2a2118;
     --stone-lit: #3d2f20;
     --water: #0e2840;
+    --tank: #6fb0d8;
     --sonar: #5eb89a;
     --sonar-dim: #2a5a4a;
     --sonar-faint: #16302a;
@@ -250,6 +251,14 @@
 
   .bar-fill.warn { background: var(--lantern); }
   .bar-fill.danger { background: var(--blood); }
+
+  /* SUPPLY: two hair bars in one cell, so food and water cost the layout the
+     space of a single stat. 1px with a gap reads as two lines rather than one
+     thick one at a glance, which is the whole job. */
+  .bar-thin { height: 1px; margin-top: 2px; }
+  .bar-fill.bar-water { background: var(--tank); }
+  /* A control that is DOING something, rather than merely available. */
+  .btn.btn-live { border-color: var(--tank); color: var(--tank); }
 
   /* ====== CHART ====== */
   #chart-container {
@@ -1393,6 +1402,20 @@
          which is better placed than it was here: it is now attached to the
          control that endangers you rather than filed at the top of the screen.
          The three remaining stats get a third more width each. -->
+    <!-- SUPPLY, SHOWN AT ALL. `state.stores` existed for months and was drawn
+         NOWHERE — it appeared in log lines and nothing else, which is most of
+         why provisions never mattered to anybody: you cannot ration what you
+         cannot read. So this is not a fourth meter added against Sean's "I want
+         a minimum of clutter", it is the first time the third one is legible.
+         ONE cell for both: the number is whichever of food and water is in more
+         trouble (that is the only figure a captain acts on), and the two hair
+         bars underneath say which of them it is. -->
+    <div class="stat">
+      <div class="stat-label" id="supply-label">Supply</div>
+      <div class="stat-value" id="supply-val">100</div>
+      <div class="bar bar-thin"><div class="bar-fill" id="food-bar" style="width:100%"></div></div>
+      <div class="bar bar-thin"><div class="bar-fill bar-water" id="water-bar" style="width:100%"></div></div>
+    </div>
     <!-- E9: the game never showed you how much money you had. -->
     <div class="stat">
       <div class="stat-label">Hold</div>
@@ -1481,6 +1504,7 @@
     <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
     <button class="btn primary" id="btn-sail" title="Close on the sail you have sighted to read her colours, then hail her for news. Holding your course lets her go - unless somebody out here is already hunting you" style="display:none">Close</button>
     <button class="btn" id="btn-attack" title="Open fire on her. Her people will not forget it, and a submarine in a surface gun action is in the wrong place - but a merchant's hold has to come from somewhere" style="display:none">Attack</button>
+    <button class="btn" id="btn-still" style="display:none" title="Her own still. Makes fresh water out of the sea — and it is a hot, thumping thing in a steel hull, so the deep hears every turn it runs. Free and silent in rain.">Still</button>
     <button class="btn" id="btn-hunt" style="display:none" title="Put hands in the water, lay them where it will run, then drive it. Sunlit water only. It flees the boat and any hand it has noticed, and never sees the rest.">Hunt</button>
     <button class="btn" id="btn-more" title="The rest of the boat — the muster, the bestiary and the settings. Tap again to put them away.">MORE</button>
   </div>
@@ -1963,7 +1987,7 @@ const ITEMS = {
                 flavor: 'There is charge in it yet for one long, bright scar down the hull. After that it is scrap like everything else.' },
   oxygen:     { name: 'an oxygen candle',       kind: 'use', glyph: '◐', col: '#9ed8f0', air: 210, val: 2, find: 6, depth: 900,
                 flavor: 'It burns cold and gives back breath, and the writing on it is in a hand nobody living can read.' },
-  freshwater: { name: 'a cask of fresh water',  kind: 'use', glyph: '≋', col: '#8fc0e0', stores: 60, val: 1, find: 7, depth: 0,
+  freshwater: { name: 'a cask of fresh water',  kind: 'use', glyph: '≋', col: '#8fc0e0', water: 70, val: 1, find: 7, depth: 0,
                 flavor: 'The one thing the whole endless sea is full of, and not a drop of it will keep a crew alive.' },
   hydrophone: { name: 'a trailing hydrophone',  kind: 'fit', fit: 'sonar', glyph: '⊙', col: '#6ecfae', val: 3, find: 4, depth: 900,
                 fitLog: 'You stream the hydrophone out astern on its wire. The water widens — you hear farther, and give nothing back.',
@@ -6700,7 +6724,8 @@ function dockHere() {
   // A town is somewhere to put in: the crew get air and something hot.
   const sub = activeSub();
   if (state.air < sub.air) { state.air = sub.air; log('The tanks go on the town\'s compressor and come back full.', '', 'AIR'); }
-  if (state.stores < 100) { state.stores = Math.min(100, state.stores + 35); log('Stores off the quay — bread, water, oil.', '', 'STORES'); }
+  if (state.stores < 100) { state.stores = Math.min(100, state.stores + 35); log('Stores off the quay — bread and oil.', '', 'STORES'); }
+  if (boatWater() < 100) { state.water = 100; log('And the hose down from the quay. The tanks come up full, and it costs nothing but the asking.', '', 'WATER'); }
   sfx('bell');
   openTrade({ id: k, culture: port.holder, q: port.q, r: port.r, depth: 0, port: nm });
   updateHUD(); render(); scheduleSave();
@@ -7585,8 +7610,12 @@ function useItem(key) {
     const b = state.air, cap = activeSub().air;
     if (b >= cap) { log('The tanks are full. Save it.', 'warn', 'HOLD'); return; }
     state.air = Math.min(cap, b + it.air); msg = `You crack the flask into the boat's air. (+${state.air - b} air)`; done = true;
+  } else if (it.water) {
+    const b = boatWater();
+    if (b >= 100) { log('The tanks are full. Save it.', 'warn', 'HOLD'); return; }
+    state.water = Math.min(100, b + it.water); msg = `Broached and struck below. (+${Math.round(state.water - b)} water)`; done = true;
   } else if (it.stores) {
-    const b = state.stores == null ? 100 : state.stores;
+    const b = boatFood();
     if (b >= 100) { log('The lockers are full.', 'warn', 'HOLD'); return; }
     state.stores = Math.min(100, b + it.stores); msg = 'Struck below. The crew will eat a while longer.'; done = true;
   } else if (it.heal) {
@@ -8366,12 +8395,179 @@ function crewVitals(m) {
   return m;
 }
 
+//=============================================================================
+// WATER, AND THE PRICE OF IT
+//=============================================================================
+//
+// Sean asked how to handle water collection and offered storms, a Dune windtrap,
+// or spreading the ports. The first finding was that THERE WAS NO WATER: one
+// meter, `state.stores`, held food and drink together, the dock line read "bread,
+// water, oil", and it was never drawn on screen at all. Two hundred and fifty
+// turns of it against a nine-turn errand to a shop. Spreading the harbours came
+// first (ISLE_CELL 16 -> 54, the run is 26 turns now); this is the rest.
+//
+// THE RULE THAT MAKES IT WORTH HAVING A SECOND METER: it must ask a DIFFERENT
+// question from the first. Food already costs TIME — you go up to the sunlit
+// water and work the drive for it. If water also cost time it would be the same
+// errand twice and the game would be poorer for having two of them.
+//
+// So water costs SILENCE. The Erebus can distil her own; every submarine can.
+// The still is a hot, loud, thumping thing in a steel hull, and loud is how the
+// deep finds you — it goes through `noiseMade`, the same door a ping goes
+// through, so a boat making her own water is stoking every lurker and rival
+// captain in earshot and raising the threat on her own station.
+//
+// That means water is NEVER A LEASH, which matters under his ruling that "a
+// person who just wants to explore should be able to". You are not obliged to
+// come home; you are obliged to choose. Run dry and quiet, or drink and be
+// heard. The knob that undoes all of it is WATER_DRAIN = 0.
+//-----------------------------------------------------------------------------
+// WEATHER — a modifier, and deliberately NOT a minigame.
+//
+// Sean floated storm-chasing as a second minigame. The hunt is a week old and a
+// second placement puzzle at the surface would make food and water the same
+// errand twice — and he had already thrown out the arcade hunt on exactly this
+// ground, that it broke the style. So weather is one fact with consequences
+// hanging off it, and the storm-chasing falls out of the fact.
+//
+// THE WHOLE SKY IS ONE FIELD SLIDING PAST ON THE PREVAILING WIND. Storms are not
+// spawned, tracked or stored: rain at (q, r) on turn N is a pure function of the
+// seed, sampled at a point offset backwards along the wind by N. That keeps the
+// substrate law intact — the world is still a function of the seed and nothing
+// is written down — and it costs nine hash lookups whenever anyone asks. It also
+// means weather never runs out and never repeats, which a fleet of spawned storm
+// objects could not manage in an infinite ocean.
+//
+// You cannot see it from below, because you cannot. To find rain you surface,
+// and the surface is where every hull afloat can see YOU. That is the entire
+// trade and it needed no new mode to say it.
+const STORM_CELL = 34;        // one weather system per 34x34 hexes of sky
+const STORM_CHANCE = 0.62;    // ...and the sky is not solid overcast
+// THE WIND HAD TO BE FOUR TIMES FASTER THAN IT LOOKED RIGHT IN THE SOURCE.
+// At 0.06 hexes a turn a front sat over one hex for 524 TURNS — measured — which
+// is not weather, it is a climate, and a captain would have thought the rain was
+// a fixed region of the map. At this speed a front takes forty-odd turns to pass,
+// which is long enough to run the still under and short enough to be worth
+// sailing for.
+const WIND_Q = 0.34, WIND_R = -0.19;   // prevailing, in hexes per turn
+
+const stormCache = new Map();
+function stormAt(ci, cj) {
+  const k = ci + '|' + cj;
+  if (stormCache.has(k)) return stormCache.get(k);
+  const rr = mulberry32(hashStr('storm:' + worldSeed + ':' + ci + ',' + cj));
+  let out = null;
+  if (rr() <= STORM_CHANCE) {
+    out = { q: ci * STORM_CELL + rr() * STORM_CELL,
+            r: cj * STORM_CELL + rr() * STORM_CELL,
+            size: 5 + rr() * 7 };
+  }
+  stormCache.set(k, out);
+  return out;
+}
+
+// The hex metric in continuous axial space — sqrt(q^2 + qr + r^2). Using plain
+// Euclidean here would draw the rain as an ellipse on a hex grid, leaning.
+function axialLen(dq, dr) { return Math.sqrt(dq * dq + dq * dr + dr * dr); }
+
+function rainAt(q, r, moves) {
+  const sq = q - WIND_Q * (moves || 0), sr = r - WIND_R * (moves || 0);
+  const ci = Math.floor(sq / STORM_CELL), cj = Math.floor(sr / STORM_CELL);
+  for (let di = -1; di <= 1; di++) {
+    for (let dj = -1; dj <= 1; dj++) {
+      const st = stormAt(ci + di, cj + dj);
+      if (!st) continue;
+      if (axialLen(sq - st.q, sr - st.r) <= st.size) return true;
+    }
+  }
+  return false;
+}
+
+// RAIN IS A SURFACE FACT. At 60 m it is already somebody else's weather.
+function rainHere() {
+  return state.currentDepth === 0 && rainAt(state.q, state.r, state.moves || 0);
+}
+
+// Said once on the way in and once on the way out, and never again in between —
+// the boat talks too much was a finding and it is not being relitigated.
+function weatherTick() {
+  if (!gameStarted || !state.alive) return;
+  const wet = rainHere();
+  if (wet === !!state.inRain) return;
+  state.inRain = wet;
+  if (wet) {
+    log(state.still
+      ? 'Rain, hard, and the still goes quiet — they are catching it instead of boiling it. Free water, and anything afloat can see you sitting in it.'
+      : 'Rain comes across the water in a grey wall. Run the still in this and it costs nothing and makes no sound.', 'good', 'WEATHER');
+  } else if (state.currentDepth === 0) {
+    log('The rain goes over and away east, and the sea is flat and bright again.', '', 'WEATHER');
+  }
+}
+
+const WATER_DRAIN = 0.6;      // a full tank is about 165 turns of ordinary sailing
+const STILL_MAKE  = 1.6;      // what her own still puts back in a turn
+const STILL_NOISE = 2;        // ...and how loudly. Same scale as a ping's loudness.
+const STILL_AIR   = 0.5;      // it runs off the boat, and the boat runs off air
+
+function boatWater() { return state.water == null ? 100 : state.water; }
+function boatFood()  { return state.stores == null ? 100 : state.stores; }
+
 // Stores feed Vigor. Full stores = the deep is merely lethal; empty stores =
 // the deep is lethal AND you are hungry, cold, and slower to take it. Never a
 // death clock of its own — a multiplier on everything else's danger.
+//
+// THIRST COUNTS THE SAME AS HUNGER HERE, by taking whichever is worse rather
+// than averaging them. Averaging would let a full larder hide an empty tank,
+// which is exactly backwards: a crew with food and no water is in more trouble
+// than one with neither in moderation.
 function vigorMult() {
-  const s = state.stores == null ? 100 : state.stores;
+  const s = Math.min(boatFood(), boatWater());
   return 1 + (1 - Math.max(0, Math.min(100, s)) / 100) * 0.6; // 1.0 full → 1.6 empty
+}
+
+// THE STILL. One decision, taken every turn it is on, and the cost is not a
+// number in a corner — it is who hears it.
+function waterTick() {
+  const before = boatWater();
+  let w = before - WATER_DRAIN;
+  if (state.still) {
+    // NOT WHILE ASHORE. The party is out of the boat; nobody is minding it.
+    if (state.foot) { /* it sits idle, and says so below */ }
+    else if (state.air <= STILL_AIR * 2) {
+      state.still = false;
+      log('The still stops. There is not air enough aboard to run it and breathe.', 'warn', 'STILL');
+    } else if (w >= 100) {
+      state.still = false;
+      log('The tanks are full. They shut the still down.', '', 'STILL');
+    } else {
+      const rain = rainHere();
+      // RAIN IS THE GIFT, and the only free water in the game. On the surface in
+      // weather you are catching it, not boiling it: no air, no heat, no noise —
+      // and every hull afloat can see you standing in it.
+      if (rain) {
+        w += STILL_MAKE * 2.2;
+      } else {
+        w += STILL_MAKE;
+        state.air = Math.max(0, state.air - STILL_AIR);
+        noiseMade(state.q, state.r, STILL_NOISE);
+      }
+    }
+  }
+  // AND THE HAND STILL FINALLY MEANS WHAT IT IS CALLED. `still` has been in the
+  // item table for months as "a hand water-still" whose only effect was to make
+  // FOOD last longer, because there was no water for it to make. It is a small
+  // hand-worked thing, so it trickles and it does not thump: no air, no noise,
+  // and not enough to cover the drain on its own (0.25 against 0.6). It buys a
+  // deep expedition more rope; it does not retire the decision.
+  const hand = countHeldWith('preserving');
+  if (hand && !state.foot) w += 0.25 * hand;
+  state.water = Math.max(0, Math.min(100, w));
+  if (before > 33 && state.water <= 33) {
+    log('The water is low. Thirst tells on a crew faster than hunger does — run the still, or find a quay.', 'warn', 'WATER');
+  }
+  if (before > 0 && state.water <= 0) {
+    log('The tanks ring empty. Every hand aboard is worse at everything they do until that changes.', 'danger', 'WATER');
+  }
 }
 
 // Time passes, and provisions go down with it. Slow — this is a reason to head
@@ -11217,7 +11413,10 @@ const state = {
   hailed: [],     // ships already spoken to, so a hail is worth something once
   // Provisions — food, water, warmth, in one number. Feeds Vigor; never kills
   // on its own. Depletes away from port/base, tops up at either.
-  stores: 100,
+  stores: 100,     // FOOD. Water is its own tank now — see `waterTick`.
+  water: 100,
+  still: false,    // her own still: makes water, and is heard doing it
+  inRain: false,   // said once on the way in, once on the way out
   // Crew you have lost, by name and role. A drowned ruin may give one back.
   lostCrew: [],
   // The hold: {itemKey: count}. Overlay — lost with the boat, unless struck
@@ -11339,6 +11538,15 @@ function syncFootControls(inside) {
   }
   // The rest have their own rules — armament, a threat, a harbour, a sail. Being
   // afloat is a precondition for those rules, never a reason on its own.
+  // THE STILL'S SWITCH APPEARS WHEN IT IS A QUESTION, and not before — the same
+  // rule the Hunt button follows. A full tank has nothing to decide.
+  const stillBtn = document.getElementById('btn-still');
+  if (stillBtn) {
+    const relevant = gameStarted && state.alive && (state.still || boatWater() < 97);
+    stillBtn.style.display = relevant ? '' : 'none';
+    stillBtn.textContent = state.still ? (rainHere() ? 'Catching' : 'Still ON') : 'Still';
+    stillBtn.className = 'btn' + (state.still ? ' btn-live' : '');
+  }
   const huntBtn = document.getElementById('btn-hunt');
   if (huntBtn && !inside) {
     huntBtn.style.display = (state.hunt || huntable()) ? '' : 'none';
@@ -11823,6 +12031,23 @@ function render() {
       poly.setAttribute('opacity', alpha);
       poly.setAttribute('stroke', 'none');
       g.appendChild(poly);
+
+      // RAIN, AND ONLY WHEN YOU ARE IN IT TO SEE IT. Weather is a surface fact:
+      // at 60 m it is already somebody else's. Drawn as a wash over the water
+      // rather than a symbol on it, because it is not a thing ON the hex, it is
+      // the sky above it — and because a captain has to be able to SEE where the
+      // front is to sail into it. Without this the storm-chasing Sean asked for
+      // would have been done blind, by reading the log and guessing.
+      if (state.currentDepth === 0 && !tile.wall && !tile.land
+          && rainAt(tile.q, tile.r, state.moves || 0)) {
+        const wash = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        wash.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
+        wash.setAttribute('fill', 'var(--tank)');
+        wash.setAttribute('opacity', (alpha * 0.22).toFixed(3));
+        wash.setAttribute('stroke', 'none');
+        wash.setAttribute('pointer-events', 'none');
+        g.appendChild(wash);
+      }
 
       // Bright edges: any boundary between a sub-reachable hex and a
       // not-currently-passable one (wall, OR open water at incompatible depth)
@@ -13226,6 +13451,8 @@ function wait() {
   dyingTick();      // a hand bleeding out is running out of time whether you move or not
   airCounsel();
   provisionTick();  // and the boat eats
+  weatherTick();    // the sky, which is only ever news at the surface
+  waterTick();      // ...and drinks, and decides whether to be heard doing it
   checkDeath();
   updateHUD();
   render();
@@ -13440,6 +13667,7 @@ function move(q, r) {
   dyingTick();     // and a hand who is bleeding out is running out of time
   airCounsel();
   provisionTick();
+  waterTick();
   baseTick();
   checkDeath();
 
@@ -14864,6 +15092,7 @@ function enterInterior(tile) {
   if (claimed) {
     log(`You cycle the lock and step into your own station. Dry ${placeWord(siteKind)}, and the pumps muttering somewhere below.`, '', 'STATION');
     if (state.stores < 90) { state.stores = Math.min(100, state.stores + 40); log('The station\'s lockers put something back in the boat — a stay here is nearly as good as a run home.', '', 'STORES'); }
+    if (boatWater() < 90) { state.water = Math.min(100, boatWater() + 45); log('And her catchment has been filling the whole time you were away.', '', 'WATER'); }
   } else {
     log('You go over the side with them. The lamp finds a breach in the structure — and past it, trapped air, and a floor nobody has walked in a very long time.', 'strange', 'ASHORE');
     log('Water is already coming through the hole you came in by. It will not stop.', 'warn', 'WATER');
@@ -14892,6 +15121,7 @@ function enterGrotto(kind) {
     // Coming home. The lamps are already up and the stores are where you left
     // them — this must not read like a first landing on strange sand.
     if (state.stores < 90) { state.stores = Math.min(100, state.stores + 40); log('The station\'s lockers put something back in the boat — a stay here is nearly as good as a run home.', '', 'STORES'); }
+    if (boatWater() < 90) { state.water = Math.min(100, boatWater() + 45); log('And her catchment has been filling the whole time you were away.', '', 'WATER'); }
     updateHUD(); render(); scheduleSave();
     return;
   }
@@ -15920,6 +16150,7 @@ function stepFoot(x, y) {
     dwellerStep();   // the rock has a tenant even where the sea has no way in
   }
   provisionTick(0.3);   // a body ashore eats into the stores too
+  waterTick();          // ...and drinks. The still is unminded while they are off her.
 
   if (state.air <= 0) {
     log('The tanks run dry in the dark.', 'danger', 'AIR');
@@ -19258,6 +19489,7 @@ let cellsEpoch = 0;
 // this function. `flip.test.js` asserts that reseeding and regenerating
 // reproduces a world exactly, which is what catches a cache you forgot.
 function resetWorldCaches() {
+  if (typeof stormCache !== 'undefined') stormCache.clear();
   passageFarCache.clear();   // where a passage comes out belongs to this ocean
   cellsEpoch++;
   world.clear();
@@ -20016,6 +20248,24 @@ function updateHUD() {
   // safe/crush band. O3's finding that "safe and crush depth were written down
   // NOWHERE" is still honoured — the words just live where the thumb is.
   syncDepthReadout();
+  // SUPPLY. The number is the worse of the two, because that is the one that is
+  // about to cost you something; the label names it so the number is never
+  // ambiguous. Thirst before hunger on a tie — it bites sooner.
+  {
+    const food = Math.round(boatFood()), wat = Math.round(boatWater());
+    const worst = Math.min(food, wat);
+    const lab = document.getElementById('supply-label');
+    const val = document.getElementById('supply-val');
+    const fb = document.getElementById('food-bar'), wb = document.getElementById('water-bar');
+    if (lab) lab.textContent = state.still ? 'Still on' : (wat <= food ? 'Water' : 'Food');
+    if (val) {
+      val.textContent = worst;
+      val.className = 'stat-value' + (worst <= 15 ? ' danger' : worst <= 33 ? ' warn' : '');
+    }
+    if (fb) fb.style.width = food + '%';
+    if (wb) wb.style.width = wat + '%';
+  }
+
   // E9: and it never showed you your own money.
   const hv = document.getElementById('hold-val'), hs = document.getElementById('hold-sub');
   if (hv) hv.textContent = state.cargo + (state.relics ? ' +' + state.relics + 'r' : '');
@@ -20095,6 +20345,7 @@ function endGame(title, summary) {
   state.route = ['0,0,0']; state.refuges = { surface: '0,0,0' }; state.autoTarget = null;   // a new hull starts at the pier
   state.foot = null;    // and it does not leave you standing in a ruin the boat is no longer under
   state.stores = 100;   // a new hull is provisioned; it does not inherit an empty larder
+  state.water = 100; state.still = false;
   state.threats = [];   // nor anything the old boat had in the water
   state.hull = sub0.hull; state.air = sub0.air;
   state.cargo = 0; state.relics = 0;
@@ -21090,6 +21341,21 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 // the hatch, and air fills itself now. What only `surface()` does — putting the hold
 // ashore, the surgeon, re-provisioning — happens when the boat actually reaches the top,
 // which is where it always should have happened.
+document.getElementById('btn-still').addEventListener('click', () => {
+  if (!gameStarted || !state.alive) return;
+  if (state.still) {
+    state.still = false;
+    log('They shut the still down, and the boat is quiet again.', '', 'STILL');
+  } else if (boatWater() >= 100) {
+    log('The tanks are already full.', 'warn', 'STILL');
+  } else {
+    state.still = true;
+    log(rainHere()
+      ? 'They rig the catchment. Rain does the work, and none of it makes a sound.'
+      : 'The still lights. It is hot and it thumps, and everything down here with an ear on you now knows exactly where you are.', 'warn', 'STILL');
+  }
+  updateHUD(); render(); scheduleSave();
+});
 document.getElementById('btn-hunt').addEventListener('click', () => { if (state.hunt) huntSpook(); else huntStart(); });
 document.getElementById('btn-dock').addEventListener('click', dockHere);
 // One control, two seas: a sail on the surface, a lamp under it.

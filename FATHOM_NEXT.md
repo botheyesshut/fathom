@@ -1,5 +1,128 @@
 # FATHOM — START HERE (last updated 2026-08-05)
 
+## WATER, AND THE PRICE OF IT (2026-08-05) — built after the ocean got big
+
+Water is its own tank now, and what it costs is **silence**.
+
+### Why a second meter is allowed to exist
+
+Sean's standing instruction is a minimum of clutter, so the bar for a new
+resource is high. The rule it had to clear: **it must ask a DIFFERENT question
+from the first one.** Food already costs TIME — you go up to the sunlit water and
+work the drive for it. If water also cost time, it would be the same errand
+twice and the game would be poorer for owning two of them.
+
+So water costs being heard. The Erebus distils her own; every submarine does. The
+still is a hot, thumping thing in a steel hull and it goes through `noiseMade` —
+the same door a ping goes through — so a boat making her own water is stoking
+every lurker and rival captain in earshot and raising the threat on her own
+station. **You are never obliged to come home for water. You are obliged to
+choose**: run dry and quiet, or drink and be found. That keeps it clear of his
+ruling that a person who just wants to explore should be able to.
+
+And it turned out not to be a fourth meter at all. `state.stores` had existed for
+months and was **drawn nowhere** — it appeared in log lines and nothing else,
+which is most of why provisions never mattered to anybody: you cannot ration what
+you cannot read. One HUD cell now carries both, the number being whichever of the
+two is in more trouble, with two hair bars saying which.
+
+### The numbers
+
+| | |
+|---|---|
+| `WATER_DRAIN` | 0.6/turn — a full tank is **167 turns** |
+| `STILL_MAKE` | 1.6/turn, so net +1.0 while it runs |
+| `STILL_NOISE` | 2 — a ping's loudness scale |
+| `STILL_AIR` | 0.5/turn, because it runs off the boat |
+| median run to a harbour | 26 turns (after the spread) |
+
+Measured over 10 voyages x 260 turns, the same course sailed twice:
+
+```
+  still OFF   ran dry in 10/10 voyages (median turn 166)
+  still ON    ran dry in  0/10
+```
+
+**And the load-bearing claim, measured rather than asserted:**
+
+```
+  attention on you, still OFF   0.0
+  attention on you, still ON  550.0
+```
+
+The first version of `tests/thirst.js` reported **0.0 against 0.0** — it cleared
+`state.creatures` and then asked how alarmed the creatures were. It was measuring
+an empty ocean, and a slightly more confident probe would have called the whole
+feature proven. It now places witnesses on purpose and refuses to print a verdict
+when it sees nothing. Confirmed live in a browser too: a lurker three hexes off
+goes 0 → saturated interest in ten turns of distilling.
+
+### Weather, and why it is not a minigame
+
+He floated storm-chasing as a second minigame. The hunt is a week old; a second
+placement puzzle at the surface makes food and water the same errand twice, and
+he had already thrown out the arcade hunt on exactly that ground. So weather is
+ONE FACT with consequences hanging off it, and the chasing falls out of the fact.
+
+**The whole sky is one field sliding past on the prevailing wind.** Storms are
+not spawned, tracked or stored: rain at (q, r) on turn N is a pure function of
+the seed sampled at a point offset backwards along the wind by N. The substrate
+law holds, nothing is written down, it costs nine hash lookups, and weather never
+runs out or repeats — which a fleet of storm objects could not manage in an
+infinite ocean.
+
+In rain the still needs no heat and makes no sound, and fills faster. Measured in
+the browser, ten turns each:
+
+| | water | lurker interest | air |
+|---|---|---|---|
+| in rain | +29 | **0** | **0** |
+| out of rain | +10 | **100** | 5 |
+
+**Rain is only visible from the surface** — 35 rain hexes drawn at depth 0, zero
+at 240 m. That is the epistemic law doing the design's work for it: to find
+weather you must surface, and the surface is where every hull afloat can see YOU.
+The trade needed no new mode to say it.
+
+*The wind had to be four times faster than it looked right in the source.* At 0.06
+hexes a turn a front sat over one hex for **524 turns** — measured — which is not
+weather, it is a climate, and a captain would have read the rain as a fixed region
+of the map. At 0.34/-0.19 a front passes in about 60 turns.
+
+### Also
+
+- **The hand water-still finally means what it is called.** `still` has been in
+  the item table for months as "a hand water-still" whose only effect was making
+  FOOD last longer, because there was no water for it to make. It now trickles
+  0.25/turn, silently, with no air — not enough to cover the drain of 0.6, so it
+  buys a deep expedition more rope without retiring the decision.
+- **Quays fill the tank for nothing** ("it costs nothing but the asking"), and a
+  claimed station's catchment has been filling the whole time you were away.
+- **A cask of fresh water is water now**, not 60 points of biscuit.
+- **Old saves need no migration.** `boatWater()` reads 100 when the field is
+  absent and the first tick writes a real value — verified against a save with
+  `water`, `still` and `inRain` deleted outright.
+- `vigorMult` takes the WORSE of food and water rather than averaging, so a full
+  larder can never hide an empty tank. `interior.test` caught the change the
+  moment it landed, because it pinned only one of the two tanks.
+
+### Knobs
+
+`WATER_DRAIN` 0.6 (set it to 0 and the whole feature is off) · `STILL_MAKE` 1.6 ·
+`STILL_NOISE` 2 · `STILL_AIR` 0.5 · `STORM_CELL` 34 · `STORM_CHANCE` 0.62 ·
+`WIND_Q` 0.34 / `WIND_R` -0.19
+
+### Still open
+
+- **More crew is better but leaves the sub less protected** — the second half of
+  his hunt sentence. Hands in the water are still not missed anywhere aboard.
+- **The strike** — the quick alternative to the drive.
+- The storm does not yet punish you for sitting in it. Rain is currently pure
+  gift plus exposure-to-shipping; the hull-battering half of "a little
+  defenceless" is designed and not built.
+
+---
+
 ## THE OCEAN GETS BIG (2026-08-05) — and there is no water in Fathom
 
 Sean asked two things: silence the game when I am driving it remotely, and

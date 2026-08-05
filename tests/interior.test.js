@@ -897,9 +897,20 @@ check(wardSerious < bareSerious, 'armour tilts the wound table away from its wor
 
 // Empty stores make every blow land harder — Vigor as a multiplier, never a
 // death clock of its own.
+//
+// AND IT READS TWO TANKS NOW, not one. Water became its own resource, and vigor
+// takes the WORSE of food and water rather than averaging them — so this has to
+// pin both or it is measuring whatever the water happened to drain to. It caught
+// exactly that when the split landed, which is the check doing its job.
+sandbox.__st().water = 100;
 sandbox.__st().stores = 100; const vFull = sandbox.__vigor();
 sandbox.__st().stores = 0;   const vEmpty = sandbox.__vigor();
-check(vEmpty > vFull && vFull === 1, 'stores multiply danger but never kill directly', 'full ' + vFull + ' empty ' + vEmpty.toFixed(2));
+check(vEmpty > vFull && vFull === 1, 'hunger multiplies danger but never kills directly', 'full ' + vFull + ' empty ' + vEmpty.toFixed(2));
+// ...and thirst does it on its own, with a full larder.
+sandbox.__st().stores = 100; sandbox.__st().water = 0;
+const vDry = sandbox.__vigor();
+sandbox.__st().water = 100;
+check(vDry === vEmpty, 'and thirst does it just as hard, with the lockers full', 'dry ' + vDry.toFixed(2) + ' vs starved ' + vEmpty.toFixed(2));
 sandbox.__st().stores = 50;
 sandbox.__provision(20);
 check(sandbox.__st().stores === 30, 'provisions depend down as time passes', 'stores=' + sandbox.__st().stores);
