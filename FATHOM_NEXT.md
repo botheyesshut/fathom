@@ -368,7 +368,7 @@ report clean. Battery is **14 suites** now.
 
 - **The board may crowd out exploring.** The bot's median max depth fell 900 m → 180 m and it never reached 2,400 m, because unrated postings are shallow and near home and it does board work to the exclusion of all else. A human would mix. If it turns out to be real in play, the answer is the rank ladder pulling further out, **not** the board paying less.
 - **96% of prizes are sealed in rock** — the ping says so honestly now and points at the nearest way down, but it is still a lot of no. Open the floor a little, or leave the deep hard to enter? Generator + economy, so yours.
-- **Standing still does not move a price.** One multiplier in `sellPriceTo`. Yours, per the no-buff ruling.
+- **Standing still does not move a price.** One multiplier in `sellPriceTo`. RULED 2026-08-05: yes, build it.
 - **The income question**, the **deep room at 70% richer**, the **log window font/height** — all unchanged and all yours.
 - **PCs proper** — merging `state.creatures` into `state.entities` — still the big refactor, still not started, still honestly described as such.
 - **Rooms with a purpose** (the Dwarf Fortress step): you can cut rock, and where you cut now matters, but a carved tile is just floor. Designating a room as magazine or quarters, and works that need a room to live in, is the next real build there.
@@ -1082,7 +1082,7 @@ apart from here.
 
 ### C. Open questions for Sean — decisions, not work
 
-- **The income question.** Bots bank ~0–4 crates in 300–400 turns; a hand costs 5. His ruling stands ("do not buff the economy until progress is reliable") and total income has NOT been raised — depth pays more only where it costs more, and the shelf is byte-identical to before. What is wanted is one honest 40-minute session and the answer to: did you bank anything, and did it feel earned?
+- **The income question.** Bots bank ~0–4 crates in 300–400 turns; a hand costs 5. His actual ruling — a session that banks nothing but charts new water is legitimate — is honoured: total income has NOT been raised — depth pays more only where it costs more, and the shelf is byte-identical to before. What is wanted is one honest 40-minute session and the answer to: did you bank anything, and did it feel earned?
 - **The deep room is 70% richer than a floor ruin, and I decided that on his behalf.** 13.5 against 7–8. Reachable only through a sinkhole, a beach, the right mouth of three, and 2–4 chambers of walking with the air draining, then all of it again on the way out. My reasoning: the hardest place to reach should be the best place to reach, or the cave layer has no economic purpose. If it reads as too generous in play, the one number to move is the `'relic'` in the `kind === 'deepruin'` branch of `interiorAt`.
 - **Engagement rate: measured, and NOT changed.** The audit wanted ship encounters raised from 13% to 33%. Measured instead: **92%** of open water has two harbours in reach, which is the condition for a hull to be despatched at all, and sitting in busy water gave 555 turn-sightings inside nine hexes over 300 turns. The sea is not empty and Sean's worry ran the other way. Left alone. (Creature STALK aggression is a separate 13% and also left alone — aggression should be felt, not computed.)
 - **"37% of log output carries no tag" — true of the runtime stream, wrong as a conclusion.** The call-site figure is 6% (20 of 325), and **11 of those 20 are `pickFlavor`** — ambient prose, which is the *room* talking and correctly wears no instrument label. Both numbers are true at once because flavour fires every single turn. The ten that were genuinely wrong were refusals, and a refusal with no label reads as the narrator sulking; they are tagged now (ARMS, SONAR, DECOY, HELM, BALLAST, AIR). Ambient prose stays untagged deliberately.
@@ -1610,7 +1610,7 @@ one playing it.
    reachable — 51 prizes in starter-safe water, sounder precision and recall
    both 100% — and every bot is a guess at how a human plays. I built a
    better bot to settle it and ended up tuning the bot. **Sean's ruling stands
-   ("do not buff the economy until progress is reliable"; "enough progress in
+   ("a person who just wants to explore should be able to"; "enough progress in
    a 40-minute session should not be virtually guaranteed") and nothing here
    was touched.** What is wanted is one honest 40-minute session and the
    answer to: did you bank anything, and did it feel earned or arbitrary?
@@ -1882,7 +1882,7 @@ Four rulings from Sean. The first one **overrides** the instinct to "fix" the ec
 ### RULING: progress must NOT be guaranteed
 "'Enough progress' in a 40 minute session should not be virtually guaranteed. If a person just
 wants to explore in the sub and see and hear interesting things, flesh out their map, they should
-be able to do that." **Do not buff the economy until progress is reliable.** A session that banks
+be able to do that." **~~Do not buff the economy until progress is reliable.~~** *(That bolded line is MINE, not his — a paraphrase written directly under his quote and then cited back to him as a ruling for two weeks, in five files. Asked about it 2026-08-05, he did not recognise it, and it is nearly backwards: his is a design principle, mine reads as a hold waiting for reliable progress — the state he was rejecting. The real test is "does this replace exploring with a wage".)* A session that banks
 nothing but charts new water is a legitimate session. When the persona playtest reports "the
 economy does not compound", separate the genuine bug (cargo was near-unobtainable — since fixed)
 from this deliberate design. Exploration is its own reward; the job is to MAKE it rewarding, not

@@ -2254,14 +2254,42 @@ function buyMult(cultureKey, itemKey) {
   if (m === 0 && b.floor) m = b.floor;
   return m;
 }
-function sellPriceTo(cultureKey, itemKey) { return Math.round((ITEMS[itemKey].val || 1) * buyMult(cultureKey, itemKey)); }   // crates you receive
+// STANDING MOVES A PRICE. Ruled by Sean, 2026-08-05: "Absolutely, of course."
+// It was the one thing about standing that a captain could never feel in their
+// hold — reputation changed who shot at you and nothing about what you were
+// paid, which made courtesy an abstraction.
+//
+// A BAND, NOT A CURVE, and a modest one: ±20% across the whole range. It has to
+// be legible ("they pay me better than they used to") without becoming the
+// reason to trade — the price of a thing is still mostly the thing.
+const STANDING_PRICE = {
+  trusted: 1.20, welcome: 1.10, known: 1.05,
+  nobody: 1.00, watched: 0.92, unwanted: 0.85, hunted: 0.80,
+};
+function standingPriceMult(cultureKey) {
+  return STANDING_PRICE[standingBand(cultureKey).key] || 1;
+}
+function sellPriceTo(cultureKey, itemKey) {
+  // ZERO MEANS ZERO. `buyMult` returns 0 for a thing this people SELLS — they
+  // do not buy back their own stock — and a `Math.max(1, ...)` I put here to
+  // stop standing rounding a price to nothing turned every such 0 into 1: buy
+  // it from them, sell it straight back, forever. items.test caught it on the
+  // first run. Clamp the floor only where there is a price to floor.
+  const m = buyMult(cultureKey, itemKey);
+  if (!m) return 0;
+  return Math.max(1, Math.round((ITEMS[itemKey].val || 1) * m * standingPriceMult(cultureKey)));
+}   // crates you receive
 function buyPriceFrom(cultureKey, itemKey) {
   const it = ITEMS[itemKey];
   // A per-item premium overrides the house markup. Without this the arms
   // dealers sold a warhead for exactly what the Confluence paid for it — not
   // a profit, but a zero-risk, zero-air, zero-noise loop one rounding change
   // away from being one, which is not a thing to leave lying in an economy.
-  return Math.max(1, Math.round((it.val || 1) * (it.markup || CULTURES[cultureKey].markup || 2)));
+  // The same regard, the other way round: a people who trust the boat do not
+  // squeeze it, and a people who do not, do. Inverted, so being liked is
+  // cheaper to buy from as well as better to sell to.
+  return Math.max(1, Math.round((it.val || 1) * (it.markup || CULTURES[cultureKey].markup || 2)
+    / standingPriceMult(cultureKey)));
 }   // crates you pay
 
 function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
@@ -5960,6 +5988,16 @@ function portRows() {
     desc: state.crew.length ? 'Nothing left to fill.' : 'Sign someone on first.', ok: false, why: '', act: null });
 
   // ---- THE ARMOURER: the boat's own teeth.
+  // ---- THE VICTUALLER. Provisions are a purchase now, and priced so a full
+  // larder is a real but affordable call against a hand (5) or a harpoon (8).
+  const need = Math.max(0, 100 - (state.stores == null ? 100 : state.stores));
+  if (need >= 10) {
+    const cost = Math.max(1, Math.round(need / 25));   // 4 crates for an empty larder
+    rows.push({ head: 'The Victualler', note: 'Salt meat, biscuit, water, lamp oil.' });
+    rows.push({ name: 'Fill the lockers',
+      desc: Math.round(need) + '% short · ' + cost + ' crate' + (cost === 1 ? '' : 's'),
+      ok: canPay(cost, 0), why: shortfall(cost, 0), act: 'victual:' + cost });
+  }
   rows.push({ head: 'The Armourer', note: "The boat's own armament." });
   if (!state.armament) {
     rows.push({ name: 'Harpoon gun', desc: 'Bolted to the bow. Adjacent targets. · 8 crates',
@@ -6091,6 +6129,13 @@ function portBuy(act) {
     state.cargoBanked -= 8;
     state.armament = 'harpoon';
     log(`The dockworks bolt a harpoon gun to the bow. (8 crates; ${state.cargoBanked} banked.)`, '', 'ARMOURY');
+    sfx('bell');
+  } else if (act.indexOf('victual:') === 0) {
+    const cost = parseInt(act.split(':')[1], 10) || 1;
+    if (state.cargoBanked < cost) return;
+    state.cargoBanked -= cost;
+    state.stores = 100;
+    log(`Salt meat, biscuit, water and lamp oil go down the hatch. The lockers are full. (${cost} crate${cost === 1 ? '' : 's'}; ${state.cargoBanked} banked.)`, '', 'STORES');
     sfx('bell');
   } else if (act === 'torps') {
     if (state.relicsBanked < 2) return;
@@ -7396,7 +7441,7 @@ const LEAD_KEYS = ['cache', 'quarry', 'cavern', 'word'];
 //
 // Sean, asking for exactly this: "a meaningful way for new captains to start
 // moving up in the world as soon as the game begins." His standing ruling — do
-// not buff the economy until progress is reliable — is what this ANSWERS rather
+// not replace exploring with a wage — is what this ANSWERS rather
 // than breaks. Nothing here raises what the sea holds. It gives a captain
 // somewhere to point the boat, and pays for the pointing.
 const BOARD_SLOTS = 2;
@@ -8457,8 +8502,10 @@ const NODE_CELL = 12; // hexes per node-cell side
 // So: rarer, but richer. `density * chance` is held constant, which keeps the
 // loneliness and removes the poverty — a chamber in the deep is scarce and worth
 // the finding, and what a lattice cell yields stops falling away with depth.
-// This is a REDISTRIBUTION and not a raise; Sean's ruling stands ("do not buff
-// the economy until progress is reliable") and `tests/prizes.js` holds me to it.
+// This is a REDISTRIBUTION and not a raise, which matters under Sean's actual
+// ruling — a session that banks nothing but charts new water is legitimate, so
+// the job is to make exploring pay rather than to pay a wage. `tests/prizes.js`
+// holds me to the arithmetic.
 //
 // BUT THE FIRST TWO BANDS ARE HELD OUT OF IT, and that is the whole care in this
 // change. Flattening all seven kept the world total to +0.2% and the home shelf
@@ -9582,8 +9629,8 @@ const PRIZE_WEIGHTS = {
 // sea-going bot reaches an interior in 3% of its runs for the same reason.
 //
 // The lever is the TYPE, not the COUNT. Nothing here adds a prize — Sean's rule
-// is that the economy does not get buffed until progress is reliable, and this
-// does not hand out one extra crate. It changes what the prizes already there
+// is that exploring must not be replaced with a wage, and this does not hand
+// out one extra crate. It changes what the prizes already there
 // turn out to be, in home water only, so the first hours contain a door.
 //
 // DISTANCE FROM THE ORIGIN, not from `homeDock()`. The dock is within a few
@@ -13820,8 +13867,8 @@ function interiorAt(q, r, d, kind) {
         // DEPTH PAYS. It did not: measured across 4,500 decks, a ruin at 300 m
         // was worth 6.45 and a ruin at 4,800 m was worth 5.91. The shelf rates
         // below are exactly the rates they have always been — 0.16 and 0.22 — so
-        // the first hour is not made harder, which would run against "do not buff
-        // the economy until progress is reliable" from the wrong side. And the
+        // the first hour is not made harder, which would run against "a person
+        // who just wants to explore should be able to" from the wrong side. And the
         // pile COUNT is untouched, so a deep deck is not a longer walk with more
         // air spent; it is the same walk, better paid.
         else {
@@ -19659,14 +19706,15 @@ function surface() {
       }
       log('The port surgeon sees to the wounded, and a night ashore does the rest. The crew stands whole again — older, and marked, but whole.', '', 'PORT');
     }
-    // TWO STORES, ONE GATE. The decoy rack was restocked inside the food test,
-    // so a captain who kept the larder full and spent every decoy tied up, took
-    // on nothing, and put back to sea with an empty rack. They are different
-    // shelves; ask about them separately.
-    if (atPort && (state.stores < 100 || state.decoys < 3)) {
-      state.stores = 100;
-      state.decoys = Math.max(state.decoys || 0, 3);
-      log('The boat re-provisions at the dock — water, salt meat, lamp oil, and dry berths.', '', 'PORT');
+    // FOOD IS BOUGHT. Sean, ruling on free provisioning: "No, we must be paying
+    // for food and water." So the quay hands over the decoys (a naval store, and
+    // the boat's own) and sells the larder — see the Chandler's provisions row.
+    // A hungry crew is not a death clock; `vigorMult` makes everything else
+    // worse, which is the pressure that sends a boat up into the sunlit water
+    // to fish rather than home to shop.
+    if (atPort && (state.decoys || 0) < 3) {
+      state.decoys = 3;
+      log('Decoy buoys go aboard off the quay — three in the rack, and nobody charges a boat for those.', '', 'PORT');
     }
     if (atPort && state.relics > 0) {
       state.relicsBanked += state.relics;

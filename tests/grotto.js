@@ -230,7 +230,10 @@ console.log('\n--- 3. LARGE, AND ALSO COMPLEX ---');
 }
 
 //--- 4. WHAT A GROTTO PAYS ---------------------------------------------------
-// Sean's standing ruling: do not buff the economy until progress is reliable.
+// Sean's standing ruling, in his words: a captain who only wants to explore
+// should be able to spend the session doing that. Make exploring pay; do not
+// pay a wage. (The "do not buff until progress is reliable" line this used to
+// quote was my paraphrase, not his — see FATHOM_NEXT, 2026-08-05.)
 // Beaches just got ~3x commoner AND turned from a dice roll into a lootable
 // system of decks. That is an economy change whether I meant it as one or not,
 // so it gets measured against the thing it now sits beside: a ruin.

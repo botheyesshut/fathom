@@ -5,8 +5,10 @@
 // file is what stops them coming back, because every one of them was introduced
 // by somebody (me, mostly) adding a feature and not asking what it cost.
 //
-// The standing ruling behind all of it: "do not buff the economy until progress
-// is reliable." An exploit is the largest possible buff and nobody chose it.
+// The standing ruling behind all of it, in Sean's own words: "'Enough
+// progress' in a 40 minute session should not be virtually guaranteed... If a
+// person just wants to explore, they should be able to do that." Exploiting a
+// loop is the opposite of that — it is a wage with no voyage attached.
 'use strict';
 const fs = require('fs'), vm = require('vm');
 function stub() {
