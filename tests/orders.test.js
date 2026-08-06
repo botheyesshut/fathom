@@ -147,6 +147,9 @@ const scenarios = {
                                            depth: X.state.currentDepth, awake: true, gone: false }]; },
   // The hunt card wants hands actually in the water, so it is driven by starting
   // a real one in real sunlit water rather than by faking `state.hunt`.
+  // The strike card fires on the same situation the hunt card does — a live
+  // hunt — so it is driven by the same scenario.
+  strike:   () => { scenarios.hunt(); },
   hunt:     () => { X.state.currentDepth = 0; X.state.foot = null; X.state.fished = {};
                     // The boat starts at the home dock, which is walled in — a drive
                     // needs open water two hexes off, so put her out to sea first.

@@ -58,6 +58,9 @@ const probe = [
   'function __huntStart(){huntStart()}function __tap(q,r){return huntTap(q,r)}function __spook(){huntSpook()}',
   'function __nbrs(q,r){return hexNeighbors(q,r)}function __dist(a,b){return hexDistance(a,b)}',
   'function __crewLvl(r){return crewLvl(r)}function __roles(){return state.crew.map(function(m){return m.role})}',
+  'function __strike(t){return strikeWith(t)}function __STRIKE(){return STRIKE}function __lore(){return state.lore}',
+  'function __noise(){var s=0;for(var i=0;i<state.creatures.length;i++){var c=state.creatures[i];s+=(c.alert||0)+(c.interest||0);}return s}',
+  'function __spawn(t,q,r,d){spawnCreature(t,q,r,d);var c=state.creatures[state.creatures.length-1];if(c){c.awake=true;c.interest=0;c.alert=0;}}',
   'function __QUARRY(){return QUARRY}function __K(){return{ARENA:HUNT_ARENA,NOTICE:HUNT_NOTICE,TURNS:HUNT_TURNS,HANDS:HUNT_HANDS}}',
 ].join('\n');
 try { vm.runInContext(script + '\n' + probe, sb, { timeout: 30000 }) } catch (e) { if (typeof sb.state === 'undefined') throw e }
@@ -177,6 +180,64 @@ console.log();
 
 const keys = ['mackerel', 'herring', 'cod', 'tuna', 'swordfish', 'marlin', 'shark'];
 const seeds = [90210, 4242, 77, 1234, 5150, 8888, 31337, 606, 1111, 2718, 3141, 1618];
+
+// -- THE STRIKE: THE FAST WAY, AND WHAT IT COSTS -------------------------------
+// The strike exists so that nobody has to play a sixteen-tap positioning puzzle
+// for a school of mackerel worth fourteen. It must therefore be genuinely fast
+// AND genuinely worse, or the drive it was built beside becomes pointless. Two
+// properties matter and both are measured here rather than asserted:
+//   - a struck fish always lands LESS than a driven one, for every species;
+//   - a wrong tool costs you the fish and BUYS INFORMATION, so the same mistake
+//     is never available twice. That is what makes it a knowledge check rather
+//     than a coin flip, which was Sean's condition on the whole feature.
+console.log('THE STRIKE — what each tool takes, and what a wrong one teaches');
+{
+  const ST = sb.__STRIKE();
+  console.log('  quarry       right tool   driven   struck   share   loud');
+  let everBetter = 0;
+  for (const k of keys) {
+    setup(k, 4242);
+    const H = sb.__hunt();
+    if (!H) { console.log('  ' + k + ' — no hunt'); continue; }
+    H.key = k;
+    const Q = sb.__QUARRY()[k];
+    st.stores = 0;
+    st.creatures = [];
+    sb.__spawn('lurker', st.q + 2, st.r, st.currentDepth);
+    sb.__strike(Q.tool);
+    const got = Math.round(st.stores);
+    const heard = sb.__noise();
+    if (got >= Q.stores) everBetter++;
+    console.log('  ' + k.padEnd(12) + Q.tool.padEnd(12)
+      + String(Q.stores).padStart(6) + String(got).padStart(9)
+      + (100 * got / Q.stores).toFixed(0).padStart(7) + '%'
+      + String(heard > 0 ? 'heard ' + Math.round(heard) : 'silent').padStart(11));
+  }
+  console.log('  ');
+  if (everBetter) console.log('  ' + everBetter + ' SPECIES PAY AS WELL OR BETTER STRUCK — the drive is pointless for them.');
+  else console.log('  every species pays less struck than driven, so the drive still has a reason.');
+
+  // A wrong answer, and what the boat keeps of it.
+  setup('marlin', 4242);
+  const H2 = sb.__hunt();
+  if (H2) {
+    H2.key = 'marlin';
+    st.stores = 0;
+    sb.__strike('net');                       // a net, at a marlin
+    const lore = sb.__lore() || {};
+    const m = lore.marlin || { bad: [], good: null };
+    console.log('  ');
+    console.log('  netting a marlin:  took ' + Math.round(st.stores) + '   hunt over: ' + (!sb.__hunt())
+      + '   learned it is not: ' + (m.bad.join(', ') || 'NOTHING — the mistake is repeatable'));
+    setup('marlin', 4242);
+    const H3 = sb.__hunt();
+    if (H3) { H3.key = 'marlin'; st.stores = 0; sb.__strike('harpoon'); }
+    const m2 = (sb.__lore() || {}).marlin || { good: null };
+    console.log('  then harpooning:   took ' + Math.round(st.stores) + '   recorded right tool: ' + (m2.good || 'NONE'));
+  }
+}
+console.log();
+
 console.log('A CAPTAIN WHO UNDERSTANDS THE AMBUSH  (' + seeds.length + ' grounds each)');
 console.log('  species     move  worth   caught   escaped   cold');
 let tot = { c: 0, e: 0, x: 0 };

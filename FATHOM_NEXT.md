@@ -1,5 +1,100 @@
 # FATHOM — START HERE (last updated 2026-08-05)
 
+## THE STRIKE (2026-08-05) — the fast way, and it asks a different question
+
+The drive is a good puzzle and it is ten to sixteen taps. Playing all of that for
+a school of mackerel worth fourteen is a chore, and a game that makes you do a
+chore for small money teaches you not to bother with small money. So there is a
+fast way — and per his standing rule there is not a die anywhere in it.
+
+**What it asks instead is WHICH TOOL.** You do not net a marlin and you do not
+harpoon a shoal, and every quarry's `tell` — the line the Ear reads out when the
+lines go over — says which it is if you are listening:
+
+| tell | tool |
+|---|---|
+| "a shoal of small silver, turning all at once" | **net** |
+| "something heavy and unhurried, close to the bottom" | **line** |
+| "a bill and a shadow, and it has already seen the lamp" | **harpoon** |
+
+Right tool and you have it that turn. Wrong tool and it is gone — **but you keep
+what you learned**, which is the whole difference between a knowledge check and a
+coin flip. `state.lore` remembers per species and the card shows what the boat
+knows: a tool already disproved goes grey and reads *"Tried on this before. Not
+this."*, the proved one turns green and reads *"This is the one."* The same
+mistake is never available twice. It is the chart rule applied to fish — the boat
+shows only what the boat could know.
+
+### And it is worse than driving, on purpose
+
+Or nobody would ever drive again and the puzzle beside it would be dead content.
+A struck fish is a damaged fish. Measured, every species:
+
+```
+  quarry       right tool   driven   struck   share   loud
+  mackerel    net             14       11     79%     silent
+  herring     net             18       14     78%     silent
+  cod         line            26       16     62%     silent
+  tuna        line            44       26     59%     silent
+  swordfish   harpoon         52       26     50%   heard 32
+  marlin      harpoon         70       35     50%   heard 32
+  shark       harpoon         58       29     50%   heard 32
+
+  every species pays less struck than driven, so the drive still has a reason.
+```
+
+The gradient is fiction, not tuning: netting a shoal is simply the right way to
+take a shoal, so it costs almost nothing (79%); a harpooned marlin bleeds out on
+the line and you land half of it. And the harpoon **trades silence too** — it is
+a gun, and `noiseMade` does not care what you were pointing it at, so the fast
+way on the big fish is also the loud way. That hooks straight into the water
+economy built the same day: the boat that shouts for its dinner is the boat
+something finds.
+
+So the trade has a shape: *mackerel — strike, obviously. Marlin — 35 now and
+loud, or 70 over fourteen taps at eight-in-twelve odds.* That is a decision.
+
+### Verified in a browser, not just headlessly
+
+Netting a marlin: 0 taken, hunt over, lore records `bad: ['net']`. Harpooning it
+next time: **20 → 55 stores**, a lurker two hexes off goes to interest 40 on the
+shot, lore records `good: 'harpoon'`, and the log says *"A marlin comes aboard —
+35 against the 70 a clean drive would have made."* The cost is named in the same
+breath as the prize.
+
+**The shark's rule is shared with the drive** rather than written twice: struck,
+it still comes up the line fighting and takes the nearest hand — but only if your
+people are in the water. Take it from the boat with nobody over the side and it
+is clean, which is a real interaction with the "hands over the side" cost built
+an hour earlier.
+
+### Where it lives
+
+Offered as a card the moment the fish is sighted, because a captain who does not
+know the fast way exists will play the whole positioning puzzle for a mackerel
+and conclude the game is tedious. **Dismissing the card is how you choose to
+drive.** A `Strike` button keeps it reachable afterwards, so setting two hands and
+then thinking better of the whole business is allowed.
+
+### The bug it shipped with for ten minutes
+
+`STRIKE` is a `const` declared above `WEAPONS`, and it read `WEAPONS.harpoon.loud`
+into its own table — so the file threw *"cannot access WEAPONS before
+initialization"* the instant it was evaluated, and took three suites down. Exactly
+the temporal-dead-zone trap `STARTING_ARMAMENT` fell into. **The syntax check
+passes either way; only running it says so.** Resolved lazily now via
+`strikeLoud`, so the gun still owns its own loudness.
+
+*(And then I made the identical mistake inside `tests/quarry.js`, using `keys`
+above its own declaration. Twice in one feature.)*
+
+### Knobs
+
+`STRIKE.net.yield` 0.75 · `.line.yield` 0.60 · `.harpoon.yield` 0.50 ·
+`QUARRY[k].tool` — retagging a species is one word and changes the whole answer.
+
+---
+
 ## WATER, AND THE PRICE OF IT (2026-08-05) — built after the ocean got big
 
 Water is its own tank now, and what it costs is **silence**.
@@ -150,8 +245,7 @@ sides of the trade exist now.
 
 ### Still open
 
-- **The strike** — the quick alternative to the drive (harpoon/net/line chosen by
-  knowledge, instant, no dice). Designed, not built.
+- ~~**The strike**~~ — BUILT 2026-08-05, see the entry at the top of this file.
 - The **ghost thread** (Angelshark #22), recorded not built.
 - **Angelshark #12** — a brown passable hex in a tunnel; never reproduced.
 
@@ -443,8 +537,7 @@ at 0/12.
 
 ### Still open, honestly
 
-- **The strike** — the quick alternative to the drive (harpoon/net/line chosen by
-  knowledge, instant, no dice). Designed, not built.
+- ~~**The strike**~~ — BUILT 2026-08-05, see the entry at the top of this file.
 - **More crew is better but leaves the sub less protected** — the second half of
   Sean's sentence. Hands in the water are not yet absent from anything that
   matters aboard, so the trade he asked for is not real yet.

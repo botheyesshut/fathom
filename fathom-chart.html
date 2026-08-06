@@ -1148,7 +1148,12 @@
   }
   .prow-b.no { border-color: #4a4436; background: transparent; color: #6a6250; cursor: default;
     font-size: 0.55rem; letter-spacing: 0.03em; }
-  #muster-list { overflow-y: auto; padding: 0.4rem 0.6rem; -webkit-overflow-scrolling: touch; }
+
+
+  /* THE ONE THE BOAT KNOWS. `.no` already existed for a row you cannot take;
+     this is its opposite — a tool this species has already been proved to come
+     to. Both are memory made visible, which is the same rule the chart obeys. */
+  .prow-b.good { border-color: var(--kelp, #7fce9a); color: var(--kelp, #7fce9a); }  #muster-list { overflow-y: auto; padding: 0.4rem 0.6rem; -webkit-overflow-scrolling: touch; }
   .mus { padding: 0.55rem 0.2rem; border-bottom: 1px solid rgba(160,140,100,0.18); }
   .mus:last-child { border-bottom: none; }
   .mus-n { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; color: #d8c9a4; }
@@ -1504,6 +1509,7 @@
     <button class="btn primary" id="btn-dock" title="Tie up alongside and go ashore. Small ports trade in what a boat needs and buy what a boat finds - and the chart remembers where they were" style="display:none">Dock</button>
     <button class="btn primary" id="btn-sail" title="Close on the sail you have sighted to read her colours, then hail her for news. Holding your course lets her go - unless somebody out here is already hunting you" style="display:none">Close</button>
     <button class="btn" id="btn-attack" title="Open fire on her. Her people will not forget it, and a submarine in a surface gun action is in the wrong place - but a merchant's hold has to come from somewhere" style="display:none">Attack</button>
+    <button class="btn" id="btn-strike" style="display:none" title="Take it now instead of driving it. Pick the tool the fish calls for — a net for a shoal, a bait for a feeder, the gun for something with a bill on it. Right tool and it is yours for a smaller share; wrong tool and it is gone.">Strike</button>
     <button class="btn" id="btn-still" style="display:none" title="Her own still. Makes fresh water out of the sea — and it is a hot, thumping thing in a steel hull, so the deep hears every turn it runs. Free and silent in rain.">Still</button>
     <button class="btn" id="btn-hunt" style="display:none" title="Put hands in the water, lay them where it will run, then drive it. Sunlit water only. It flees the boat and any hand it has noticed, and never sees the rest.">Hunt</button>
     <button class="btn" id="btn-more" title="The rest of the boat — the muster, the bestiary and the settings. Tap again to put them away.">MORE</button>
@@ -6424,6 +6430,19 @@ const BRIEFS = [
       noticed. If that run takes it past a net, you have it. Bigger fish are faster fish.
       Tap her own hull to call them in.</p>` },
 
+  { id: 'strike', title: 'The fast way',
+    when: () => !!state.hunt,
+    body: `<p>Driving a fish is the way to land <b>all</b> of it, and it takes a
+      while. When it is not worth a while, <b>STRIKE</b> instead — one tap, one
+      tool, and it is settled.</p>
+      <p>The tool is the whole question. A <b>net</b> for anything that moves as a
+      crowd; a <b>line</b> for a fish that feeds rather than flees; the <b>harpoon</b>
+      for something with a bill or teeth on it. The Ear tells you what is out there
+      when the lines go over — listen to what it says and you will know.</p>
+      <p>Right tool: it is yours, though a struck fish is a damaged fish and you
+      land less of it. Wrong tool: it is gone — but the boat writes down what it is
+      not, and you will never be wrong about that one again.</p>` },
+
   { id: 'teeth', title: 'The harpoon gun',
     when: () => !!state.armament && !state.foot && (state.creatures || []).some(c =>
       !c.gone && c.awake && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
@@ -6851,6 +6870,142 @@ function quarryHere(q, r) {
 // open sea, hands could not be placed, and the quarry would have fled from walls
 // that are not there. Found by the briefing suite, which could not reach the
 // hunt card from anywhere in twelve rings of ocean.
+//-----------------------------------------------------------------------------
+// THE STRIKE — the fast way, and it is a different question from the drive.
+//
+// The drive is a positioning puzzle and it is the good one, but it is ten to
+// sixteen taps. Playing all of that for a school of mackerel worth fourteen is
+// a chore, and a game that makes you do a chore for small money teaches you not
+// to bother with small money. So there is a fast way, and per Sean's standing
+// rule there is not a die anywhere in it.
+//
+// WHAT IT ASKS INSTEAD: which tool. You do not net a marlin and you do not
+// harpoon a shoal, and every quarry's `tell` — the line the Ear reads out when
+// the lines go over — says which it is if you are listening. Silver turning all
+// at once is a net. Something heavy and unhurried near the bottom takes a bait.
+// A bill and a shadow is a harpoon.
+//
+// Get it right and you have it, that turn, no puzzle. Get it wrong and it is
+// gone — but you KEEP WHAT YOU LEARNED, which is the whole point of a knowledge
+// check rather than a dice roll: a wrong answer buys information and the same
+// mistake is never available twice. `state.lore` remembers per species, and the
+// card shows what the boat knows, in the same spirit as a chart that shows only
+// what the boat could know.
+//
+// AND IT IS WORSE THAN DRIVING, ON PURPOSE, or nobody would ever drive again.
+// A struck fish is a damaged fish: the harpoon bleeds it, the line tears, the
+// net takes the shoal but not all of the shoal. You trade meat for time — and
+// the harpoon trades silence too, because it is a gun and `noiseMade` does not
+// care what you were pointing it at.
+const STRIKE = {
+  net:     { label: 'Cast the net',   yield: 0.75, loud: 0,
+             desc: 'A wall of mesh and two hands on the lines. For anything that moves as a crowd.',
+             win:  'The net goes out in a circle and comes back heavy.',
+             lose: 'The net closes on green water. Whatever that was, it was not a thing you take in a net.' },
+  line:    { label: 'Put a line over', yield: 0.60, loud: 0,
+             desc: 'Baited, weighted, and patient. For a fish that feeds rather than flees.',
+             win:  'It takes the bait and it keeps taking it, and they bring it up hand over hand.',
+             lose: 'The bait sits there and goes grey. That is not a fish that eats what you are offering.' },
+  harpoon: { label: 'Fire the harpoon', yield: 0.50, loud: 'harpoon',
+             desc: "The bow gun, at a fish. Fast, certain, and the whole dark hears it.",
+             win:  'The gun goes off flat and hard and the line comes up taut.',
+             lose: 'The iron goes past it into the dark, and the noise of the shot does the rest.' },
+};
+
+function strikeable() { return !!(state.hunt && state.alive && !state.foot); }
+
+// READ LAZILY, NOT AT INITIALISATION. `STRIKE` is a const declared above
+// `WEAPONS`, so writing `WEAPONS.harpoon.loud` into the table threw
+// "cannot access WEAPONS before initialization" the moment the file was
+// evaluated — and took three suites down with it, the same temporal-dead-zone
+// trap `STARTING_ARMAMENT` fell into. The syntax check passes either way;
+// only running it says so. Still single-sourced: the gun owns its own loudness.
+function strikeLoud(tool) {
+  const l = STRIKE[tool] && STRIKE[tool].loud;
+  if (!l) return 0;
+  return typeof l === 'string' ? (WEAPONS[l] ? WEAPONS[l].loud : 0) : l;
+}
+
+// What the boat has learned about this species, and nothing it has not.
+function loreOf(key) {
+  if (!state.lore) state.lore = {};
+  if (!state.lore[key]) state.lore[key] = { bad: [], good: null };
+  return state.lore[key];
+}
+
+function strikeOpen() {
+  if (!strikeable()) return;
+  const H = state.hunt, Q = QUARRY[H.key], L = loreOf(H.key);
+  const rows = Object.keys(STRIKE).map(k => {
+    const S = STRIKE[k];
+    const known = L.good === k ? 'This is the one.'
+      : L.bad.indexOf(k) >= 0 ? 'Tried on this before. Not this.' : '';
+    const cls = L.good === k ? ' good' : L.bad.indexOf(k) >= 0 ? ' no' : '';
+    return '<div class="prow"><div class="prow-t"><div class="prow-n">' + S.label
+      + '</div><div class="prow-d">' + S.desc + (known ? ' <b>' + known + '</b>' : '') + '</div></div>'
+      + '<button class="prow-b' + cls + '" data-strike="' + k + '">Take it</button></div>';
+  }).join('');
+  showBrief({
+    id: 'strike:' + H.key,
+    title: 'Take it now?',
+    body: '<p>' + ucfirst(Q.tell) + '.</p>'
+      + '<p class="dim">A struck fish is a damaged fish — you will land less of it than you would by driving it. '
+      + 'Wrong tool and it is gone. Close this to drive it instead.</p>' + rows,
+  });
+  const body = document.getElementById('brief-body');
+  if (body) body.querySelectorAll('.prow-b[data-strike]').forEach(b => {
+    b.addEventListener('click', () => strikeWith(b.getAttribute('data-strike')));
+  });
+}
+
+function strikeWith(tool) {
+  const H = state.hunt;
+  if (!H || !STRIKE[tool]) return;
+  const Q = QUARRY[H.key], S = STRIKE[tool], L = loreOf(H.key);
+  closeBrief();
+  const loud = strikeLoud(tool);
+  if (loud) noiseMade(state.q, state.r, loud);
+  if (Q.tool === tool) {
+    if (L.good !== tool) log('And now you know it. ' + ucfirst(Q.name) + ' comes to ' + S.label.toLowerCase().replace(/^(cast|put|fire) /, '') + '.', 'good', 'LORE');
+    L.good = tool;
+    const got = Math.max(1, Math.round(Q.stores * S.yield));
+    log(S.win, 'good', 'STRIKE');
+    // A SHARK STRUCK IS STILL A SHARK, and if your people are in the water it
+    // goes through them on the way in — the same rule the drive uses, so a
+    // captain who learned it there is not surprised here.
+    if (Q.bites) strikeBite();
+    state.stores = Math.min(100, boatFood() + got);
+    log(`${ucfirst(Q.name)} comes aboard — ${got} against the ${Math.round(Q.stores)} a clean drive would have made. The lockers are ${Math.round(state.stores)}% full.`, 'good', 'STRIKE');
+    sfx('relic');
+    if (!state.fished) state.fished = {};
+    state.fished[H.from] = state.moves || 0;
+  } else {
+    if (L.bad.indexOf(tool) < 0) L.bad.push(tool);
+    log(S.lose, 'warn', 'STRIKE');
+    log(`${ucfirst(Q.name)} is gone, and you have learned what it is not.`, '', 'LORE');
+    if (!state.fished) state.fished = {};
+    state.fished[H.from] = state.moves || 0;
+  }
+  state.hunt = null;
+  updateHUD(); render(); scheduleSave();
+}
+
+// The shark's price, shared with the drive so there is one rule and not two.
+function strikeBite() {
+  const H = state.hunt;
+  let victim = null, bd = 99;
+  for (const h of (H.hands || [])) {
+    if (h.q == null) continue;
+    const d = hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r });
+    if (d < bd) { bd = d; victim = h; }
+  }
+  const m = victim && (state.crew || []).find(c => c.name === victim.name && !c.lost);
+  if (!m) return;   // nobody in the water; you took it from the boat and clean
+  inflictCondition(m, 0.55);
+  frayNerve(m, 10);
+  log(`It comes up the line still fighting and takes ${m.name} on the way past.`, 'danger', 'STRIKE');
+}
+
 function huntStart() {
   if (!huntable()) {
     if (state.foot) log('Not from ashore.', 'warn', 'HUNT');
@@ -6893,6 +7048,10 @@ function huntStart() {
   const ear = (state.crew || []).find(m => m.role === 'ear' && !m.lost && !m.wounded);
   const tell = Q.tell + ', ' + bearing(state.q, state.r, at.q, at.r) + ' of her';
   log(ear ? ear.name + ': “' + ucfirst(tell) + '.”' : ucfirst(tell) + '.', '', 'HUNT');
+  // THE FAST WAY IS OFFERED FIRST, because a captain who does not know it exists
+  // will play the whole positioning puzzle for a school of mackerel and conclude
+  // the game is tedious. Dismissing the card IS choosing to drive.
+  strikeOpen();
   log('Tap the water to put hands over the side and walk them out. It will not run until you make it. Lay a net where it will go, then DRIVE IT. Tap her own hull to call them in.', 'tip', 'HUNT');
   updateHUD(); render(); scheduleSave();
 }
@@ -11477,6 +11636,7 @@ const state = {
   water: 100,
   still: false,    // her own still: makes water, and is heard doing it
   inRain: false,   // said once on the way in, once on the way out
+  lore: {},        // what the boat has learned takes what — see `strikeWith`
   // Crew you have lost, by name and role. A drowned ruin may give one back.
   lostCrew: [],
   // The hold: {itemKey: count}. Overlay — lost with the boat, unless struck
@@ -11598,6 +11758,13 @@ function syncFootControls(inside) {
   }
   // The rest have their own rules — armament, a threat, a harbour, a sail. Being
   // afloat is a precondition for those rules, never a reason on its own.
+  // THE FAST WAY STAYS AVAILABLE. It is offered as a card the moment the fish is
+  // sighted, but dismissing that card must not be a decision you are locked out
+  // of reversing — a captain who set two hands and then thought better of the
+  // whole business should be able to just take it.
+  const strikeBtn = document.getElementById('btn-strike');
+  if (strikeBtn) strikeBtn.style.display = strikeable() ? '' : 'none';
+
   // THE STILL'S SWITCH APPEARS WHEN IT IS A QUESTION, and not before — the same
   // rule the Hunt button follows. A full tank has nothing to decide.
   const stillBtn = document.getElementById('btn-still');
@@ -12986,21 +13153,21 @@ const WEAPONS = {
 // dead world would actually be taking.
 const SUNLIT = 160;            // metres. His line: the Sunlit Zone, 160 m or higher.
 const QUARRY = {
-  mackerel:  { name: 'a school of mackerel', glyph: '∴', move: 0, stores: 14, val: 1,
+  mackerel:  { tool: 'net', name: 'a school of mackerel', glyph: '∴', move: 0, stores: 14, val: 1,
                tell: 'a shoal of small silver, turning all at once' },
-  herring:   { name: 'a run of herring',     glyph: '∵', move: 0, stores: 18, val: 1,
+  herring:   { tool: 'net', name: 'a run of herring',     glyph: '∵', move: 0, stores: 18, val: 1,
                tell: 'a long ribbon of them, going the same way' },
-  cod:       { name: 'a cod',                glyph: 'c', move: 1, stores: 26, val: 2,
+  cod:       { tool: 'line', name: 'a cod',                glyph: 'c', move: 1, stores: 26, val: 2,
                tell: 'something heavy and unhurried, close to the bottom' },
-  tuna:      { name: 'a bluefin',            glyph: 'T', move: 2, stores: 44, val: 4,
+  tuna:      { tool: 'line', name: 'a bluefin',            glyph: 'T', move: 2, stores: 44, val: 4,
                tell: 'a fast shape, deep-bodied, running level' },
-  swordfish: { name: 'a swordfish',          glyph: 'Y', move: 2, stores: 52, val: 5,
+  swordfish: { tool: 'harpoon', name: 'a swordfish',          glyph: 'Y', move: 2, stores: 52, val: 5,
                tell: 'a bill and a shadow, and it has already seen the lamp' },
-  marlin:    { name: 'a marlin',             glyph: 'M', move: 3, stores: 70, val: 7,
+  marlin:    { tool: 'harpoon', name: 'a marlin',             glyph: 'M', move: 3, stores: 70, val: 7,
                tell: 'the fastest thing in this water, and it knows the water better' },
   // The shark is the risk, and the risk is NOT a die roll: cornered, it turns
   // on the nearest hand. Driving one is a decision to accept that, for meat.
-  shark:     { name: 'a shark',              glyph: 'S', move: 2, stores: 58, val: 5,
+  shark:     { tool: 'harpoon', name: 'a shark',              glyph: 'S', move: 2, stores: 58, val: 5,
                bites: true,
                tell: 'something that is not running from the lamp' },
 };
@@ -21409,6 +21576,7 @@ document.getElementById('btn-dig').addEventListener('click', digAdjacent);
 // the hatch, and air fills itself now. What only `surface()` does — putting the hold
 // ashore, the surgeon, re-provisioning — happens when the boat actually reaches the top,
 // which is where it always should have happened.
+document.getElementById('btn-strike').addEventListener('click', () => { strikeOpen(); });
 document.getElementById('btn-still').addEventListener('click', () => {
   if (!gameStarted || !state.alive) return;
   if (state.still) {
