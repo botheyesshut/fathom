@@ -398,6 +398,28 @@ function playOne(tallies, personaName, seed) {
     // Ping sometimes.
     if (rnd() < P.ping) { call(sb.ping); sawOnce(T, run, 'used active sonar'); }
 
+    // ON THE MARK, AND THE MARK HAS A DEPTH. A lead pays out only within two
+    // grid steps of its recorded depth — E5.2 fixed a bug where a mark at
+    // 2520 m paid while you sat on the surface above it — and the bot steered
+    // to the lead's HEX and then ignored its depth entirely. So it sailed to
+    // the right place and collected nothing, which is most of why only 13% of
+    // runs ever picked up any cargo while 85 prizes sat inside 26 hexes.
+    // The chart prints the depth on the mark; a captain reads it and goes down.
+    {
+      const mark = (s.leads || []).find(L => L.q === s.q && L.r === s.r && L.d != null);
+      if (mark) {
+        const dz = mark.d - s.currentDepth;
+        if (Math.abs(dz) > sb.__grid() * 2) {
+          const step = dz > 0 ? sub.diveStep : -sub.diveStep;
+          if ((dz > 0 && canGo(sb, s, 1)) || (dz < 0 && canGo(sb, s, -1))) {
+            spend(run, 'went down to the mark');
+            call(sb.changeDepth, step);
+            continue;
+          }
+        }
+      }
+    }
+
     // A CAPTAIN WHO HAS DECIDED TO GO DEEP, GOES DEEP.
     //
     // This used to be a per-turn coin flip — `rnd() < P.dive`, at 0.18 to 0.42 —
@@ -426,6 +448,14 @@ function playOne(tallies, personaName, seed) {
     // the deep being dangerous, it is a bot driving into a wall it was told
     // about. Capping here also makes the harness measure the PROGRESSION: a
     // captain wanting 4200 m now has to go and buy a boat rated for it.
+    // ...AND DESCENT SERVES THE VOYAGE, IT DOES NOT REPLACE IT. Committing to
+    // the dive puts a `continue` in front of all navigation, so a bot that
+    // always wants to be deeper never arrives anywhere: leads went unvisited
+    // (the "went down to the mark" branch fired 10 times in 14,303 turns) and
+    // salvage went unbanked. A captain descends when they are OVER the thing
+    // they came for, or when nothing else is pressing — not while crossing.
+    const nearGoal = !run.goal
+      || sb.__dist({ q: s.q, r: s.r }, run.goal) <= 2;
     const rated = Math.min(P.deepTarget, sub.safeDepth || P.deepTarget);
     // ...AND A FULL HOLD BEATS A DEEP ONE. Committing to the descent above put a
     // `continue` in front of the navigation that steers home, so the bot dived
@@ -435,7 +465,7 @@ function playOne(tallies, personaName, seed) {
     // Same two conditions `pickGoal` already uses, so there is one idea of
     // "time to go in" and not two.
     const heavyHold = s.cargo >= 8, holed = s.hull < sub.hull * 0.45;
-    const wantDeeper = s.currentDepth < rated && airOk && !heavyHold && !holed;
+    const wantDeeper = s.currentDepth < rated && airOk && !heavyHold && !holed && nearGoal;
     if (wantDeeper && canGo(sb, s, 1)) {
       spend(run,'dived');
       call(sb.changeDepth, sub.diveStep);
