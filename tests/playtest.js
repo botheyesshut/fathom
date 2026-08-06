@@ -96,6 +96,8 @@ function boot(seed) {
     '\nfunction __world(){ return world; }' +
     '\nfunction __openAt(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
     '\nfunction __grid(){ return DEPTH_GRID; }' +
+    // Could the captain SEE this, at this depth? The same test the chart uses.
+    '\nfunction __seen(t){ return revealFade(t.q, t.r, poiSeenDepth(t)) > 0; }' +
     // The harbour board, reached the way a captain reaches it: the rows the
     // window actually offers, and the button it actually presses.
     '\nfunction __portRows(){ return portRows(); }' +
@@ -682,6 +684,12 @@ function pickGoal(sb, s, P) {
       if (!t || !t.poi) return;
       if (t.poi === 'deadend' || t.poi === 'surface') return;
       if ((s.poisFound || []).includes(k)) return;
+      // A SINKHOLE HAS TO BE FOUND NOW, so the bot may not steer at one it has
+      // not detected. Without this the harness would keep reporting a descent a
+      // player can no longer perform — the bot reads `world` directly and would
+      // have gone on seeing every hole in the seabed for free after the chart
+      // stopped drawing them.
+      if (t.poi === 'opening' && !sb.__seen(t)) return;
       const d = sb.__dist({q: t.q, r: t.r}, {q: s.q, r: s.r});
       if (d <= 0 || d > 40) return;
       // Score: prizes always, openings heavily when we want to get deeper.

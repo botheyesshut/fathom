@@ -12429,9 +12429,27 @@ function render() {
       // was checked against ground it was nowhere near. Growth is the exception
       // and stays visible: kelp climbs the whole column and breaks the surface,
       // which is the one thing down there you genuinely could see from a boat.
-      const restsBelow = tile.poi && tile.poi !== 'growth' && tile.poi !== 'opening'
-        && tile.poi !== 'surface';
-      const poiAt = restsBelow ? settledDepth(tile, (poiStack(tile)[0] || { d: tile.floor })) : 0;
+      // A SINKHOLE IS A HOLE IN THE SEABED AND YOU CANNOT SEE IT FROM ABOVE.
+      //
+      // Sean, 2026-08-06: "I don't like that the sinkholes are automatically
+      // populated at the surface with big zeros. I think the player should need
+      // to find them with sonar."
+      //
+      // He is right, and the argument is already written three lines above this
+      // in the comment about one secret kept and another given away. `opening`
+      // sat in this exemption beside `growth`, and growth earns its place —
+      // kelp climbs the whole column and breaks the surface, so a boat genuinely
+      // could see it. A hole in the floor under three hundred metres of water is
+      // the opposite of that: it is the single most remarkable thing down there
+      // and it was the one thing handed over for free.
+      //
+      // It is now earned the same way every other resting thing is: by sonar, or
+      // by having charted near the depth it actually lies at. That also gives
+      // the ping a job it did not have — the depth dial matters, because a
+      // shallow shelf hole comes up on a mid-power ping from the surface and a
+      // deep one does not.
+      const restsBelow = tile.poi && tile.poi !== 'growth' && tile.poi !== 'surface';
+      const poiAt = restsBelow ? poiSeenDepth(tile) : 0;
       const floorSecret = restsBelow && !consumedPoi && revealFade(tile.q, tile.r, poiAt) <= 0;
       if (tile.char && !consumedPoi && !floorSecret && hexAcceptsDepth(tile, state.currentDepth)) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -12971,6 +12989,29 @@ function revealAt(q, r, depth) {
 
 // Returns 0..1 alpha factor for a water tile at (q,r) viewed from currentDepth.
 // Fades linearly to 0 over 3 DEPTH_GRID steps (180 m). 0 = render as void.
+// AT WHAT DEPTH WOULD YOU HAVE HAD TO LOOK, TO HAVE FOUND THIS?
+//
+// One function, because the chart and the harness both need the answer and a
+// number worked out twice is a number that will disagree with itself — which is
+// exactly how `economy.js` came to spend weeks calling the sounder a liar.
+//
+// For most things it is where the thing settled. For a SINKHOLE it is the
+// SEABED IT PIERCES, and getting that wrong is what the first attempt at this
+// did: `tile.floor` on a sinkhole hex is the bottom of the entire column — one
+// measured at 7,980 m — so the hole you dive through to reach the deep only
+// became visible once you were already at the deep. The mouth is in the shelf
+// floor, about 290 m down, and that is the depth a sounding has to have reached.
+function poiSeenDepth(tile) {
+  if (!tile || !tile.poi) return 0;
+  if (tile.poi === 'opening') {
+    const sf = shelfSeafloorDepth(tile.q, tile.r);
+    if (sf != null) return sf;
+    // No shelf over it — out past the break the floor IS the answer.
+    return tile.floor == null ? 0 : tile.floor;
+  }
+  return settledDepth(tile, (poiStack(tile)[0] || { d: tile.floor }));
+}
+
 function revealFade(q, r, currentDepth) {
   const depths = revealed.get(hexKey(q, r));
   if (!depths) return 0;
@@ -13373,6 +13414,27 @@ function pingWayTo(tile) {
 // ping's own reach, so this reports only water the sonar actually touched —
 // the same sanctioned knowledge as everything else the ping says, and not a
 // free index of every sinkhole in the ocean.
+// SONAR THAT NAMES A THING PUTS IT ON THE CHART.
+//
+// The ping has always named sinkholes — bearing, range, its own OPENING tag —
+// and then left the captain to remember it, because the glyph was drawn for
+// free anyway. With the free glyph gone (Sean: "the player should need to find
+// them with sonar") the naming has to be worth something, so this writes the
+// find at the depth the mouth actually lies at.
+//
+// ONLY OPENINGS. A sinkhole is navigation, not treasure, and the rule that
+// keeps a wreck secret until you have charted near its depth is deliberate and
+// stays exactly as it was. This is the one thing the sonar is allowed to hand
+// you, because it is the thing that lets you go and look for the rest.
+function chartTheWay(q, r) {
+  const t = getTile(q, r);
+  if (!t || t.poi !== 'opening') return false;
+  const d = poiSeenDepth(t);
+  if (revealFade(q, r, d) > 0) return false;      // already on the chart
+  revealAt(q, r, d);
+  return true;
+}
+
 function nearestOpeningKnown(radius) {
   let best = null;
   for (let dq = -radius; dq <= radius; dq++) {
@@ -13550,6 +13612,15 @@ function ping() {
 
   const atSurface = state.currentDepth <= 1;
 
+  // ANY PING THAT REACHES A BREAK IN THE FLOOR CHARTS IT, whatever else it
+  // happened to find first. Hanging this off the headline result did not work
+  // and the browser said so: the sweep's "most interesting" hit is often a
+  // chasm or a wreck, so the sinkhole six hexes away went unmentioned and
+  // unmapped while the log talked about something else entirely. The way down
+  // is not a runner-up prize; it is the thing the instrument is FOR.
+  const wayFound = nearestOpeningKnown(lvl.activeRange);
+  const wayIsNew = wayFound ? chartTheWay(wayFound.q, wayFound.r) : false;
+
   if (interesting) {
     const dir = bearing(state.q, state.r, interesting.q, interesting.r);
     const meters = interestingDist * 60;
@@ -13577,19 +13648,45 @@ function ping() {
     const iw = pingWayTo(interesting);
     if (iw.open) {
       log(`The water is open above it. You could go straight down.`, 'good', echo);
+      // The sweep may also have caught a break in the floor somewhere else
+      // entirely; say so, once, and only when it is news.
+      if (wayIsNew && interesting.poi !== 'opening') {
+        log(`And the floor gives back wrong ${bearing(state.q, state.r, wayFound.q, wayFound.r)}, ${wayFound.d * 60} m — a break in it. Charted.`, 'good', 'OPENING');
+      }
     } else {
-      const w = nearestOpeningKnown(lvl.activeRange);
+      const w = wayFound;
       log(`Sounder: hard floor under her — no way down from this water.`
         + (w ? ` Break in the floor ${bearing(state.q, state.r, w.q, w.r)}, ${w.d * 60} m.`
              : ` No break in the floor inside this sweep.`), 'warn', 'SONAR');
     }
   } else if (atSurface) {
-    // Surface pings detect bottom contours and openings — no walls up here.
+    // SURFACE PINGS DETECT BOTTOM CONTOURS AND OPENINGS — and until now that
+    // sentence was the entire implementation. The branch reported "nothing
+    // breaks the seafloor in earshot" UNCONDITIONALLY: it never called
+    // `nearestOpeningKnown`, never looked, and said so with total confidence at
+    // every power. Content wired at both ends with nothing in the middle, in
+    // the one place a captain goes to ask the one question that matters early.
+    //
+    // Sean, 2026-08-06: "I don't like that the sinkholes are automatically
+    // populated at the surface with big zeros. I think the player should need
+    // to find them with sonar." Taking the free O off the chart is half of it;
+    // this is the other half, and without it the way down would be findable
+    // only by sailing three hundred metres down and looking, which is not
+    // sonar, it is groping.
+    //
+    // The dial does the gating, honestly: `activeRange` is 1, 3, 5, 8, 12 hexes
+    // by power, so a bigger ping reaches further across the shelf. And finding
+    // it CHARTS it — at the depth the mouth actually lies at, which is the
+    // seabed it pierces and not the bottom of the column.
     const reach = PING_LEVELS[power] ? PING_LEVELS[power].activeRange * 60 : 0;
-    if (power >= 4) {
+    const way = wayFound;
+    if (way) {
+      log(`The ping ranges ${reach} m across the shelf and something gives it back wrong — a break in the seafloor, ${bearing(state.q, state.r, way.q, way.r)}, ${way.d * 60} m. It is on the chart now.`,
+          'good', 'ECHO');
+    } else if (power >= 4) {
       log(`The ping ranges ${reach} m across the shelf. Nothing breaks the seafloor in earshot.`, '', 'ECHO');
     } else if (power >= 3) {
-      log(`The ping fans out ${reach} m through open water. Empty.`, '', 'ECHO');
+      log(`The ping fans out ${reach} m through open water. No break in the floor inside it.`, '', 'ECHO');
     } else {
       log(`The ping fades out at ${reach} m and finds nothing but shelf. The dial buys reach, and spends air and quiet for it.`, '', 'ECHO');
     }
