@@ -141,6 +141,11 @@ function newTally() {
   return {
     runs: 0, turns: 0, deaths: {}, survived: 0, softlocks: 0, traps: 0, botStuck: 0, errors: {},
     maxDepth: [], cratesBanked: [], relicsVaulted: [],
+    // WHERE THE TURNS WENT. A median max depth of 180 m against personas asking
+    // for 4200 could mean the bot cannot descend, or that it is busy doing
+    // something else for 800 turns. Those are opposite problems with opposite
+    // fixes, and no number in this file distinguished them.
+    budget: {},
     reach: {}, itemsFound: {}, itemsUsed: {}, boats: {}, crewLost: 0, crewHired: 0,
     peakCargo: [], everCollected: 0, portVisits: 0, softlockWhere: [],
     broken: {},   // invariants violated during play — see checkInvariants
@@ -355,9 +360,10 @@ function playOne(tallies, personaName, seed) {
     // Air management: run for the surface when low. Only if there IS water above
     // — driving the casing into rock is how a bot kills itself, not a captain.
     if (s.air < sub.air * P.fleeAir && s.currentDepth > 0) {
-      if (canGo(sb, s, -1)) { call(sb.changeDepth, -sub.diveStep); continue; }
+      if (canGo(sb, s, -1)) { spend(run,'ran for air'); call(sb.changeDepth, -sub.diveStep); continue; }
     }
     // At the surface with cargo: bank it (surface() handles port).
+    if (s.currentDepth <= 0) { spend(run, '(marker) was at the surface'); }
     if (s.currentDepth <= 0) {
       const banked0 = s.cargoBanked;
       call(sb.surface);
@@ -392,10 +398,72 @@ function playOne(tallies, personaName, seed) {
     // Ping sometimes.
     if (rnd() < P.ping) { call(sb.ping); sawOnce(T, run, 'used active sonar'); }
 
-    // Dive toward this captain's preferred depth — but only into real water.
-    if (s.currentDepth < P.deepTarget && rnd() < P.dive && canGo(sb, s, 1)) {
+    // A CAPTAIN WHO HAS DECIDED TO GO DEEP, GOES DEEP.
+    //
+    // This used to be a per-turn coin flip — `rnd() < P.dive`, at 0.18 to 0.42 —
+    // laid on top of horizontal travel, and the turn budget showed exactly what
+    // that produces: 83% of all turns SAILED SUBMERGED, 4% dived, and 625 dives
+    // against 537 flights for air. The bot oscillated, paying deep-water air
+    // prices (a move costs 1 + depth/400) for shelf-water progress, and reached
+    // a median 180 m while asking for as much as 4200.
+    //
+    // A person does not do that. A person decides to go down, goes down, and
+    // turns back when the air says so. So descent is now a COMMITMENT gated on
+    // air rather than a dice roll gated on nothing: while below your target and
+    // holding a working margin over your own flee threshold, going down is what
+    // you do. `P.dive` stops being a per-turn probability and `P.deepTarget`
+    // and `P.fleeAir` — which are statements about the captain, not the turn —
+    // carry the whole personality.
+    //
+    // KNOB: restore `rnd() < P.dive &&` in both branches below to put the old
+    // wandering behaviour back.
+    const airOk = s.air > sub.air * (P.fleeAir + 0.15);
+    // AND NEVER PAST WHAT THE HULL IS RATED FOR. The game prints the safe and
+    // crush band on the depth readout precisely so a captain can see this, and
+    // the bot was the one captain ignoring it: giving the pilot its head sent
+    // the hoarder (deepTarget 1800) through the Erebus safe depth of 1500 and
+    // survival fell from 92% to 79%, three of them hull failures. That is not
+    // the deep being dangerous, it is a bot driving into a wall it was told
+    // about. Capping here also makes the harness measure the PROGRESSION: a
+    // captain wanting 4200 m now has to go and buy a boat rated for it.
+    const rated = Math.min(P.deepTarget, sub.safeDepth || P.deepTarget);
+    const wantDeeper = s.currentDepth < rated && airOk;
+    if (wantDeeper && canGo(sb, s, 1)) {
+      spend(run,'dived');
       call(sb.changeDepth, sub.diveStep);
       continue;
+    }
+
+    // SIDEWAYS, ONTO A COLUMN THAT GOES ON. This is the one move the bot never
+    // had, and without it every number this harness has ever printed about the
+    // deep half of the game was fiction.
+    //
+    // A water column is DISCONTINUOUS: `tests/descent.js` reads one as
+    // "0-600 m, 840-1200 m, 2640-3120 m". You descend to the bottom of your own
+    // run and then `canGo(down)` is false for ever, because the next run is a
+    // gap away. The way on is a neighbouring hex whose column spans the gap —
+    // which is precisely what the chart already tells a human, painting a
+    // perimeter INDIGO for "descend one step, then move" and CYAN for the
+    // reverse. The bot was the only captain in the world who could not read it.
+    //
+    // Measured before this went in: personas asking for 4200 m reached a median
+    // max depth of 240 m across 24 runs of 800 turns, while a breadth-first
+    // search over the same voxel graph reaches 2400 m in about 60 moves and
+    // 6000 m in about 120. The world was never the obstacle.
+    if (wantDeeper && !canGo(sb, s, 1)) {
+      const step = descentStep(sb, s);
+      if (step) {
+        run.steppedForDepth = (run.steppedForDepth || 0) + 1;
+        if (step.q === s.q && step.r === s.r) {
+          spend(run, 'piloted: changed depth to get round');
+          call(sb.changeDepth, step.d - s.currentDepth);
+        } else {
+          spend(run, 'piloted: moved to get round');
+          call(sb.move, step.q, step.r);
+        }
+        continue;
+      }
+      run.noWayDown = (run.noWayDown || 0) + 1;
     }
     // ---- Navigation. A human does not wander at random: they steer for
     // something. Pick a goal, then step toward it.
@@ -458,6 +526,7 @@ function playOne(tallies, personaName, seed) {
       for (const c of nbrs) { const d = sb.__dist({q: c.q, r: c.r}, run.goal); if (d < bd) { bd = d; best = c; } }
       n = best || nbrs[Math.floor(rnd() * nbrs.length)];
     } else n = nbrs[Math.floor(rnd() * nbrs.length)];
+    spend(run, s.currentDepth <= 0 ? 'sailed on the surface' : 'sailed submerged');
     call(sb.move, n.q, n.r);
     if (s.crew.length) sawOnce(T, run, 'sailed with crew aboard');
   }
@@ -475,6 +544,8 @@ function playOne(tallies, personaName, seed) {
     t.peakCargo.push(peakCargo);
     if (peakCargo > 0) t.everCollected++;
     if (run.followedSounder) t.followedSounder = (t.followedSounder || 0) + 1;
+    t.noWayDown = (t.noWayDown || 0) + (run.noWayDown || 0);
+    for (const k of Object.keys(run.budget || {})) t.budget[k] = (t.budget[k] || 0) + run.budget[k];
     for (const k of Object.keys(s.items || {})) t.itemsFound[k] = (t.itemsFound[k] || 0) + 1;
   }
 }
@@ -485,6 +556,61 @@ function playOne(tallies, personaName, seed) {
 // Is there actually water one step up (-1) or down (+1)? A captain reads the
 // depth strip before blowing ballast; a bot that does not simply drives itself
 // into rock over and over until the hull fails.
+// THE DESCENT PILOT.
+//
+// A one-hex look for a ledge was not enough and the numbers said so: 53 sideways
+// steps in 14,000 turns, because the bot stands at the bottom of a basin where
+// no NEIGHBOUR goes deeper either. The way on can be ten hexes off and two
+// levels up — over a lip, along a gallery, down a shaft — and `tests/descent.js`
+// measures real routes to 2400 m at about sixty moves. A human reads that off
+// the chart, which paints every perimeter cyan for "up one, then across" and
+// indigo for "down one, then across". This is the bot finally reading it.
+//
+// Breadth-first over the sub's own two moves — across to a neighbour open at
+// your depth, or one 60 m step inside your own column — and it stops at the
+// first cell deeper than where it started. Bounded hard, because this runs
+// inside a turn loop: RADIUS hexes, LIFT steps of vertical slack, CAP nodes.
+// Returns the FIRST step of the route, or null if there is no way down nearby.
+const PILOT_RADIUS = 10, PILOT_LIFT = 6, PILOT_CAP = 4000;
+function descentStep(sb, s) {
+  const g = sb.__grid();
+  const start = { q: s.q, r: s.r, d: s.currentDepth };
+  const key = (c) => c.q + ',' + c.r + ',' + c.d;
+  const seen = new Set([key(start)]);
+  let frontier = [{ c: start, first: null }];
+  let nodes = 0;
+  while (frontier.length && nodes < PILOT_CAP) {
+    const next = [];
+    for (const item of frontier) {
+      const c = item.c;
+      const moves = [];
+      for (const n of sb.__nbrs(c.q, c.r)) moves.push({ q: n.q, r: n.r, d: c.d });
+      moves.push({ q: c.q, r: c.r, d: c.d - g });
+      moves.push({ q: c.q, r: c.r, d: c.d + g });
+      for (const w of moves) {
+        nodes++;
+        if (w.d < 0) continue;
+        // Never climb more than PILOT_LIFT above where we started — a route that
+        // goes to the surface and back is a different decision (see pickGoal).
+        if (w.d < s.currentDepth - PILOT_LIFT * g) continue;
+        if (sb.__dist({ q: w.q, r: w.r }, start) > PILOT_RADIUS) continue;
+        const k = key(w);
+        if (seen.has(k)) continue;
+        if (!sb.__openAt(w.q, w.r, w.d)) continue;
+        seen.add(k);
+        const first = item.first || w;
+        if (w.d > s.currentDepth) return first;    // found water deeper than here
+        next.push({ c: w, first: first });
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
+// One line per turn, so the budget always sums to the turns actually taken.
+function spend(run, what) { run.budget = run.budget || {}; run.budget[what] = (run.budget[what] || 0) + 1; }
+
 function canGo(sb, s, dir) {
   const g = sb.__grid();
   const target = s.currentDepth + dir * g;
@@ -582,6 +708,18 @@ console.log(`  median peak cargo held: ${median(T.peakCargo)}   (best ${Math.max
 console.log(`  median crates banked: ${median(T.cratesBanked)}   (max ${Math.max(...T.cratesBanked)})`);
 console.log(`  median relics vaulted: ${median(T.relicsVaulted)}  (max ${Math.max(...T.relicsVaulted)})`);
 console.log(`  median max depth: ${median(T.maxDepth)}m   (deepest ${Math.max(...T.maxDepth)}m)`);
+
+console.log('\n=== WHERE THE TURNS WENT ===');
+{
+  const tot = Object.values(T.budget).reduce((a, b) => a + b, 0) || 1;
+  const rows = Object.entries(T.budget).sort((a, b) => b[1] - a[1]);
+  for (const [k, v] of rows) {
+    console.log('  ' + k.padEnd(30) + String(v).padStart(7) + '  ' + (100 * v / tot).toFixed(1) + '%');
+  }
+  console.log('  ' + '-'.repeat(48));
+  console.log('  ' + tot + ' entries over ' + T.turns + ' turns — the (marker) row is not');
+  console.log('  a turn of its own, so the rest sum to the turns actually taken.');
+}
 console.log(`  crew lost across all runs: ${T.crewLost}`);
 
 console.log('\n=== CONTENT REACH — what fraction of runs ever saw this? ===');
