@@ -1,4 +1,144 @@
-# FATHOM — START HERE (last updated 2026-08-05)
+# FATHOM — START HERE (last updated 2026-08-06)
+
+## WHILE HE WAS AWAY (2026-08-06) — the instruments were lying, not the game
+
+Sean went away and asked me to make the game better. What I found instead, five
+times running, was that **the game was already better than the instruments said**
+— and that is worth more than a feature, because every design decision in this
+project is taken off these numbers.
+
+No game code was changed in any of this. `fathom-chart.html` is byte-identical
+to where he left it. Everything below is measurement.
+
+### 1. The bot could not get off the shelf, so half the game was never measured
+
+`playtest.js` gives the reckless captain `deepTarget: 4200` and the hoarder 1800.
+Across 24 runs of 800 turns the **median max depth was 180 m** and nothing ever
+passed 2400. I had been reading that for weeks as a bot declining to dive.
+
+It was a bot trying to dive and failing. `tests/descent.js` (new) settles it:
+
+| | |
+|---|---|
+| sinkholes within 40 hexes of the dock | 3–12, median nearest **17 hexes** |
+| deepest standable water | **11,100 m** |
+| breadth-first route to 2400 m | **~60 moves** |
+| to 6000 m | ~120 moves |
+
+**The world was never the obstacle.** What the bot was missing: a water column is
+DISCONTINUOUS — one reads `0-600 m, 840-1200 m, 2640-3120 m`. You descend to the
+bottom of your own run and `canGo(down)` is false for ever, because the next run
+is a gap away. The way on can be ten hexes off and two levels up.
+
+A human reads this straight off the chart, which paints every perimeter **cyan**
+for "up one, then across" and **indigo** for "down one, then across". The bot was
+the only captain in the world who could not read it.
+
+So it has a **descent pilot** now: breadth-first over the sub's own two moves,
+bounded to ten hexes and six levels of slack. And descent became a *commitment*
+rather than a per-turn coin flip, because the **turn budget** — added here, and it
+is the thing that found this — showed 83% of all turns SAILED SUBMERGED, 4%
+dived, and 625 dives against 537 flights for air. It oscillated, paying
+deep-water air prices for shelf-water progress.
+
+```
+  median max depth   180 m -> 720 m      (hoarder reaches 1380 m)
+  deep bestiary, first ever contact: baro 8%, lurker 13%, angler 13%,
+                                     chorus 8%, silt 8%
+  on-foot entry      3% -> 8%
+```
+
+Two things I got wrong on the way, both caught by measuring after:
+
+- Giving the pilot its head sent it through the Erebus safe depth of 1500 m and
+  survival fell 92% → 79%, three hull failures. That is not the deep being
+  dangerous, it is a bot driving into a wall the game prints on the depth
+  readout. **Capped at the hull rating** — and that makes the harness measure the
+  PROGRESSION, since a captain wanting 4200 m must now go and buy a boat for it.
+- Committing to the dive put a `continue` in front of all navigation, so the bot
+  dived and never came home. Banking went to zero. **Descent now yields to the
+  crossing** — you descend when you are over the thing you came for.
+
+### 2. The sounder was never lying. The instrument checking it was.
+
+`economy.js` reported the sounder's precision at **53.3%** — sixteen honest
+alerts against fourteen times it "cried wolf" — and that number sat underneath
+this project's standing worry that nobody can find anything. I printed the
+fourteen. **Every one was a real wreck, in a real cell, correctly announced.**
+
+The game's list is `SOUNDER_PRIZE = salvage, ruin, hull, opening, signal, growth,
+air`. The test had a hand-copied `PRIZE = salvage, ruin, signal, growth, air`.
+Missing `hull` and `opening`.
+
+```
+  precision   53.3% -> 100.0%     recall 100%     false alerts 14 -> 0
+```
+
+The same drifted list was also counting the world's treasure, and a wreck is a
+payout — most of what the shelf holds since the sunlit graveyard went in:
+
+```
+  prizes                    109 -> 157  (+44%)
+  starter-safe water   52 -> 85 prizes, 0.56 -> 0.92 per 1000 cells
+```
+
+Two lists now, because "what pays" and "what the sounder mentions" are different
+questions — a sinkhole is worth being told about and is not treasure. **The
+sounder's list is read from the game at runtime so it cannot drift again.**
+
+### 3. The tutorial was never dead; nobody was dismissing the card
+
+`firsthour.js` reported all thirteen tips firing **0/40 runs**, median 0 tips per
+run, and had said so since the tutorial became pop-up cards. Two faults stacked:
+
+- A tip is a **card** now, not a log line. The scorer counted log entries tagged
+  TIP. It was looking in a room the furniture had left.
+- Fixing that changed nothing, which is the interesting part. **The harness never
+  dismisses the card.** `ordersTick` refuses to stack a second card on an open one
+  — correct, and exactly what Sean asked for — so a run showed `helm` at boot and
+  then nothing for the rest of its life.
+
+```
+  log 39/40   shelf 37/40   current 25/40   median 3 tips per run
+  briefing cards in hour one: air x32, harbour x17, collect x1
+```
+
+The remaining zeros are situational and correct: you do not reach crush depth,
+jettison cargo or strike rock in your first hour, and that bot filters to
+passable neighbours by construction so it never can.
+
+### 4. Angelshark #12 — one hypothesis eliminated
+
+Brown is the **land** colour, and `flagMoveFail` paints a refused move dock-brown,
+so a cave carved under a land hex would look exactly like the report. It is not
+that: across 8 seeds, **0 of 859 land hexes** have a single open cell beneath
+them. The guard in `addVolume` holds across chunk borders. Recorded so nobody
+spends that afternoon twice. Still needs his seed and position.
+
+### 5. What did NOT turn out to be a problem
+
+- **The item table is healthy.** 35 of 36 items are rollable as loot; the one that
+  is not (`gillhood`, `find: 0`) is sold by the Children of Dagon on purpose. The
+  31 "never found" in the old playtest were the bot never leaving the shelf.
+- **Zero dead functions**, 528 top-level, none unreachable. The project's
+  signature bug is currently absent.
+
+### The one thing still genuinely unmeasured
+
+**Nobody buys a better boat.** The Charon is 20 crates; the best run banks 14
+across 2000 turns, and only 25% of runs pick up any cargo at all. Given prizes
+pay 2–5 each and 85 sit inside 26 hexes in starter-safe water, I read that as the
+bot still being a poor earner rather than the economy being shut — but *that is a
+reading, not a measurement*. Until a captain in this harness completes
+find → claim → sail home → bank → buy, **everything past 1500 m is verified by
+arithmetic and nothing else.**
+
+That is the next job, and it is the on-foot layer's problem: the long chain is
+find a site, dive to its depth, board, walk, collect, leave, sail home, dock.
+`delve.js` walks interiors directly and `playtest.js` cannot get into one more
+than 8% of the time.
+
+---
 
 ## THE STRIKE (2026-08-05) — the fast way, and it asks a different question
 
@@ -247,7 +387,7 @@ sides of the trade exist now.
 
 - ~~**The strike**~~ — BUILT 2026-08-05, see the entry at the top of this file.
 - The **ghost thread** (Angelshark #22), recorded not built.
-- **Angelshark #12** — a brown passable hex in a tunnel; never reproduced.
+- **Angelshark #12** — a brown passable hex in a tunnel; never reproduced. One hypothesis eliminated 2026-08-06 (cave under a land hex: 0 of 859 land hexes have open cells). Still needs his seed + position.
 
 ---
 
