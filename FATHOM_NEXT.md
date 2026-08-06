@@ -1,5 +1,73 @@
 # FATHOM — START HERE (last updated 2026-08-06)
 
+## THE WAY DOWN HAS TO BE FOUND (2026-08-06)
+
+Sean: *"I don't like that the sinkholes are automatically populated at the surface
+with big zeros. I think the player should need to find them with sonar."*
+
+He is right, and the argument was already sitting in the source three lines above
+the offending clause — a comment about **one secret kept and another given away**.
+Every prize that RESTS somewhere is earned by sonar or by having charted near the
+depth it lies at. `opening` sat in that exemption next to `growth`, and growth
+earns its place: kelp climbs the whole column and breaks the surface, so a boat
+genuinely could see it. A hole in the seabed under three hundred metres of water
+is the opposite, and it was the one thing in the game handed over for nothing.
+
+### Taking the O off the chart was one clause. Making it findable took three goes.
+
+The browser caught every wrong turn, and none of them would have shown up in the
+battery.
+
+**1. The mouth is not the floor.** `tile.floor` on a sinkhole hex is the bottom of
+the entire column — one measured at **7,980 m**. So the first version made the
+hole you dive through to reach the deep visible only once you were already at the
+deep. The mouth is in the shelf floor, about **294 m** down. That is `poiSeenDepth`
+now: one function, shared with the harness, because a number worked out twice is a
+number that will eventually disagree with itself. (That is not a hypothetical —
+it is exactly how `economy.js` came to spend weeks calling the sounder a liar.)
+
+**2. The surface ping never looked.** The branch reported *"nothing breaks the
+seafloor in earshot"* **unconditionally**, at every power, under a comment that
+read "Surface pings detect bottom contours and openings". It never called
+`nearestOpeningKnown`. Content wired at both ends with nothing in the middle, in
+the one place a captain goes to ask the one question that matters early on.
+
+**3. Charting off the headline find does not work.** A sweep's most interesting
+hit is usually a chasm or a wreck, so the sinkhole six hexes away went unmapped
+while the log talked about something else. **Any ping that reaches a break in the
+floor charts it now, whatever else it found.** The way down is not a runner-up
+prize; it is the thing the instrument is for.
+
+*And one bug I made and caught:* brace surgery left an `else` attached to the
+wrong `if`, so a boat with open water beneath her would have been told "hard floor
+under her — no way down". Rewritten whole rather than patched.
+
+### Measured in a browser — boat six hexes off a hole, at the surface
+
+| | |
+|---|---|
+| sailing past | 0 markers, not charted |
+| ping power 2, reach 3 hexes | *"No break in the floor inside this sweep."* |
+| ping power 5, reach 12 hexes | the O appears — *"a break in it. Charted."* |
+
+The dial buys reach, and reach now buys the way down. `activeRange` is 1/3/5/8/12
+hexes by power, so the gating is honest and needs no new number.
+
+**Descent is unchanged** — bot median max depth 660 m, same as before — because
+sonar does the job the free markers were doing, and feeling your way through
+connected water was never affected. The bot was taught the same rule
+(`__seen` → `poiSeenDepth`), so the harness cannot go on steering at holes a
+player can no longer see. Without that it would have reported a descent nobody
+could perform, which is the exact failure this whole day was spent removing.
+
+### The knob
+
+`poiSeenDepth` decides what depth a thing must have been sounded at. Put
+`&& tile.poi !== 'opening'` back into `restsBelow` in the render to restore the
+free markers.
+
+---
+
 ## WHILE HE WAS AWAY (2026-08-06) — the instruments were lying, not the game
 
 Sean went away and asked me to make the game better. What I found instead, five
