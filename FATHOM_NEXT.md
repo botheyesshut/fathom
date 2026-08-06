@@ -1,5 +1,71 @@
 # FATHOM — START HERE (last updated 2026-08-06)
 
+## THE SUNLIT WATER HAS THINGS LIVING IN IT (2026-08-06)
+
+Sean: *"Please make more animations for the top 120m where lots of fish and
+plants would be."*
+
+He was right that it was bare. `shallow` covered **everything from the surface to
+400 m in one picture**, so the water the drive happens in — where the kelp is,
+where the light still reaches — looked exactly like 390 m of empty blue. This
+file already records that complaint in another form: *"a window that does not
+answer the one control you are pressing is furniture."*
+
+### Two scenes, and the second one is an epistemics problem, not a variety one
+
+`sunlit` draws kelp standing in silt. On the open shelf at 60 m the floor is
+usually two hundred metres further down, and drawing a seabed there would be the
+window lying about the one thing the sounder exists to tell you. Measured while
+building it: in ordinary shelf water the picker returns `column` every time.
+
+So the weed scene is for genuinely shallow ground — shoals, island skirts, the
+home bay — and **`sunlitblue`** (beams and fish, no bottom, shaped like `column`
+with no porthole rim) is for everywhere else in the band. Verified live:
+
+| where | scene |
+|---|---|
+| 60 m over open shelf | `sunlitblue` |
+| 60 m over a 158 m shoal | `sunlit` |
+| 120 m over that shoal | `seabed` (unchanged) |
+| 120 m+ open water | `column` (unchanged) |
+
+**Six frames, not the usual three or four.** Three things move at different rates
+— beams sliding, two fish crossing in opposite directions at different speeds,
+kelp breathing — and at four frames they fall into step and the whole thing
+pulses instead of drifting. Confirmed six distinct frames per scene in a browser,
+with every colour resolving (cyan beams, green weed, white fish, brown sand) and
+none falling through to the unknown-glyph grey.
+
+### Found while reading the art: the shallows' sunlight was switched off
+
+The `shallow` scene declared `'│'` **three times in one object literal**. The
+first said `'b'` — bright cyan — for its sun shafts. The last said `'8'` and won.
+The sunlight in the scene captioned *"the light still reaching"* has been
+rendering in dark grey.
+
+It could never have worked: the porthole rim is drawn with `'│'` as well, and a
+character key gives one character one colour. The new scenes slant their light
+instead, which is both colourable and more like light. The duplicates are gone.
+
+### And the battery caught my glyph
+
+The beams are `/` rather than the `╲` I reached for first, because
+`items.test.js` rejected it immediately: not on `VP_SAFE`, the measured set of
+glyphs that all advance exactly one cell. Worth noting that `VP_KEY` colours
+`'╲'` and `'╱'` regardless — two dead key entries for characters no scene is
+permitted to draw.
+
+Art is **generated rather than hand-typed**, per the warning already in the
+source that two hand-typed rows never stay the same length forever.
+
+### Knobs
+
+`SUNLIT_ART` 120 — how deep the window keeps its light. Deliberately NOT the same
+number as `SUNLIT` (160), which is where the hunt allows fish to be taken: one is
+a rule, this is a picture.
+
+---
+
 ## THE WAY DOWN HAS TO BE FOUND (2026-08-06)
 
 Sean: *"I don't like that the sinkholes are automatically populated at the surface
