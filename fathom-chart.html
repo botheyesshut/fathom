@@ -2966,6 +2966,11 @@ function drawSeaChart() {
 // CSS that sizes the frame does the same arithmetic and says 24 too. This read
 // 36 for as long as `VP_W` has read 24, one line below it.
 const VP_W = 24, VP_H = 10;
+// How deep the lit, living water goes as far as the WINDOW is concerned. Sean
+// asked for the top 120 m; `SUNLIT` (160) is the rule the hunt uses and they are
+// deliberately not the same number — one is where fish can be taken, this is
+// where the picture still has light in it.
+const SUNLIT_ART = 120;
 const ANSI16 = ['#0a0a12','#1a3a7a','#1a7a3a','#1a7a8a','#8a2a20','#6a2a7a','#8a5a1a','#9aa0a8',
                 '#3a4048','#4a7ad8','#5ad87a','#6ad8e0','#e05a4a','#c05ad0','#e8d060','#eef0f4'];
 // One step darker. This used to map only the BRIGHT half of the palette, so a
@@ -5226,8 +5231,184 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 
+  // SUNLIT WATER WITH NOTHING UNDER IT.
+  //
+  // The other half of the top band, and it exists because of the epistemic law
+  // rather than for variety: `sunlit` draws kelp standing in silt, and on the
+  // shelf at 60 m the floor is usually 200 m further down. Showing a seabed
+  // there would be the window lying about the one thing the sounder is for.
+  // Measured while building this — in ordinary shelf water at 60 m the picker
+  // returns `column` every time, so the weed scene is for genuinely shallow
+  // ground: shoals, island skirts, the home bay.
+  //
+  // Shaped like `column` — no porthole rim, motes drifting — because that is
+  // what suspended water looks like in this game already. What it adds is the
+  // light coming in at an angle and the fish that live in it.
+  sunlitblue: { cap: 'Bright water, and no bottom under any of it', hold: 2, wet: 1,
+    key: { '/': 'b', '>': 'f', '<': 'f', '·': '7', '∙': '8' },
+    frames: [
+['   /     /      /    /  ',
+       '  · /     /      /    / ',
+       '     /        ·   /     ',
+       ' ><>                    ',
+       '      ∙                 ',
+       '                  <><   ',
+       '                    ∙   ',
+       '      ><>               ',
+       '            ·           ',
+       '                        '],
+      ['   /     /      /    /  ',
+       '    /     /      /    / ',
+       '  ·  /            /     ',
+       '    ><>       ·         ',
+       '                        ',
+       '      ∙         <><     ',
+       '                        ',
+       '        ><>         ∙   ',
+       '                        ',
+       '            ·           '],
+      ['    /     / ·    /    / ',
+       '     /     /      /    /',
+       '      /            /    ',
+       '  ·    ><>              ',
+       '              ·         ',
+       '              <><       ',
+       '      ∙                 ',
+       '          ><>           ',
+       '                    ∙   ',
+       '                        '],
+      ['    /     /      /    / ',
+       '     /     /·     /    /',
+       '      /            /    ',
+       '          ><>           ',
+       '  ·                     ',
+       '            <><         ',
+       '                        ',
+       '      ∙     ><>         ',
+       '                        ',
+       '                    ∙   '],
+      ['   /     /      /   ∙/  ',
+       '    /     /      /    / ',
+       '     /      ·     /     ',
+       '             ><>        ',
+       '                        ',
+       '  ·       <><           ',
+       '              ·         ',
+       '              ><>       ',
+       '      ∙                 ',
+       '                        '],
+      ['  /     /      /    /   ',
+       '   /     /      /   ∙/  ',
+       '    /            /      ',
+       '            ·   ><>     ',
+       '                        ',
+       '        <><             ',
+       '  ·                     ',
+       '              · ><>     ',
+       '                        ',
+       '      ∙                 '],
+    ] },
+
+  // THE SUNLIT SHALLOWS — the top 120 m, and the only water in the game with
+  // anything growing in it.
+  //
+  // Sean: "Please make more animations for the top 120m where lots of fish and
+  // plants would be." He is right that it was bare: `shallow` covered EVERYTHING
+  // from the surface to 400 m in one picture, so the water where the drive
+  // happens, where the kelp is, where the light still reaches, looked exactly
+  // like 390 m of empty blue. The file already records this complaint in another
+  // form — "a window that does not answer the one control you are pressing is
+  // furniture".
+  //
+  // Six frames rather than the usual three or four, because there are three
+  // separate things moving at different rates — beams sliding, two fish
+  // crossing at different speeds and in opposite directions, and kelp breathing
+  // — and with four frames the fish and the weed fall into step and the whole
+  // thing pulses instead of drifting.
+  //
+  // The beams are '/' and not '│' ON PURPOSE, for two reasons. The porthole rim
+  // is drawn with '│', a character key gives one character one colour, and that
+  // is exactly how `shallow` came to declare '│' THREE TIMES and paint its own
+  // sunlight dark grey. And light comes in at an angle anyway.
+  //
+  // '/' rather than the '╲' I reached for first, which `items.test.js` rejected
+  // on the spot: it is not on VP_SAFE, the measured set of glyphs that all
+  // advance exactly one cell. (VP_KEY colours '╲' and '╱' regardless — two dead
+  // key entries for characters no scene is permitted to draw.)
+  sunlit: { cap: 'Sunlit water, and everything that lives in it', wet: true, hold: 2, porthole: true, snowFrom: 1,
+    key: { '/': 'b', '>': 'f', '<': 'f', ')': 'a', '(': 'a', '░': '6',
+           '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '│': '8' },
+    frames: [
+['   ┌────────────────┐   ',
+       '  │  /   /    /   /  │  ',
+       '  │   /        /     │  ',
+       '  │><>               │  ',
+       '  │            <><   │  ',
+       '  │ )   )    )    )  │  ',
+       '  │ )   )    )    )  │  ',
+       '  │ )   )    )    )  │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │  /   /    /   /  │  ',
+       '  │   /        /     │  ',
+       '  │   ><>            │  ',
+       '  │         <><      │  ',
+       '  │   )   )    )    )│  ',
+       '  │  )   )    )    ) │  ',
+       '  │ )   )    )    )  │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │   /   /    /   / │  ',
+       '  │    /        /    │  ',
+       '  │      ><>         │  ',
+       '  │      <><         │  ',
+       '  │   )   )    )    )│  ',
+       '  │  )   )    )    ) │  ',
+       '  │ )   )    )    )  │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │   /   /    /   / │  ',
+       '  │    /        /    │  ',
+       '  │         ><>      │  ',
+       '  │   <><            │  ',
+       '  │ )   )    )    )  │  ',
+       '  │ )   )    )    )  │  ',
+       '  │ )   )    )    )  │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │  /   /    /   /  │  ',
+       '  │   /        /     │  ',
+       '  │            ><>   │  ',
+       '  │<><               │  ',
+       '  │   (    (    (    │  ',
+       '  │(   (    (    (   │  ',
+       '  │ (   (    (    (  │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '   └────────────────┘   '],
+      ['   ┌────────────────┐   ',
+       '  │ /   /    /   /   │  ',
+       '  │  /        /      │  ',
+       '  │               ><>│  ',
+       '  │   <><            │  ',
+       '  │   (    (    (    │  ',
+       '  │(   (    (    (   │  ',
+       '  │ (   (    (    (  │  ',
+       '  │░░░░░░░░░░░░░░░░░░│  ',
+       '   └────────────────┘   '],
+    ] },
+
   shallow: { cap: 'Shallow water, the light still reaching', wet: true, hold: 3, porthole: true, snowFrom: 1,
-    key: { '│': 'b', '>': 'a', '<': 'a', '░': '3', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
+    // '│' WAS DECLARED THREE TIMES HERE and the last one won, so the sun shafts
+    // this scene is named for rendered in #3a4048 — dark grey — while the key
+    // said 'b', bright cyan. The rim is drawn with '│' as well, so the two could
+    // never have been colourable apart; see `sunlit` above for the fix, which is
+    // to slant the light. Here the duplicates simply go, and the shafts stay the
+    // colour of the rim, which is at least honest about being 400 m down.
+    key: { '>': 'a', '<': 'a', '░': '3', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
        '  │  │     │   │    ││  ',
@@ -5779,7 +5960,11 @@ function sceneForNow() {
   // return that skipped `openestAbove` entirely and drew a lid over
   // cathedrals — the column mistake again, caught by the check that guards it.
   if (nearRoof && (!nearFloor || atTop)) return 'roof'; // stone over the sail
-  if (!nearRoof && !nearFloor) return 'column';    // suspended, neither in reach
+  // Suspended, neither in reach — but in the top 120 m that is bright water
+  // with fish in it, not the blank blue of the middle depths.
+  if (!nearRoof && !nearFloor) {
+    return state.currentDepth < SUNLIT_ART ? 'sunlitblue' : 'column';
+  }
 
   // IN THE SILT versus A STEP ABOVE IT. Sean, playing at 720 m with "the floor
   // is right there" and at 660 m with "the floor is open below", got the same
@@ -5789,6 +5974,9 @@ function sceneForNow() {
 
   // A step above the floor: the depth-band scenes, which is where their
   // thinner seabeds belong.
+  // THE TOP 120 M IS ITS OWN PLACE. Two grid steps, the water the drive happens
+  // in and the only water with plants in it.
+  if (state.currentDepth < SUNLIT_ART) return 'sunlit';
   if (state.currentDepth < 400) return 'shallow';
   if (state.currentDepth < 1200) return 'midwater';
   return 'open';
