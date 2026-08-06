@@ -92,7 +92,20 @@ function boot(seed) {
     '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
     '\nfunction __start(){ gameStarted = true; }' +
     '\nfunction __look(){ lookAround(); }' +
-    '\nfunction __tips(){ return TIPS; }';
+    '\nfunction __tips(){ return TIPS; }' +
+    // A TIP IS A CARD NOW, NOT A LOG LINE, and this file could not see one.
+    // The tutorial was rebuilt as dismissible pop-ups at Sean's request and the
+    // tips came with it — `maybeShowTip` calls `showBrief`. So the old scorer,
+    // which counted log entries tagged TIP and matched their text against
+    // TIPTEXT, reported every one of thirteen tips as "never fires in hour one"
+    // and a median of 0 tips per run. That reads as a dead tutorial and is an
+    // instrument looking in a room the furniture left.
+    //
+    // Captured at the door, the same trick orders.test uses: whatever the card
+    // was handed, taken one function earlier than the DOM.
+    '\nvar __cards = [];' +
+    '\n(function(){ var o = showBrief; showBrief = function(b){ __cards.push(String(b.id)); o(b); }; })();' +
+    '\nfunction __cards_(){ return __cards; }';
   try { vm.runInContext(script + probe, sandbox, { timeout: 20000 }); }
   catch (e) { if (typeof sandbox.state === 'undefined') throw e; }
   sandbox.restart();
@@ -122,6 +135,13 @@ function playCold(s, turns) {
     // The fallback used to be Math.random, so on any boot where the game's own
     // `rand` was not exported this instrument silently became unreproducible
     // and nobody could have told from the output. Seeded either way now.
+    // A CAPTAIN DISMISSES THE CARD. Without this exactly one briefing ever
+    // fires in a run — 'helm', during boot — because `briefOpen` stays true
+    // for ever and `ordersTick` refuses to stack a second card on the first.
+    // That is correct game behaviour and a broken harness: it made the whole
+    // tutorial read as dead in this file. orders.test.js has always modelled
+    // the dismissal; this one never did.
+    if (s.closeBrief) s.closeBrief();
     const roll = s.rand ? s.rand() : coldRand();
     if (t === 1) { s.lookAround(); continue; }
     if (t === 2) { s.ping(); continue; }
@@ -138,6 +158,9 @@ function playCold(s, turns) {
 }
 
 const all = [];
+// Cards captured per run, sliced to the cold play only so it lines up with `all`
+// — the pier nudge above happens first and is not part of the hour.
+const cardRuns = [];
 let dockHull = [], dockTaught = 0, deaths = 0;
 // The tip table, read from the game rather than duplicated here — a copy would
 // drift and then quietly report the wrong tip as never firing.
@@ -156,7 +179,9 @@ for (let i = 0; i < RUNS; i++) {
     if (s.__lines_().some(l => l.tag === 'DOCK' || l.tag === 'SHORE')) dockTaught++;
   }
   s.__clear();
+  const c0 = s.__cards_().length;
   all.push(playCold(s, TURNS));
+  cardRuns.push(s.__cards_().slice(c0));
   if (!st.alive) deaths++;
 }
 
@@ -180,18 +205,33 @@ const set = count('slow and steady') + count('strong set runs');
 console.log(`  "silt, nothing more to say"   BEFORE 221/1200  NOW ${silt}/${N}   (${pct(silt, N)} of all lines)`);
 console.log(`  the set, restated             BEFORE 103/1200  NOW ${set}/${N}   (${pct(set, N)} of all lines)`);
 
-console.log('\n--- THE TIPS (nine entries; eight had call sites, four printed backwards) ---');
+console.log('\n--- THE TIPS (they are cards now, and are counted as cards) ---');
 const seen = {};
 for (const t of tips) {
   const k = Object.keys(TIPTEXT).find(k => TIPTEXT[k] === t.t) || '?';
   seen[k] = (seen[k] || 0) + 1;
+}
+// ...plus every tip that arrived as a card, which since the tutorial rebuild is
+// all of them. Card ids for tips are 'tip:<key>'; briefings have bare ids.
+for (const run of cardRuns) {
+  for (const id of run) {
+    if (id.indexOf('tip:') !== 0) continue;
+    const k = id.slice(4);
+    seen[k] = (seen[k] || 0) + 1;
+  }
 }
 const order = ['log', 'shelf', 'impact', 'current', 'silent', 'layer', 'sounder', 'depth', 'crush', 'port', 'pages', 'chart', 'jettison'];
 for (const k of order) {
   const n = seen[k] || 0;
   console.log(`  ${(k + '            ').slice(0, 12)} fires in ${String(n).padStart(3)} / ${RUNS} runs   ${n === 0 ? '  <-- never fires in hour one' : ''}`);
 }
-console.log(`  tips per run, median: ${median(all.map(r => r.filter(l => l.tag === 'TIP').length))}`);
+console.log(`  tips per run, median: ${median(cardRuns.map(r => r.filter(id => id.indexOf('tip:') === 0).length))}`);
+{
+  const briefs = {};
+  for (const run of cardRuns) for (const id of run) if (id.indexOf('tip:') !== 0) briefs[id] = (briefs[id] || 0) + 1;
+  const rows = Object.entries(briefs).sort((a, b) => b[1] - a[1]);
+  console.log('  briefing cards in hour one: ' + (rows.length ? rows.map(([k, v]) => k + ' ×' + v).join(', ') : 'NONE — the tutorial never speaks'));
+}
 
 console.log('\n--- ORDER (the explanation must never arrive before the thing) ---');
 // A tip is BACKWARDS if the very next line is the event it explains.
