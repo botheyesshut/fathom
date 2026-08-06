@@ -78,6 +78,8 @@ try { vm.runInContext(script +
   '\nfunction __seed(s){ worldSeed=s; interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s); resetWorldCaches(); }' +
   '\nfunction __tile(q,r){ return tileAt(q,r); }' +
   '\nfunction __cellsSize(){ return cells.size; }' +
+  '\nfunction __sounderPrize(){ return SOUNDER_PRIZE.slice(); }' +
+  '\nfunction __stackOf(q,r){ var t=getTile(q,r); if(!t) return []; return poiStack(t).map(function(p){ return {d:p.d,at:p.at,type:p.type,inCell:cells.has(cellKey(q,r,p.d))}; }); }' +
   '\nfunction __isWater(q,r,d){ return cells.has(cellKey(q,r,d)); }' +
   '\nfunction __run(q,r,d){ return cellRun(q,r,d); }' +
   '\nfunction __nbrs(q,r){ return hexNeighbors(q,r); }' +
@@ -93,7 +95,23 @@ try { vm.runInContext(script +
 const D = sandbox.__grid();
 // The prizes. `kelp` and `deadend`/`surface`/`opening` are scenery or exits,
 // not payouts — counting them would flatter every number in this report.
-const PRIZE = ['salvage', 'ruin', 'signal', 'growth', 'air'];
+// WHAT PAYS, AND WHAT THE SOUNDER TALKS ABOUT, ARE TWO DIFFERENT LISTS — and
+// this file had one hand-written list standing in for both, drifted from the
+// game, and it made the game look broken in two separate ways.
+//
+// `hull` was missing. A wreck is a payout — it is most of what the shelf holds
+// since the sunlit graveyard went in — so every wreck in the world was being
+// left out of the density and depth-band counts. And because the SOUNDER scorer
+// used the same list, every correct chirp over a wreck was filed as CRYING
+// WOLF: precision read 53.3%, sixteen honest alerts against fourteen "lies",
+// and all fourteen sampled turned out to be real hulls sitting in real cells.
+// The instrument was slandering the feature it was built to check.
+//
+// So: two lists, and the sounder's comes from the GAME rather than from here.
+// A constant copied into a test is a constant that will drift, and this one did.
+const PRIZE = ['salvage', 'ruin', 'hull', 'signal', 'growth', 'air'];
+// `opening` is a sinkhole: worth being told about, never a payout. That is
+// exactly why the two lists cannot be one list.
 
 const SEEDS = [20260725, 771, 4242, 99001, 31337];
 const RADIUS = 26;          // hexes around the dock — about a long session's reach
@@ -212,7 +230,9 @@ for (const seed of SEEDS) {
 // THE SOUNDER, SCORED. Its whole job is to convert an invisible prize into a
 // decision, so the questions are precision (does it ever cry wolf?) and recall
 // (does it stay silent over something a captain could have taken?).
-let sTrue = 0, sFalse = 0, sMissed = 0, sHexes = 0;
+// Straight from the game, so it can never drift again.
+const SOUND_LIST = sandbox.__sounderPrize();
+let sTrue = 0, sFalse = 0, sMissed = 0, sHexes = 0; const falseEg = [];
 {
   sandbox.__seed(SEEDS[0]); sandbox.__start();
   for (let dq = -RADIUS; dq <= RADIUS; dq++) for (let dr = -RADIUS; dr <= RADIUS; dr++) {
@@ -235,7 +255,7 @@ let sTrue = 0, sFalse = 0, sMissed = 0, sHexes = 0;
       if (rd && rd.odd) { chirped = true; break; }
     }
     if (!anyWater) continue;
-    const isPrize = !!(t.poi && PRIZE.indexOf(t.poi) >= 0);
+    const isPrize = !!(t.poi && SOUND_LIST.indexOf(t.poi) >= 0);
     // is it genuinely claimable from this column?
     let claimable = false;
     if (isPrize) for (let d = 0; d <= MAXD; d += D) {
@@ -244,7 +264,7 @@ let sTrue = 0, sFalse = 0, sMissed = 0, sHexes = 0;
       if (sandbox.__reachBottom(t)) { claimable = true; break; }
     }
     if (chirped && claimable) sTrue++;
-    else if (chirped && !claimable) sFalse++;
+    else if (chirped && !claimable) { sFalse++; if (falseEg.length < 6) falseEg.push({q:q,r:r,poi:t.poi||null,isPrize:isPrize,stack:sandbox.__stackOf(q,r)}); }
     else if (!chirped && claimable) sMissed++;
   }
 }
@@ -295,6 +315,8 @@ console.log('  FALSE alerts (cried wolf)     ' + sFalse);
 console.log('  MISSED (claimable, silent)    ' + sMissed);
 console.log('  precision                     ' + pct(sTrue, sTrue + sFalse));
 console.log('  recall                        ' + pct(sTrue, sTrue + sMissed));
+if (falseEg.length) console.log('  --- what the false alerts actually are ---');
+for (const e of falseEg) console.log('    (' + e.q + ',' + e.r + ') hex-poi=' + e.poi + ' countedAsPrize=' + e.isPrize + ' stack=' + JSON.stringify(e.stack));
 console.log('  alerts per 100 hexes          ' + (sHexes ? (sTrue / sHexes * 100).toFixed(1) : 'n/a'));
 
 console.log('\nDefinition: reachable = 3D flood fill from the surface through connected');

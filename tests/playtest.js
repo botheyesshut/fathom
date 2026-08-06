@@ -427,7 +427,15 @@ function playOne(tallies, personaName, seed) {
     // about. Capping here also makes the harness measure the PROGRESSION: a
     // captain wanting 4200 m now has to go and buy a boat rated for it.
     const rated = Math.min(P.deepTarget, sub.safeDepth || P.deepTarget);
-    const wantDeeper = s.currentDepth < rated && airOk;
+    // ...AND A FULL HOLD BEATS A DEEP ONE. Committing to the descent above put a
+    // `continue` in front of the navigation that steers home, so the bot dived
+    // and never came back: over 12 runs of 2500 turns, salvage banked at port
+    // went from 8% of runs to ZERO. Depth is not the goal, it is how you get to
+    // the goal, and a captain with a full hold or a holed boat turns for home.
+    // Same two conditions `pickGoal` already uses, so there is one idea of
+    // "time to go in" and not two.
+    const heavyHold = s.cargo >= 8, holed = s.hull < sub.hull * 0.45;
+    const wantDeeper = s.currentDepth < rated && airOk && !heavyHold && !holed;
     if (wantDeeper && canGo(sb, s, 1)) {
       spend(run,'dived');
       call(sb.changeDepth, sub.diveStep);
