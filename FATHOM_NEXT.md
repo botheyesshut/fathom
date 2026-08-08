@@ -1,5 +1,47 @@
 # FATHOM — START HERE (last updated 2026-08-08)
 
+## A CORRECTION: THE BUILD WAS NEVER STALE (2026-08-08)
+
+Commit `8c9db36` says I was "reading a stale build and did not notice" while
+chasing the land colour. **That is wrong, and it is the sort of wrong that costs
+somebody an afternoon later**, so it is corrected here rather than left standing.
+
+What actually happened: my first land fix was a **no-op on those hexes**, and I
+misread the unchanged picture as a caching problem. The evidence was already in
+front of me and I did not read it — I had checked
+`Function.prototype.toString.call(render)` and confirmed `newShoreColour: true`.
+The new code was in the page the whole time. Shore hexes at the surface are drawn
+by a **dedicated land block near the top of the tile loop**, at `tile.color` and
+opacity 1, and never reach the impassable branch I had edited.
+
+So I unregistered the service worker, deleted the caches, and cache-busted the
+URL — all of which did nothing, correctly, because nothing was stale.
+
+### And the deploy path does not have this failure mode anyway
+
+Sean asked whether closing the tab and opening a new one guarantees a fresh
+build. Reading `sw.js` rather than reciting service-worker folklore:
+
+- the HTML is **network-first**, fetched with `cache: 'reload'`, which bypasses
+  Chrome's own HTTP cache. Every navigation goes to the network for the game.
+- `skipWaiting()` on install and `clients.claim()` on activate, so a new worker
+  never sits in the waiting state that causes the classic one-load lag.
+
+**A plain reload is enough.** Closing the tab is belt-and-braces. The only ways
+to see an old build are having no signal (the cache fallback, which is the point)
+or loading inside the minute or two before GitHub Pages publishes — and no amount
+of reloading fixes that one, only waiting does.
+
+`VERSION` bumps matter for the fonts, icon and music, which are cache-first.
+They are not what makes a code change reach a player.
+
+**The lesson worth keeping** is not about caches. It is: when a change does not
+show up, check whether the code you edited is on the path that draws the thing,
+BEFORE blaming the delivery. `grep` for every site that sets the property — there
+were three that read `tile.color`, and I patched one.
+
+---
+
 ## ANGELSHARK #12, REPRODUCED AND FIXED (2026-08-08) — brown meant two things
 
 Sean sent a photograph of his phone and it cracked open a bug that had been open
