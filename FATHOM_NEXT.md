@@ -1,4 +1,61 @@
-# FATHOM — START HERE (last updated 2026-08-06)
+# FATHOM — START HERE (last updated 2026-08-08)
+
+## ANGELSHARK #12, REPRODUCED AND FIXED (2026-08-08) — brown meant two things
+
+Sean sent a photograph of his phone and it cracked open a bug that had been open
+since Playtest Angelshark and had survived one failed hunt.
+
+**I had been looking for the wrong thing.** The report was "a brown passable hex
+in a tunnel", so I hunted a hex drawn brown that you could sail into, and
+eliminated the only hypothesis I had (a cave carved under a land hex — 0 of 859
+land hexes have a single open cell beneath them). It is the other way round.
+
+One line drew every hex that does not accept your CURRENT depth:
+
+```js
+fill = cd >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820'
+```
+
+and "does not accept your current depth" covers two entirely different things:
+**stone you can never enter, and water sitting one sixty-metre step above or
+below you.** Above 180 m both are painted the same brown.
+
+| | |
+|---|---|
+| impassable-looking neighbours sampled on the shelf | 446 |
+| **of which were open water one step away** | **172 — 38.6%** |
+| in one view at 120 m | 7 of 13 |
+
+More than a third of the rock on the chart was somewhere a captain could go.
+
+**The perimeter has always known this.** It paints the shared edge cyan for
+"ascend one, then move" and indigo for "descend one", off exactly these three
+cells in the neighbour column. So the fix reveals no new knowledge — it makes the
+FILL agree with the EDGE. A thin coloured line around a solid earth-brown hex
+loses every time. Gated the same way the perimeter is (only where a hex the boat
+could actually occupy touches this one), so a lump of rock read by sonar alone
+keeps its secrets.
+
+### And a second thing, which only the photograph would have shown
+
+At the surface the shore, the pier and bare stone were **all one undifferentiated
+brown**, because that branch returns before `tile.color` is ever read. `shore`
+(#c8a060) and `dock` (#7a5028) have carried their own colours the whole time and
+were never used on the main chart. His view now reads **28 sand, 3 pier, 17 rock**
+where it was 48 identical hexes.
+
+His screenshot itself is at the surface, where every brown hex genuinely IS land —
+so the picture does not contain the bug it is named after. It showed me where to
+look, which is what a screenshot is for.
+
+### Verification note, again
+
+The Browser pane had collapsed to `innerWidth: 0` and my first three colour counts
+were drawn from a chart that had never laid out. `resize_window` to 375x812 — his
+phone — before believing anything counted off the DOM. That is the same trap that
+nearly had me report a 0.0% chart cost in July, and it is now twice.
+
+---
 
 ## THE SUNLIT WATER HAS THINGS LIVING IN IT (2026-08-06)
 
@@ -521,7 +578,7 @@ sides of the trade exist now.
 
 - ~~**The strike**~~ — BUILT 2026-08-05, see the entry at the top of this file.
 - The **ghost thread** (Angelshark #22), recorded not built.
-- **Angelshark #12** — a brown passable hex in a tunnel; never reproduced. One hypothesis eliminated 2026-08-06 (cave under a land hex: 0 of 859 land hexes have open cells). Still needs his seed + position.
+- ~~**Angelshark #12**~~ — REPRODUCED AND FIXED 2026-08-08 from his photograph. It was never a passable hex drawn brown; it was water one depth-step away painted the same colour as rock, 38.6% of impassable-looking neighbours. See the entry at the top of this file.
 
 ---
 
