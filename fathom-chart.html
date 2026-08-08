@@ -9307,8 +9307,26 @@ const DOCK_PRICES = {
 // Tile types
 const TILES = {
   stone:    { name: 'solid stone',         char: '',   cost: 99, color: '#000000', wall: true },
-  shore:    { name: 'the shore',           char: '',   cost: 99, color: '#c8a060', wall: true, land: true },
-  dock:     { name: 'the dock',            char: '╪',  cost: 99, color: '#7a5028', wall: true, land: true },
+  // LAND IS THE NEGATIVE SPACE ON A SEA CHART, and these two colours forgot it.
+  //
+  // Sean sent a photograph of the home coast and said the brown was the problem;
+  // I misread which brown, chased the wrong one, and then made it worse by
+  // routing MORE things through `#c8a060` — a bright saturated sand, luminance
+  // 0.64, against open water at 0.50 and a chart background of pure black. Land
+  // was literally the brightest thing on the screen, drawn at opacity 1, in a
+  // game about the sea. He reset the world, looked again and said so.
+  //
+  // The palette has had the answer since the beginning and this table never used
+  // it: `--stone` #2a2118 and `--stone-lit` #3d2f20, dark warm earth built to sit
+  // against the black. The coast is legible as a coast and then gets out of the
+  // way; the pier is lifted once more again because it is a place you go.
+  //
+  // Fixed HERE, at the tile, rather than at one of the three places that draw it
+  // — the dedicated land block, the impassable-hex branch and the sea chart all
+  // read `tile.color`, and my first attempt patched only one of the three and
+  // changed nothing at all on his screen.
+  shore:    { name: 'the shore',           char: '',   cost: 99, color: '#3d2f20', wall: true, land: true },
+  dock:     { name: 'the dock',            char: '╪',  cost: 99, color: '#4d3b26', wall: true, land: true },
   water:    { name: 'open water',          char: '',   cost: 1,  color: '#08141e' },
   passage:  { name: 'a passage',           char: '',   cost: 1,  color: '#0a1622' },
   chamber:  { name: 'an open chamber',     char: '',   cost: 1,  color: '#0e1c2c' },
@@ -12398,17 +12416,30 @@ function render() {
               const nt = getTile(n.q, n.r);
               return nt && !nt.wall && hexAcceptsDepth(nt, cd);
             });
-            // AND LAND LOOKS LIKE LAND. This branch returns before `tile.color`
+            // AND LAND STOPS SHOUTING. This branch returns before `tile.color`
             // is ever read, so the shore, the pier and bare stone were all one
-            // undifferentiated brown — which is most of what a captain sees at
-            // the surface, and is the picture Sean sent. The tiles carry their
-            // own colours and always have; they were simply never used here.
-            const rock = tile.land && tile.color ? tile.color
-                       : (cd >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820');
-            const water = cd >= 3 * DEPTH_GRID ? '#24404f' : '#2f5f7a';
+            // undifferentiated brown. My first fix at that was to use the tile's
+            // own colour — and `shore` is #c8a060, a bright saturated sand, so on
+            // a chart where the water is near-black I turned the LAND into the
+            // brightest thing on the screen. Sean reset the world, looked at it
+            // and said it was worse. He was right; it was worse.
+            //
+            // The palette has had the right answer the whole time and this
+            // function never used it: `--stone` #2a2118 and `--stone-lit`
+            // #3d2f20, dark warm earth meant to sit against the chart's black.
+            // A sea chart wants the SEA to hold the eye. Land is the negative
+            // space — it has to be legible as a coastline and then get out of
+            // the way, so the shore is lifted only enough to separate it from
+            // bare rock, and the pier only enough again to be findable.
+            const rock = cd >= 3 * DEPTH_GRID ? '#20242c'   // cold stone, deep
+                                              : '#2a2118';  // --stone, warm and shallow
+            // Straight from the tile, so land seen from below matches land seen
+            // from the surface and there is one place to change it.
+            const land = tile.color || '#3d2f20';
+            const water = cd >= 3 * DEPTH_GRID ? '#17323f' : '#1d4a66';
             const rsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             rsp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
-            rsp.setAttribute('fill', perimeterKnows ? water : rock);
+            rsp.setAttribute('fill', perimeterKnows ? water : (tile.land ? land : rock));
             rsp.setAttribute('opacity', Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05).toFixed(2));
             rsp.setAttribute('stroke', 'none');
             rsp.setAttribute('pointer-events', 'none');
