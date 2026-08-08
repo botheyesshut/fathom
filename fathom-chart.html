@@ -12370,9 +12370,45 @@ function render() {
               return revealFade(n.q, n.r, cd) > 0;
             });
           if (seen) {
+            // BROWN MEANT TWO THINGS AND ONE OF THEM WAS A LIE.
+            //
+            // Sean has reported "a brown passable hex" twice and I could not
+            // reproduce it, because I was hunting a hex drawn brown that you
+            // could sail into. It is the other way round: this one line painted
+            // EVERY hex that does not accept your CURRENT depth, and that
+            // covers two entirely different things — stone you can never enter,
+            // and water sitting one sixty-metre step above or below you.
+            //
+            // Measured across 446 impassable-looking neighbours on the shelf:
+            // 38.6% OF THEM WERE OPEN WATER ONE STEP AWAY. More than a third of
+            // the "rock" on the chart was somewhere you could go.
+            //
+            // The perimeter has always known this — it paints the shared edge
+            // cyan for "ascend one, then move" and indigo for "descend one" off
+            // exactly these three cells. So no new knowledge is revealed here;
+            // the FILL is simply made to agree with the EDGE, which is the whole
+            // fix. A thin coloured line around a solid earth-brown hex loses.
+            //
+            // Gated the same way the perimeter is — only where a hex the boat
+            // could actually occupy touches this one — so a lump of rock read by
+            // sonar alone still keeps its secrets.
+            const oneUp = cd - DEPTH_GRID >= 0 && cells.has(cellKey(q, r, cd - DEPTH_GRID));
+            const oneDown = cells.has(cellKey(q, r, cd + DEPTH_GRID));
+            const perimeterKnows = (oneUp || oneDown) && hexNeighbors(q, r).some(n => {
+              const nt = getTile(n.q, n.r);
+              return nt && !nt.wall && hexAcceptsDepth(nt, cd);
+            });
+            // AND LAND LOOKS LIKE LAND. This branch returns before `tile.color`
+            // is ever read, so the shore, the pier and bare stone were all one
+            // undifferentiated brown — which is most of what a captain sees at
+            // the surface, and is the picture Sean sent. The tiles carry their
+            // own colours and always have; they were simply never used here.
+            const rock = tile.land && tile.color ? tile.color
+                       : (cd >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820');
+            const water = cd >= 3 * DEPTH_GRID ? '#24404f' : '#2f5f7a';
             const rsp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             rsp.setAttribute('points', hexCorners(px.x, px.y, HEX_SIZE * 1.02));
-            rsp.setAttribute('fill', cd >= 3 * DEPTH_GRID ? '#3c3c44' : '#7a4820');
+            rsp.setAttribute('fill', perimeterKnows ? water : rock);
             rsp.setAttribute('opacity', Math.max(0.6, 0.88 - Math.max(0, dFromPlayer - SIGHT) * 0.05).toFixed(2));
             rsp.setAttribute('stroke', 'none');
             rsp.setAttribute('pointer-events', 'none');
