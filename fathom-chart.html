@@ -19718,7 +19718,17 @@ function lookAround() {
       log(`${who} puts a hand up for quiet and listens to the hull for a while. "There's a hollow off us, ${bearing(state.q, state.r, w.q, w.r)} — ${(w.d * 60 / 1000).toFixed(1)} km, near enough. The water goes down there."`,
           'good', 'THE EAR');
     } else {
-      log(`${who} listens a long time, and shakes their head. "Solid, all round. Whatever's under this is under all of it."`,
+      // SAY WHAT IS SOLID. "Solid, all round" is what this said, and Sean read it
+      // exactly as written — as rock in every direction — while the chart in
+      // front of him showed open water on five sides and the boat sitting in it.
+      // The Ear is reporting on ONE thing, the floor, and never says so.
+      //
+      // Which is the same mistake the comment above this one records being fixed
+      // in the branch three lines up: a line that is true about the seabed and
+      // reads as a fact about your surroundings. That fix went into the SUCCESS
+      // case and this, the failure case, was left saying the ambiguous thing —
+      // and the failure case is the one a captain hears 42% of the time.
+      log(`${who} listens a long time, and shakes their head. "No break in the floor anywhere I can hear. Whatever's under this shelf is under all of it."`,
           '', 'THE EAR');
     }
   }
