@@ -96,6 +96,16 @@ function boot(seed) {
     '\nfunction __world(){ return world; }' +
     '\nfunction __openAt(q,r,d){ return !!cells.get(cellKey(q,r,d)); }' +
     '\nfunction __grid(){ return DEPTH_GRID; }' +
+    // What depth is the prize in THIS hex at? The game's own answer, not a guess.
+    '\nfunction __prizeDepth(t){ return prizeDepthHere(t); }' +
+    '\nfunction __worked(t){ return !!(t && state.poisFound && state.poisFound.indexOf(hexKey(t.q,t.r)) >= 0); }' +
+    // Is there actually anything in this hex worth diving to? `prizeDepthHere`
+    // answers `tile.floor` for a hex with no stack at all, so without this gate
+    // the bot dives to the seabed on EVERY hex it crosses — measured, and it
+    // took cargo from 25% of runs to 8% and median depth from 720 m to 240.
+    '\nfunction __hasPrize(t){ if(!t) return false;' +
+    '\n  if (t.poi && SOUNDER_PRIZE.indexOf(t.poi) >= 0 && t.poi !== "opening") return true;' +
+    '\n  return poiStack(t).some(function(p){ return !poiTaken(t,p); }); }' +
     // Could the captain SEE this, at this depth? The same test the chart uses.
     '\nfunction __seen(t){ return revealFade(t.q, t.r, poiSeenDepth(t)) > 0; }' +
     // The harbour board, reached the way a captain reaches it: the rows the
@@ -399,6 +409,37 @@ function playOne(tallies, personaName, seed) {
     }
     // Ping sometimes.
     if (rnd() < P.ping) { call(sb.ping); sawOnce(T, run, 'used active sonar'); }
+
+    // STANDING OVER A PRIZE, AND PRIZES HAVE DEPTHS TOO.
+    //
+    // `handleTile` boards a wreck or a ruin AUTOMATICALLY the moment the boat
+    // arrives at the prize's own depth — that is the whole interaction, there is
+    // no button. So the only thing between this bot and the entire on-foot
+    // layer, and with it the entire economy, was the last sixty metres: it would
+    // sail onto a hex holding a wreck and then never go down the shaft to it.
+    //
+    // Measured before this: 25% of runs ever picked up cargo, 8% ever set foot
+    // in an interior, and nobody in the history of this harness has bought a
+    // better boat. `prizeDepthHere` is the game's own answer to "how far under
+    // the keel is it", the same number the sounder reads out.
+    //
+    // (`P.enterRuin` — 0.6 to 1.0 across the four captains — is DEAD. It is
+    // declared on every persona and read nowhere, and has been for as long as
+    // git remembers. Boarding is automatic on arrival, so the knob describes a
+    // decision nobody makes. Left in place and labelled rather than deleted,
+    // because it is exactly the kind of thing that reads like tuning.)
+    {
+      const here = sb.__tile(s.q, s.r);
+      const pd = sb.__hasPrize(here) ? sb.__prizeDepth(here) : null;
+      if (pd != null && !sb.__worked(here) && Math.abs(pd - s.currentDepth) > sb.__grid()) {
+        const down = pd > s.currentDepth;
+        if ((down && canGo(sb, s, 1)) || (!down && canGo(sb, s, -1))) {
+          spend(run, 'went down to a prize');
+          call(sb.changeDepth, down ? sub.diveStep : -sub.diveStep);
+          continue;
+        }
+      }
+    }
 
     // ON THE MARK, AND THE MARK HAS A DEPTH. A lead pays out only within two
     // grid steps of its recorded depth — E5.2 fixed a bug where a mark at

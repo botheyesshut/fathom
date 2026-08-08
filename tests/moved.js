@@ -61,7 +61,7 @@ const ROOT = path.join(__dirname, '..');
 //
 // Measured cost of one pass, both sides (2026-08-04, this machine):
 //   fast ≈ 2 min      full ≈ 25 min (playtest alone is 8.5 min a side)
-const FAST = ['prizes', 'traffic', 'holes', 'economy', 'banking', 'decks', 'grotto', 'hold', 'seeing', 'picked', 'quarry', 'thirst'];
+const FAST = ['prizes', 'traffic', 'holes', 'economy', 'banking', 'decks', 'grotto', 'hold', 'seeing', 'picked', 'quarry', 'thirst', 'afford'];
 const SLOW = ['playtest', 'firsthour', 'reasons', 'hunt', 'corpus'];
 
 //--- ARGUMENTS ---------------------------------------------------------------
