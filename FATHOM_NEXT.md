@@ -342,6 +342,10 @@ passable neighbours by construction so it never can.
 
 ### 4. Angelshark #12 — one hypothesis eliminated
 
+*(Superseded 2026-08-08: he sent a photograph and it was reproduced and fixed. The
+elimination below still stands as a true negative — it was not a cave under land —
+and the real cause is at the top of this file.)*
+
 Brown is the **land** colour, and `flagMoveFail` paints a refused move dock-brown,
 so a cave carved under a land hex would look exactly like the report. It is not
 that: across 8 seeds, **0 of 859 land hexes** have a single open cell beneath
@@ -996,7 +1000,7 @@ ran on horizontal moves only, so DIVING onto a mark arrived unannounced; the
 | 9 | crew should sound like people | FIXED — helm lines through the Mate ("Course made good, cap'n"), screws report in the Ear's voice; mate.test allows HELM |
 | 10 | BUY on missions | FIXED — Sign / Collect / Hand back / Sign on |
 | 11 | captions title-case; can be poetic now | FIXED — all 48 rewritten as prose; window wraps at min(72vw,21rem); tests guard the NEW ruling (≤72 chars, no Title Register) |
-| 12 | brown passable hex in tunnel | OPEN — not reproduced from the report. Best hypothesis: a stack-prize hex charted at that depth for the first time paints its prize tile colour where plain tunnel had drawn. NEEDS his seed + position next sighting |
+| 12 | brown passable hex in tunnel | **FIXED 2026-08-08** (`6d7808e`), reproduced from his photograph. The old hypothesis in this row was wrong twice over: it was never a *passable hex drawn brown*, it was **water one depth-step away painted the same colour as solid rock** — 38.6% of impassable-looking neighbours, measured. The perimeter already knew (cyan = up one, indigo = down one); the fill now agrees with the edge. See the entry at the top of this file |
 | 13 | LOOK repeats the Ear | FIXED — second LOOK in unchanged water draws from a look-again pool |
 | 14 | "something is close" opaque, blocks helm, often false | FIXED — hazard needs an AWAKE contact within 3 depth bands, and the refusal names a bearing |
 | 15 | mark beside intended position | = #8 |
