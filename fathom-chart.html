@@ -1744,7 +1744,14 @@ const SUBS = {
     crushDepth: 2200,
     // How much air a single move costs at zero depth. Scales with depth.
     airBase: 1,
-    // How fast pressure damages hull per move past safe depth.
+    // HOW HARD THE DEPTH WORKS HER: every `depthAirPer` metres adds one more
+    // air to a move. The Erebus is the calibration — 400, so at her rated
+    // 1,500 m a move costs 4.75 — and every other hull is tuned so that it
+    // costs the SAME 4.75 at ITS rating. See the Charon for why.
+    depthAirPer: 400,
+    // How fast pressure damages hull per move past safe depth. 0.04 across her
+    // 700 m from safe to crush is 28 a move at the crush line — the other hulls
+    // are tuned to the same 28 at theirs.
     pressurePerMeter: 0.04,
     // Vertical movement (ascend/descend per action, in meters), and its air cost.
     // Snapped to the 60-meter depth grid so the sub can land precisely on
@@ -1775,7 +1782,22 @@ const SUBS = {
     safeDepth:  2400,
     crushDepth: 3200,
     airBase: 1,
-    pressurePerMeter: 0.04,
+    // A BOAT BUILT FOR DEPTH BREATHES EASIER THERE. These two were 400 and 0.04
+    // on every hull — numbers tuned for the Erebus and never revisited for the
+    // boats nobody had sailed — which made each better boat WORSE at its own
+    // rated depth: measured by `tests/deep.js`, the Erebus had 60 moves of work
+    // at 1,500 m on one tank, this boat 52 at 2,400, and the Nyx, "built for
+    // the black bands", 25 at 6,000. Past the rating it was the same story: the
+    // Nyx's 2,000 m danger zone took 41 hull a move at its midpoint against the
+    // Erebus's 14, so her crush depth was fiction two moves past safe.
+    //
+    // So each hull is calibrated to the Erebus at the same FRACTION of its own
+    // rating: a move at the rated depth costs 4.75, and the pressure at the
+    // crush line takes 28 a move. The Erebus is untouched; the first hours are
+    // byte-identical. Tuned on the hull's DESIGN rating — plate bolted on buys
+    // depth (safeDepthNow), it does not make her engines better.
+    depthAirPer: 640,          // 2400 / 1500 x 400
+    pressurePerMeter: 0.035,   // 28 across her 800 m from safe to crush
     diveStep: 60,
     diveAirCost: 1,
     diveStepFast: 120,
@@ -1794,7 +1816,11 @@ const SUBS = {
     safeDepth:  6000,
     crushDepth: 8000,
     airBase: 1,
-    pressurePerMeter: 0.04,
+    // Calibrated to the Erebus at the same fraction of her rating — see the
+    // Charon. Without it: 25 moves of work at 6,000 m on a full tank, and four
+    // moves of life halfway into her own danger zone.
+    depthAirPer: 1600,         // 6000 / 1500 x 400
+    pressurePerMeter: 0.014,   // 28 across her 2,000 m from safe to crush
     diveStep: 60,
     diveAirCost: 1,
     diveStepFast: 120,
@@ -6152,9 +6178,13 @@ function portRows() {
       // 1,500 — and a captain reading "2,280 m down" against a readout that
       // says "safe to 1500 m" can do the arithmetic, but should not have to.
       // Still offered: the right answer may be to sign, then buy the boat.
+      // ...AND WHEN IT IS PAST HER CRUSH DEPTH, which is a different sentence.
+      // A 'name' slate posts to 4,200 m and a Charon crushes at 3,200.
       const past = o.d != null && o.d > safeDepthNow();
+      const lethal = o.d != null && o.d > crushDepthNow();
       rows.push({ name: o.title, desc: o.tell + ' · ' + o.pay + ' crate' + (o.pay === 1 ? '' : 's')
-          + (past ? ' · deeper than this hull is rated for' : ''),
+          + (lethal ? ' · past this hull’s crush depth — she would not come back'
+             : past ? ' · deeper than this hull is rated for' : ''),
         ok: true, why: '', act: 'berth:' + s });
     }
     if (!posted) rows.push({ name: 'The slate is bare', desc: 'Nothing wanted today. Somebody will want something.',
@@ -7977,13 +8007,13 @@ function renderTrade(e) {
         const it = ITEMS[m.item];
         h += `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
           `<div class="in"><b>Owed: ${m.n === 1 ? '' : m.n + ' \u00d7 '}${it.name}</b>` +
-          `<span class="fl">${m.done || 0} of ${m.n} handed over. Sell it to them here \u2014 ${m.pay} crates and their memory of it.</span></div></div>`;
+          `<span class="fl">${m.done || 0} of ${m.n} handed over. Sell it to them here \u2014 their price for it, ${m.pay} crates over when the last is in, and their memory of it.</span></div></div>`;
       } else if (!state.mission) {
         const off = missionOffer(e);
         if (off) {
           const it = ITEMS[off.item];
           h += `<div class="inv-row"><div class="ig" style="color:${it.col}">${it.glyph}</div>` +
-            `<div class="in"><b>They are short of ${it.name}</b><span class="fl">${off.n === 1 ? 'One' : off.n} of them, brought here. ${off.pay} crates, and it would be remembered.</span></div>` +
+            `<div class="in"><b>They are short of ${it.name}</b><span class="fl">${off.n === 1 ? 'One' : off.n} of them, brought here. Their price, ${off.pay} crates over it, and it would be remembered.</span></div>` +
             `<button class="act" data-mission="1">Agree</button></div>`;
         }
       } else {
@@ -8119,6 +8149,7 @@ function useItem(key) {
 // be bolted on for nothing. A fitting cannot be un-fitted or sold, so that is
 // a whole find thrown into the sea.
 const FIT_CAP = { depth: 2, sonar: 2, quiet: 2, trim: 2, fix: 1 };
+const PLATE_DEPTH = 450;   // metres each plate of pressure-hull adds to both ratings
 
 function fitItem(key) {
   const it = ITEMS[key];
@@ -9410,12 +9441,21 @@ let activeSubKey = 'erebus';
 function activeSub() { return SUBS[activeSubKey]; }
 // Pressure-hull plating buys real depth: the safe band pushes down with every
 // sheet fitted, so the deep water that was killing you becomes merely dangerous.
-function safeDepthNow() { return activeSub().safeDepth + fitLevel('depth') * 450; }
+function safeDepthNow() { return activeSub().safeDepth + fitLevel('depth') * PLATE_DEPTH; }
 // Plating buys you a deeper SAFE band, but it does not repeal the crush depth —
 // it moves with the boat, and past it the sea wins whatever you have bolted on.
 // Without this the advertised two-band model was one band that money moved: a
 // plated Erebus took exactly zero damage 550 m past its own stated crush depth.
-function crushDepthNow() { return activeSub().crushDepth + fitLevel('depth') * 450; }
+function crushDepthNow() { return activeSub().crushDepth + fitLevel('depth') * PLATE_DEPTH; }
+// THE DEEPEST WATER ANY BOAT CAN SIT IN: the deepest-rated hull in the yards with
+// all the plate her frames will take. No settlement is placed below it (see the
+// enclave roll) — the cities are for "when one goes deep enough", and a city
+// under every rating is one nobody can go deep enough for.
+function deepestRating() {
+  let m = 0;
+  for (const k in SUBS) m = Math.max(m, SUBS[k].safeDepth);
+  return m + FIT_CAP.depth * PLATE_DEPTH;
+}
 function crushPenalty() {
   const over = state.currentDepth - crushDepthNow();
   if (over <= 0) return 0;
@@ -11148,7 +11188,18 @@ function generateChunk(cq, cr) {
           const band = depth >= 1800 ? 'deep' : depth >= 900 ? 'mid' : 'shelf';
           const culture = pick > humanOdds ? 'dagon'
             : weightedPeople(band, crand());
-          spawnEnclave(culture, h.q, h.r, depth);
+          // NO DEEPER THAN A BOAT CAN SIT. Caves run down to 10,800 m and the
+          // deepest rating in the yards, fully plated, is 6,900: over fourteen
+          // worlds 5 settlements in 41 came out below it — a city at 10,200 m,
+          // Deep Ones' posts at 7,020, 8,160, 8,460 and 10,320 — and a dive past
+          // the rating costs hull on every step down and every step back, so
+          // four of the five could not be visited and lived through (tests/deep.js). One
+          // rolled below the line moves up its own hex to the deepest cave a
+          // boat can sit in, and stays the Deep Ones' — it was rolled where only
+          // they live. The rolls above are untouched, so the rest of the chunk
+          // comes out as it always did.
+          const reach = opts.filter(d => d <= deepestRating());
+          if (reach.length) spawnEnclave(culture, h.q, h.r, Math.min(depth, Math.max(...reach)));
         }
       }
     }
@@ -18739,7 +18790,8 @@ function applyMoveCosts(tileCostMultiplier, favour) {
     surfaceAirRecovery();
     return;
   }
-  const depthFactor = 1 + state.currentDepth / 400;
+  // Per hull: see `depthAirPer` in SUBS. A boat built for depth breathes easier there.
+  const depthFactor = 1 + state.currentDepth / (sub.depthAirPer || 400);
   // Fine trim tanks make the boat slip through the water for less; dead weight in
   // the hold makes her work harder for every hex.
   // Riding the set costs about half; punching it costs about double. This is
@@ -20437,15 +20489,26 @@ function handleTile(tile) {
     state._lastFloor = snd.floor;
     // ONCE PER TRENCH, not once per step down into it. Crossing a rim measured
     // 2,520 m in one hex and then another 960 m at the axis, so the boat said the
-    // same thing twice running. The latch clears when the floor comes back up.
-    if (prevFloor != null && snd.floor - prevFloor >= 900 && !state._inTrench) {
+    // same thing twice running.
+    //
+    // AND ONLY OVER A TRENCH. A 900 m drop was the whole test, and an island's
+    // flank drops that far in one hex too: sailing off the shallows into deep
+    // water claimed a trench on 38 walks in 40 where there was none (tests/deep.js),
+    // and set the latch — which only a 900 m rise in ONE hex cleared, so the next
+    // real trench, and every one after it, went unannounced. A trench's own
+    // shoulders are gentle enough to leave it set as well (1 crossing in 39).
+    // The ping reads the shape of the floor around the boat, which is how the
+    // line can say the thing runs off in both directions; the latch now lifts
+    // whenever the boat is off the trench, however gently the floor came up.
+    const overCut = trenchFloorAt(state.q, state.r) != null;
+    if (prevFloor != null && snd.floor - prevFloor >= 900 && overCut && !state._inTrench) {
       state._inTrench = true;
       log(`The bottom goes out from under the ping — ${snd.floor - prevFloor} m of it, in one hex. There is a trench under you, and it runs off in both directions.`,
           'strange', 'TRENCH');
       sfx('contact');
-    } else if (prevFloor != null && prevFloor - snd.floor >= 900 && state._inTrench) {
+    } else if (state._inTrench && !overCut) {
       state._inTrench = false;
-      log('The floor comes back up to meet the ping. You are over the plain again.', '', 'TRENCH');
+      log('The floor comes back up to meet the ping. The trench is behind you.', '', 'TRENCH');
     }
   }
 
@@ -22328,7 +22391,6 @@ function setZoom(newZoom, opts) {
 // DEPTH STRIP UPDATER
 //=============================================================================
 function updateDepthStrip() {
-  const sub = activeSub();
   const marker = document.getElementById('depth-strip-marker');
   const hexRange = document.getElementById('depth-strip-hex-range');
   const safeLine = document.getElementById('depth-strip-safe-line');
@@ -22336,7 +22398,11 @@ function updateDepthStrip() {
   if (!marker) return;
 
   // Strip represents 0 to maxScale meters, where maxScale extends past crush depth.
-  const maxScale = Math.max(sub.crushDepth * 1.2, state.maxDepth * 1.1, 1000);
+  // THE FITTED RATING, on both lines. The safe line read `safeDepthNow()` and the
+  // crush line read the bare hull table, so a twice-plated Erebus showed its
+  // crush depth 900 m shallower than it was — the one instrument on the side of
+  // the chart disagreeing with the readout between the dive arrows.
+  const maxScale = Math.max(crushDepthNow() * 1.2, state.maxDepth * 1.1, 1000);
 
   function pct(m) { return (Math.max(0, Math.min(maxScale, m)) / maxScale) * 100; }
 
@@ -22351,7 +22417,7 @@ function updateDepthStrip() {
     hexRange.style.height = (bot - top) + '%';
   }
   safeLine.style.top = pct(safeDepthNow()) + '%';
-  crushLine.style.top = pct(sub.crushDepth) + '%';
+  crushLine.style.top = pct(crushDepthNow()) + '%';
   marker.style.top = `calc(${pct(state.currentDepth)}% - 2px)`;
 
   syncDepthReadout();

@@ -1,5 +1,134 @@
 # FATHOM — START HERE (last updated 2026-09-29)
 
+## THE DEEP-WATER AUDIT (2026-09-29, third pass) — nobody had ever been down there
+
+Sean: *"Go ahead and do the deep-water audit."* Nobody — not Sean, not the bot
+(its deepest run ever is 1,500 m), not any suite — had played below the Erebus's
+rating. The Charon, the Nyx, plating, trenches, the cities, missions, treaties,
+commissions and households were all wired at both ends and never walked. The new
+instrument is **`tests/deep.js`** (`node tests/deep.js [seeds] [radius]`): it
+reads each hull's costs off the game's own `applyMoveCosts`, routes real water
+from the home surface to every depth band, puts each boat down in each band and
+makes it sail, ping, look and dive, crosses trenches, walks off island flanks,
+and presses the whole city chain. It reports; it is not in the battery (a few
+minutes a seed). All the calls below were mine; each has its knob.
+
+### What was wrong, and what I did
+
+**1. The deep boats were worse at depth than the Erebus.** Air per move grew as
+`1 + depth/400` for every hull, so the Nyx at her own 6,000 m rating paid 16 a
+move against a 600 tank: **25 moves of work** after the dive, to the Erebus's 60
+at hers. The top of the ladder was the worst boat on it. Past the rating, the
+Nyx lost **41 hull a move** at the midpoint of her gap (Erebus 14), because
+`pressurePerMeter` was per metre and her gap is 2,000 m. **Call:** each hull is
+calibrated to the Erebus at the same FRACTION of its own rating — `depthAirPer`
+(400 / 640 / 1,600) and `pressurePerMeter` (0.04 / 0.035 / 0.014) in `SUBS`.
+
+| | Erebus | Charon | Nyx |
+|---|---|---|---|
+| moves of work at her rating, before → after | 60 → **60** | 52 → **74** | 25 → **80** |
+| hull lost per move halfway to crush, before → after | 14 → **14** | 17 → **15** | 41 → **14** |
+| moves a full hull lasts there, before → after | 7 → **7** | 7 → **8** | 4 → **12** |
+
+The Erebus is byte-identical: `moved.js` against HEAD moved **0 of 189 numbers**.
+Tuned on the DESIGN rating, so plate buys depth, not better engines.
+**Knob:** those two fields per hull; delete `depthAirPer` for the old curve.
+
+**2. One settlement in ten was below every boat.** Caves run down to 10,800 m;
+the deepest rating in the yards, fully plated, is 6,900 m (`deepestRating()`).
+Over 14 worlds, **5 of 41 settlements** were below it — a city at 10,200 m, Deep
+Ones' posts at 7,020, 8,160, 8,460 and 10,320 — and a dive past the rating costs
+hull on every step down *and* back: four of the five could not be visited and
+survived, and the fifth was a wager. Your ruling was cities *"when one goes deep
+enough"*; these were deeper than enough exists. **Call:** a settlement rolled
+below the line moves up its own hex to the deepest cave a boat can sit in, and
+stays the Deep Ones'. The rolls are untouched, so the rest of each chunk is as it
+was. After: **0 below the line**, 40 settlements (one hex had no cave within
+reach, and lost its post), cities at 3,840 to 6,840 m. Only chunks not yet
+generated change — old saves keep theirs.
+**Knob:** the `reach` filter in the enclave roll; `PLATE_DEPTH` is the 450 m
+that was a bare number in both rating functions.
+
+**3. The trench line lied off every island, and then went quiet for good.** It
+fired on any 900 m drop in one hex. An island's flank drops that far too:
+walking straight off island shallows into deep water, it claimed a trench on
+**38 walks in 40 where there was none**, and set a latch that only a 900 m rise in
+one hex cleared — so the next real trench, and every one after, went unannounced.
+**Call:** the line fires only when the boat is actually over a trench, and the
+latch lifts whenever she is off it. After: **0 of 40** false, **0 of 39** stuck,
+36 of 39 trenches announced. The 3 silent ones are gentle (deepest 1,860 m under
+the plain, no step as big as 900 m) — country, not a cliff, and the sounder reads
+it anyway; I left them. The exit line said *"You are over the plain again"*
+coming out onto an island; it says *"The trench is behind you."*
+
+**4. The depth strip drew a plated boat's crush line at the bare hull's.** A
+twice-plated Erebus: line at 2,200 m, rating 3,100. It reads the fitted rating
+now. (The first version of this check copied the strip's formula into the test
+and would have agreed with itself either way; it now reads what the game DREW.)
+
+**5. The slate says when a job would kill her.** A posting past the rating said
+*"deeper than this hull is rated for"*; past crush it now says *"past this hull's
+crush depth — she would not come back."* Still offered, as before.
+
+**6. A mission paid 10 against "3 crates" promised.** The 3 is the fee, paid over
+their price for the goods — the text now says so, in both places.
+
+**Walked and sound:** every hull in every band it is rated for sails, pings,
+looks and dives with the right scene; the deep is reachable (cheapest air to
+6,000 m is 100); beaches exist in every band; 69 prizes lie below 6,000 m over two
+seeds; and the city chain — arrive, trade, mission, treaty, commission, a prize
+under it, a household robbed and remembered — runs end to end.
+
+### Sean's, not mine
+
+- **The abyss costs more water than a tank holds.** A slow dive to the Nyx's
+  6,000 m and back is 200 turns — **120 water** against a tank of 100, before any
+  work. Fast dives halve it (120 m steps, and loud). So the deep is a
+  loud-or-thirsty choice, casks, or rain on the way. That may be exactly right
+  ("silence is a speed"); it is a design number, and yours.
+- **The Nyx carries water like the Erebus.** Every tank is 100.
+- **No hull reaches a city past 6,900 m, now, by construction.** If you want
+  cities the player can hear and never reach, say so — the knob is above.
+
+---
+
+## THE GHOST THREAD (Angelshark #22) — what I need you to imagine
+
+Your seed: *"I like that we just keep coming back. This is not unlike Torment.
+We could make a plot out of this. It could be a ghost game."* The mechanics are
+already there: the button says *Take another boat*; the sea keeps everything
+aboard; the port keeps the bank; the charts keep what was learned; the pages of
+THE ACCOUNT survive; lost hands come back as hollow men in the uniforms you
+issued. What is missing is the **why** — and that is yours, because it is your
+story (the Account is *The Dark Way Down*). A sentence or two on each is plenty,
+and "you pick" is a fine answer to any of them:
+
+1. **Who takes the next boat?** The same captain, who does not remember going
+   down? A new captain each time, who inherits a dead one's charts? Or nobody
+   living — the first death was real and the rest is the sea dreaming?
+2. **Why does the sea keep you?** Is it crewing a boat of its own (the hollow men
+   are its hands)? Is there a bargain, and who made it? Or does it want nothing,
+   and you are one more thing that went in?
+3. **Who notices, and when?** The pier-hand on your third boat (*"Weren't you — no.
+   Sorry."*), your Mate, the Deep Ones in a city, the death screen itself, found
+   text. Triggers the game can count: deaths, a hand coming back hollow, a page,
+   a depth, a city.
+4. **Is your last boat down there?** The sea keeps everything aboard, so she
+   could be where she went down: your cargo, your log in your own hand, your
+   crew. Finding yourself would be the one new mechanic; the rest is prose.
+5. **Does it end?** Is there a way to stop coming back — something at the bottom,
+   a last page, refusing the boat — or is the loop the point?
+6. **How loud?** Whispered (it never says *you are dead*; the player works it
+   out) or, at the end, confessed? And is the "you" of the Account the captain?
+   If yes, the Account and the ghost thread are one story and I would weave them.
+
+**What it costs:** a death count (the only new state), a handful of places that
+speak, twenty to forty lines of prose, and maybe the wreck of your last boat.
+It fits in the systems that exist. I can draft all the prose myself once I have
+the arc — or you write the lines and I place them.
+
+---
+
 ## "DO THEM ALL" (2026-09-29, second pass) — the calls were mine; the knobs are yours
 
 Sean: *"If you have ideas about what ought to be done next, spend some time
