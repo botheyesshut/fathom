@@ -68,7 +68,10 @@ const path = require('path');
 //                   which is the one check that reliably catches the recursion
 //                   that shipped on 2026-08-04. Verified both ways: silent on the
 //                   sound build, red on a scratch build with the bug replanted.
-const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed', 'crew', 'delve'];
+// `wired` is last and fast: every name the code utters — tip, sfx, scene, item,
+// tenant, creature — checked against its table, so a typo in a string key
+// cannot ship as a feature that silently never fires.
+const suites = ['flip', 'save', 'creature', 'cargo', 'ping', 'interior', 'station', 'links', 'migrate', 'items', 'board', 'works', 'locks', 'orders', 'mate', 'greed', 'crew', 'delve', 'wired'];
 // THE RUNNER MUST SAY WHICH ONE AND WHY. It used to count failures and print
 // only the count, so "BATTERY: 1 SUITE(S) FAILED" meant a hunt through fourteen
 // suites to find out what had gone wrong — and twice it was not a failing check

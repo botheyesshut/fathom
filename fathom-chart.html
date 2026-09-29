@@ -368,7 +368,10 @@
   /* ====== DIVE CONTROLS ====== */
   #dive-controls {
     display: flex;
-    gap: 0.35rem;
+    /* 0.6rem, not 0.35: the gap between ▼ and ▼▼ was 5.6 px, and a thumb that
+       lands on the wrong side of it takes the boat 120 m down and tells every
+       hunter in earshot about it. A little air between the two is cheap. */
+    gap: 0.6rem;
     align-items: center;
     justify-content: center;
   }
@@ -950,9 +953,13 @@
      274 px, so it fits the target phone with room to spare. */
   #controls .btn { min-height: 44px; min-width: 44px; }
 
-  /* A control the game has disabled must LOOK disabled. */
+  /* A control the game has disabled must LOOK disabled — and still look
+     PRESENT. At 0.3 the audit measured 1.69:1 against the ground, so the dive
+     arrow at the seabed did not read as "cannot" but as "gone", and a captain
+     went looking for it. Dim, not absent. (A second copy of this rule at 0.3
+     sat further down and was winning; it is gone.) */
   .btn:disabled, .btn[disabled] {
-    opacity: 0.3;
+    opacity: 0.45;
     cursor: not-allowed;
     border-color: rgba(94,184,154,0.15);
   }
@@ -980,11 +987,6 @@
   .btn.primary:active {
     background: rgba(244, 184, 96, 0.15);
     border-color: var(--lantern);
-  }
-
-  .btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
   }
 
   /* ====== GAME OVER ====== */
@@ -1163,7 +1165,10 @@
   /* Scars read quieter than a fresh wound — they are history, not an emergency. */
   .mus-s { font-size: 0.7rem; color: #7d7060; font-style: italic; margin-top: 0.15rem; }
   .mus-w { font-size: 0.7rem; color: #6f6247; margin-top: 0.2rem; font-style: italic; }
-  #inv-panel {
+  /* A CLASS, NOT AN ID. Eight panels shared `id="inv-panel"` and `id="inv-head"`
+     — invalid HTML that browsers forgave and the first getElementById on either
+     would not have. Nothing scripts them; only these rules ever did. */
+  .inv-panel {
     width: 100%;
     max-width: 620px;
     max-height: 82vh;
@@ -1174,14 +1179,14 @@
     border-radius: 6px;
     overflow: hidden;
   }
-  #inv-head {
+  .inv-head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 0.9rem 1.1rem;
     border-bottom: 1px solid var(--sonar-dim);
     font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.5rem;
     color: var(--sonar); letter-spacing: 0.06em;
   }
-  #inv-head .btn { flex: none; padding: 0.5rem 0.9rem; font-size: 0.62rem; }
+  .inv-head .btn { flex: none; padding: 0.5rem 0.9rem; font-size: 0.62rem; }
   #inv-list { overflow-y: auto; padding: 0.4rem; -webkit-overflow-scrolling: touch; }
   .inv-row {
     display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: 0.7rem;
@@ -1290,16 +1295,16 @@
 
 <!-- THE TRANSCRIPT (tap the log to read everything that has been said) -->
 <div id="transcript">
-  <div id="inv-panel">
-    <div id="inv-head"><span>The Log</span><button class="btn" id="transcript-close">Close</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span>The Log</span><button class="btn" id="transcript-close">Close</button></div>
     <div id="transcript-list"></div>
   </div>
 </div>
 
 <!-- THE HOLD (inventory) -->
 <div id="inventory">
-  <div id="inv-panel">
-    <div id="inv-head"><span>The Hold</span><button class="btn" id="inv-close">Close</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span>The Hold</span><button class="btn" id="inv-close">Close</button></div>
     <div id="inv-list"></div>
   </div>
 </div>
@@ -1308,8 +1313,8 @@
      Without this the whole knack system is invisible, and "crew grow in value
      by staying" is a claim the player has no way to check. -->
 <div id="muster">
-  <div id="inv-panel">
-    <div id="inv-head"><span>The Muster</span><button class="btn" id="muster-close">Close</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span>The Muster</span><button class="btn" id="muster-close">Close</button></div>
     <div id="muster-list"></div>
   </div>
 </div>
@@ -1317,8 +1322,8 @@
 <!-- THE PORT. Everything the dock sells, visible at once, priced, and bought
      only when you say so. Replaces four irreversible outcomes on one button. -->
 <div id="port">
-  <div id="inv-panel">
-    <div id="inv-head"><span>The Port</span><button class="btn" id="port-close">Cast Off</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span>The Port</span><button class="btn" id="port-close">Cast Off</button></div>
     <div id="port-ledger"></div>
     <div id="port-list"></div>
   </div>
@@ -1328,8 +1333,8 @@
      lived one thumb away from SURFACE and destroys a campaign, which is no
      place for it. -->
 <div id="options">
-  <div id="inv-panel">
-    <div id="inv-head"><span>Options</span><button class="btn" id="options-close">Close</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span>Options</span><button class="btn" id="options-close">Close</button></div>
     <div id="options-list"></div>
   </div>
 </div>
@@ -1352,8 +1357,8 @@
 </div>
 
 <div id="bestiary">
-  <div id="inv-panel">
-    <div id="inv-head"><span>The Bestiary</span><button class="btn" id="bestiary-close">Close</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span>The Bestiary</span><button class="btn" id="bestiary-close">Close</button></div>
     <div id="pages-sub">what the boat has met, and what it learned by surviving it</div>
     <div id="bestiary-list"></div>
   </div>
@@ -1362,8 +1367,8 @@
 
 <!-- TRADE (with an enclave) -->
 <div id="trade">
-  <div id="inv-panel">
-    <div id="inv-head"><span id="trade-name">the peoples</span><button class="btn" id="trade-close">Cast Off</button></div>
+  <div class="inv-panel">
+    <div class="inv-head"><span id="trade-name">the peoples</span><button class="btn" id="trade-close">Cast Off</button></div>
     <p id="trade-creed"></p>
     <div id="trade-crates"></div>
     <div id="trade-scroll">
@@ -2515,6 +2520,7 @@ function renderInventory() {
     if (f.depth) bits.push(`pressure-hull +${f.depth}`);
     if (f.quiet) bits.push(`quieting +${f.quiet}`);
     if (f.trim) bits.push(`trim +${f.trim}`);
+    if (f.fix) bits.push('positioning log');   // it was fitted and this line did not say so
     return bits.length ? `<div class="inv-row"><div class="ig" style="color:#6ecfae">⚙</div><div class="in"><b>fitted to the boat</b><span class="fl">${bits.join(', ')} — permanent, and it goes down with her.</span></div><div></div></div>` : '';
   };
   // Properties, spelled out, so a cursed or volatile thing is never a surprise.
@@ -6141,7 +6147,14 @@ function portRows() {
       const o = boardOffer(bport, s);
       if (!o) continue;
       posted++;
-      rows.push({ name: o.title, desc: o.tell + ' · ' + o.pay + ' crate' + (o.pay === 1 ? '' : 's'),
+      // SAY WHEN THE JOB IS DEEPER THAN THE BOAT. The ladder is in the geography
+      // — a 'trusted' slate posts work to 2,400 m and an Erebus is rated to
+      // 1,500 — and a captain reading "2,280 m down" against a readout that
+      // says "safe to 1500 m" can do the arithmetic, but should not have to.
+      // Still offered: the right answer may be to sign, then buy the boat.
+      const past = o.d != null && o.d > safeDepthNow();
+      rows.push({ name: o.title, desc: o.tell + ' · ' + o.pay + ' crate' + (o.pay === 1 ? '' : 's')
+          + (past ? ' · deeper than this hull is rated for' : ''),
         ok: true, why: '', act: 'berth:' + s });
     }
     if (!posted) rows.push({ name: 'The slate is bare', desc: 'Nothing wanted today. Somebody will want something.',
@@ -6701,8 +6714,7 @@ const BRIEFS = [
 // nothing else needs them — a helper that only one caller uses belongs next to
 // that caller, or it becomes the next dead function.
 function atHomeDock() {
-  const hd = homeDock();
-  return hexDistance({ q: state.q, r: state.r }, hd) <= 1 || !!portNear(state.q, state.r);
+  return !!quayAlongside();   // the same hex the DOCK button and the press agree on
 }
 function knownOpeningNear() {
   const t = getTile(state.q, state.r);
@@ -6905,7 +6917,13 @@ function renderOptions() {
         setTimeout(() => { node.setAttribute('data-armed', '0'); node.textContent = 'Abandon'; }, 4000);
         return;
       }
-      renderOptions();
+      // IN PLACE, not a re-render. `renderOptions()` rewrites the list's
+      // innerHTML, which scrolls it back to the top under your thumb — the
+      // fault the fader above was already cured of. The button is the only
+      // thing that changed, so the button is the only thing redrawn.
+      const on = kind === 'sound' ? !audioMuted : kind === 'porthole' ? vpOn : tipsOn;
+      node.textContent = on ? 'On' : 'Off';
+      node.classList.toggle('off', !on);
     });
   });
 }
@@ -7794,11 +7812,26 @@ function shipNews(sh) {
   ]), '', 'HAIL');
 }
 
+// THE QUAY YOU CAN ACTUALLY TIE UP TO: within a hex of the home pier, or of a
+// foreign harbour. `boardPort()` answers a different question — WHOSE slate is
+// this, within four hexes, for the Board's identity — and the DOCK button was
+// asking it: the button showed at two, three and four hexes off the home pier,
+// and pressing it there said "No quay within reach of her lines." A dead
+// control is worse than no control, this file says, repeatedly. One predicate
+// for the button, the press and the harbour briefing, so they cannot disagree.
+function quayAlongside() {
+  const p = portNear(state.q, state.r);
+  if (p) return p;
+  const hd = homeDock();
+  if (hexDistance({ q: state.q, r: state.r }, hd) <= 1) return { q: hd.q, r: hd.r, holder: 'mariners', home: true };
+  return null;
+}
+
 // The button only when there is something to tie up to.
 function syncDockBtn() {
   const b = document.getElementById('btn-dock');
   if (!b) return;
-  // `boardPort`, NOT `portNear` — the home dock is not in the ports map. It is a
+  // NOT `portNear` alone — the home dock is not in the ports map. It is a
   // `dock` tile the origin chunk writes, and every other part of the game asks
   // for it by distance instead. This asked portNear and got null there, so the
   // DOCK button was hidden at the one harbour every campaign begins at — and
@@ -7806,7 +7839,7 @@ function syncDockBtn() {
   // force-showing it a few lines later and papering over the answer. Fixing that
   // loop is what surfaced this: the button vanished at the pier.
   const near = (!state.foot && state.alive && state.currentDepth === 0)
-    ? boardPort() : null;
+    ? quayAlongside() : null;
   b.style.display = near ? '' : 'none';
   if (near) b.textContent = 'Dock';
 }
@@ -7835,6 +7868,28 @@ function surfaceSupplied(culture, q, r) {
     if (hexDistance({ q: p.q, r: p.r }, { q: q, r: r }) <= SUPPLY_REACH) return true;
   }
   return false;
+}
+
+// THE WANTS OF A PEOPLE, IN WORDS — read off `buys` so it cannot drift from
+// what `buyMult` actually pays for. The panel priced only what was in the
+// hold, so a captain could not plan a run ("the Deep Ones pay for idols, the
+// Line for pre-Fall metal") without already carrying the thing. Knowing what
+// sells where IS the trade; this is the Trade Wars half of the game finally
+// saying its prices out loud. Epistemically free: you are standing in their
+// market.
+function cultureWants(cu) {
+  const b = cu.buys || {};
+  const bits = [];
+  const noArt = (n) => n.replace(/^(a|an|the) /, '');
+  for (const k of (b.keys || [])) if (ITEMS[k]) bits.push(noArt(ITEMS[k].name));
+  for (const k of (b.kinds || [])) bits.push(k === 'chart' ? 'charts and logbooks' : k === 'fit' ? 'boat fittings' : k === 'valuable' ? 'anything of worth' : k);
+  for (const p of (b.props || [])) bits.push(p === 'cursed' ? 'things the old ones touched' : p === 'living' ? 'things still living' : p);
+  for (const s of (b.sigs || [])) { if (s === 'dagon') bits.push('their own sacred things'); else if (s === 'confluence') bits.push('pre-Fall work'); }
+  if (b.relics) bits.push('relics');
+  if (b.flesh) bits.push('the freshly dead');
+  const uniq = bits.filter((x, i) => bits.indexOf(x) === i);
+  const head = uniq.length ? 'They pay well for ' + uniq.join(', ') + '.' : 'They pay well for nothing in particular.';
+  return b.floor ? head + ' And a poor price for anything else at all.' : head;
 }
 
 function renderTrade(e) {
@@ -7966,7 +8021,8 @@ function renderTrade(e) {
       sellRows += `<div class="inv-row"><div class="ig" style="color:#a05858">☠</div><div class="in"><b>${c.name}</b><span class="fl">${state_} — and they are already looking at it</span></div><button class="act warn" data-sellbody="${i}">Sell · ${p} cr</button></div>`;
     }
   }
-  sellEl.innerHTML = sellRows || '<div id="inv-empty">You carry nothing they want. Bring what they prize, and come back.</div>';
+  sellEl.innerHTML = '<div class="pshop-n">' + cultureWants(cu) + '</div>'
+    + (sellRows || '<div id="inv-empty">You carry nothing they want yet.</div>');
 
   for (const b of buyEl.querySelectorAll('.act[data-buy]')) b.addEventListener('click', () => tradeBuy(e, b.getAttribute('data-buy')));
   for (const b of sellEl.querySelectorAll('.act[data-sell]')) b.addEventListener('click', () => tradeSell(e, b.getAttribute('data-sell')));
@@ -10492,13 +10548,21 @@ function hexToChunk(q, r) {
   return { cq: Math.floor(q / CHUNK), cr: Math.floor(r / CHUNK) };
 }
 
-// Which zone is this hex in? Used both by generation and by runtime
-// transition messaging ("you have left the shelf", etc).
+// Which zone is this hex in? Used by the runtime transition messaging ("you
+// have left the shelf", etc).
+//
+// WHERE THE FLOOR IS, not which chunk you are in. This measured distance in
+// CHUNKS from the origin — a fossil of the finite world with its one straight
+// coast — so "off the continental shelf" fired at 42 hexes when the break is at
+// 23-30, and "over the abyss" at 70 when the plain begins at 53; by then the
+// sounder had been reading two kilometres under the keel for a dozen moves,
+// and the line it then said, "No floor returns the ping", was flatly untrue of
+// a plain the sounder reads at 4,200 m. `baseSeafloorRaw` is the authority on
+// where the shelf ends, so its two thresholds are the authority here.
 function hexZone(q, r) {
-  const { cq, cr } = hexToChunk(q, r);
-  const d = Math.sqrt(cq*cq + cr*cr + cq*cr);
-  if (d < 3) return 'shelf';
-  if (d < 5) return 'shelf-edge';
+  const off = homeShoreDist(q, r);
+  if (off < HOME_SHELF) return 'shelf';
+  if (off < ABYSS_AT) return 'shelf-edge';
   return 'deep';
 }
 function zoneRank(zone) {
@@ -14033,6 +14097,32 @@ function bearing(fromQ, fromR, toQ, toR) {
 // MOVEMENT
 //=============================================================================
 
+// THE HULL MEETS ROCK. One act, four places it can happen — a wall alongside,
+// water a step above or below you, the seabed under the keel, the roof over
+// the sail — and until now four copies of the same eight lines, which is how
+// one copy came to call tip('impact') twice and another came to make no sound
+// at all. The damage, the din, the flash, the tip, the turn the creatures get
+// and the death check are one thing; only the sentence differs.
+function hullStrike(q, r, sentence) {
+  const dmg = 4 + Math.floor(rand() * 5);   // 4-8 hull
+  state.hull = Math.max(0, state.hull - dmg);
+  state.lastMoveTime = performance.now();
+  log(`${sentence} -${dmg} hull.`, 'danger', 'IMPACT');
+  tip('impact');
+  flagMoveFail(q, r, '#a04030');
+  // QUIET FEET, AS AN OPTION. A hand who can work "without telling the whole
+  // sea about it" is worth having for the noise you did NOT choose to make:
+  // the wall you did not see in the dark. A ping is a decision and still
+  // costs what it costs; this is the accident, and they catch it. Binary,
+  // unlevelled, and it removes an event rather than scaling a number.
+  if (!crewCan('quietfeet')) noiseMade(q, r, 2);   // metal on rock carries
+  else if (rand() < 0.35) log('The hull rings — and somebody has a hand on it before the sound gets away.', '', 'IMPACT');
+  sfx('impact');
+  creatureTick();
+  checkDeath();
+  updateHUD();
+}
+
 // Flag a failed move attempt so the renderer can flash the target hex and
 // shake the sub. Color picks the flash hue based on what blocked the move.
 function flagMoveFail(q, r, color) {
@@ -14134,24 +14224,7 @@ function move(q, r) {
   }
 
   if (tile.wall) {
-    // Collision — the sub strikes the rock
-    const dmg = 4 + Math.floor(rand() * 5); // 4-8 hull damage
-    state.hull = Math.max(0, state.hull - dmg);
-    state.lastMoveTime = performance.now();
-    log(`${pickLoose(WALL_FACE)} -${dmg} hull.`, 'danger', 'IMPACT');
-    tip('impact');
-    flagMoveFail(q, r, '#a04030');
-    // QUIET FEET, AS AN OPTION. A hand who can work "without telling the whole
-    // sea about it" is worth having for the noise you did NOT choose to make:
-    // the wall you did not see in the dark. A ping is a decision and still
-    // costs what it costs; this is the accident, and they catch it. Binary,
-    // unlevelled, and it removes an event rather than scaling a number.
-    if (!crewCan('quietfeet')) noiseMade(q, r, 2);   // metal on rock carries
-    else if (rand() < 0.35) log('The hull rings — and somebody has a hand on it before the sound gets away.', '', 'IMPACT');
-    sfx('impact');
-    creatureTick();
-    checkDeath();
-    updateHUD();
+    hullStrike(q, r, pickLoose(WALL_FACE));   // a wall alongside
     return;
   }
 
@@ -14160,30 +14233,11 @@ function move(q, r) {
     // Striking rock at this depth — the water in that hex is above or below
     // the sub, so swimming horizontally drives into stone. Damage applies,
     // and the sonar reports which direction has the opening.
-    const dmg = 4 + Math.floor(rand() * 5);
-    state.hull = Math.max(0, state.hull - dmg);
-    state.lastMoveTime = performance.now();
     const near = nearestVolume(tile, state.currentDepth);
-    if (near && near.deltaMeters > 0 && near.deltaMeters <= PING_LEVELS[activeSub().sonarMaxPower].depthRange) {
-      const delta = Math.max(1, Math.round(near.deltaMeters));
-      const dir = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
-      log(`${pickLoose(WALL_FACE)} Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
-    } else {
-      log(`${pickLoose(WALL_FACE)} Not at this depth, at any rate. -${dmg} hull.`, 'danger', 'IMPACT');
-    }
-    tip('impact');
-    flagMoveFail(q, r, '#a04030');
-    // QUIET FEET, AS AN OPTION. A hand who can work "without telling the whole
-    // sea about it" is worth having for the noise you did NOT choose to make:
-    // the wall you did not see in the dark. A ping is a decision and still
-    // costs what it costs; this is the accident, and they catch it. Binary,
-    // unlevelled, and it removes an event rather than scaling a number.
-    if (!crewCan('quietfeet')) noiseMade(q, r, 2);   // metal on rock carries
-    else if (rand() < 0.35) log('The hull rings — and somebody has a hand on it before the sound gets away.', '', 'IMPACT');
-    sfx('impact');
-    creatureTick();
-    checkDeath();
-    updateHUD();
+    const hint = (near && near.deltaMeters > 0 && near.deltaMeters <= PING_LEVELS[activeSub().sonarMaxPower].depthRange)
+      ? ` Sonar reads an opening ${Math.max(1, Math.round(near.deltaMeters))} m ${near.volume.ceiling > state.currentDepth ? 'below' : 'above'}.`
+      : ' Not at this depth, at any rate.';
+    hullStrike(q, r, pickLoose(WALL_FACE) + hint);
     return;
   }
 
@@ -14570,12 +14624,11 @@ function startExpedition(tile, kind) {
     crates: 0,
     relics: 0,
   };
-  // Ruins are no longer worked this way — the captain walks them in person
-  // (see enterInterior). What is left here is the abstract dive: beaches and
-  // signals, where there is nothing built to walk through.
-  log(kind === 'beach'
-    ? 'The crew wades ashore by lamplight — the first dry ground in miles. They fan out across the sand.'
-    : 'The boat holds station on the signal. A diver goes over the side, homing on the pulse.', '', 'DIVE TEAM');
+  // SIGNALS ONLY, now. Ruins are walked (`enterInterior`) and beaches are
+  // walked (`enterGrotto`), so the one abstract dive left is the one with
+  // nothing built to walk through. A 'beach' arm with its own prose sat here
+  // for months after the last caller stopped passing it.
+  log('The boat holds station on the signal. A diver goes over the side, homing on the pulse.', '', 'DIVE TEAM');
 }
 
 // Rising into a cavern beach: air off the trapped pocket, landfall for the
@@ -14645,7 +14698,7 @@ function expeditionTick() {
   }
   exp.turns--;
   const roll = rand();
-  const relicChance = exp.type === 'signal' ? 0.20 : exp.type === 'beach' ? 0.15 : 0.10;
+  const relicChance = 0.20;   // a signal is the only dive team left — see startExpedition
   if (roll < relicChance) {
     exp.relics++;
     log('The divers surface a relic — old work, and not drowned-men make.', 'strange', 'RELIC');
@@ -17460,8 +17513,10 @@ function boatIdentity(q, r, depth) {
 }
 
 function spawnCreature(type, q, r, depth) {
+  // No `calm` — it was set here and read by nothing, for as long as creatures
+  // have existed. `tests/wired.js` is what finally noticed.
   const c = { id: type + ':' + q + ',' + r + ',' + depth, type, q, r, depth,
-              awake: false, tq: 0, tr: 0, calm: 0, phase: 0 };
+              awake: false, tq: 0, tr: 0, phase: 0 };
   if (type === 'rival') {
     const who = boatIdentity(q, r, depth);
     c.culture = who.culture;
@@ -18588,9 +18643,11 @@ function detectZoneTransition(q, r) {
         : 'The seafloor falls away. Off the shelf again.',
         '', 'OFF SHELF');
     } else if (newZone === 'deep') {
+      // The plain HAS a floor, and the sounder reads it. What changes here is
+      // that it stops falling.
       log(firstTime
-        ? 'No floor returns the ping. You are over the abyss.'
-        : 'The abyss again. No floor.',
+        ? 'The floor stops falling and goes on, flat, four kilometres down. The abyssal plain — and it is a plain, not a bottom: what is deeper than this you will have to find.'
+        : 'The plain again, four kilometres under the keel.',
         'strange', 'ABYSS');
     }
   } else {
@@ -18598,7 +18655,7 @@ function detectZoneTransition(q, r) {
     if (newZone === 'shelf') {
       log('Solid ground beneath you again. The shelf returns.', '', 'SHELF');
     } else if (newZone === 'shelf-edge') {
-      log('A floor returns to the sonar. The cliff is behind you.', '', 'SHELF EDGE');
+      log('The floor begins to come up under the keel. The rise — and the shelf is beyond it.', '', 'SHELF EDGE');
     }
   }
 }
@@ -18761,40 +18818,13 @@ function changeDepth(deltaMeters) {
     // is just as much "striking rock" as driving it into a side wall.
     // Exception: reaching the surface from below is a soft stop (no rock).
     if (deltaMeters > 0) {
-      // Floor: striking rock below (seabed or chamber floor)
-      const dmg = 4 + Math.floor(rand() * 5);
-      state.hull = Math.max(0, state.hull - dmg);
-      log(`${pickLoose(WALL_UNDER)}. -${dmg} hull.`, 'danger', 'IMPACT');
-      flagMoveFail(state.q, state.r, '#a04030');
-      state.lastMoveTime = performance.now();
-      noiseMade(state.q, state.r, 2); // impacts ring through the water
-      sfx('impact');
-      creatureTick();
-      checkDeath();
+      hullStrike(state.q, state.r, pickLoose(WALL_UNDER) + '.');   // the seabed, or a chamber floor
+    } else if (state.currentDepth <= 0) {
+      log('You are at the surface.', 'warn', 'HELM');            // the one soft ceiling there is
+      updateHUD();
     } else {
-      // Ceiling: surface is soft, chamber ceiling and shallow-water cap are rock
-      if (state.currentDepth <= 0) {
-        log('You are at the surface.', 'warn', 'HELM');
-      } else {
-        const dmg = 4 + Math.floor(rand() * 5);
-        state.hull = Math.max(0, state.hull - dmg);
-        log(`${pickLoose(WALL_OVER)}. -${dmg} hull.`, 'danger', 'IMPACT');
-        flagMoveFail(state.q, state.r, '#a04030');
-        state.lastMoveTime = performance.now();
-        // THE SAME THREE LINES THE FLOOR STRIKE HAS, twenty lines up, under a
-        // comment whose whole point is that these are one act: "driving the sub
-        // into a chamber ceiling is just as much striking rock as driving it
-        // into a side wall." It took the hull damage and none of the rest, so
-        // ramming a cave roof was the only collision in the game that made no
-        // sound, played nothing, and cost the sea no turn — every hunter in
-        // earshot heard the floor and not the ceiling.
-        noiseMade(state.q, state.r, 2); // impacts ring through the water
-        sfx('impact');
-        creatureTick();
-        checkDeath();
-      }
+      hullStrike(state.q, state.r, pickLoose(WALL_OVER) + '.');    // a roof, and it is rock
     }
-    updateHUD();
     return;
   }
   const prevDepth = state.currentDepth;
@@ -18955,7 +18985,6 @@ function identifyPoi(tile) {
   const dir = bearing(state.q, state.r, tile.q, tile.r);
   // Tappable glyphs always share the sub's depth slice (the render gate
   // requires hexAcceptsDepth), so there is never a vertical offset to hint.
-  const depthHint = '';
   const desc = POI_DESCRIPTIONS[tile.poi] || tile.name || 'an unknown reading';
   const tag = (tile.poi === 'signal' || tile.poi === 'growth') ? 'STRANGE'
             : (tile.poi === 'air')    ? 'AIR'
@@ -18965,7 +18994,7 @@ function identifyPoi(tile) {
   if (dist === 0) {
     log(`${desc} — you are over it.`, cls, tag);
   } else {
-    log(`${desc} ${dir}, ${meters} m out${depthHint}.`, cls, tag);
+    log(`${desc} ${dir}, ${meters} m out.`, cls, tag);
   }
 }
 
@@ -20989,7 +21018,7 @@ function endGame(title, summary) {
   // Shut the furniture first. You can die with a panel open — a hull breach
   // resolves while you are reading the Hold — and leaving it up put an opaque
   // sheet between the player and the only button on the screen.
-  ['inventory', 'seachart', 'muster', 'port', 'options', 'bestiary', 'pages',
+  ['inventory', 'seachart', 'muster', 'port', 'options', 'bestiary',
    'trade', 'transcript'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('show');
@@ -21007,7 +21036,7 @@ function endGame(title, summary) {
   activeSubKey = 'erebus';
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
-  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null; state._lastFloor = null; state._inTrench = false;   // and so does a new boat
+  state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // and so does a new boat
   // THE DROWNED JOIN THE POOL. Every hand aboard when she went down is now
   // somebody the deep has a name for, and a deck somewhere may put them in
   // front of you again, wearing what they were wearing.
@@ -21053,7 +21082,6 @@ function endGame(title, summary) {
   // was aboard".
   state.crew = [];
   state.expedition = null;
-  state._outfitOffer = null; state._hireOffer = null; state._armoryOffer = null; state._armsOffer = null;
   state.moves = 0; state.maxDepth = 0;
   state.trail = []; state.pingMemory = new Map();
   state.pingArrows = null; state.ping = null;
@@ -21080,11 +21108,10 @@ function anotherBoat() {
 
 function restart() {
   activeSubKey = 'erebus'; // every new world starts at the bottom of the ladder
-  state._outfitOffer = null;
   const sub = activeSub();
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
-  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null; state._lastFloor = null; state._inTrench = false;   // a new sea gets its first reading
+  state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // a new sea gets its first reading
   toldSpace.clear();   // ...and every room in it is a room you have not been told about
   // A NEW SEA ARRIVES UNREAD. These four are keyed by bare coordinates or by
   // the campaign, not by the seed, so they used to walk into the next world
@@ -21141,9 +21168,6 @@ function restart() {
   state.enclaves = [];
   state.corpses = [];
   state.crew = startingCrew();
-  state._hireOffer = null;
-  state._armoryOffer = null;
-  state._armsOffer = null;
   state.alive = true;
   state.cameraX = 0; state.cameraY = 0;
   state.panX = 0; state.panY = 0;
@@ -21305,7 +21329,16 @@ function surface() {
     // ANGELSHARK #5: Sean surfaced over a sinkhole two hexes off and was
     // "suddenly at Port". Banking at hailing distance is a mechanic and stays;
     // the WINDOW opening is an act, and only happens alongside.
-    const alongsideNow = hexDistance({ q: state.q, r: state.r }, hd) <= 1 || !!portNear(state.q, state.r);
+    //
+    // ...AND ONLY ALONGSIDE HOME. This also opened the Port window beside a
+    // FOREIGN harbour — the Yard selling the Nyx, the Hiring Hall, the Board —
+    // while the DOCK button at that same harbour opened the Trade window, so
+    // one town was two different rooms depending on whether you arrived by
+    // surfacing or by tapping. Sean drew the line himself: "the towns at the
+    // surface are only for basic trade." DOCK is the door there; this is
+    // home's. (The knob: `|| !!portNear(state.q, state.r)` here gives every
+    // harbour the whole Port window again.)
+    const alongsideNow = hexDistance({ q: state.q, r: state.r }, hd) <= 1;
     if (alongsideNow) openPort();
     else if (atPort) log('The quay is a short run off — bring her alongside and DOCK to put in.', '', 'PORT');
 
@@ -21507,7 +21540,6 @@ function resumeGame(save) {
   const arr = v => Array.isArray(v) ? v : [];
   const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
   activeSubKey = SUBS[save.subKey] ? save.subKey : 'erebus';
-  state._outfitOffer = null;
   const sub = activeSub();
   state.q = save.q; state.r = save.r;
   state.air = save.air; state.hull = save.hull;
@@ -21538,7 +21570,6 @@ function resumeGame(save) {
   state.cargoBanked = save.cargoBanked || 0;
   state.armament = save.armament || null;
   state.torpedoes = save.torpedoes || 0;
-  state._armsOffer = null;
   state.relics = save.relics || 0;
   state.relicsBanked = save.relicsBanked || 0;
   state.expedition = save.expedition || null;
@@ -21559,7 +21590,7 @@ function resumeGame(save) {
   state.refuges = obj(save.refuges);
   state.autoTarget = null;       // never resume under power
   state._airMark = (typeof save.airMark === 'number') ? save.airMark : null;   // null re-derives from the gauge
-  state._lastSetKey = null; state._lastSndKey = null; state._lastSpaceClass = null; state._lastFloor = null; state._inTrench = false;   // dampers are per-session
+  state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // dampers are per-session
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
@@ -21644,8 +21675,6 @@ function resumeGame(save) {
   // aboard kept the old ones.
   migrateCrewRoles();
   for (const m of state.crew) crewVitals(m);   // AFTER the load, or it vitalises the roster it is about to replace
-  state._hireOffer = null;
-  state._armoryOffer = null;
   // Gameplay dice only — the substrate derives everything from hashed seeds.
   rng = mulberry32((worldSeed ^ Date.now()) >>> 0);
   tileAt(0, 0);                 // origin (dock, pier entrance) always exists
@@ -22294,7 +22323,13 @@ function updateDepthStrip() {
   syncDepthReadout();
 }
 
-window.addEventListener('resize', () => { setViewport(); render(); });
+window.addEventListener('resize', () => {
+  setViewport(); render();
+  // The sea chart is a canvas sized to the panel; turn the phone with it open
+  // and it stayed the old shape until closed and reopened.
+  const sc = document.getElementById('seachart');
+  if (sc && sc.classList.contains('show')) drawSeaChart();
+});
 
 // Prevent pinch zoom on iOS
 document.addEventListener('gesturestart', e => e.preventDefault());
