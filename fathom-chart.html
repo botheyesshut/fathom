@@ -8336,15 +8336,35 @@ function boardTarget(rng, port, rank) {
     if (away < rank.reach[0] || away > rank.reach[1]) continue;
     const t = tileAt(q, r);
     if (!t || t.wall) continue;
+    // THE FIRST JOBS ARE A STRAIGHT DIVE. Measured over 24 seeds, every rank
+    // and slot: 55% of all postings — a third of the unrated ones, two in
+    // three at 'known' — sat in a cave UNDER the shelf floor, with rock between
+    // the surface and the mark. A new captain sailed to the flag and was told
+    // "take her down to it" over 240 m of shelf and a floor. That is the
+    // sounder's old lie ("something is there", never "you can get to it")
+    // wearing the board's clothes, and it is most of why the bot captain
+    // completed a third of its postings and bought no boat, ever.
+    //
+    // So the two lowest ranks post only into water the surface reaches: sail
+    // there, go down. From 'trusted' the caves are fair game — finding the
+    // break in the floor is the skill the rank certifies — and the slate SAYS
+    // so (`sealed`), as does the arrival line in `checkLeads`.
+    const surf = cellRun(q, r, 0);
+    if (!surf) continue;                  // no water at the surface here at all
+    const straight = rank.key === 'unrated' || rank.key === 'known';
     // A DEPTH, NOT THE DEPTH. Taking the deepest water within the cap put every
     // single unrated job at exactly 600 m — two postings on the slate, both "600
     // m down", which reads as one job printed twice. Pick from the open depths
     // instead, biased to the lower half so it is still a dive.
     const open = [];
-    for (let z = DEPTH_GRID; z <= rank.maxD; z += DEPTH_GRID) if (hexAcceptsDepth(t, z)) open.push(z);
+    for (let z = DEPTH_GRID; z <= rank.maxD; z += DEPTH_GRID) {
+      if (!hexAcceptsDepth(t, z)) continue;
+      if (straight && z > surf.floor) continue;
+      open.push(z);
+    }
     if (!open.length) continue;           // must be a dive, not a row across the bay
     const d = open[Math.floor(open.length / 2) + Math.floor(rng() * Math.ceil(open.length / 2))];
-    return { q, r, d };
+    return { q, r, d, sealed: d > surf.floor };
   }
   return null;
 }
@@ -8416,13 +8436,17 @@ function boardOffer(port, slot) {
   const t = boardTarget(rng, port, rank);
   if (!t) return null;
   const km = (hexDistance({ q: port.q, r: port.r }, { q: t.q, r: t.r }) * 60 / 1000).toFixed(1);
-  const where = bearing(port.q, port.r, t.q, t.r) + ', ' + km + ' km, ' + Math.round(t.d) + ' m down';
+  // ...AND WHETHER YOU CAN GO STRAIGHT DOWN TO IT. A mark under the shelf is
+  // a different job from a mark in open water, and the slate says which.
+  const where = bearing(port.q, port.r, t.q, t.r) + ', ' + km + ' km, ' + Math.round(t.d) + ' m down'
+    + (t.sealed ? ' — under the shelf, and the way in is a break in the floor' : '');
   if (kind === 'salvage') {
-    return Object.assign(base, { q: t.q, r: t.r, d: t.d, pay: rank.pay + 2,
+    return Object.assign(base, { q: t.q, r: t.r, d: t.d, sealed: !!t.sealed, pay: rank.pay + 2,
       title: 'Salvage off the ' + bearing(port.q, port.r, t.q, t.r).replace(/^to the /, ''),
-      tell: 'A boat went down here and nobody has been to look. ' + where + '. Keep what you lift; the fee is for going.' });
+      tell: (t.sealed ? 'A boat lies down there and nobody has been to look. ' : 'A boat went down here and nobody has been to look. ')
+        + where + '. Keep what you lift; the fee is for going.' });
   }
-  return Object.assign(base, { q: t.q, r: t.r, d: t.d,
+  return Object.assign(base, { q: t.q, r: t.r, d: t.d, sealed: !!t.sealed,
     title: 'A sounding wanted',
     tell: 'The harbour wants this position on its own charts and will not send its own boat. ' + where + '.' });
 }
@@ -8548,7 +8572,17 @@ function checkLeads() {
         const noun = (L.kind === 'berth' && state.berth)
           ? (state.berth.kind === 'salvage' ? 'The wreck the board posted' : 'The sounding position the board posted')
           : 'Whatever is here';
-        log(`You are over the marked position. ${noun} lies ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} you — take her ${dz > 0 ? 'down' : 'up'} to it.`, 'warn', 'CHART');
+        // IS THERE WATER BETWEEN YOU AND IT, OR ROCK? "Take her down to it" was
+        // said over every mark, and over a mark sealed in a cave under the shelf
+        // it sent a captain diving into the floor. The same question the ping
+        // learned to answer about prizes: if the run of water you are in at this
+        // hex does not hold the mark's depth, the way in is somewhere else.
+        const runHere = cellRun(L.q, L.r, state.currentDepth);
+        const straight = !!runHere && L.d >= runHere.ceiling && L.d <= runHere.floor;
+        log(straight
+          ? `You are over the marked position. ${noun} lies ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} you — take her ${dz > 0 ? 'down' : 'up'} to it.`
+          : `You are over the marked position, and there is rock between you and it. ${noun} lies ${Math.abs(dz)} m ${dz > 0 ? 'below' : 'above'} you, under this floor — the way in is a break in the seabed somewhere else. The sounder will find it.`,
+          'warn', 'CHART');
       }
       // A nudge as you close, so the thread never goes cold in the dark.
       const d = hexDistance({ q: state.q, r: state.r }, { q: L.q, r: L.r });

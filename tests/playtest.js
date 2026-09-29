@@ -113,6 +113,17 @@ function boot(seed) {
     '\nfunction __portRows(){ return portRows(); }' +
     '\nfunction __portBuy(act){ return portBuy(act); }' +
     '\nfunction __boardPort(){ return boardPort(); }' +
+    // The game's own course through charted water at this depth — what tapping a
+    // far hex on the chart does. Null when the chart holds no route.
+    '\nfunction __course(q,r){ return courseTo(q,r); }' +
+    // THE STRIKE, the way a captain uses it: put the lines over, and take the
+    // fish with the tool the boat has learned for that species — or, not yet
+    // knowing, the first tool not yet disproved. `state.lore` remembers per
+    // species exactly as it does for a player; nothing here reads QUARRY.
+    '\nfunction __huntable(){ return huntable(); }' +
+    '\nfunction __strike(){ if (!huntable()) return false; huntStart(); const H = state.hunt; if (!H) return false;' +
+    '\n  const L = loreOf(H.key); const tool = L.good || ["net","line","harpoon"].find(function(t){ return L.bad.indexOf(t) < 0; }) || "net";' +
+    '\n  const before = boatFood(); strikeWith(tool); return boatFood() > before; }' +
     '\nfunction __start(){ gameStarted = true; }';
   try { vm.runInContext(script + probe, sandbox, { timeout: 20000 }); }
   catch (e) { if (typeof sandbox.state === 'undefined') throw e; }
@@ -397,14 +408,46 @@ function playOne(tallies, personaName, seed) {
         if (pay) {
           const t0 = s.ticket || 0;
           call(sb.__portBuy, 'berthpay');
-          if ((s.ticket || 0) > t0) sawOnce(T, run, 'collected on a posting');
+          if ((s.ticket || 0) > t0) { sawOnce(T, run, 'collected on a posting'); run.goal = null; }   // the errand is over; steer for something else
         } else if (!s.berth) {
           const offer = rows.filter(r => r.act && r.act.indexOf('berth:') === 0)[0];
           if (offer) {
             call(sb.__portBuy, offer.act);
-            if (s.berth) sawOnce(T, run, 'took work off the board');
+            if (s.berth) { sawOnce(T, run, 'took work off the board'); run.goal = null; }   // ...and steer for the mark now, not in sixty turns
           }
         }
+        // AND A HAND ON THE LEDGER. "Nobody in the history of this harness
+        // has bought a better boat" has been in the file for weeks as a fact
+        // about the ECONOMY. It was a fact about the BOT: it took postings and
+        // banked crates and never once pressed Buy on anything. The ledger's
+        // biggest unmeasured claim was being measured by a captain with no
+        // hands. Same window, same rows, same buttons a player uses — the
+        // yard's three purchases that keep a boat going, and the next boat
+        // the moment it is affordable.
+        const canBuy = (act) => rows.find(r => r.act === act && r.ok);
+        const boat = rows.find(r => r.act && r.act.indexOf('boat:') === 0 && r.ok);
+        if (boat) {
+          const was = sb.__sub();
+          call(sb.__portBuy, boat.act);
+          if (sb.__sub() !== was) { sawOnce(T, run, 'bought a better boat'); spend(run, 'bought ' + boat.act.slice(5)); }
+        }
+        // `sb.__sub()`, not the `sub` captured at the top of the run — after the
+        // purchase above that one is the boat you no longer have.
+        if (s.hull < sb.__sub().hull * 0.6 && canBuy('repair')) { call(sb.__portBuy, 'repair'); sawOnce(T, run, 'paid the yard for hull'); }
+        const vict = rows.find(r => r.act && r.act.indexOf('victual:') === 0 && r.ok);
+        if (vict && (s.stores == null ? 100 : s.stores) < 25) { call(sb.__portBuy, vict.act); sawOnce(T, run, 'bought provisions'); }
+      }
+      // ...AND FEED THE BOAT THE WAY A CAPTAIN DOES. With only the Victualler
+      // to eat from, the bot spent four crates of every five it earned on
+      // biscuit and never reached the twenty a Charon costs: median banked 0,
+      // best 17. A human fishes — the sunlit water is where the food is, and
+      // the strike is one tap. So does the bot now, in fresh water when the
+      // lockers are under sixty, learning each species the way a player does.
+      if ((s.stores == null ? 100 : s.stores) < 60 && sb.__huntable()) {
+        let fed = false;
+        try { fed = sb.__strike(); } catch (e) { fed = false; }
+        if (fed) sawOnce(T, run, 'fed the boat with a strike');
+        else sawOnce(T, run, 'struck and missed (learned the tool)');
       }
     }
     // Ping sometimes.
@@ -553,6 +596,41 @@ function playOne(tallies, personaName, seed) {
     }
     run.goalTurns++;
 
+    // THE WAY HOME. `pickGoal` sends a captain to the quay with a hold to bank
+    // or a posting to collect on — and until now the bot then greedy-stepped
+    // toward (1,1) at whatever depth it happened to be: six hundred metres
+    // under a shelf whose floor is three hundred, where it could never arrive,
+    // finding the surface only when its air ran out. Measured over 32 runs:
+    // 100% took a posting off the board, 31% ever collected on one, 0% bought a
+    // boat — and the ledger read that for weeks as "nobody buys a better
+    // boat", a fact about the economy. It was a fact about the bot.
+    //
+    // A human surfaces and sails home. So a goal on the surface is reached by
+    // going UP first — one step if the water above is open, else the pilot run
+    // in reverse — and then by the game's own course through charted water,
+    // which is exactly what tapping the dock on the chart does. (0,0) rather
+    // than the pier itself: the pier is land and `courseTo` will not route onto
+    // it, and (0,0) is a hex every campaign has stood on, one from the quay.
+    const homeward = run.goal && run.goal.q === 1 && run.goal.r === 1;
+    if (homeward && s.currentDepth > 0) {
+      if (canGo(sb, s, -1)) { spend(run, 'rose for home'); call(sb.changeDepth, -sub.diveStep); continue; }
+      const up = ascentStep(sb, s);
+      if (up) {
+        if (up.q === s.q && up.r === s.r) { spend(run, 'piloted: changed depth to get home'); call(sb.changeDepth, up.d - s.currentDepth); }
+        else { spend(run, 'piloted: moved to get home'); call(sb.move, up.q, up.r); }
+        continue;
+      }
+    }
+    if (homeward && s.currentDepth <= 0 && sb.__dist({ q: s.q, r: s.r }, { q: 0, r: 0 }) > 1) {
+      let course = null;
+      try { course = sb.__course(0, 0); } catch (e) { course = null; }
+      if (course && course.length) {
+        spend(run, 'sailed home on a course');
+        call(sb.move, course[0].q, course[0].r);
+        continue;
+      }
+    }
+
     // FOLLOW THE SOUNDER, the way a reading captain does.
     //
     // This used to dive toward `here.floor` — the seabed — which stopped being
@@ -653,7 +731,11 @@ function playOne(tallies, personaName, seed) {
 // inside a turn loop: RADIUS hexes, LIFT steps of vertical slack, CAP nodes.
 // Returns the FIRST step of the route, or null if there is no way down nearby.
 const PILOT_RADIUS = 10, PILOT_LIFT = 6, PILOT_CAP = 4000;
-function descentStep(sb, s) {
+// ...AND THE SAME PILOT RUN THE OTHER WAY IS THE WAY HOME. `dir` +1 seeks the
+// first cell deeper than here; -1 the first cell shallower — over a lip, along
+// a gallery, up a shaft — which is what a captain under a cave roof does when
+// the hold is full and the quay is three hundred metres overhead.
+function pilotStep(sb, s, dir) {
   const g = sb.__grid();
   const start = { q: s.q, r: s.r, d: s.currentDepth };
   const key = (c) => c.q + ',' + c.r + ',' + c.d;
@@ -671,16 +753,17 @@ function descentStep(sb, s) {
       for (const w of moves) {
         nodes++;
         if (w.d < 0) continue;
-        // Never climb more than PILOT_LIFT above where we started — a route that
-        // goes to the surface and back is a different decision (see pickGoal).
-        if (w.d < s.currentDepth - PILOT_LIFT * g) continue;
+        // Never go more than PILOT_LIFT the WRONG way from where we started — a
+        // route that goes to the surface and back is a different decision
+        // (see pickGoal), and so is one that goes to the floor and back.
+        if (dir > 0 ? w.d < s.currentDepth - PILOT_LIFT * g : w.d > s.currentDepth + PILOT_LIFT * g) continue;
         if (sb.__dist({ q: w.q, r: w.r }, start) > PILOT_RADIUS) continue;
         const k = key(w);
         if (seen.has(k)) continue;
         if (!sb.__openAt(w.q, w.r, w.d)) continue;
         seen.add(k);
         const first = item.first || w;
-        if (w.d > s.currentDepth) return first;    // found water deeper than here
+        if (dir > 0 ? w.d > s.currentDepth : w.d < s.currentDepth) return first;   // found water the right way
         next.push({ c: w, first: first });
       }
     }
@@ -688,6 +771,8 @@ function descentStep(sb, s) {
   }
   return null;
 }
+function descentStep(sb, s) { return pilotStep(sb, s, 1); }
+function ascentStep(sb, s) { return pilotStep(sb, s, -1); }
 
 // One line per turn, so the budget always sums to the turns actually taken.
 function spend(run, what) { run.budget = run.budget || {}; run.budget[what] = (run.budget[what] || 0) + 1; }

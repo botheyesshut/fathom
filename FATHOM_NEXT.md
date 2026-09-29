@@ -1,5 +1,172 @@
 # FATHOM — START HERE (last updated 2026-09-29)
 
+## "DO THEM ALL" (2026-09-29, second pass) — the calls were mine; the knobs are yours
+
+Sean: *"If you have ideas about what ought to be done next, spend some time
+planning what should be enacted, fixed, or otherwise created ... then go ahead
+and do them all."* Everything below was my decision, taken against his standing
+rulings, and each carries the single thing to change if he disagrees. Two
+commits: `53efc02` (the game and the new suite) and the one this entry ships in
+(the harness, and this text).
+
+### A. The sweep the ledger asked for — `tests/wired.js`, and it is in the battery
+
+The 2026-07-27 entry said: *"Nobody has ever swept the file for the general
+case. A worthwhile hour: for every `kind`, `poi`, `type` and `act` string the
+game branches on, ask what writes it, and whether that writer is reachable."*
+This is that hour, mechanised, and running as suite 19 of `run-all.js`.
+
+It checks every name the code utters — `tip('x')`, `sfx('x')`, `showScene('x')`,
+`giveItem('x')`, the cultures' shelves, `CACHE_STOCK`, `BOARDER_AS`,
+`spawnCreature('x')`, `crewLvl`/`crewCan` — against the table it indexes, and
+FAILS the run on a name no table holds, because `showScene` ignores an unknown
+key **silently** and a typo there is a scene that never shows. It then lists,
+for the eye: table keys nothing names; state fields read but never written
+outside the literal (the `awake` shape); fields written and never read;
+creature fields set at spawn and never touched.
+
+Its first run found, and I removed: `state._lastSpaceClass`, `_outfitOffer`,
+`_hireOffer`, `_armoryOffer`, `_armsOffer` — each nulled in three places and
+read nowhere, the old offer chain's ghosts — and `c.calm`, set on every
+creature since creatures existed and read by nothing. It also settled a question
+left open on 2026-08-01: all ten (people, hull) pairs a fleet can sail have a
+drawing of their own, so the four generic `ship*` scenes are unreachable. **Kept**
+— they are the documented fallback for a fifth people, and the suite now says
+exactly why they cannot show, every run, which is better than deleting art.
+
+Its first run also had three false positives of its own (`'ship' + hull` read as
+a bare scene name; a ternary inside `tip()` missed; `'shoal:'` in an id string
+read as a field), fixed before I believed anything it said. Same lesson as
+always: refine the ruler first.
+
+### B. One town, one room — and the floor said truly
+
+- **Surfacing beside a foreign harbour opened the HOME Port window** (the Yard
+  selling the Nyx, the Hiring Hall, the Board), while the DOCK button at that
+  same harbour opened Trade. One town, two rooms, chosen by how you arrived.
+  Sean drew the line himself: *"the towns at the surface are only for basic
+  trade."* Only the home pier opens the Port now. **Knob:** put
+  `|| !!portNear(state.q, state.r)` back into `alongsideNow` in `surface()`.
+- **The DOCK button showed at two, three and four hexes off the pier** and
+  pressing it there said "No quay within reach of her lines" — the button asked
+  `boardPort()` (within four, for the slate's identity) and the press asked
+  "within one". `quayAlongside()` is now the one predicate for the button, the
+  press and the harbour briefing.
+- **The zone lines were keyed to chunk distance from a coast that no longer
+  exists.** "Off the continental shelf" fired at 42 hexes when the break is at
+  23–30; "over the abyss" at 70 when the plain begins at 53 — a dozen moves
+  after the sounder had started reading two kilometres — and then said *"No
+  floor returns the ping,"* which is untrue of a plain the sounder reads at
+  4,200 m. `hexZone` reads `homeShoreDist` against `HOME_SHELF` and `ABYSS_AT`,
+  the two numbers `baseSeafloorRaw` itself uses, and the abyss line says what is
+  true: the floor stops falling.
+- **`hullStrike()`** — one function for the four places the hull meets rock.
+  There were four copies of the same eight lines; that is how one came to
+  call `tip('impact')` twice and another to make no sound. Vertical strikes now
+  get the tip and the quiet-feet option like the others (the dive buttons are
+  disabled at floor and roof anyway, so a player rarely reaches them).
+- **The slate says "deeper than this hull is rated for."** A 'trusted' rank
+  posts work to 2,400 m and an Erebus is rated to 1,500; the arithmetic was the
+  captain's to do. Still offered — the right move may be to sign and then buy
+  the boat.
+- **The market says what it pays well for**, before you hold any of it. Read
+  off `buys` so it cannot drift from `buyMult`. This is the Trade Wars half of
+  the game finally saying its prices out loud; nothing epistemically new — you
+  are standing in their market.
+- The Hold lists the positioning log under "fitted to the boat"; it did not.
+
+### C. The phone
+
+Disabled buttons at opacity 0.45, not 0.3 (the audit measured 1.69:1 — "gone",
+not "cannot"; a duplicate rule at 0.3 further down was winning). 0.6 rem between
+▼ and ▼▼, where a mis-tap is 120 m and a roar. The sea chart redraws on
+rotation. Options toggles update the button in place instead of rewriting the
+list and scrolling to the top — the fault the fader was already cured of. Eight
+panels shared `id="inv-panel"`/`id="inv-head"`; they are classes. Three dead
+scraps gone (`startExpedition`'s beach arm, `identifyPoi`'s empty `depthHint`,
+an `endGame` id that was never in the markup).
+
+Verified at 375×812: the wants line renders; a Sound toggle at scroll 220 stays
+at 220 and reads On; the dive gap is 9.6 px; no console errors.
+
+### D. "Nobody buys a better boat" was the bot, three times over — and then it found a real bug
+
+The ledger has carried *"nobody in the history of this harness has bought a
+better boat"* for weeks as the one thing still genuinely unmeasured, and read it
+as a fact about the economy. Reading `playtest.js`: the bot took postings and
+banked crates and **never once pressed Buy on anything.** So I gave it hands —
+buy the boat when the row is `ok`, patch the hull under 60%, victual when
+hungry — and ran 32 captains for 800 turns. Four times, fixing one thing each
+time, and each fix moved the number:
+
+| the bot could… | took work | collected | banked any | best | bought a boat |
+|---|---|---|---|---|---|
+| press Buy | 100% | 31% | 13% | 10 | 0% |
+| …and go home (surface first, then the chart's own course) | 100% | 34% | 16% | 8 | 0% |
+| …and the slate stopped lying (below) | 100% | **53%** | **25%** | 17 | 0% |
+| …and feed the boat by the strike, not the Victualler | 100% | 53% | 25% | 14 | **3%** |
+
+**The way home.** After a mark was found the bot greedy-stepped toward the pier
+at whatever depth it happened to be — six hundred metres under a shelf whose
+floor is three hundred — and found the surface only when its air ran out. A
+human surfaces and sails home. `ascentStep` is the descent pilot run the other
+way; the surface leg uses `courseTo(0,0)`, the game's own tap-to-travel.
+
+**THE SLATE WAS LYING, and this is the real find.** Measured over 24 seeds,
+every rank and slot: **55% of all board postings sat in a cave under the shelf
+floor** — a third of the unrated ones, two in three at 'known' — with rock
+between the surface and the mark, and *"take her down to it"* printed over
+them. The sounder's old lie ("something is there", never "you can get to it")
+wearing the board's clothes, on the first job a new captain ever takes. This is
+`tests/wired.js`'s cousin: wired at both ends — a posting, a flag, a fee — with
+no water in the middle.
+
+My call, by rank: **unrated and known post only into water the surface
+reaches** (sail there, go down: 0% sealed now, median 180 m). **Trusted and
+name keep the caves** — finding the break in the floor is the skill the rank
+certifies — but the slate says *"under the shelf, and the way in is a break in
+the floor"*, and the arrival line says *"there is rock between you and it"*
+instead of *"take her down"*. Probed over 12 seeds: 77 claims hold, the slate's
+own `sealed` flag agrees with the world 141 of 141 times, and the depth ladder
+still climbs — 180 → 180 → 540/840 → 1,080/1,980 m by rank.
+
+**Food ate the wage.** With only the Victualler to eat from, the bot spent four
+crates of every five it earned on biscuit (28% of runs bought provisions) and
+peaked at 17 — three short of a Charon. A human fishes. The bot strikes now,
+learning each species the way a player does, off `state.lore`: 59% of runs fed
+the boat that way, provisions purchases fell to 13%, and **one captain in
+thirty-two bought the Charon** — the first, ever. It is not many. The bot is a
+poor navigator (22% of runs oscillate in a shaft; "piloted to get round" is a
+fifth of all turns) and a human would do it in fewer than 800 taps. Read it as:
+the ladder is real and climbable, and at 3–5 crates a job it is a long climb —
+which is the ruling, *progress must not be guaranteed*, and not mine to move.
+
+**Two things this surfaced that are Sean's:** the hunt and the strike spend
+**no game turn** — `state.moves++` lives in step, dive, wait and attack, and
+nowhere in the drive — so the sea stands still while you fish, and food, which
+the water design says "costs TIME", costs taps and a trip and no turns. And
+board pay (3/5/8/12) against a 4-crate larder and a 20-crate hull is the whole
+early economy in three numbers; they are `BOARD_RANKS` and the Victualler row.
+
+### Left alone, still — Sean's
+
+Free food at foreign quays; role levels multiplying numbers; ping, fire, decoy
+— and now the hunt — spending no turn; board pay. As in the entry below.
+
+### Knobs, all of them
+
+`wired.js` — a name it wrongly flags is a bug in the ruler; fix the regex, not
+the game. `surface()` `alongsideNow` — see B. `hexZone` thresholds are
+`HOME_SHELF`/`ABYSS_AT`. `hullStrike` — the sentence is the only argument.
+`cultureWants` — the wording of each want lives there. `boardTarget` —
+`straight` is the rank test; make it `false` everywhere to allow cave postings
+at every rank (the slate will still say so), or `true` to forbid them
+everywhere. `.btn:disabled` opacity, `#dive-controls` gap — CSS. In the
+harness: the bot's food threshold (60) and provisions threshold (25) are in the
+surface block of `playOne`.
+
+---
+
 ## THE FRESH-EYES PASS (2026-09-29) — a new model read the whole file
 
 Sean upgraded the model and asked for one thing: read everything against the
