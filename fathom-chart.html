@@ -2045,7 +2045,7 @@ const ITEMS = {
   antivenom:  { name: 'an ampoule of antivenom', kind: 'use', glyph: '⚕', col: '#b0e0a0', heal: true, val: 2, find: 5, depth: 900,
                 flavor: 'For a bite that keeps on biting after the teeth are long gone. It mends more than a dressing, and there is only ever the one.' },
   still:      { name: 'a hand water-still',      kind: 'use', glyph: '⚗', col: '#a0d0c0', keep: true, val: 2, find: 4, depth: 600, props: ['preserving'],
-                flavor: 'It wrings drinkable water out of the foul, drop by patient drop. Keep it running and the lockers empty slower.' },
+                flavor: 'It wrings drinkable water out of the foul, drop by patient drop. Keep it running and the tank empties slower.' },
 
   // ---- relic-work and the strange: what the old ones left in the dark ----
   saltiron:   { name: 'a salt-iron ward',        kind: 'use', glyph: '✛', col: '#c0b090', keep: true, val: 3, strange: true, find: 4, depth: 1200, props: ['ward'],
@@ -2771,19 +2771,53 @@ function drawSeaChart() {
   const showSoundings = s > 13;
   const inFrame = (t) => t.q >= minQ && t.q <= maxQ && t.r >= minR && t.r <= maxR;
 
+  // WHAT IS LAND, asked of the generator rather than of the tile's label.
+  //
+  // Every scattered island is `shore` hex for hex, so `t.land` was enough for
+  // them. The HOME island is not: the generator writes water where there is sea
+  // and NOTHING where there is not, so most of the island under the dock had no
+  // tile at all, and the caves carved beneath it (264 hexes on one seed — the
+  // island is a mountain, and mountains have caves) left `chamber` tiles with
+  // no water at the surface. Pass 1 drew those as open sea, pass 2 was willing
+  // to print a 600 m sounding on them, and the untyped rest was blank paper: a
+  // hatched rim with the sea running through the middle of the island. The law
+  // of this view is that the ENTIRE SURFACE is drawn, and the one piece of land
+  // every campaign begins on was the one piece not drawn.
+  //
+  // `shelfSeafloorDepth` returns null in exactly one case — there is no sea
+  // here — and it is the function that decided so when the world was built.
+  const isLand = (t) => !!t.land || shelfSeafloorDepth(t.q, t.r) == null;
+  const drawLand = (p) => {
+    hexPath(p.x, p.y, rad);
+    g.fillStyle = '#cdbb94'; g.fill();
+    g.strokeStyle = '#a08a5e'; g.lineWidth = 0.5; g.stroke();
+  };
+
   // ---- Pass 1: THE SURFACE, drawn for every hex the world holds. Land is
   // hatched, open water is left as paper. This is the free knowledge.
   for (const t of tiles) {
     const p = P(t.q, t.r);
     if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
-    const land = t.wall && (t.type === 'shore' || t.type === 'dock' || t.land);
-    if (land) {
-      hexPath(p.x, p.y, rad);
-      g.fillStyle = '#cdbb94'; g.fill();
-      g.strokeStyle = '#a08a5e'; g.lineWidth = 0.5; g.stroke();
-    } else if (!t.wall) {
+    if (isLand(t)) drawLand(p);
+    else if (!t.wall) {
       hexPath(p.x, p.y, rad);
       g.fillStyle = '#dfeae4'; g.fill();     // open water: pale, uncharted below
+    }
+  }
+  // ...AND THE HOME ISLAND ENTIRE, including the hexes nothing has looked at
+  // yet. Its outline is a pure function of the seed, so it can simply be asked.
+  {
+    const hi = homeIsle();
+    const R = Math.ceil(hi.size * 1.6) + 1;   // the outline's harmonics reach ~1.55x
+    for (let dq = -R; dq <= R; dq++) {
+      for (let dr = Math.max(-R, -dq - R); dr <= Math.min(R, -dq + R); dr++) {
+        const q = hi.q + dq, r = hi.r + dr;
+        if (world.has(hexKey(q, r))) continue;          // pass 1 drew it
+        if (homeShoreDist(q, r) > 0) continue;          // sea
+        const p = P(q, r);
+        if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
+        drawLand(p);
+      }
     }
   }
 
@@ -2791,7 +2825,7 @@ function drawSeaChart() {
   // their depth and what is in them.
   g.textAlign = 'center'; g.textBaseline = 'middle';
   for (const t of tiles) {
-    if (t.wall || !chartKnown(t)) continue;
+    if (t.wall || isLand(t) || !chartKnown(t)) continue;
     const p = P(t.q, t.r);
     if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) continue;
     const deep = Math.min(1, (t.floor || 0) / 4000);
@@ -2808,7 +2842,7 @@ function drawSeaChart() {
 
   // ---- Pass 3: marks. Your station, the peoples, the prizes you know of.
   for (const t of tiles) {
-    if (!chartKnown(t) || !t.poi) continue;
+    if (!chartKnown(t) || !t.poi || isLand(t)) continue;   // a chamber prize under the island is not on the surface
     const p = P(t.q, t.r);
     // No 'base' case here on purpose — see the station block below. Nothing
     // creates a tile of type `base`, so a branch on it is a promise the chart
@@ -2891,7 +2925,7 @@ function drawSeaChart() {
   // so the return leg can be planned instead of suffered.
   if (s > 5) {
     for (const t of tiles) {
-      if (t.wall || !chartKnown(t)) continue;
+      if (t.wall || isLand(t) || !chartKnown(t)) continue;
       const cur = currentAt(t.q, t.r, t.floor || 0);
       if (!cur) continue;
       const p = P(t.q, t.r);
@@ -3010,8 +3044,11 @@ const SNOW_CH = ['.', '·', '˙', ','];
 // the frame square.
 const VP_SAFE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
               + '█▓▒░▄▀│║─┌┐└┘├┤┬┴┼●◦○•*·~≈=+-^v><»«¤☼∙ᵛ◘†‡¦|.,\'"!?:;()[]/ ';
+// Every character here is on VP_SAFE. It used to colour '╲', '╱', '▐' and '▌'
+// as well — four glyphs no scene is permitted to draw, which is a key to a door
+// that does not exist.
 const VP_KEY = { '█':'8', '▓':'8', '▒':'1', '░':'1', '▄':'8', '▀':'8',
-                 '~':'3', '¤':'e', '│':'6', '╲':'f', '╱':'f', '▐':'7', '▌':'7',
+                 '~':'3', '¤':'e', '│':'6',
                  '.':'8', '·':'8', '˙':'8', ',':'8' };
 
 // frames: the drawings, looped.  key: which palette digit each CHARACTER takes.
@@ -3022,11 +3059,11 @@ const VP_KEY = { '█':'8', '▓':'8', '▒':'1', '░':'1', '▄':'8', '▀':'8
 // failure this replaced), and no scene of the 48 uses the single-drawing `art`
 // form. Every frame is VP_W x VP_H and the battery does enforce that much.
 //
-// `cap` is authored on all 48 and READ BY NOTHING. Sean: "the captions should
-// just go away. They're too small to be legible." What went away was the
-// renderer; the strings are kept because they are written prose and a caption
-// may yet come back somewhere legible — a long-press, or a line in Look. Until
-// then nothing here reaches a player, so do not spend effort on them.
+// `cap` is read by `vpShowCaption` — tap the picture and it fades up under the
+// art, large enough to read, then goes. Sean: "keep authoring porthole
+// captions, but they only appear when user clicks or taps on the porthole."
+// The permanent caption that preceded that was cut for being illegible at
+// 0.5 rem; the words were always fine, the place they were printed was not.
 const VP_SCENES = {
 
   // THE WATER PRESSES. This was a still, and it is the second-most-seen picture
@@ -3541,7 +3578,7 @@ const VP_SCENES = {
     ] },
 
   silt: { cap: 'A ridge that was not there yesterday', hold: 3,
-    key: { '─': '6', '▄': '6', '▄': '6', '▄': '6', '█': '6', '█': '6', '▓': '6', '◦': 'c', '●': 'c' },
+    key: { '─': '6', '▄': '6', '█': '6', '▓': '6', '◦': 'c', '●': 'c' },
     frames: [
       ['                        ',
        '                        ',
@@ -5141,7 +5178,7 @@ const VP_SCENES = {
   // instantly, and only then notice that the sky above this one is stone.
 
   dock: { cap: 'The pier. The last solid ground there is', hold: 4, porthole: true, snowFrom: 7,
-    key: { '▄': '6', '║': '6', '~': '3', '≈': 'b', '░': '1', 'ᵛ': '7', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8' },
+    key: { '▄': '6', '║': '6', '~': '3', '≈': 'b', '░': '1', 'ᵛ': '7', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8' },
     frames: [
       ['   ┌────────────────┐   ',
        '  │        ᵛ         │  ',
@@ -5187,7 +5224,7 @@ const VP_SCENES = {
 
   surface: { cap: 'The glass half under, sky on the water', hold: 3, porthole: true, snowFrom: 7,
     pulse: ['e'],
-    key: { '☼': 'e', '~': 'b', '≈': 'f', '░': '3', '▒': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
+    key: { '☼': 'e', '~': 'b', '≈': 'f', '░': '3', '▒': '1', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
        '  │      ☼           │  ',
@@ -5502,7 +5539,7 @@ const VP_SCENES = {
     ] },
 
   midwater: { cap: 'Mid-water, the colour going out of it', wet: true, hold: 4, porthole: true, snowFrom: 1,
-    key: { '·': '3', '>': '2', '<': '2', '▒': '1', '░': '1', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
+    key: { '·': '3', '>': '2', '<': '2', '▒': '1', '░': '1', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
        '  │     ·        ·   │  ',
@@ -5547,7 +5584,7 @@ const VP_SCENES = {
     ] },
 
   cavernlake: { cap: 'A sky of stone over still black water', wet: true, hold: 4, porthole: true, snowFrom: 6,
-    key: { '▓': '8', '▒': '8', '~': '1', '≈': '9', '░': '1', '^': '8', 'v': '8', '│': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
+    key: { '▓': '8', '▒': '8', '~': '1', '≈': '9', '░': '1', '^': '8', 'v': '8', '│': '8', '┌': '8', '┐': '8', '└': '8', '┘': '8', '─': '8', '▀': '8', '▄': '8' },
     frames: [
       ['   ┌────────────────┐   ',
        '  │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ',
@@ -5772,16 +5809,9 @@ function vpDraw() {
     html += '\n';
   }
   el.innerHTML = html;
-  // NO CAPTION. Sean: "The porthole ... I think the captions should just go
-  // away. They're too small to be legible." He is right and it had already been
-  // decided once — the comment below this has said "no caption is written any
-  // more" for weeks while the line above it wrote one, at 0.62rem, into a tile
-  // 24 characters wide. Code and comment disagreed and the comment was correct
-  // about the intent. `cap` stays in the scene data: it documents what each
-  // drawing is meant to be, and the item suite checks it fits the frame.
-  // No caption is written any more — it rendered at 7.5px and was unreadable on
-  // a phone. `cap` stays in the scene data: it documents what each drawing is
-  // meant to be, and the battery checks every scene has one.
+  // NO PERMANENT CAPTION. It rendered at 7.5px into a tile 24 characters wide
+  // and Sean could not read it. The caption is on demand now — `vpShowCaption`,
+  // on a tap — and the item suite still checks every scene has one.
 }
 
 function vpStep() {
@@ -5819,8 +5849,11 @@ function sceneForNow() {
   }
   // ADJACENCY FIRST: something alongside outranks everything, including the
   // surface. Any creature with a scene now shows it — this used to be the
-  // angler alone, because the angler was the only creature ever drawn.
-  const near = (state.creatures || []).find(c => !c.gone && c.awake
+  // angler alone, because the angler was the only creature ever drawn. And it
+  // asks `creatureShown`, not `c.awake`: a hunter at interest 100 lying against
+  // the hull was never `awake` (see that function), so the window showed open
+  // water with the thing outside the glass.
+  const near = (state.creatures || []).find(c => creatureShown(c)
     && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
     && Math.abs(c.depth - state.currentDepth) <= DEPTH_GRID);
   if (near && VP_SCENES[near.type]) return near.type;
@@ -6633,7 +6666,7 @@ const BRIEFS = [
 
   { id: 'teeth', title: 'The harpoon gun',
     when: () => !!state.armament && !state.foot && (state.creatures || []).some(c =>
-      !c.gone && c.awake && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
+      creatureShown(c) && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 1
       && Math.abs((c.depth || 0) - state.currentDepth) <= DEPTH_GRID),
     body: `<p>Something is alongside, and the Erebus does carry one gun: a harpoon
       bolted to the bow. <b>FIRE</b> arms it, and a second tap shoots — because the
@@ -6646,8 +6679,9 @@ const BRIEFS = [
       depth, distance and silence.</p>` },
 
   { id: 'contact', title: 'Something is out there',
-    when: () => (state.creatures || []).some(c => !c.gone && c.awake
-      && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 3),
+    when: () => (state.creatures || []).some(c => creatureMenacing(c)
+      && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 3
+      && Math.abs((c.depth || 0) - state.currentDepth) <= 2 * DEPTH_GRID),
     body: `<p>Something in the water has your bearing.</p>
       <p>Most of what lives down here hunts by <b>sound</b>. Drop the sonar dial to silent
       and you go deaf, but it loses your thread — usually the better trade. Running fast
@@ -7178,16 +7212,28 @@ function strikeWith(tool) {
   updateHUD(); render(); scheduleSave();
 }
 
-// The shark's price, shared with the drive so there is one rule and not two.
-function strikeBite() {
-  const H = state.hunt;
+// WHICH HAND IT REACHES: the nearest one in the water, found in `state.crew` by
+// the INDEX the hunt recorded and never by name — two hands can share a name,
+// and `handsOverSide` says why that mattered once already. The name is only a
+// fallback, for a hunt saved before `ci` existed or a roster that shifted under
+// it; when the index and the name disagree, the name wins and nobody is bitten
+// by mistake.
+function nearestHandInWater(H) {
   let victim = null, bd = 99;
-  for (const h of (H.hands || [])) {
+  for (const h of ((H && H.hands) || [])) {
     if (h.q == null) continue;
     const d = hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r });
     if (d < bd) { bd = d; victim = h; }
   }
-  const m = victim && (state.crew || []).find(c => c.name === victim.name && !c.lost);
+  if (!victim) return null;
+  const byIndex = victim.ci != null ? (state.crew || [])[victim.ci] : null;
+  if (byIndex && !byIndex.lost && byIndex.name === victim.name) return byIndex;
+  return (state.crew || []).find(c => c.name === victim.name && !c.lost) || null;
+}
+
+// The shark's price, shared with the drive so there is one rule and not two.
+function strikeBite() {
+  const m = nearestHandInWater(state.hunt);
   if (!m) return;   // nobody in the water; you took it from the boat and clean
   inflictCondition(m, 0.55);
   frayNerve(m, 10);
@@ -7383,13 +7429,7 @@ function huntCaught() {
   // THE SHARK'S RULE. Cornered, it goes through the nearest hand rather than
   // into the net. Not a roll — the price of driving one, known in advance.
   if (Q.bites) {
-    let victim = null, bd = 99;
-    for (const h of H.hands) {
-      if (h.q == null) continue;
-      const d = hexDistance({ q: h.q, r: h.r }, { q: H.q, r: H.r });
-      if (d < bd) { bd = d; victim = h; }
-    }
-    const m = victim && (state.crew || []).find(c => c.name === victim.name && !c.lost);
+    const m = nearestHandInWater(H);
     if (m) {
       inflictCondition(m, 0.55);
       frayNerve(m, 10);
@@ -7649,7 +7689,7 @@ function attackShip() {
   const dmg = Math.max(1, Math.round(W.power * (0.75 + rand() * 0.5)));
   sh.hp = (sh.hp == null ? st2.hull : sh.hp) - dmg;
   log(useTorp
-    ? `A torpedo away, and the run is short. It takes her ${bearing(sh.q, sh.r, state.q, state.r) ? 'square' : 'square'} amidships — ${dmg} into her.`
+    ? `A torpedo away, and the run is short. It takes her square amidships — ${dmg} into her.`
     : `You come alongside and put the harpoon gun into her plating. ${dmg} into her.`,
     'warn', 'ACTION');
   noiseMade(state.q, state.r, W.loud);   // a gun action is the loudest thing you can do
@@ -7732,7 +7772,6 @@ function shipNews(sh) {
 
   if (roll < 0.82) {
     // THE TRADE. Where their people are paying, which is worth real crates.
-    const wants = Object.keys(cu.buys && cu.buys.keys ? {} : {});
     const keys = (cu.buys && cu.buys.keys) || [];
     if (keys.length) {
       const k = keys[Math.floor(rr() * keys.length)];
@@ -8938,8 +8977,9 @@ function waterTick() {
   const before = boatWater();
   let w = before - WATER_DRAIN;
   if (state.still) {
-    // NOT WHILE ASHORE. The party is out of the boat; nobody is minding it.
-    if (state.foot) { /* it sits idle, and says so below */ }
+    // NOT WHILE ASHORE. The party is out of the boat; nobody is minding it, so
+    // it sits idle — no water made, no air spent, no noise — until you are back.
+    if (state.foot) { /* idle */ }
     else if (state.air <= STILL_AIR * 2) {
       state.still = false;
       log('The still stops. There is not air enough aboard to run it and breathe.', 'warn', 'STILL');
@@ -8982,8 +9022,12 @@ function waterTick() {
 // (below a third) is worth saying out loud, once.
 function provisionTick(amount) {
   const before = state.stores == null ? 100 : state.stores;
-  // A water-still and the like make the lockers last: provisions drain slower.
-  const eff = (amount || 0.4) * Math.max(0.25, 1 - countHeldWith('preserving') * 0.4);
+  // No `preserving` term here any more. The hand water-still slowed FOOD by 40%
+  // from the months when food and water were one meter; it makes water now (see
+  // `waterTick`), and a still that also cured salt meat was that old meter's
+  // ghost. The ledger for the water split says the item "finally means what it
+  // is called" — this is the half of the sentence that had not been done.
+  const eff = (amount || 0.4);
   state.stores = Math.max(0, before - eff);
   if (before > 33 && state.stores <= 33) {
     log('Stores are running low. The crew feels it — hungry hands take a wound harder, and the dark leans heavier. Time to think about turning back.', 'warn', 'STORES');
@@ -12006,9 +12050,12 @@ function syncFootControls(inside) {
   // that has you — and goes away again when the water is quiet.
   const decBtn = document.getElementById('btn-launch');
   if (decBtn && !inside) {
-    const hunted = (state.creatures || []).some(c => !c.gone && (
-      c.type === 'rival' ? (c.alert || 0) > 30 : (c.awake || (c.interest || 0) > 20)
-    ) && hexDistance(c, { q: state.q, r: state.r }) <= 12);
+    // `creatureMenacing` rather than the awake flag, so a school closing its
+    // ring — the one thing `tickShoal` says a buoy is FOR — puts the button up.
+    // A hunter merely taking an interest (above 20, below stalking) counts too.
+    const hunted = (state.creatures || []).some(c => !c.gone
+      && (creatureMenacing(c) || (c.interest || 0) > 20)
+      && hexDistance(c, { q: state.q, r: state.r }) <= 12);
     decBtn.style.display = (hunted && (state.decoys || 0) > 0) ? '' : 'none';
   }
   // A DEAD CONTROL IS WORSE THAN NO CONTROL. `claimOrStore` can never succeed
@@ -13111,7 +13158,6 @@ function render() {
     // puzzle you cannot see the board of is not a puzzle, it is a guess.
     {
       H.sighted = true;
-      H.sighted = true;
       const qp = hexToPixel(H.q, H.r);
       const qm = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       qm.setAttribute('x', qp.x); qm.setAttribute('y', qp.y + 4);
@@ -13568,16 +13614,19 @@ function hitCreature(c, power) {
   // done, because until now the boat sailed with no gun to fire.
   const nm = (BESTIARY[c.type] && BESTIARY[c.type].name) || 'it';
   if (c.dmgTaken < creatureTough(c)) {
-    if (c.type === 'hulk') { log('The leviathan takes the hit and does not so much as turn. You will not kill this with what you carry.', 'warn', 'FIRE'); return; }
+    // The paragraph above says the hulk line was made to ask the bestiary. It
+    // was not — "the leviathan" sat here for a month under a comment describing
+    // its own removal, and so did "the school" and "the colony" below.
+    if (c.type === 'hulk') { log(`${ucfirst(nm)} takes the hit and does not so much as turn. You will not kill this with what you carry.`, 'warn', 'FIRE'); return; }
     if (c.type === 'lurker') c.interest = Math.min(100, (c.interest || 0) + 25); // a wound only enrages it
     if (c.type === 'shoal') c.spooked = Math.max(c.spooked || 0, 1);
     log(`You put ${dmg} into ${nm}, but it holds.`, 'warn', 'FIRE');
     return;
   }
-  if (c.type === 'shoal') { for (const o of state.creatures) if (o.type === 'shoal') o.spooked = 8; log('The school breaks apart and scatters into the dark.', '', 'FIRE'); }
+  if (c.type === 'shoal') { for (const o of state.creatures) if (o.type === 'shoal') o.spooked = 8; log(`${ucfirst(nm)} break apart and scatter into the dark.`, '', 'FIRE'); }
   else if (c.type === 'silt') { c.spent = 6; c.dmgTaken = 0; log('The buried thing convulses and digs deep — gone, for now.', '', 'FIRE'); }
   else if (c.type === 'lurker') { c.fleeing = true; c.interest = 0; c.dmgTaken = 0; log('It recoils, breaks off, and flees into the black.', '', 'FIRE'); }
-  else if (c.type === 'chorus') { c.gone = true; log('The colony bursts and goes silent. The water clears.', '', 'FIRE'); }
+  else if (c.type === 'chorus') { c.gone = true; log(`${ucfirst(nm)} bursts and goes silent. The water clears.`, '', 'FIRE'); }
   else { c.gone = true; log(`You drive ${nm} off — it will not be back soon.`, '', 'FIRE'); }
   sfx('strike');
 }
@@ -13999,11 +14048,46 @@ function flagMoveFail(q, r, color) {
   }, 600);
 }
 
+// EVERYTHING THE SEA DOES WITH A TURN, IN ONE PLACE.
+//
+// Three actions spend a turn — a step, a dive, holding station — and each kept
+// its own list of what the world does while it happens. The lists drifted.
+// `wait` had eleven ticks (and a comment complaining that only two used to
+// run); `move` had grown to fourteen; `changeDepth` had seven. Read together,
+// the gaps were the bug: `weatherTick` and `stormTick` had ONE call site each,
+// and it was `wait` — so a captain who SAILED into rain was never told, and a
+// boat that sat in a storm paid hull while a boat that sailed through one paid
+// nothing. That is the trade Sean asked for, built, and never reached by the
+// action a captain actually takes. A hand bleeding out did not bleed while you
+// dived. The still did not run, or make its noise, on the way down. The hold
+// did not stir. A ten-step dive was ten turns the sea did not notice.
+//
+// So: one list. What is peculiar to an action — the set of the water, the zone
+// line, the sounding, the hatch — stays with the action. What the sea does
+// regardless of which way you moved lives here, and nowhere else.
+function seaTick() {
+  warTick();
+  shipsTick();
+  creatureTick();
+  checkLeads();
+  if (!state.foot) checkEnclave();   // handleTile may have just put you ashore
+  hauntTick();      // the old ones work on the crew while their relics ride below
+  holdTick();       // and the rest of the hold — the soothing, the living — stirs too
+  corpseTick();     // and the dead, if you are carrying any, go on not keeping
+  dyingTick();      // and a hand who is bleeding out is running out of time
+  airCounsel();
+  provisionTick();  // and the boat eats
+  weatherTick();    // the sky, which is only ever news at the surface
+  stormTick();      // ...and a sea running under her costs hull to sit in
+  waterTick();      // ...and drinks, and decides whether to be heard doing it
+  baseTick();
+  checkDeath();
+}
+
 // Wait — a passive turn. The boat holds station. Air is consumed (or recovered)
 // per the current depth, and an ambient flavor line fires occasionally.
 function wait() {
   if (!state.alive || ashore()) return;
-  baseTick();   // holding station is still a turn, and the sea keeps working
   state.moves++;
   state.lastMoveTime = performance.now();
   tickPingMemory();
@@ -14012,28 +14096,10 @@ function wait() {
   // time passing rather than silence.
   const tile = getTile(state.q, state.r);
   if (tile && rand() < 0.6) handleTile(tile);
-  creatureTick();
-  // HOLDING STATION IS A TURN, AND THE SEA KEEPS WORKING — which the line at the
-  // top of this function has claimed all along while only two of the eleven
-  // per-turn ticks actually ran. Traffic stopped, the war stopped, leads never
-  // resolved, the hold never stirred, the dying never worsened — and airCounsel
-  // never fired, on the single action a captain repeats when the air is short
-  // and the counsel is the whole point of it.
-  warTick();
-  shipsTick();
-  checkLeads();
-  ordersTick();
-  checkEnclave();
-  hauntTick();
-  holdTick();
-  corpseTick();
-  dyingTick();      // a hand bleeding out is running out of time whether you move or not
-  airCounsel();
-  provisionTick();  // and the boat eats
-  weatherTick();    // the sky, which is only ever news at the surface
-  stormTick();      // ...and a sea running under her costs hull to sit in
-  waterTick();      // ...and drinks, and decides whether to be heard doing it
-  checkDeath();
+  // HOLDING STATION IS A TURN, AND THE SEA KEEPS WORKING — the same turn a step
+  // or a dive is, off the same list. (The Standing Orders are not called here:
+  // `updateHUD` runs them, and says it is the only place that does.)
+  seaTick();
   updateHUD();
   render();
 }
@@ -14102,7 +14168,6 @@ function move(q, r) {
       const delta = Math.max(1, Math.round(near.deltaMeters));
       const dir = near.volume.ceiling > state.currentDepth ? 'below' : 'above';
       log(`${pickLoose(WALL_FACE)} Sonar reads an opening ${delta} m ${dir}. -${dmg} hull.`, 'danger', 'IMPACT');
-      tip('impact');
     } else {
       log(`${pickLoose(WALL_FACE)} Not at this depth, at any rate. -${dmg} hull.`, 'danger', 'IMPACT');
     }
@@ -14205,7 +14270,6 @@ function move(q, r) {
   const firstHere = !visited.has(hexKey(q, r));
   visited.add(hexKey(q, r));
   revealAt(q, r, state.currentDepth);   // you were HERE, at THIS depth: that is a sounding
-  revealAt(q, r, state.currentDepth);
   for (const n of hexNeighbors(q, r)) {
     revealAt(n.q, n.r, state.currentDepth);
   }
@@ -14234,22 +14298,9 @@ function move(q, r) {
     logZContext(tile, curVol);
   }
 
-  // The water answers: landfall, creatures, then death checks.
+  // The water answers: landfall, then everything the sea does with a turn.
   maybeBeach();
-  warTick();
-  shipsTick();
-  creatureTick();
-  checkLeads();
-  checkEnclave();  // have we come upon one of the peoples?
-  hauntTick();     // the old ones work on the crew while their relics ride below
-  holdTick();      // and the rest of the hold — the soothing, the living — stirs too
-  corpseTick();    // and the dead, if you are carrying any, go on not keeping
-  dyingTick();     // and a hand who is bleeding out is running out of time
-  airCounsel();
-  provisionTick();
-  waterTick();
-  baseTick();
-  checkDeath();
+  seaTick();
 
   updateHUD();
   render();
@@ -14443,9 +14494,14 @@ function trackForNow() {
   // (ashore() only returns true WHEN state.foot is set), so the whole condition
   // existed to nag the player once per music evaluation for as long as they
   // stayed on a deck. Read the state directly, the way the viewport does.
+  // `creatureMenacing` decides WHETHER a thing is hunting you; the two that
+  // carry a number are held to a higher bar for the music than for the helm,
+  // because a tune that starts at the first stir of interest cries wolf. A
+  // school closing its ring or the pressure-thing pacing you have no number
+  // and were never scored at all.
   const hunted = (state.creatures || []).some(c => {
-    if (c.gone || c.fleeing || c.crippled) return false;
-    const keen = c.type === 'rival' ? (rivalHostile(c) && (c.alert || 0) > 45) : (c.interest || 0) > 45;
+    if (!creatureMenacing(c)) return false;
+    const keen = c.type === 'rival' ? (c.alert || 0) > 45 : c.type === 'lurker' ? (c.interest || 0) > 45 : true;
     return keen && hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r }) <= 6;
   });
   if (hunted) return 'hunted';
@@ -17343,6 +17399,46 @@ function wakeNoticeR() { return passiveRange() + 6; }
 // decides how the beast behaves this turn.
 const LURK_WARY = 12, LURK_STALK = 38, LURK_HUNT = 68;
 
+// IS IT A DANGER THE BOAT COULD KNOW ABOUT — one answer, asked by everything
+// that used to ask `c.awake`.
+//
+// `awake` is written by exactly two spawners: a quarry's guard and a siege's
+// attacker. No creature ever sets it on itself. So every gate on it — the
+// autopilot's "anything in the water stops it", the harpoon and contact
+// briefings, the decoy button — was blind to a hunter at interest 100 lying
+// alongside, and answered only for the two kinds of thing that arrive already
+// labelled. Nine of eleven species could never trip any of them.
+//
+// A hunter is menacing when it is STALKING or worse; another boat when she is
+// hostile and casting for you; a lure once it has shown its mouth; a school
+// unless it has been scattered; the pressure-thing while you are in its water.
+// A buried silt is left out on purpose — the boat cannot know it is there, and
+// a helm that stopped for it would be omniscient (Angelshark #14, the finding
+// that put `awake` on this gate in the first place). Drifters, the hulk, an eel
+// and a chorus are nuisances the boat steers round, not hunters.
+function creatureMenacing(c) {
+  if (!c || c.gone || c.fleeing || c.crippled) return false;
+  if (c.awake) return true;
+  if (c.type === 'lurker') return (c.interest || 0) >= LURK_STALK;
+  if (c.type === 'rival') return rivalHostile(c) && (c.alert || 0) >= RIVAL_SEARCH_ALERT;
+  if (c.type === 'angler') return !!c.revealed;
+  if (c.type === 'shoal') return !(c.spooked > 0);
+  if (c.type === 'baro') return state.currentDepth >= (c.ceilingLimit || 0) - DEPTH_GRID;
+  return false;
+}
+// COULD THE BOAT SEE IT, IF IT WERE ALONGSIDE? The porthole's question, and the
+// harpoon briefing's — a drifter filling the passage is nothing to fear and
+// exactly the thing you would be looking at. Mirrors the chart's own gate: a
+// sleeping hunter is not drawn, a silent boat is not drawn, and a lure still
+// wearing a wreck's face must not give itself away in the window.
+function creatureShown(c) {
+  if (!c || c.gone) return false;
+  if (c.type === 'lurker') return (c.interest || 0) >= LURK_STALK || !!c.fleeing;
+  if (c.type === 'rival') return rivalLocalized(c);
+  if (c.type === 'angler') return !!c.revealed;
+  return true;
+}
+
 // WHOSE BOAT IS THAT? A `rival` has existed since before the peoples did, and it was
 // an anonymous thing — "another boat", no flag, no name, and shooting at it was the
 // whole of the relationship you could have. Sean's Mariners are "the neutral name
@@ -18721,11 +18817,10 @@ function changeDepth(deltaMeters) {
   state.lastMoveTime = performance.now();
   state.pingArrows = null; // depth-relative distances now stale
   tickPingMemory();
-  // ANGELSHARK #8/#15. checkLeads ran on horizontal moves only, so a captain
-  // who DIVED onto the marked position arrived unannounced — nothing fired
-  // until the next sideways step, one hex off the flag, which read as "the
-  // mark is beside the real spot". Arriving vertically is arriving.
-  checkLeads();
+  // ANGELSHARK #8/#15: arriving vertically is arriving. A lone `checkLeads()`
+  // sat here as the fix — the first of several ticks a dive had that a step
+  // did not, or the other way about. `seaTick` at the end of this function
+  // runs it on a dive exactly as on a step, with everything else the sea does.
 
   // Vertical air cost (free at depth 0)
   if (state.currentDepth > 0) {
@@ -18784,10 +18879,8 @@ function changeDepth(deltaMeters) {
 
   // E7: AN ENCLAVE IS AT A DEPTH TOO. checkEnclave() had exactly one call site,
   // in move(), so a captain who dived onto one of the peoples sat inside their
-  // settlement with no panel, no greeting, and no way to trade — the same class
-  // of bug as "descend to work it" above, and it silently gated the entire
-  // culture economy behind arriving horizontally.
-  if (!state.foot) checkEnclave();
+  // settlement with no panel, no greeting, and no way to trade. `seaTick` asks
+  // now, on every kind of turn — this was the first of the drifted ticks.
 
   // The same hex is a different room at a different depth — the boat says so, ONCE,
   // and briefly unless there is a mate aboard to say more. This was rand() < 0.55, so
@@ -18796,8 +18889,6 @@ function changeDepth(deltaMeters) {
     const mate = firstMate();
     log(describeSpace(mate ? 'first' : 'brief'), '', 'WATER');
   }
-  airCounsel();
-  baseTick();
 
   // Z-axis context — describe what's above and below the sub in the current hex.
   // Only log when there's a meaningful Z context (vertical space > 30 meters), and
@@ -18805,10 +18896,7 @@ function changeDepth(deltaMeters) {
   logZContext(tile, cur);
 
   maybeBeach();
-  warTick();
-  shipsTick();
-  creatureTick();
-  checkDeath();
+  seaTick();
   updateHUD();
   render();
 }
@@ -19212,10 +19300,12 @@ function neighbourWays(q, r, d) {
 //
 // Epistemically free: the glyph is only drawn where the boat has already
 // earned the knowledge, so saying it aloud reveals nothing new.
+// No `base` row: nothing in the game makes a tile whose poi is 'base' — the
+// station is drawn from `state.base`, and the sea chart says the same thing.
 const PRIZE_NOUN = { salvage: 'wreckage', ruin: 'a sunken ruin', hull: 'a boat on the bottom',
                      air: 'a pocket of trapped gas',
                      signal: 'something signalling', growth: 'a mass of growth',
-                     opening: 'a sinkhole', chasm: 'a chasm', base: 'your own station' };
+                     opening: 'a sinkhole', chasm: 'a chasm' };
 function prizesInSight(q, r, d) {
   const out = [];
   const here = getTile(q, r);
@@ -19811,15 +19901,17 @@ function autoHazard() {
   if (!state.alive) return 'the boat is lost';
   if (state.foot) return 'you are not aboard';
   for (const c of (state.creatures || [])) {
-    if (c.gone) continue;
     // ANGELSHARK #14: a sleeping silt three bands under the keel held the helm
     // hostage — "something is close", forever, with nothing to see and nothing
-    // coming. A contact only takes the helm if it is AWAKE and in your water,
-    // and the refusal names a bearing, so it is a situation and not a curse.
-    if (!c.awake) continue;
+    // coming. The fix gated this on `c.awake`, which no creature ever sets on
+    // itself — so the helm then stopped for NOTHING but a quarry's guard, and
+    // sailed a captain past a hunter at interest 100 with its title promising
+    // "anything in the water stops it". `creatureMenacing` is the honest
+    // middle: a thing the boat could know is hunting it, in its water.
+    if (!creatureMenacing(c)) continue;
     if (Math.abs((c.depth || 0) - state.currentDepth) > DEPTH_GRID * 3) continue;
     const d = hexDistance({ q: c.q, r: c.r }, { q: state.q, r: state.r });
-    if (d <= passiveRange() + 1 && (c.type !== 'lurker' || (c.interest || 0) >= LURK_STALK))
+    if (d <= passiveRange() + 1)
       return 'something is close, ' + bearing(state.q, state.r, c.q, c.r) + ' of her';
   }
   if ((state.threats || []).length) return 'there is a weapon in the water';
@@ -20597,15 +20689,8 @@ const FLAVOR = {
       'Through the porthole: bioluminescent flecks, like a sky that doesn\u2019t belong here.',
     ],
   },
-  openWater: [
-    'Water above and water below, and the boat hanging in the middle of it.',
-    'A school of something silver passes through your sonar and is gone.',
-    'The water goes blue and then goes nothing. From here on you see with the instruments or you do not see.',
-    'The hull is silent. You could be the only living thing for miles.',
-    'Sunlight from far above, bent and broken by the swell.',
-    'Pressure builds slowly. The boat settles into the depth.',
-    'The return comes back grainy. Marine snow, falling through the beam.',
-  ],
+  // `openWater` used to sit here — seven depth-blind sentences that AMBIENT
+  // replaced, banded by depth. Nothing read the array for a month after.
   passage: [
     'Stone presses close. The hull complains.',
     'The walls are wet. Always wet.',

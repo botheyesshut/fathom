@@ -1,4 +1,123 @@
-# FATHOM — START HERE (last updated 2026-08-08)
+# FATHOM — START HERE (last updated 2026-09-29)
+
+## THE FRESH-EYES PASS (2026-09-29) — a new model read the whole file
+
+Sean upgraded the model and asked for one thing: read everything against the
+founding principles and clean up what is now obviously wrong. This is what a
+front-to-back read of all 22,000 lines found. Eighteen suites green before and
+after; `reachable.js` 0 dead before and after; `moved.js` 0 of 189 numbers
+moved — which is the expected answer, because none of the instruments reach
+any of the things below, and that is itself a finding.
+
+### 1. The sea kept three different clocks, and two of them were slow
+
+Three actions spend a turn — a step, a dive, holding station — and each kept
+its own list of what the world does while it happens. `wait()` had eleven ticks
+(under a comment complaining that only two used to run); `move()` had fourteen;
+`changeDepth()` had seven. Nobody had put the three side by side.
+
+| tick | wait | move | dive |
+|---|---|---|---|
+| `weatherTick` — "Rain comes across the water" | yes | **no** | **no** |
+| `stormTick` — hull cost for sitting in a sea | yes | **no** | **no** |
+| `provisionTick` / `waterTick` — eat and drink | yes | yes | **no** |
+| `dyingTick` / `hauntTick` / `holdTick` / `corpseTick` | yes | yes | **no** |
+
+So the storm system built on 2026-08-05 — "collect rain at the surface while a
+little defenseless" — was reachable by exactly one action, and it was the one a
+captain uses least. Sail into rain and nothing was said. Sail through a storm
+and the hull paid nothing; press WAIT in it and it did. A ten-step dive was ten
+turns the sea did not notice: a hand bleeding out did not bleed, the still did
+not run or make its noise, the tank did not go down.
+
+**One list now: `seaTick()`.** What is peculiar to an action stays with it (the
+set of the water, the zone line, the sounding, the hatch); what the sea does
+regardless lives in one function called from all three. Proved by a probe that
+fails on HEAD in five places and passes on the fix: sailing into rain is
+announced and `inRain` flips; twelve wet steps cost 99.8 → 97.1 hull; four
+dives drink 2.4 water and 1.6 food.
+
+### 2. `awake` was a flag nothing ever set on itself
+
+`c.awake` is written by two spawners — a quarry's guard and a siege's attacker
+— and by no creature's own tick. Five things gated on it:
+
+- **`autoHazard`** — the autopilot's "anything in the water stops it" stopped
+  for nothing but those two. A hunter at interest 100 lying against the hull
+  did not take the helm. (This was the Angelshark #14 fix, which put `awake`
+  on the gate to stop a buried silt holding the helm hostage — right problem,
+  wrong predicate.)
+- **`sceneForNow`** — the porthole showed open water with the thing outside
+  the glass.
+- **The harpoon and contact briefings** could never fire for an ordinary
+  hunter.
+- **The decoy button** never appeared for a school closing its ring — the one
+  thing `tickShoal` says a buoy is for.
+- **The hunted music** never scored a shoal or the pressure-thing.
+
+Nine of eleven species could trip none of them. Two predicates now:
+`creatureMenacing(c)` — hunting, in a way the boat could know: a lurker
+stalking or worse, a hostile boat casting for you, a lure once it has shown
+its mouth, a school unless scattered, the baro while you are in its water —
+and `creatureShown(c)`, the porthole's question, which mirrors the chart's
+own gate. A buried silt is still left out on purpose: the boat cannot know it
+is there, and #14 holds (probed).
+
+### 3. The home island was not on the sea chart
+
+The law of the sea chart is that the ENTIRE SURFACE is drawn. The generator
+writes water where there is sea and NOTHING where there is not, and the home
+island is a mountain with caves in it — so of its 375 hexes, **22 drew as
+land, 316 (caves beneath) drew as open water, and 37 drew as blank paper.** A
+hatched rim with the sea running through the middle of the one piece of land
+every campaign begins on. The chart asks `shelfSeafloorDepth` now — the
+function that decided there was no sea there when the world was built — and
+asks the island's own outline for the hexes nothing has looked at yet.
+Verified in the browser at 375x812: the island draws whole, dock on its north
+shore.
+
+### 4. Smaller, all player-visible
+
+- **The hulk was still "the leviathan"** when shot, the shoalfang "the
+  school", the chorus "the colony" — directly under a comment describing their
+  removal. They ask the bestiary now, as the comment claimed.
+- **The shark bit the wrong hand.** `huntCaught` and `strikeBite` found the
+  bitten hand by NAME, five thousand lines under a comment saying never to; the
+  hunt records `ci` for exactly this. One `nearestHandInWater()` for both.
+- **The hand water-still still cured salt meat.** It slowed FOOD by 40% from
+  the months when food and water were one meter, on top of making water. The
+  entry below says it "finally means what it is called"; this is the half of
+  that sentence that had not been done. Water only; the flavour says "tank".
+- Five scene keys declared a glyph twice (`'│'` ×2 in four scenes, `'▄'` ×3
+  and `'█'` ×2 in `silt`) — the exact shape that painted the shallows'
+  sunlight dark grey. Same value both times, so harmless today; gone.
+- Dead: `FLAVOR.openWater` (7 strings, unread since AMBIENT), `PRIZE_NOUN.base`,
+  four `VP_KEY` entries for glyphs not on `VP_SAFE`, a `? 'square' : 'square'`
+  ternary, an unused `wants`, a doubled `H.sighted`, a doubled `revealAt`, a
+  doubled `tip('impact')`. Two comments that contradicted the code they sat on
+  (`cap` is read; the still "says so below" said nothing).
+
+### Left alone, and why — these are Sean's
+
+- **Free food at foreign quays.** `dockHere()` at another people's harbour
+  gives +35 stores and a full tank for nothing; the home Victualler charges
+  4 crates for a full larder, under his ruling "we must be paying for food and
+  water". Free water at quays is ratified by his own framing of the water
+  problem. Free food is an inconsistency and an economy call.
+- **Role levels multiply numbers** (`crewLvl('wrench')` makes the yard's
+  crates go further; `crewLvl('diver')` lifts dive odds). The knack law forbids
+  a KNACK multiplying a number; roles predate it, cap at 3, and are mortal.
+  Noted, not touched.
+- **Ping, fire and decoy** spend air and noise but not a turn. Consistent with
+  one another; left.
+
+### Knobs
+
+`seaTick` is the list — add a per-turn tick there and nowhere else.
+`creatureMenacing` is the one place "is it hunting me" is answered; to make a
+species count, add a line there.
+
+---
 
 ## A CORRECTION: THE BUILD WAS NEVER STALE (2026-08-08)
 
