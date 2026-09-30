@@ -94,14 +94,25 @@ under it, a household robbed and remembered — runs end to end.
 
 ## THE GHOST THREAD (Angelshark #22) — what I need you to imagine
 
+**Corrected 2026-09-30.** The first draft of this brief leaned on THE ACCOUNT —
+the fourteen pages of *The Dark Way Down* — as a thread to weave with. Those
+pages have been out of the game since 2026-08-03 (`6db3734`). Sean pressed the
+button expecting the story so far and got a paragraph about plywood: *"really
+cool effort, Claude, but it doesn't work ... Let's strip all that out for now."*
+Two good voices that cannot share a window. The ledger never recorded the
+removal — only the commit did — which is how the pages walked back into a plan
+seven weeks later. The entry below this one is so it does not happen a third
+time. The lesson carries into the thread itself: **it speaks in Fathom's own
+voice** — the log, the Mate, the pier-hand, the death screen — never as
+inserted pages.
+
 Your seed: *"I like that we just keep coming back. This is not unlike Torment.
 We could make a plot out of this. It could be a ghost game."* The mechanics are
 already there: the button says *Take another boat*; the sea keeps everything
-aboard; the port keeps the bank; the charts keep what was learned; the pages of
-THE ACCOUNT survive; lost hands come back as hollow men in the uniforms you
-issued. What is missing is the **why** — and that is yours, because it is your
-story (the Account is *The Dark Way Down*). A sentence or two on each is plenty,
-and "you pick" is a fine answer to any of them:
+aboard; the port keeps the bank; the charts keep what was learned; lost hands
+come back as hollow men in the uniforms you issued. What is missing is the
+**why** — and that is yours. A sentence or two on each is plenty, and "you pick"
+is a fine answer to any of them:
 
 1. **Who takes the next boat?** The same captain, who does not remember going
    down? A new captain each time, who inherits a dead one's charts? Or nobody
@@ -110,22 +121,39 @@ and "you pick" is a fine answer to any of them:
    are its hands)? Is there a bargain, and who made it? Or does it want nothing,
    and you are one more thing that went in?
 3. **Who notices, and when?** The pier-hand on your third boat (*"Weren't you — no.
-   Sorry."*), your Mate, the Deep Ones in a city, the death screen itself, found
-   text. Triggers the game can count: deaths, a hand coming back hollow, a page,
-   a depth, a city.
+   Sorry."*), your Mate, the Deep Ones in a city, the death screen itself, a log
+   found in a wreck. Triggers the game can count: deaths, a hand coming back
+   hollow, a depth, a city.
 4. **Is your last boat down there?** The sea keeps everything aboard, so she
    could be where she went down: your cargo, your log in your own hand, your
    crew. Finding yourself would be the one new mechanic; the rest is prose.
 5. **Does it end?** Is there a way to stop coming back — something at the bottom,
-   a last page, refusing the boat — or is the loop the point?
+   refusing the boat — or is the loop the point?
 6. **How loud?** Whispered (it never says *you are dead*; the player works it
-   out) or, at the end, confessed? And is the "you" of the Account the captain?
-   If yes, the Account and the ghost thread are one story and I would weave them.
+   out) or, at the end, confessed?
 
 **What it costs:** a death count (the only new state), a handful of places that
 speak, twenty to forty lines of prose, and maybe the wreck of your last boat.
 It fits in the systems that exist. I can draft all the prose myself once I have
 the arc — or you write the lines and I place them.
+
+---
+
+## THE ACCOUNT IS OUT (2026-08-03, `6db3734`) — written down 2026-09-30, seven weeks late
+
+The fourteen verbatim pages of Sean's 2016 gamebook *The Dark Way Down*, awarded
+one per resolved word lead, were removed on 2026-08-03 at his word: *"The whole
+inclusion of my Dark Way Down material, really cool effort, Claude, but it
+doesn't work. I hit a button that was supposed to give me 'the story so far' or
+something like that, and it was about plywood. It doesn't work. Let's strip all
+that out for now."* The reason was not a bug: second-person present-tense prose
+about a person on foot in a dry passage, dropped a paragraph at a time into a
+third-person game about a boat under a mile of water. Removed: `PAGES`,
+`recoverPage`, the panel, the button, `state.pagesFound`, the award in
+`resolveWord`, items.test §19. The word lead still pays in water and a thread.
+**Still in, by his choice: the MUSIC** — four tracks he wrote in 2012 for the
+same gamebook; "it doesn't work" meant the prose. **Do not propose the pages
+again.** Every mention of THE ACCOUNT further down this file is history.
 
 ---
 
@@ -2592,7 +2620,7 @@ own chain. **There is exactly one entrance: `readChart()`**, which needs a
 `kind:'chart'` item, and those turn up ~0.05 times per session. One session in
 twenty. Behind that shut door sit `word` leads (the mechanic that makes
 charting pay — Sean's own ruling), `cavern` leads, `quarry` leads, and all
-fourteen pages of THE ACCOUNT.
+fourteen pages of THE ACCOUNT. *(The Account came out 2026-08-03, `6db3734`.)*
 
 Sean's answer: **"yes, charting should earn leads."** Not built yet. The
 intended shape is a second entrance that costs something other than luck —
@@ -2828,7 +2856,7 @@ ruling that charting is a legitimate way to play:**
 > finds per session**, charts are 6–16% of the item table → **≈0.05 charts per
 > session.** Observed: 0 of 20. That single gate holds shut `word` leads (the
 > charting-pays mechanic), `cavern` leads, `quarry` leads, **and all fourteen
-> pages of THE ACCOUNT.** A feature that fires one session in twenty is
+> pages of THE ACCOUNT.** [The Account came out 2026-08-03, `6db3734`.] A feature that fires one session in twenty is
 > indistinguishable from one that does not exist. The ruling-2-safe fix is not
 > more crates — it is a **second door into `makeLead()` that costs the player
 > something other than luck.** Confirm with: charts-read per session, currently
@@ -3071,7 +3099,7 @@ measured, and it owns questions 1 and 2 above.
 
 **T6 — harness debt:** teach the bot captain to follow the sounder (dive when `snd.odd` — cargo-pickup numbers currently under-read the new signposting); add the S5 generator softlock assertion; note economy.js counts prizes per-hex (stack entries have their own table now).
 
-**DONE BY FABLE (2026-07-26, `a53918e`): THE ACCOUNT (found-text system).** Fourteen pages of Sean's 2016 gamebook *The Dark Way Down*, verbatim, recovered **in order, one per resolved `word` lead** (`PAGES`, `recoverPage`, hook in `resolveWord`). Second person kept deliberately — framed once, never again. Pages are **campaign knowledge**: they survive death/restart like the bank (state literal comment explains; do not "fix" by resetting them). `btn-pages` hidden until the first page. Panel `#pages` renders found pages as a document, unfound as dim rules. Nine invariants in items.test §19. **Extension hooks if Sean wants more:** the source has ~50k words — a second account could gate on deeper water; pages could also seed into ruin lockers on foot; the curated fragments live in the `PAGES` const with the full source in Sean's Drive. **Trap fixed en route:** `poiStack` reads `cellPois` by coordinates, so the strict claim rule was hijacking legacy floor prizes on hexes that also hold a chamber stack — gate is `tile.poiDepth != null` in `atReachableBottom`; cargo.test rolls a random seed and is what caught it.
+**REMOVED 2026-08-03 (`6db3734`) at Sean's word — *"it doesn't work. Let's strip all that out for now."* Kept here as history; see THE ACCOUNT IS OUT near the top.** **DONE BY FABLE (2026-07-26, `a53918e`): THE ACCOUNT (found-text system).** Fourteen pages of Sean's 2016 gamebook *The Dark Way Down*, verbatim, recovered **in order, one per resolved `word` lead** (`PAGES`, `recoverPage`, hook in `resolveWord`). Second person kept deliberately — framed once, never again. Pages are **campaign knowledge**: they survive death/restart like the bank (state literal comment explains; do not "fix" by resetting them). `btn-pages` hidden until the first page. Panel `#pages` renders found pages as a document, unfound as dim rules. Nine invariants in items.test §19. **Extension hooks if Sean wants more:** the source has ~50k words — a second account could gate on deeper water; pages could also seed into ruin lockers on foot; the curated fragments live in the `PAGES` const with the full source in Sean's Drive. **Trap fixed en route:** `poiStack` reads `cellPois` by coordinates, so the strict claim rule was hijacking legacy floor prizes on hexes that also hold a chamber stack — gate is `tile.poiDepth != null` in `atReachableBottom`; cargo.test rolls a random seed and is what caught it.
 
 **WAITING ON SEAN'S PLAYTEST — do not tune blind:** sonar power ladder (S3, settings 1–4 dominated), cross-culture arbitrage (E6), engineer multiplier (E8), corpse prices (E10), Fire two-tap (S1), decoy tracking (S4). Also pending Sean: viewport delight-vs-distraction, sounder frequency, music levels, D7 zoom, bestiary go/no-go.
 

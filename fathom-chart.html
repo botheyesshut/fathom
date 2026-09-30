@@ -7777,9 +7777,9 @@ function attackShip() {
 // AND THIS IS THE SECOND DOOR. `makeLead()` has had exactly one player-reachable
 // entrance for its whole life — `readChart()`, which needs a chart item, and
 // those turn up about 0.05 times a session. One session in twenty. Behind that
-// shut door sit word leads, cavern leads, quarry leads and all fourteen pages of
-// THE ACCOUNT. A hull that has been at sea and will talk to you is a door that
-// costs a courtesy instead of a lottery ticket.
+// shut door sit word leads, cavern leads and quarry leads. A hull that has been
+// at sea and will talk to you is a door that costs a courtesy instead of a
+// lottery ticket.
 function shipNews(sh) {
   const cu = CULTURES[sh.culture];
   const rr = mulberry32(hashStr('news:' + worldSeed + ':' + sh.id));
