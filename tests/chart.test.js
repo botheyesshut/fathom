@@ -79,13 +79,25 @@ vm.runInContext(script + [
   'function __finish() { let n = 0; while (state.travel && state.travel.length && n++ < 60) travelStep(); return n; }',
   'function __land(R) { for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) { const t = getTile(q, r);',
   '  if (t && t.land && t.type !== "dock" && revealed.has(hexKey(q, r)) && hexDistance({ q, r }, { q: state.q, r: state.r }) >= 2) return { q, r }; } return null; }',
+  // n hexes of open, unmarked sea in a straight line from the pier: [origin, 1, 2 ... n], or null.
+  'function __line(n) { for (const [dq, dr] of [[-1,0],[0,-1],[1,-1],[-1,1],[1,0],[0,1]]) { const out = [{ q: 0, r: 0 }]; let ok = true;',
+  '  for (let k = 1; k <= n; k++) { const q = dq * k, r = dr * k; tileAt(q, r); if (!__sea(q, r) || getTile(q, r).poi) { ok = false; break; } out.push({ q, r }); }',
+  '  if (ok) return out; } return null; }',
+  'function __known(q, r) { return visited.has(hexKey(q, r)) || revealed.has(hexKey(q, r)); }',
+  // Hexes charted outside the pier ring that lie more than one hex from anywhere she has been.
+  'function __strays(track, ring) { let n = 0; for (const k of revealed.keys()) { const p = k.split(",").map(Number), h = { q: p[0], r: p[1] };',
+  '  if (hexDistance(h, { q: 0, r: 0 }) <= ring) continue; if (!track.some(t => hexDistance(h, t) <= 1)) n++; } return n; }',
+  // A straight run of sea through (q, r): three hexes back on one side, two on past it on the other.
+  'function __through(q, r) { for (const [dq, dr] of [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]]) { let ok = true;',
+  '  for (const k of [-3, -2, -1, 1, 2]) { const a = q + dq * k, b = r + dr * k; tileAt(a, b); if (!__sea(a, b) || getTile(a, b).poi) { ok = false; break; } }',
+  '  if (ok) return { from: { q: q - dq * 3, r: r - dr * 3 }, far: { q: q + dq * 2, r: r + dr * 2 } }; } return null; }',
   // Surface water the boat can sail to from the pier, inside R hexes.
   'function __reach(R) { const seen = new Set(["0,0"]); let fr = [{ q: 0, r: 0 }]; while (fr.length) { const nx = []; for (const c of fr) for (const n of hexNeighbors(c.q, c.r)) {',
   '  const k = n.q + "," + n.r; if (seen.has(k) || hexDistance(n, { q: 0, r: 0 }) > R) continue; const t = tileAt(n.q, n.r); if (!t || t.wall || !hexAcceptsDepth(t, 0)) continue;',
   '  seen.add(k); nx.push(n); } fr = nx; } return seen.size; }',
   // The same seed, made the way every world before generation 2 was made.
   'function __gen1reach(s, R) { worldGen = 1; __seed(s, true); const n = __reach(R); worldGen = WORLD_GEN; return n; }',
-  'var __X = { state, farTap, travelStep, diveTap, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
+  'var __X = { state, farTap, nearTap, travelStep, diveTap, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
   '  revealAt, poiSeenDepth, cellRun, hexKey, activeSub, hexNeighbors, TILES };',
 ].join('\n'), sb, { timeout: 600000 });
 const X = sb.__X, S = X.state;
@@ -185,9 +197,7 @@ check(!!m && +m[1] === hole.mouth, 'LOOK over a sinkhole quotes the depth of its
 //--- 3. EVERY OTHER TAP SAYS WHY NOT ----------------------------------------
 console.log('\n--- 3. NO TAP GOES UNANSWERED ---');
 load(world.seed);
-L.length = 0; let at0 = here();
-X.farTap(40, -40);
-check(/No course to there through water you have charted/.test(said()[0] || '') && here() === at0, 'the dark says there is no course through water you have not charted', said()[0]);
+let at0 = here();
 const shore = sb.__land(6);
 L.length = 0;
 if (shore) X.farTap(shore.q, shore.r);
@@ -196,6 +206,95 @@ L.length = 0;
 X.farTap(0, 0);
 check(L.length === 0 && here() === at0, 'and her own hex is not somewhere to go', 'nothing said, nothing moved');
 
+//--- 3b. BY EYE ---------------------------------------------------------------
+// A boat under way charts her own hex and the six round it. So in water she had
+// never sailed, no course could be more than one hex long and every far tap said
+// "no course through water you have charted" — the larger half of "plotting a
+// course works inconsistently", and all of "sailing around happens step by step".
+console.log('\n--- 3b. ON THE SURFACE SHE STEERS BY EYE; UNDER IT SHE DOES NOT ---');
+load(world.seed);
+const run = sb.__line(10);                               // ten hexes of open sea in a straight line from the pier
+check(!!run, 'there is a straight run of open sea off the pier to try it on', run ? 'toward ' + run[10].q + ',' + run[10].r : 'none in this world');
+if (run) {
+  const a = run[4], dark = run[10];
+  sb.__at(a.q, a.r, 1);
+  check(!sb.__known(dark.q, dark.r), 'the mark is water she has never seen', 'six hexes off, past everything charted at the pier');
+  const hullA = S.hull;
+  L.length = 0;
+  X.farTap(dark.q, dark.r);
+  check(/by eye/i.test(said()[0] || '') && here() !== a.q + ',' + a.r && S.travel && S.travel.eye === true,
+    'a tap on it from the surface is a heading, and she is already under way', said()[0]);
+  const track = [a, { q: S.q, r: S.r }];
+  let n = 0;
+  while (S.travel && n++ < 40) { X.travelStep(); track.push({ q: S.q, r: S.r }); }
+  // A sighting on the way hands the helm back; a captain taps again.
+  for (let again = 0; again < 6 && here() !== dark.q + ',' + dark.r; again++) {
+    X.farTap(dark.q, dark.r); track.push({ q: S.q, r: S.r });
+    n = 0; while (S.travel && n++ < 40) { X.travelStep(); track.push({ q: S.q, r: S.r }); }
+  }
+  check(here() === dark.q + ',' + dark.r && S.hull === hullA, 'she gets there, and touches nothing on the way', 'at ' + here() + ', hull ' + S.hull);
+  const stray = sb.__strays(track, 5);
+  check(stray === 0, 'and she charted her own track and the hexes beside it — exactly what the same taps would have', stray + ' hex(es) charted further off than that');
+
+  // The same tap from sixty metres down, in the same ocean before any of that was charted.
+  load(world.seed);
+  sb.__at(a.q, a.r, 1);
+  X.changeDepth(X.activeSub().diveStep);
+  const under = S.currentDepth, at1 = here();
+  L.length = 0;
+  X.farTap(dark.q, dark.r);
+  check(under > 0 && here() === at1 && !S.travel && /No course to there through water you have charted\. On the surface she can steer for it by eye/.test(said()[0] || ''),
+    'under water there is no course into the dark, and the answer says where there would be', said()[0]);
+}
+// Any tap takes the helm back — the hex beside her included. It used to step her
+// by hand and leave the course running.
+load(world.seed);
+if (run) {
+  sb.__at(run[4].q, run[4].r, 1);
+  // (A sail can come into sight on the very first step and end the course; tap until one is running.)
+  for (let i = 0; i < 6 && !S.travel; i++) X.farTap(run[10].q, run[10].r);
+  const underWay = !!S.travel, mid = here();
+  const nb = X.hexNeighbors(S.q, S.r).find(h => sb.__sea(h.q, h.r));
+  L.length = 0;
+  X.nearTap(nb.q, nb.r);
+  check(underWay && !S.travel && here() === mid && said().some(x => /took the helm back/.test(x)),
+    'while a course runs, a tap on the hex beside her takes the helm back and does not step her', said()[0]);
+}
+// Land in the way: steer for the middle of the island from open water.
+load(world.seed);
+const off3 = sb.__off(0, 0, 3);
+if (off3) {
+  sb.__at(off3.q, off3.r, 1);
+  const hullB = S.hull;
+  // (Tapped again if a sail ends the course on the way in, until it is the land that stops her.)
+  let byLand = null;
+  for (let i = 0; i < 8 && !byLand; i++) {
+    L.length = 0;
+    X.farTap(0, 12);                                      // the island's own centre, never seen
+    let n2 = 0; while (S.travel && n2++ < 40) X.travelStep();
+    byLand = said().filter(x => /way (ahead|toward it) is not open/.test(x))[0] || null;
+  }
+  const t = X.getTile(S.q, S.r);
+  check(!S.travel && S.hull === hullB && t && !t.wall && !!byLand,
+    'steered at the land, she stops in the water in front of it and says so', 'at ' + here() + ', hull ' + S.hull + ' — ' + (byLand || 'nothing said'));
+}
+// Something sighted: an unfound sinkhole on the line. She must not sail on past it.
+load(world.seed);
+const thr = sb.__through(hole.q, hole.r);
+check(!!thr, 'there is a straight run of sea through the hidden hole to try it on');
+if (thr) {
+  sb.__at(thr.from.q, thr.from.r, 1);
+  L.length = 0;
+  X.farTap(thr.far.q, thr.far.r);
+  let n3 = 0; while (S.travel && n3++ < 40) X.travelStep();
+  const lines = said();
+  const opened = lines.findIndex(x => /A sinkhole opens beneath you/.test(x));
+  check(here() === hole.q + ',' + hole.r && !S.travel && opened >= 0,
+    'a course that crosses an unfound sinkhole ends over it, not two hexes past it', 'at ' + here() + ' — ' + (lines[opened] || 'no line'));
+  check(opened >= 0 && !lines.slice(opened + 1).some(x => /Helm is yours|take the helm back/.test(x)),
+    'and the line that stopped her is the last word — nothing is said over it');
+}
+
 //--- 4. THE PIER MEANS ALONGSIDE ---------------------------------------------
 console.log('\n--- 4. TAP THE PIER, AND SHE GOES ALONGSIDE ---');
 load(world.seed);
@@ -203,8 +302,8 @@ const hd = X.homeDock();
 const out = sb.__off(0, 0, 3) || { q: -3, r: 0 };
 sb.__at(out.q, out.r, 6);
 L.length = 0;
-X.farTap(hd.q, hd.r + 2);                              // the landward end of the pier, three tiles long
-sb.__finish();
+// (Tapped again if the helm comes back for something sighted on the way, as a captain would.)
+for (let i = 0; i < 6 && !X.quayAlongside(); i++) { X.farTap(hd.q, hd.r + 2); sb.__finish(); }   // the landward end of the pier, three tiles long
 check(X.hexDistance({ q: S.q, r: S.r }, hd) <= 1 && !!X.quayAlongside(), 'a tap on the far end of the pier brings her alongside the quay', 'at ' + here() + ', quay ' + hd.q + ',' + hd.r);
 L.length = 0;
 X.farTap(hd.q, hd.r + 2);
@@ -234,8 +333,7 @@ load(world.seed);
 check(!X.glyphShown(X.getTile(0, 0)) && !X.TILES.surface.char, 'the hex she starts on draws no mark of its own');
 sb.__at(out.q, out.r, 6);
 L.length = 0; at0 = here();
-X.farTap(0, 0);
-sb.__finish();
+for (let i = 0; i < 6 && here() !== '0,0'; i++) { X.farTap(0, 0); sb.__finish(); }
 check(here() === '0,0' && !said().some(t => /dock and the shore/i.test(t)), 'and a tap on it from three hexes off is a course home, not a question', 'at ' + here());
 
 //--- 7. THE HARBOUR IS OPEN ----------------------------------------------------

@@ -66,6 +66,32 @@ no target.
   (bands top and bottom). `fitChartSoon` redraws one frame after any line if the
   chart no longer fits.
 
+### 2b. ON THE SURFACE SHE STEERS BY EYE — the larger half of remark 2
+
+A boat under way charts her own hex and the six round it. A course was a line
+through charted water. So **in water she had never sailed, no course could be
+more than one hex long** — every far tap away from home failed, and "sailing
+around happens very slowly and step by step" (his note, below) was the rule
+working as written. Underwater that rule is right and stays. On the surface
+there is a horizon:
+
+- **A tap on water the chart has no course to, made from the surface, is a
+  heading** (`eyeStep`, `state.travel.eye`). She steers for it a hex at a time,
+  charting as she goes, three hexes a second. It reveals exactly what the same
+  taps would have — her track and the hexes beside it (checked: 0 strays) — so
+  nothing is found sooner or cheaper. Every hex is still a turn.
+- It ends when the way ahead is not open (*"Helm is yours — the way ahead is not
+  open"*; she never touches the land), and from under water it is refused with
+  the reason: *"…On the surface she can steer for it by eye."*
+- **"Halt if something new is detected"** was his original sentence for the helm,
+  and it halted for danger only. Now any line logged under a sighting tag during
+  a step ends the course there (`HELM_HALTS`: SAIL, STRIKE, AIR, CONTACT, SONAR,
+  SOUNDER, OPENING, TRENCH, STRANGE) — silently, because the line that stopped
+  her is the explanation. Seen in the browser on the first try: five hexes into
+  the dark, then *"Sail ho, captain — west of us, 0.5 km"*, and she stopped.
+- **The course is drawn**: a red dashed line from the boat to a ring on the mark,
+  gone when the helm comes back.
+
 ### 3. "I have a helmsman, Osei, but the sonarman has no name"
 
 There is no helmsman. The line was the **Mate's**, under a HELM tag, with a
@@ -86,24 +112,28 @@ printed. With no Ear at the set the instrument reads flatly, as before.
 > lot of sense in the tunnels [Cloudy Mountain] but at the surface it's a little
 > menial."
 
-What exists: tap-to-travel (two hexes a second, **charted water only** — which
-is why new water is a tap a hex); the sea chart (CHART: pans, pinches, read-only,
-and shows your position only with the positioning log); sails that announce
-themselves and can be hailed inside six hexes. **My proposal, for his yes:**
-passage-making ON the sea chart — tap waypoints, a red line, *Get under way*; the
-boat runs it on the surface at eight or ten hexes a second, every hex still a
-real turn (water, food, weather, traffic all tick; only the taps are saved); it
-stops with a card and two or three choices when anything is sighted — a sail,
-land ahead, a harbour, weather, a contact. Surface only: below, step by step
-stays. **His calls:** may a passage cross water not yet charted (I say yes, on
-the surface — the lookout charts it as she goes); whether plotting needs the
-positioning log or dead reckoning will do; the verb.
+**The first step is built (2b above):** on the surface a tap anywhere is a
+heading, the course is a red line, and anything sighted stops her. That is his
+idea at the scale of one screen. What exists besides: the sea chart (CHART: pans,
+pinches, read-only, and shows your position only with the positioning log);
+sails that announce themselves and can be hailed inside six hexes.
+
+**The rest is a proposal, for his yes:** passage-making ON the sea chart — tap
+waypoints, the red line across the whole chart, *Get under way*; the boat runs
+it on the surface at eight or ten hexes a second, every hex still a real turn
+(water, food, weather, traffic all tick; only the taps are saved); when anything
+is sighted it stops with a CARD and two or three choices — the Pirates! moment —
+instead of a log line. Surface only: below, step by step stays. **His calls:**
+whether plotting needs the positioning log or dead reckoning will do; cards or
+the log for what is sighted; the verb.
 
 ### Guarded by
 
-`tests/chart.test.js`, suite 20 of the battery: 26 checks — every far tap
+`tests/chart.test.js`, suite 20 of the battery: 35 checks — every far tap
 answers; a mark asks then sails; a hidden mark is plain water to tap and LOOK
-alike (named exactly when drawn, over 19 sinkholes in five worlds); the pier
+alike (named exactly when drawn, over 19 sinkholes in five worlds); by eye she
+reaches unseen water, charts only her track, stops short of land and stops over
+an unfound sinkhole; the pier
 means alongside; the dive arrow answers for nothing; the home hex is water; and
 **sixty worlds can all leave the pier**, with one of the twenty-seven by name
 shown shut under generation 1 and open under 2. `mate.test.js` grew a section 7
@@ -114,6 +144,9 @@ for the introductions and the Ear.
 `TILES.surface.char` — put `☼` back for the home mark. `diveTap` — the three
 sentences. `farTap` — delete the `again` test to make a mark sail on the first
 tap. `TAP_THRESH`. `HARBOUR_HALF` / `HARBOUR_SLOPE` — the width of the cove.
+`travelTo` — delete the `eyeStep` branch and the helm is charted-water-only
+again. `HELM_HALTS` — the tags that stop a course; empty it for danger-only.
+`TRAVEL_MS_SURFACE` — her pace on the surface.
 `speakerLabel` — return `name` to drop the introductions; `earSays` — call
 `log(plain…)` to give the sonar back to the instrument.
 

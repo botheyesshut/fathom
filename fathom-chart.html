@@ -13048,7 +13048,7 @@ function render() {
         waitHit.setAttribute('stroke-dasharray', '1.5 2.5');
         waitHit.style.cursor = 'pointer';
         waitHit.setAttribute('data-tap', '1');
-        waitHit.addEventListener('click', () => wait());
+        waitHit.addEventListener('click', () => { if (state.travel) travelStop('you took the helm back'); else wait(); });
         g.appendChild(waitHit);
       }
     }
@@ -13292,6 +13292,36 @@ function render() {
     g.appendChild(flash);
   }
 
+  // THE COURSE, DRAWN. A course was something the log said once and the boat then
+  // did; nothing on the chart showed that one was set, where it led, or that it
+  // had ended. Sean's own sketch of a passage: "a little sub icon would move
+  // along a red line denoting the course." So the line is red, it runs from her
+  // to the mark by the way she will actually go, and it goes when the helm comes
+  // back. By eye it is one straight leg, because that is all a heading is.
+  if (state.travel && state.travel.length) {
+    const pts = [hexToPixel(state.q, state.r)].concat(state.travel.map(h => hexToPixel(h.q, h.r)));
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('points', pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' '));
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', '#d0503a');
+    line.setAttribute('stroke-width', '1.4');
+    line.setAttribute('stroke-dasharray', '4 3');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('opacity', '0.85');
+    line.setAttribute('pointer-events', 'none');
+    g.appendChild(line);
+    const end = pts[pts.length - 1];
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    ring.setAttribute('cx', end.x); ring.setAttribute('cy', end.y);
+    ring.setAttribute('r', HEX_SIZE * 0.42);
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', '#d0503a');
+    ring.setAttribute('stroke-width', '1.2');
+    ring.setAttribute('opacity', '0.85');
+    ring.setAttribute('pointer-events', 'none');
+    g.appendChild(ring);
+  }
+
   // A COURSE TO ANYWHERE YOU HAVE BEEN. A tap on a hex that is not a neighbour sets a
   // course to it; a tap while a course is running takes the helm back. The six
   // neighbours keep their own handlers below, because a single step should stay a single
@@ -13377,10 +13407,7 @@ function render() {
       // mostly adjacent hexes, so these taps have to reach the drive — without
       // it the only reachable part of the arena was the far ring, and a tap
       // meant to work a hand across sailed the boat instead.
-      hit.addEventListener('click', () => {
-        if (state.hunt && huntTap(n.q, n.r)) return;
-        move(n.q, n.r);
-      });
+      hit.addEventListener('click', () => nearTap(n.q, n.r));
       g.appendChild(hit);
       continue;
     }
@@ -13405,10 +13432,7 @@ function render() {
       // mostly adjacent hexes, so these taps have to reach the drive — without
       // it the only reachable part of the arena was the far ring, and a tap
       // meant to work a hand across sailed the boat instead.
-      hit.addEventListener('click', () => {
-        if (state.hunt && huntTap(n.q, n.r)) return;
-        move(n.q, n.r);
-      });
+      hit.addEventListener('click', () => nearTap(n.q, n.r));
       g.appendChild(hit);
     } else {
       // Depth-locked: invisible but tappable. Collision behavior in move().
@@ -13422,10 +13446,7 @@ function render() {
       // mostly adjacent hexes, so these taps have to reach the drive — without
       // it the only reachable part of the arena was the far ring, and a tap
       // meant to work a hand across sailed the boat instead.
-      hit.addEventListener('click', () => {
-        if (state.hunt && huntTap(n.q, n.r)) return;
-        move(n.q, n.r);
-      });
+      hit.addEventListener('click', () => nearTap(n.q, n.r));
       g.appendChild(hit);
     }
   }
@@ -20185,6 +20206,7 @@ function autoStop(why) {
 // uniform cost gives the shortest path anyway. It will not dive for you — a course is a
 // course, and changing depth is a decision with an air cost attached.
 const TRAVEL_MS = 500;
+const TRAVEL_MS_SURFACE = 320;   // three hexes a second with the hatch open
 const TRAVEL_MAX = 1200;
 function courseTo(gq, gr) {
   const d = state.currentDepth;
@@ -20235,25 +20257,82 @@ function travelStop(why) {
   render();
 }
 
+// ON THE SURFACE SHE STEERS BY EYE. A course was a line drawn on the chart, and
+// the chart is only what she has been beside: a boat under way charts her own
+// hex and the six round it, nothing more. So in water she had not sailed before
+// — which is where a voyage goes — no course could ever be more than one hex
+// long, and every far tap answered "no course through water you have charted".
+// That is the larger half of Sean's "plotting a course ... works inconsistently",
+// and all of his "sailing around happens very slowly and step by step".
+//
+// Underwater the rule is right and stays: the boat is blind and a course is what
+// she knows. On the surface there is a horizon. So a tap on water the chart has
+// no course to, made from the surface, is a HEADING: she steers for it a hex at
+// a time, charting as she goes, and it ends the moment the way ahead is not
+// open or anything at all is sighted. It reveals exactly what the same taps
+// would have — her own track and the hexes beside it — so nothing is found any
+// sooner or any cheaper; only the tapping is saved. Each hex is still a turn.
+//
+// One step: the neighbour most nearly on the line to the mark, of those that
+// are open and strictly closer to it. Strictly closer means it cannot circle,
+// and it only ever asks about hexes beside the boat, which she can see.
+function eyeStep(goal) {
+  if (state.currentDepth > 0) return null;
+  const d0 = hexDistance({ q: state.q, r: state.r }, goal);
+  const gp = hexToPixel(goal.q, goal.r);
+  let best = null, bd = Infinity;
+  for (const n of hexNeighbors(state.q, state.r)) {
+    if (hexDistance(n, goal) >= d0) continue;
+    const t = tileAt(n.q, n.r);
+    if (!t || t.wall || !hexAcceptsDepth(t, 0)) continue;
+    const p = hexToPixel(n.q, n.r);
+    const dd = (p.x - gp.x) * (p.x - gp.x) + (p.y - gp.y) * (p.y - gp.y);
+    if (dd < bd) { bd = dd; best = n; }
+  }
+  return best;
+}
+
+// "HALT IF SOMETHING NEW IS DETECTED" — Sean's words when he asked for the helm,
+// and until now it halted for danger only: a hunter close, a weapon in the
+// water, the hull, the air. A sail on the horizon, a harbour, the sounder
+// answering hard under the keel, the floor opening — the boat said each of
+// those and sailed straight on past it, and on a long course the line had
+// scrolled away before she arrived. These are the tags a sighting is logged
+// under; any line under one of them, said during a step, ends the course there.
+// Silently: the line that stopped her is the explanation, and a second line
+// would push it off a three-line window.
+const HELM_HALTS = { SAIL: 1, STRIKE: 1, AIR: 1, CONTACT: 1, SONAR: 1, SOUNDER: 1, OPENING: 1, TRENCH: 1, STRANGE: 1 };
+function sightedSince(mark) {
+  for (let i = logHistory.length - 1; i >= 0 && logHistory[i] !== mark; i--) {
+    if (HELM_HALTS[logHistory[i].echo]) return true;
+  }
+  return false;
+}
+
 let travelTimer = 0;
 function travelStep() {
   if (!state.travel || !state.travel.length) return travelStop(null);
-  // THE SAME STOPPING RULE THE RETRACE USES. "Halt if something new is detected" is
-  // already written and already right: a creature inside passive range, a weapon in the
-  // water, a hull that will not take much more, air nearly gone.
+  // THE SAME STOPPING RULE THE RETRACE USES for danger: a creature inside passive
+  // range, a weapon in the water, a hull that will not take much more, air nearly gone.
   const stop = autoHazard();
   if (stop) return travelStop(stop);
-  const nextHex = state.travel[0];
+  const eye = !!state.travel.eye;
+  const nextHex = eye ? eyeStep(state.travel[0]) : state.travel[0];
+  if (!nextHex) return travelStop(state.currentDepth > 0 ? 'she cannot steer by eye under water' : 'the way ahead is not open');
   const t = getTile(nextHex.q, nextHex.r);
   if (!t || t.wall || !hexAcceptsDepth(t, state.currentDepth)) return travelStop('the way ahead has closed');
   const wasQ = state.q, wasR = state.r;
+  const mark = logHistory[logHistory.length - 1];
   move(nextHex.q, nextHex.r);
   if (state.q === wasQ && state.r === wasR) return travelStop('she will not answer the helm');
-  state.travel.shift();
+  if (!state.travel) return;                    // the step itself ended the course (she went ashore)
+  if (!eye || (state.q === state.travel[0].q && state.r === state.travel[0].r)) state.travel.shift();
   if (!state.travel.length) {
     travelStop(null);
     mateSays(`Course made good${mateAddress()}.`, 'Course made good.', '', 'HELM');
+    return;
   }
+  if (sightedSince(mark)) travelStop(null);
 }
 
 // EVERY TAP ON THE CHART GETS AN ANSWER. Sean, playing on his phone: "Plotting a
@@ -20292,9 +20371,20 @@ function farTap(q, r) {
     // is a fresh question.
     const again = state._asked && state._asked.k === k && state._asked.at === state.moves;
     state._asked = again ? null : { k: k, at: state.moves };
-    if (!again) { identifyPoi(tl, !!courseTo(q, r)); return; }
+    if (!again) { identifyPoi(tl, !!courseTo(q, r) || !!eyeStep({ q: q, r: r })); return; }
   }
   travelTo(q, r);
+}
+
+// A TAP ON A HEX BESIDE HER. One step, no timer and no ceremony — unless a course
+// is running, when it is "the chart" like any other tap and takes the helm back.
+// It used to step her by hand while the course ran on: the next tick found its
+// next hex no longer alongside and gave the helm back with "she will not answer
+// the helm", which was not what had happened.
+function nearTap(q, r) {
+  if (state.hunt && huntTap(q, r)) return;                     // a hunt owns the water around the hull
+  if (state.travel) { travelStop('you took the helm back'); return; }
+  move(q, r);
 }
 
 // The water beside a quay that the helm can reach soonest. Alongside is the
@@ -20323,18 +20413,36 @@ function travelTo(gq, gr) {
     // whether it is land are both things the drawing already shows.
     const gk = hexKey(gq, gr), gt = getTile(gq, gr);
     const charted = !!gt && (visited.has(gk) || revealed.has(gk));
+    const shut = charted && (gt.wall || !hexAcceptsDepth(gt, state.currentDepth));
+    // Not known to be shut, and she is on the surface: steer for it by eye.
+    if (!shut && state.currentDepth <= 0) {
+      if (!eyeStep({ q: gq, r: gr })) { log('The way toward it is not open from here.', 'warn', 'HELM'); return; }
+      const off = hexDistance({ q: state.q, r: state.r }, { q: gq, r: gr });
+      state.travel = [{ q: gq, r: gr }];
+      state.travel.eye = true;
+      log('Steering for it by eye — ' + bearing(state.q, state.r, gq, gr) + ', ' + off + ' hex' + (off === 1 ? '' : 'es') +
+          ', charting as she goes. Anything sighted and the helm is yours; tap the chart to take it back.', '', 'HELM');
+      travelRun();
+      return;
+    }
     log(charted && gt.land ? 'That is the shore. There is no course onto it.'
-      : charted && (gt.wall || !hexAcceptsDepth(gt, state.currentDepth)) ? 'No course to there at this depth.'
-      : 'No course to there through water you have charted.', 'warn', 'HELM');
+      : shut ? 'No course to there at this depth.'
+      : 'No course to there through water you have charted. On the surface she can steer for it by eye.', 'warn', 'HELM');
     return;
   }
   state.travel = path;
   log('Course set — ' + path.length + ' hex' + (path.length === 1 ? '' : 'es') + ', ' +
-      bearing(state.q, state.r, gq, gr) + '. Tap anywhere on the chart to take the helm back.', '', 'HELM');
+      bearing(state.q, state.r, gq, gr) + '. Anything sighted and the helm is yours; tap the chart to take it back.', '', 'HELM');
+  travelRun();
+}
+
+// The first step at once, then the rest on the clock. A little quicker on the
+// surface, where there is nothing to feel her way past.
+function travelRun() {
   travelStep();
   if (state.travel) {
     if (travelTimer) clearInterval(travelTimer);
-    travelTimer = setInterval(travelStep, TRAVEL_MS);
+    travelTimer = setInterval(travelStep, state.currentDepth <= 0 ? TRAVEL_MS_SURFACE : TRAVEL_MS);
   }
 }
 
@@ -22657,8 +22765,8 @@ function setZoom(newZoom, opts) {
       // (which only speaks) are safe to pass on; ROCK IS NOT — a ram costs hull,
       // and it has to be meant, so it stays on the target drawn for it.
       const nt = getTile(h.q, h.r);
-      if (state.hunt && huntTap(h.q, h.r)) return;
-      if (nt && (nt.land || (!nt.wall && hexAcceptsDepth(nt, state.currentDepth)))) move(h.q, h.r);
+      if (state.travel || (nt && (nt.land || (!nt.wall && hexAcceptsDepth(nt, state.currentDepth))))) nearTap(h.q, h.r);
+      else if (state.hunt) huntTap(h.q, h.r);
       return;
     }
     farTap(h.q, h.r);
