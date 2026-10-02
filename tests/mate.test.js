@@ -60,7 +60,8 @@ vm.createContext(sb);
 vm.runInContext(script + `
 ;var __L=[]; log=function(t,c,e){ __L.push({t:String(t), c:String(c||''), e:String(e||'')}) };
 gameStarted = true;
-var __X = { L: __L, state, mateSays, mateName, mateAddress, firstMate, AIR_STEPS, airCounsel:(typeof airCounsel==='function'?airCounsel:null) };
+var __X = { L: __L, state, mateSays, mateName, mateAddress, firstMate, AIR_STEPS, airCounsel:(typeof airCounsel==='function'?airCounsel:null),
+  earSays, introduced };
 `, sb, { timeout: 120000 });
 const X = sb.__X;
 
@@ -164,6 +165,38 @@ console.log('    the mate speaks under: ' + (callTags.join(', ') || '(none found
 check(callTags.length >= 3, 'the mate has something to report at all', callTags.length + ' call sites');
 check(stray.length === 0, 'and every one of them is a change in your situation',
   stray.length ? 'stray: ' + stray.join(', ') : 'sail, hull strike, air — nothing ambient');
+
+//--- 7. WHO IS THAT? --------------------------------------------------------
+// Sean, 2026-10-02: "I seem to have a helmsman, 'Osei' ... but the sonarman does
+// not seem to have a name." The Mate's lines carried a surname and nothing else,
+// under a HELM tag; the sonar's carried no name at all. A hand now says what
+// they are the first time they speak, and the Ear speaks for the sonar.
+console.log('\n--- 7. A HAND SAYS WHAT THEY ARE, ONCE — AND THE EAR SPEAKS FOR THE SONAR ---');
+X.introduced.clear();
+crew([{ name: 'Osei', role: 'ear', xp: 4, conditions: [], nerve: 70 }, { name: 'Ito', role: 'hand', xp: 0, conditions: [], nerve: 70 }]);
+X.L.length = 0; X.mateSays('Helm is yours', 'The helm is yours', '', 'HELM');
+check(/^Osei, your Mate: /.test(said()[0]), 'the first thing the Mate says, he says as the Mate', said()[0]);
+X.L.length = 0; X.mateSays('Course made good', 'Course made good', '', 'HELM');
+check(/^Osei: /.test(said()[0]), 'and after that he is a name you know', said()[0]);
+const heard = 'Something moving — north, 240 m.';
+X.L.length = 0; X.earSays(heard, 'Passive sonar: something moving — north, 240 m.', 'strange', 'CONTACT');
+check(/^Osei, the Ear: /.test(said()[0]) && !/Passive sonar/.test(said()[0]) && said().length === 1,
+  'the sonar’s report is the Ear’s, by name and by trade, and it is still one line', said()[0]);
+X.L.length = 0; X.earSays(heard, 'Passive sonar: something moving — north, 240 m.', 'strange', 'CONTACT');
+check(/^Osei: /.test(said()[0]), 'and the second time, just the name', said()[0]);
+crew([{ name: 'Ito', role: 'hand', xp: 0, conditions: [], nerve: 70 }]);
+X.L.length = 0; X.earSays('Something moving.', 'Passive sonar: something moving.', 'strange', 'CONTACT');
+check(said()[0] === 'Passive sonar: something moving.', 'with no Ear aboard the instrument reads it flatly, as before', said()[0]);
+crew([{ name: 'Osei', role: 'ear', xp: 4, conditions: [], nerve: 70, wounded: true }]);
+X.L.length = 0; X.earSays('Something moving.', 'Passive sonar: something moving.', 'strange', 'CONTACT');
+check(said()[0] === 'Passive sonar: something moving.', 'and a wounded Ear is not at the set', said()[0]);
+const earTags = [...src.matchAll(/earSays\(([\s\S]*?)\);/g)].map(m => (m[1].match(/'([A-Z ]+)'\s*$/) || [])[1]).filter(Boolean);
+const earStray = earTags.filter(t => ['SONAR', 'CONTACT'].indexOf(t) < 0);
+console.log('    the Ear speaks under: ' + (earTags.join(', ') || '(none found)'));
+check(earTags.length >= 4 && earStray.length === 0, 'the Ear speaks only for the sonar, and for every contact it reports',
+  earTags.length + ' call sites' + (earStray.length ? ', stray: ' + earStray.join(', ') : ''));
+check(!/\blog\([^;\n]*Passive sonar:/.test(src), 'no sonar report is left that nobody says',
+  'every "Passive sonar:" line goes through earSays');
 
 console.log('\n' + (fail === 0 ? 'THE MATE HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);

@@ -1,4 +1,123 @@
-# FATHOM — START HERE (last updated 2026-09-29)
+# FATHOM — START HERE (last updated 2026-10-02)
+
+## PLAYTEST, 2026-10-02 — three remarks off the phone, and what was under them
+
+Sean, playing on his phone and remarking as he went. Each remark was true, and
+each had more under it than it said. All calls mine; knobs at the end.
+
+### The one he did not report: ONE NEW GAME IN SEVEN COULD NOT LEAVE THE PIER
+
+Found by accident — the first seed of a test I was writing for something else.
+`homeIsle` is "centred so the dock sits on the north shore", which is true of a
+round island; the outline swells up to half again on any bearing, and when it
+swelled toward the pier it buried the harbour. **27 worlds in 200**: the boat in
+one hex of water, land on all six sides, every arrow dead. The bot had been
+sitting in these for weeks (*"22% of runs oscillate in a shaft"*, entry below —
+read then as bad navigation).
+
+**Fix:** on the pier's own bearing the land may come no further out than the
+round island would (`harbourCap`), widening either side, so the harbour is a
+cove about eight hexes across. It only ever removes land. After: **0 in 200**.
+
+**AND THE WORLD HAS A GENERATION NUMBER NOW** (`WORLD_GEN`, `worldGen`, `gen` in
+the save; absent means 1). "The world is a pure function of the seed" was always
+also "…and of the generator". A fix to the shape of the world must not redraw an
+ocean somebody is sailing, so a saved campaign keeps the rules it was made by
+and only a new world takes the new ones. **Any future substrate change should
+ask `worldGen` the same way** — Sean's game in progress was not touched by this.
+
+### 1. "I can't dive at the pier, and nothing says the floor is under the hull"
+
+- The **test sinkhole** by the pier went on 2026-08-06 at his word (*"The
+  sinkholes should be discovered naturally from now on"*). He had forgotten, and
+  the game gave him a reason to think it was still there:
+- **The home hex drew a ☼** the moment the boat moved off it — the oldest mark
+  in the game, meaning nothing. He read it as the hole. It is gone (the pier is
+  the landmark; the sea chart draws the dock already).
+- **A dive arrow at the floor was `disabled`**, which fires nothing, so the tap
+  was mute. It now only looks off (`.blocked`) and answers: *"The sea floor is
+  just beneath the hull. The ways further down are breaks in it, and a ping
+  finds them."* No move, no turn, no hull; said once, not once per tap.
+
+### 2. "Plotting a course by tapping a far hex works inconsistently"
+
+Four causes, three of them silent. `farTap` is now the one answer to every tap
+that is not beside the boat, and the chart has a catch-all for taps that land on
+no target.
+
+- A hex with a mark **asked what the mark was and never sailed there**. Now the
+  first tap answers (*"…Tap it again to steer for it."*) and the second sails.
+  The boat still never moves on a question.
+- **It asked even when the mark was not on the chart** — tapping plain water over
+  an undiscovered sinkhole printed *"A sinkhole through the seafloor northeast,
+  120 m out"*. A free reveal of the thing he ruled must be found by sonar.
+  `glyphShown` is now the one test for the drawing AND the tap.
+- **LOOK had the same leak**: `prizesInSight` named an undiscovered sinkhole in
+  the next hex **33 times in 34** (*"A sinkhole lies west of you"*). Same test
+  now: it says what is drawn. It also quoted a sinkhole's depth as the bottom of
+  the whole shaft (*"7,740 m below the keel"* in 180 m of water); it quotes the
+  mouth.
+- **The dark, water closed at this depth, the land and the pier had no target**,
+  so a tap did nothing. Each says why now; **a tap on the pier takes her
+  alongside**.
+- **A thumb that slid a few pixels was read as a drag** (8 px, measured as
+  |dx|+|dy|, stricter than the browser's own tap test). 10 px straight-line.
+- A tap that only SAYS something left the chart drawn for the log's old height
+  (bands top and bottom). `fitChartSoon` redraws one frame after any line if the
+  chart no longer fits.
+
+### 3. "I have a helmsman, Osei, but the sonarman has no name"
+
+There is no helmsman. The line was the **Mate's**, under a HELM tag, with a
+surname on it; and Osei was very likely his **Ear** — whose own instrument said
+"Passive sonar: …" with nobody's name at all. Now a hand says what they are the
+first time they speak in a session (*"Osei, your Mate:"*, *"Osei, the Ear:"*,
+then plain *"Osei:"*), and **the Ear speaks the sonar's five contact reports**
+(`earSays`) under the Mate's own rule: no new lines, only the ones already
+printed. With no Ear at the set the instrument reads flatly, as before.
+
+### HIS NOTE ON THE SURFACE — recorded, not built
+
+> "the experience of sailing around happens very slowly and step by step on a
+> small mobile screen … Maybe there could be an overworld map, a chart not unlike
+> a regular sea chart … plot a course by selecting waypoints, and then click a
+> button … a little sub icon would move along a red line … If an NPC (or PC)
+> were encountered, then a pop-up might occur [Pirates!] … Step by step makes a
+> lot of sense in the tunnels [Cloudy Mountain] but at the surface it's a little
+> menial."
+
+What exists: tap-to-travel (two hexes a second, **charted water only** — which
+is why new water is a tap a hex); the sea chart (CHART: pans, pinches, read-only,
+and shows your position only with the positioning log); sails that announce
+themselves and can be hailed inside six hexes. **My proposal, for his yes:**
+passage-making ON the sea chart — tap waypoints, a red line, *Get under way*; the
+boat runs it on the surface at eight or ten hexes a second, every hex still a
+real turn (water, food, weather, traffic all tick; only the taps are saved); it
+stops with a card and two or three choices when anything is sighted — a sail,
+land ahead, a harbour, weather, a contact. Surface only: below, step by step
+stays. **His calls:** may a passage cross water not yet charted (I say yes, on
+the surface — the lookout charts it as she goes); whether plotting needs the
+positioning log or dead reckoning will do; the verb.
+
+### Guarded by
+
+`tests/chart.test.js`, suite 20 of the battery: 26 checks — every far tap
+answers; a mark asks then sails; a hidden mark is plain water to tap and LOOK
+alike (named exactly when drawn, over 19 sinkholes in five worlds); the pier
+means alongside; the dive arrow answers for nothing; the home hex is water; and
+**sixty worlds can all leave the pier**, with one of the twenty-seven by name
+shown shut under generation 1 and open under 2. `mate.test.js` grew a section 7
+for the introductions and the Ear.
+
+### Knobs
+
+`TILES.surface.char` — put `☼` back for the home mark. `diveTap` — the three
+sentences. `farTap` — delete the `again` test to make a mark sail on the first
+tap. `TAP_THRESH`. `HARBOUR_HALF` / `HARBOUR_SLOPE` — the width of the cove.
+`speakerLabel` — return `name` to drop the introductions; `earSays` — call
+`log(plain…)` to give the sonar back to the instrument.
+
+---
 
 ## THE DEEP-WATER AUDIT (2026-09-29, third pass) — nobody had ever been down there
 

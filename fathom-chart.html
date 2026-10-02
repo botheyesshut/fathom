@@ -958,7 +958,9 @@
      arrow at the seabed did not read as "cannot" but as "gone", and a captain
      went looking for it. Dim, not absent. (A second copy of this rule at 0.3
      sat further down and was winning; it is gone.) */
-  .btn:disabled, .btn[disabled] {
+  /* `.blocked` is a dive arrow against rock or the sky: it looks the same and is
+     NOT disabled, because it answers the tap with what is in the way. */
+  .btn:disabled, .btn[disabled], .btn.blocked {
     opacity: 0.45;
     cursor: not-allowed;
     border-color: rgba(94,184,154,0.15);
@@ -2883,7 +2885,7 @@ function drawSeaChart() {
              : t.poi === 'hull' ? ['⊟', '#6a6f52']
              : t.poi === 'salvage' ? ['✕', '#9a3b26'] : t.poi === 'air' ? ['○', '#2c6e7a']
              : t.poi === 'opening' ? ['O', '#7a5a10'] : t.poi === 'signal' ? ['◉', '#5c3a86']
-             : t.poi === 'surface' ? ['☼', '#8a6a12'] : null;
+             : null;   // home is the ╪ drawn below; the ☼ beside it was a second mark for the same pier
     if (!mk) continue;
     g.fillStyle = mk[1];
     g.font = `${Math.max(7, Math.round(s * 0.85))}px "JetBrains Mono", monospace`;
@@ -6557,7 +6559,7 @@ const TIPS = {
   // dives, hits 60 m of shelf, is told "the sounder has nothing more to say"
   // a dozen times, and closes the tab — never learning that the shelf floor
   // is not the sea floor and the sinkholes are the door.
-  shelf:   'That is the shelf floor, not the sea floor. The deep is under it, and the only ways through are the sinkholes — the chart draws them O. Find one and take her down it.',
+  shelf:   'That is the shelf floor, not the sea floor. The deep is under it, and the only ways through are the sinkholes. A ping finds them and the chart marks each one O. Find one and take her down it.',
   // The dashed outline is the entire movement affordance and nothing named it.
   impact:  'That was rock. A hex you can enter at this depth carries a dashed outline. Anything without one is stone, or water above or below you. The sonar says which way and how far.',
   // Sean, first time on a deck: "I tried to seal bulkhead but I wasn't sure
@@ -9539,7 +9541,15 @@ const TILES = {
   // in the sea chart; `deadend` is simply gone. Do NOT restore them as tile
   // types — `spaceClass()` returns the STRING 'deadend' for a one-exit space,
   // which is a description of water and has nothing to do with this table.
-  surface:  { name: 'the surface',         char: '☼',  cost: 0,  color: '#1a2818', poi: 'surface' },
+  // NO GLYPH, since 2026-10-02. This is the hex the boat starts on, beside the
+  // pier, and it drew a sun-wheel (☼) the moment she moved off it — the oldest
+  // mark in the game, from when "the surface" was a place you had to find your
+  // way back to. Sean, two months away, read it as the hole of the test sinkhole
+  // that used to sit there ("the hole icon shouldn't be there") and tried to
+  // dive it. The pier is the landmark and is drawn; a second mark beside it
+  // meant nothing, and being a mark it also turned every tap on the home hex
+  // into a question instead of a course. Put the ☼ back in `char` to restore it.
+  surface:  { name: 'the surface',         char: '',   cost: 0,  color: '#1a2818', poi: 'surface' },
 };
 
 function mulberry32(a) {
@@ -9553,6 +9563,16 @@ function mulberry32(a) {
 }
 
 let worldSeed = Date.now() & 0xffffffff;
+// WHICH RULES WAS THIS OCEAN MADE BY? The world is a pure function of the seed —
+// and of the generator, which is the half of that sentence nobody wrote down. A
+// fix to the SHAPE of the world must not redraw an ocean somebody is already
+// sailing: land that moves under a saved boat is a worse bug than the one being
+// fixed. So a campaign remembers the generation it was made by (`gen` in the
+// save; absent means 1, every world before 2026-10-02), a new one takes the
+// current number, and a change to the substrate asks `worldGen` before it acts.
+//   2 — the harbour is kept clear (see `harbourCap`).
+const WORLD_GEN = 2;
+let worldGen = WORLD_GEN;
 // WHICH OCEAN IS THIS DECK IN? `interiorAt` and `beachMouths` hashed nothing but
 // (q, r, d), so measured across 720 decks and 300 beaches, EVERY layout and every
 // mouth set was byte-identical between two different worlds. The exposure to a
@@ -10604,8 +10624,34 @@ function homeShoreDist(q, r) {
   const h = homeIsle();
   const dq = q - h.q, dr = r - h.r;
   const hd = (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
-  const shore = isleRadius(h, hexBearing(dq, dr), h.size);
+  const ang = hexBearing(dq, dr);
+  let shore = isleRadius(h, ang, h.size);
+  if (worldGen >= 2) shore = Math.min(shore, harbourCap(h, ang));
   return hd - shore;
+}
+
+// THE HARBOUR IS KEPT CLEAR. "Centred so the dock sits on the north shore" is
+// true of a round island and the island is not round: its outline swells by up
+// to half again on any bearing, and when it swelled toward the pier it buried
+// the harbour. Measured over 200 worlds: in 27 of them — one new game in seven
+// — the boat sat in a single hex of water with land on all six sides and could
+// not make her first move. (Found by a suite written about something else,
+// tests/chart.test.js, whose first seed happened to be one of them. The bot
+// had been sitting in these for weeks: "22% of runs oscillate in a shaft.")
+//
+// So on the pier's own bearing the land may come no further out than the round
+// island would — HOME_R, which leaves the origin a hex off the beach exactly as
+// the layout intends — and either side of that it may swell again, a little
+// more with every degree, so the harbour is a cove about eight hexes across at
+// the pier and wider to seaward. It only ever takes land away: a world whose
+// harbour was already open is the same world. Gen 2 and later; an ocean already
+// being sailed keeps the coast it has.
+const HARBOUR_HALF = 0.35;   // radians either side of the pier kept open — about four hexes at the shore
+const HARBOUR_SLOPE = 24;    // hexes further out the land may reach per radian beyond that
+function harbourCap(h, ang) {
+  let d = Math.abs(ang - hexBearing(-h.q, -h.r));
+  if (d > Math.PI) d = Math.PI * 2 - d;
+  return HOME_R + Math.max(0, d - HARBOUR_HALF) * HARBOUR_SLOPE;
 }
 
 // THE BAY WALLS ARE GONE, and so is the mountain check that kept them. They ran
@@ -11756,10 +11802,9 @@ function shipsTick() {
       // model every other contact obeys; this one obeys it now. And the report
       // carries range as well as bearing (#16) — "somewhere west" sent Sean
       // surfacing into an empty sea with no idea how far to look.
-      const earHand = state.crew.find(m => m.role === 'ear' && !m.lost && !m.wounded);
       const km2 = (d * 60 / 1000).toFixed(1);
       const screws = `Screws on the surface — ${bearing(state.q, state.r, sh.q, sh.r)}, about ${km2} km, fast and shallow.`;
-      log(earHand ? earHand.name + ': \u201C' + screws + '\u201D' : screws, '', 'SONAR');
+      earSays(screws, screws, '', 'SONAR');
     }
   }
 
@@ -12866,7 +12911,6 @@ function render() {
       // Consumed one-shot POIs (air pockets, salvage) stay consumed across
       // reloads: the substrate regenerates the tile, but the overlay
       // (poisFound) knows it was taken — draw plain water, not the prize.
-      const consumedPoi = (tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(key);
       // Ruling: THE BOTTOM KEEPS ITS SECRETS — and it kept them for salvage
       // only, which meant a wreck on the floor was hidden from surface eyes
       // while a sunken ruin two kilometres down under the same open water drew
@@ -12899,10 +12943,9 @@ function render() {
       // the ping a job it did not have — the depth dial matters, because a
       // shallow shelf hole comes up on a mid-power ping from the surface and a
       // deep one does not.
-      const restsBelow = tile.poi && tile.poi !== 'growth' && tile.poi !== 'surface';
-      const poiAt = restsBelow ? poiSeenDepth(tile) : 0;
-      const floorSecret = restsBelow && !consumedPoi && revealFade(tile.q, tile.r, poiAt) <= 0;
-      if (tile.char && !consumedPoi && !floorSecret && hexAcceptsDepth(tile, state.currentDepth)) {
+      // The test itself lives in `glyphShown`, because the tap needs the same
+      // answer the drawing does.
+      if (glyphShown(tile)) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', px.x);
         txt.setAttribute('y', px.y);
@@ -12917,7 +12960,6 @@ function render() {
         else if (tile.poi === 'growth') color = '#b870e8';
         else if (tile.poi === 'air') color = '#9ee0c2';
         else if (tile.poi === 'salvage') color = '#f4b860';
-        else if (tile.poi === 'surface') color = '#f4b860';
         else if (tile.poi === 'opening') color = '#f4b860'; // warm — the way back up
         else if (isBaseSite(tile.q, tile.r, state.currentDepth)) color = '#6ecfae';  // your own hatch light
         else if (tile.type === 'kelp') color = '#3a6850';
@@ -12940,6 +12982,7 @@ function render() {
           hit.setAttribute('fill', 'rgba(0,0,0,0.001)');
           hit.setAttribute('stroke', 'none');
           hit.style.cursor = 'help';
+          hit.setAttribute('data-tap', '1');
           hit.addEventListener('click', (e) => {
             e.stopPropagation();
             identifyPoi(tile);
@@ -13004,6 +13047,7 @@ function render() {
         waitHit.setAttribute('stroke-width', '0.8');
         waitHit.setAttribute('stroke-dasharray', '1.5 2.5');
         waitHit.style.cursor = 'pointer';
+        waitHit.setAttribute('data-tap', '1');
         waitHit.addEventListener('click', () => wait());
         g.appendChild(waitHit);
       }
@@ -13273,14 +13317,10 @@ function render() {
     // course and took the first step of it on the same tap.
     //
     // So a hex with something ON it answers first. Anywhere else still starts a
-    // voyage, which is what tap-to-travel is for.
-    far.addEventListener('click', () => {
-      if (state.hunt && huntTap(tl.q, tl.r)) return;   // a hunt owns the water
-      const poiHere = tl.poi && !((tl.poi === 'air' || tl.poi === 'salvage')
-        && state.poisFound.includes(k));
-      if (poiHere) { identifyPoi(tl); return; }
-      travelTo(tl.q, tl.r);
-    });
+    // voyage, which is what tap-to-travel is for. (`farTap` decides; the chart's
+    // own catch-all sends it every tap that lands on no target at all.)
+    far.setAttribute('data-tap', '1');
+    far.addEventListener('click', () => farTap(tl.q, tl.r));
     g.appendChild(far);
   }
 
@@ -13332,6 +13372,7 @@ function render() {
       hit.setAttribute('fill', 'rgba(0,0,0,0.001)'); // invisible but tappable
       hit.setAttribute('stroke', 'none');
       hit.style.cursor = 'not-allowed';
+      hit.setAttribute('data-tap', '1');
       // A HUNT OWNS THE WATER AROUND THE HULL. The ring you are closing is
       // mostly adjacent hexes, so these taps have to reach the drive — without
       // it the only reachable part of the arena was the far ring, and a tap
@@ -13359,6 +13400,7 @@ function render() {
       hit.setAttribute('stroke-width', '0.8');
       hit.setAttribute('stroke-dasharray', '2 2');
       hit.style.cursor = 'pointer';
+      hit.setAttribute('data-tap', '1');
       // A HUNT OWNS THE WATER AROUND THE HULL. The ring you are closing is
       // mostly adjacent hexes, so these taps have to reach the drive — without
       // it the only reachable part of the arena was the far ring, and a tap
@@ -13375,6 +13417,7 @@ function render() {
       hit.setAttribute('fill', 'rgba(0,0,0,0.001)');
       hit.setAttribute('stroke', 'none');
       hit.style.cursor = 'not-allowed';
+      hit.setAttribute('data-tap', '1');
       // A HUNT OWNS THE WATER AROUND THE HULL. The ring you are closing is
       // mostly adjacent hexes, so these taps have to reach the drive — without
       // it the only reachable part of the arena was the far ring, and a tap
@@ -13460,6 +13503,22 @@ function poiSeenDepth(tile) {
     return tile.floor == null ? 0 : tile.floor;
   }
   return settledDepth(tile, (poiStack(tile)[0] || { d: tile.floor }));
+}
+
+// IS THIS HEX'S MARK ON THE CHART RIGHT NOW? One answer, for the drawing and for
+// the tap, because they had two and disagreed. The chart hid a prize resting
+// below until sonar or a sounding had earned it (see the rulings in `render`,
+// above the call to this); the tap asked only `tile.poi` — so tapping plain,
+// unmarked water over an undiscovered sinkhole printed "A sinkhole through the
+// seafloor northeast, 120 m out", gave away the one thing Sean ruled must be
+// found with sonar, and set no course. A taken air pocket or salvage is plain
+// water; growth breaks the surface and is always seen.
+function glyphShown(tile) {
+  if (!tile || !tile.char) return false;
+  if ((tile.poi === 'air' || tile.poi === 'salvage') && state.poisFound.includes(hexKey(tile.q, tile.r))) return false;
+  if (!hexAcceptsDepth(tile, state.currentDepth)) return false;
+  const restsBelow = tile.poi && tile.poi !== 'growth' && tile.poi !== 'surface';
+  return !restsBelow || revealFade(tile.q, tile.r, poiSeenDepth(tile)) > 0;
 }
 
 function revealFade(q, r, currentDepth) {
@@ -14108,9 +14167,10 @@ function ping() {
       }
     } else {
       const w = wayFound;
-      log(`Sounder: hard floor under her — no way down from this water.`
+      const floorSaid = `ard floor under her — no way down from this water.`
         + (w ? ` Break in the floor ${bearing(state.q, state.r, w.q, w.r)}, ${w.d * 60} m.`
-             : ` No break in the floor inside this sweep.`), 'warn', 'SONAR');
+             : ` No break in the floor inside this sweep.`);
+      earSays('H' + floorSaid, 'Sounder: h' + floorSaid, 'warn', 'SONAR');
     }
   } else if (atSurface) {
     // SURFACE PINGS DETECT BOTTOM CONTOURS AND OPENINGS — and until now that
@@ -17749,7 +17809,7 @@ function noiseMade(q, r, loudness) {
     c.interest = Math.min(100, was + spike);
     c.tq = q; c.tr = r;
     if (was < LURK_STALK && c.interest >= LURK_STALK && d <= wakeNoticeR()) {
-      log('Passive sonar: something out there turns toward the noise.', 'danger', 'CONTACT');
+      earSays('Something out there turns toward the noise.', 'Passive sonar: something out there turns toward the noise.', 'danger', 'CONTACT');
       tip('silent');
       sfx('contact');
     }
@@ -18163,7 +18223,8 @@ function tickChorus(c, dPlayer) {
   if (dPlayer <= 10 && !sonarSilent() && rand() < 0.6) {
     const dir = COMPASS[Math.floor(rand() * COMPASS.length)];
     const m = (1 + Math.floor(rand() * 6)) * 60;
-    log(`Passive sonar: something moving — ${dir}, ${m} m.`, 'strange', 'CONTACT'); // a voice thrown
+    // A voice thrown — and the Ear reports it in good faith, which is the point.
+    earSays(`Something moving — ${dir}, ${m} m.`, `Passive sonar: something moving — ${dir}, ${m} m.`, 'strange', 'CONTACT');
     sfx('contact');
   }
 }
@@ -18525,7 +18586,8 @@ function creatureTick() {
                  : c.type === 'baro' ? 'a vast pressure, pacing you in the deep'
                  : lurkWhat;
       const depthNote = depthOff >= DEPTH_GRID ? (c.depth > state.currentDepth ? ', below' : ', above') : '';
-      log(`Passive sonar: ${what} — ${dir}, ${d2 * 60} m${depthNote}.`, hunting || c.fleeing ? 'danger' : 'strange', 'CONTACT');
+      const heard = `${what} — ${dir}, ${d2 * 60} m${depthNote}.`;
+      earSays(ucfirst(heard), 'Passive sonar: ' + heard, hunting || c.fleeing ? 'danger' : 'strange', 'CONTACT');
       sfx('contact');
       // A contact is a lesson if you live through it. This is the ONLY hook the
       // bestiary needs: it rides the existing passive-sonar contact, so a
@@ -19064,7 +19126,7 @@ function logZContext(tile, currentVolume) {
 
 // Tap-to-identify a POI hex. Logs a description of what sonar reports about
 // that hex, including distance and depth offset. Costs nothing.
-function identifyPoi(tile) {
+function identifyPoi(tile, canSteer) {
   if (!tile || !tile.poi) return;
   const dist = hexDistance({q: tile.q, r: tile.r}, {q: state.q, r: state.r});
   const meters = dist * 60;
@@ -19080,7 +19142,8 @@ function identifyPoi(tile) {
   if (dist === 0) {
     log(`${desc} — you are over it.`, cls, tag);
   } else {
-    log(`${desc} ${dir}, ${meters} m out.`, cls, tag);
+    // `canSteer` is `farTap` saying a course exists: the answer names the next tap.
+    log(`${desc} ${dir}, ${meters} m out.` + (canSteer ? ' Tap it again to steer for it.' : ''), cls, tag);
   }
 }
 
@@ -19421,11 +19484,25 @@ const PRIZE_NOUN = { salvage: 'wreckage', ruin: 'a sunken ruin', hull: 'a boat o
                      air: 'a pocket of trapped gas',
                      signal: 'something signalling', growth: 'a mass of growth',
                      opening: 'a sinkhole', chasm: 'a chasm' };
+// "EPISTEMICALLY FREE" WAS TRUE WHEN IT WAS WRITTEN and stopped being true on
+// 2026-08-06, when the sinkholes came off the chart until sonar finds them.
+// This went on asking `tile.poi` — is there a thing — where the comment says
+// "drawn", so LOOK, which costs nothing, named an undiscovered sinkhole in the
+// next hex 33 times in 34 (measured over twelve worlds): "A sinkhole lies west
+// of you." It asks `glyphShown` now, the same test the drawing uses, so it says
+// what is on the chart and nothing else — 6 in 34, the shallow mouths the chart
+// does draw from the surface.
+//
+// AND A SINKHOLE IS WHERE ITS MOUTH IS. `prizeDepthHere` falls back to
+// `tile.floor`, which on a sinkhole hex is the bottom of the whole column —
+// the boat over a hole in 180 m of shelf water was told the sinkhole was
+// "7,740 m below the keel". `poiSeenDepth` already knows the answer.
 function prizesInSight(q, r, d) {
   const out = [];
   const here = getTile(q, r);
-  if (here && here.poi && PRIZE_NOUN[here.poi] && !state.poisFound.includes(hexKey(q, r))) {
-    const target = prizeDepthHere(here);
+  if (here && here.poi && PRIZE_NOUN[here.poi] && glyphShown(here) && !state.poisFound.includes(hexKey(q, r))) {
+    const target = here.poi === 'opening' ? Math.round(poiSeenDepth(here) / DEPTH_GRID) * DEPTH_GRID
+                                           : prizeDepthHere(here);
     if (target != null) {
       const dz = Math.round(target - d);
       out.push(dz === 0
@@ -19437,6 +19514,7 @@ function prizesInSight(q, r, d) {
     const t = getTile(n.q, n.r);
     if (!t || !t.poi || !PRIZE_NOUN[t.poi]) continue;
     if (!visited.has(hexKey(n.q, n.r)) && !revealed.has(hexKey(n.q, n.r))) continue;   // not charted yet
+    if (!glyphShown(t)) continue;                                                      // charted, but its mark is not
     if (state.poisFound.includes(hexKey(n.q, n.r))) continue;                          // already worked
     out.push(` ${ucfirst(PRIZE_NOUN[t.poi])} lies ${bearing(q, r, n.q, n.r)} of you.`);
     break;                                    // one is a fact; a list is furniture
@@ -19667,12 +19745,52 @@ function mateAddress() {
   if (!m) return '';
   return m.machine ? '' : pickLoose([', cap’n', ', captain', ', skipper']);
 }
+// WHO IS THAT? Sean, on the build where the Mate first spoke: "I seem to have a
+// helmsman, 'Osei', very cool, but the sonarman does not seem to have a name."
+// He had read it exactly as written and it was wrong twice. There is no
+// helmsman — the line was the MATE'S, under a HELM tag, with only a surname on
+// it — and Osei was very likely his Ear, the sonar hand, whose own instrument
+// reported everything as "Passive sonar: …" with nobody's name on it at all.
+//
+// So a hand says what they are the first time they speak in a session — "Osei,
+// your Mate:" once, "Osei, the Ear:" once — and is plain "Osei:" after that.
+// Session-scoped and cleared with a new boat or a new sea: a line of
+// introduction, not a title worn for ever.
+const introduced = new Set();
+function speakerLabel(name, as) {
+  const k = name + '|' + as;
+  if (introduced.has(k)) return name;
+  introduced.add(k);
+  return name + ', ' + as;
+}
 // Say a thing in the Mate's voice if there is one to speak, and plainly if not.
 // `plain` is what the boat said before and still says with nobody aboard.
 function mateSays(spoken, plain, cls, tag) {
   const who = mateName();
   if (!who) { log(plain, cls, tag); return; }
-  log(who + ': “' + spoken + '”', cls, tag);
+  const m = firstMate();
+  log((m && m.machine ? who : speakerLabel(who, 'your Mate')) + ': “' + spoken + '”', cls, tag);
+}
+
+// AND THE EAR SPEAKS FOR THE SONAR, the same way and under the same rule: no new
+// lines, only the ones the instrument was already going to print. With an Ear at
+// the set, "Passive sonar: something closing" is a person telling you so; with
+// nobody there — none aboard, wounded, or over the side on a drive — the boat
+// reads it flatly off the instrument, as it always did. One line did this
+// already (the surface screws); the rest of the sonar now agrees with it.
+function earOnWatch() {
+  const over = handsOverSide();
+  const crew = state.crew || [];
+  for (let i = 0; i < crew.length; i++) {
+    const m = crew[i];
+    if (m.role === 'ear' && !m.lost && !m.wounded && !(over && over.has(i))) return m;
+  }
+  return null;
+}
+function earSays(spoken, plain, cls, tag) {
+  const ear = earOnWatch();
+  if (!ear) { log(plain, cls, tag); return; }
+  log(speakerLabel(ear.name || 'The Ear', roleName('ear')) + ': “' + spoken + '”', cls, tag);
 }
 
 // HAS THIS ROOM ALREADY SPOKEN? One description per hex AND depth — the same hex is a
@@ -20138,12 +20256,78 @@ function travelStep() {
   }
 }
 
+// EVERY TAP ON THE CHART GETS AN ANSWER. Sean, playing on his phone: "Plotting a
+// course by tapping a hex more than one space away works inconsistently." It
+// did, four ways, and three of them said nothing at all:
+//
+//   - a hex with a mark on it asked what the mark was and never sailed there —
+//     and the marked hexes are the ones worth sailing to;
+//   - it asked even when the mark was not on the chart (see `glyphShown`);
+//   - dark water, water closed at this depth, the land and the pier had no tap
+//     target, so the tap went nowhere and nothing was said;
+//   - and a thumb that slid a few pixels was read as a drag (see TAP_THRESH).
+//
+// So one function decides, for the drawn target and for the chart's catch-all
+// alike. A MARK ANSWERS FIRST AND THE SECOND TAP SAILS TO IT — the boat must
+// never move on a question, which is the fault the first rule was written to
+// cure, and going there costs one more tap that the answer itself tells you
+// about. A QUAY MEANS "TAKE ME ALONGSIDE". Anything else is a course, or the
+// reason there is not one.
+function farTap(q, r) {
+  if (!state.alive || state.foot) return;
+  if (q === state.q && r === state.r) return;                  // her own hex is not somewhere to go
+  if (state.hunt && huntTap(q, r)) return;                     // a hunt owns the water
+  if (state.travel) { travelStop('you took the helm back'); return; }
+  const k = hexKey(q, r), tl = getTile(q, r);
+  const charted = !!tl && (visited.has(k) || revealed.has(k));
+  if (charted && tl.type === 'dock') {
+    const by = alongsideCourse(q, r);
+    if (by && by.here) log('She is alongside already. ' + (state.currentDepth > 0 ? 'Surface, and tap DOCK.' : 'Tap DOCK — they come out to the boat.'), '', 'DOCK');
+    else if (by) travelTo(by.q, by.r);
+    else log('No course to the quay through water you have charted' + (state.currentDepth > 0 ? ' at this depth.' : '.'), 'warn', 'HELM');
+    return;
+  }
+  if (charted && tl.poi && glyphShown(tl)) {
+    // "Again" means the very next thing you did: a turn in between and the tap
+    // is a fresh question.
+    const again = state._asked && state._asked.k === k && state._asked.at === state.moves;
+    state._asked = again ? null : { k: k, at: state.moves };
+    if (!again) { identifyPoi(tl, !!courseTo(q, r)); return; }
+  }
+  travelTo(q, r);
+}
+
+// The water beside a quay that the helm can reach soonest. Alongside is the
+// game's own rule — within a hex of the tile you tie up to — so for the home
+// pier that is `homeDock()` whichever of its three tiles was tapped.
+function alongsideCourse(q, r) {
+  const hd = homeDock();
+  const quay = (!portAt(q, r) && hexDistance({ q: q, r: r }, hd) <= 3) ? hd : { q: q, r: r };
+  let best = null;
+  for (const n of hexNeighbors(quay.q, quay.r)) {
+    if (n.q === state.q && n.r === state.r) return { here: true };
+    const p = courseTo(n.q, n.r);
+    if (p && (!best || p.length < best.len)) best = { q: n.q, r: n.r, len: p.length };
+  }
+  return best;
+}
+
 function travelTo(gq, gr) {
   if (!state.alive || state.foot) return;
   if (state.autoTarget) autoStop(null);      // one hand on the helm at a time
   if (state.travel) { travelStop('you took the helm back'); return; }
   const path = courseTo(gq, gr);
-  if (!path) { log('No course to there through water you have charted.', 'warn', 'HELM'); return; }
+  if (!path) {
+    // WHY NOT, in the three ways it can be not — said off the chart alone. A
+    // hex is "charted" if it is drawn; whether it is open at this depth and
+    // whether it is land are both things the drawing already shows.
+    const gk = hexKey(gq, gr), gt = getTile(gq, gr);
+    const charted = !!gt && (visited.has(gk) || revealed.has(gk));
+    log(charted && gt.land ? 'That is the shore. There is no course onto it.'
+      : charted && (gt.wall || !hexAcceptsDepth(gt, state.currentDepth)) ? 'No course to there at this depth.'
+      : 'No course to there through water you have charted.', 'warn', 'HELM');
+    return;
+  }
   state.travel = path;
   log('Course set — ' + path.length + ' hex' + (path.length === 1 ? '' : 'es') + ', ' +
       bearing(state.q, state.r, gq, gr) + '. Tap anywhere on the chart to take the helm back.', '', 'HELM');
@@ -20929,6 +21113,27 @@ function logScrollDown() {
   el.scrollTop = Math.max(0, last.offsetTop - el.offsetTop);
 }
 
+// THE CHART HAS TO FIT WHAT THE LOG LEFT IT. The log window is as tall as its
+// newest line is long, so a three-line answer after a six-line description
+// hands the chart thirty-six pixels back — and `render` is the only thing that
+// re-measures. Every turn ends in a render, so nobody saw it; but a tap that
+// only SAYS something (what a mark is, why there is no course, what is under
+// the keel) left the chart drawn for the old height, with a band of it showing
+// wrong at the top and bottom until the next move. Measured: 388 px of chart
+// drawn for 352. One frame after any line, if the chart no longer fits, redraw.
+// (The flag rides on the function: `log` can be called before a `let` beside it
+// has been reached.)
+function fitChartSoon() {
+  if (fitChartSoon.pending) return;
+  fitChartSoon.pending = true;
+  requestAnimationFrame(() => {
+    fitChartSoon.pending = false;
+    if (!gameStarted) return;
+    const box = svg.getBoundingClientRect();
+    if (box.height > 1 && Math.abs(box.height - (viewH || 0)) > 2) render();
+  });
+}
+
 function log(text, cls, echo) {
   // Once there is genuinely a history worth opening, say so — once.
   if (typeof logHistory !== 'undefined' && logHistory.length === 14) setTimeout(() => tip('log'), 50);
@@ -20963,6 +21168,7 @@ function log(text, cls, echo) {
   // Follow the tail — unless the player has scrolled up to read something, in
   // which case yanking them back down is the rudest thing the window could do.
   if (wasAtBottom) logScrollDown();
+  fitChartSoon();
   if (document.getElementById('transcript').classList.contains('show')) renderTranscript();
 }
 
@@ -21018,19 +21224,51 @@ function syncDepthReadout() {
   else { band.textContent = 'safe to ' + safe + ' m'; band.style.color = ''; }
 }
 
-function syncDiveControls() {
-  const ids = [['btn-ascend', -1], ['btn-ascend-fast', -1], ['btn-descend', 1], ['btn-descend-fast', 1]];
+// WHY SHE CANNOT GO THAT WAY — 'floor', 'roof', 'surface' — or null if she can.
+// One test for how the arrow looks and for what a tap on it does, so the two
+// cannot disagree.
+function diveBlocked(dir) {
   const tile = getTile(state.q, state.r);
   const run = (tile && !tile.wall) ? cellRun(state.q, state.r, state.currentDepth) : null;
+  if (!run) return null;                                              // unknown water — let them try
+  if (dir > 0) return state.currentDepth >= run.floor ? 'floor' : null;   // seabed / chamber floor
+  if (state.currentDepth <= 0) return 'surface';
+  return state.currentDepth <= run.ceiling ? 'roof' : null;               // deckhead
+}
+
+// AN ARROW THAT CANNOT MOVE HER STILL ANSWERS. The guard above took the tap away
+// entirely — a `disabled` button fires nothing — and it cured the hull damage by
+// making the control mute. Sean, at the pier, looking for a way down: "I also
+// don't get a message in the text window saying the sea floor is just beneath
+// the hull." In one world in six the water beside the pier is too shallow to
+// dive in at all, so the arrow was dead from the first turn and nothing said why.
+//
+// So against rock or the sky the arrow only LOOKS off (`.blocked`, the same dim)
+// and a tap on it says what is in the way: no move, no turn, no hull. Dead or
+// ashore it is truly disabled, as before.
+function diveTap(delta) {
+  const why = diveBlocked(delta > 0 ? 1 : -1);
+  if (!why || !state.alive || state.foot) { changeDepth(delta); return; }
+  const run = cellRun(state.q, state.r, state.currentDepth);
+  const line = why === 'surface' ? 'She is on the surface.'
+    : why === 'roof' ? 'Rock overhead, just above the sail. She goes no higher here.'
+    : state.currentDepth <= 0 ? 'The sea floor is just beneath the hull here — too shallow to take her down.'
+    : run && run.ceiling <= 0 ? 'The sea floor is just beneath the hull. The ways further down are breaks in it, and a ping finds them.'
+    : 'The floor of this place is just beneath the hull. She goes no deeper here.';
+  // Once per stand, not once per tap: hammering the arrow does not fill the log.
+  const last = logHistory[logHistory.length - 1];
+  if (!last || last.text !== line) log(line, '', 'SOUNDING');
+}
+
+function syncDiveControls() {
+  const ids = [['btn-ascend', -1], ['btn-ascend-fast', -1], ['btn-descend', 1], ['btn-descend-fast', 1]];
   for (const [id, dir] of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
-    let blocked = false;
-    if (!state.alive || state.foot) blocked = true;
-    else if (!run) blocked = false;                                   // unknown water — let them try
-    else if (dir > 0) blocked = state.currentDepth >= run.floor;      // seabed / chamber floor
-    else blocked = state.currentDepth <= 0 || state.currentDepth <= run.ceiling;  // surface / deckhead
-    el.disabled = blocked;
+    el.disabled = !state.alive || !!state.foot;
+    const blocked = !el.disabled && !!diveBlocked(dir);
+    el.classList[blocked ? 'add' : 'remove']('blocked');
+    el.setAttribute('aria-disabled', blocked ? 'true' : 'false');
   }
 }
 
@@ -21134,6 +21372,7 @@ function endGame(title, summary) {
   const sub0 = SUBS.erebus;
   state.q = 0; state.r = 0; state.currentDepth = 0;
   state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // and so does a new boat
+  introduced.clear(); state._asked = null;   // nobody has spoken yet, and nothing has been asked
   // THE DROWNED JOIN THE POOL. Every hand aboard when she went down is now
   // somebody the deep has a name for, and a deck somewhere may put them in
   // front of you again, wearing what they were wearing.
@@ -21209,6 +21448,7 @@ function restart() {
   clearSave(); // a fresh world supersedes any saved run
   state.q = 0; state.r = 0;
   state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // a new sea gets its first reading
+  introduced.clear(); state._asked = null;   // nobody has spoken yet, and nothing has been asked
   toldSpace.clear();   // ...and every room in it is a room you have not been told about
   // A NEW SEA ARRIVES UNREAD. These four are keyed by bare coordinates or by
   // the campaign, not by the seed, so they used to walk into the next world
@@ -21279,6 +21519,7 @@ function restart() {
   visited.clear();
   generatedChunks.clear();
   worldSeed = Date.now() & 0xffffffff;
+  worldGen = WORLD_GEN;             // a new ocean is made by the current rules
   interiorSalt = ':' + worldSeed;   // ...and its buildings are its own
   rng = mulberry32(worldSeed);
   resetWorldCaches();   // lattice, edge memos, carve registry, prizes — all seed-dependent
@@ -21501,7 +21742,7 @@ function doSave(force) {
     const rev = {};
     for (const [k, s] of revealed) rev[k] = [...s];
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: SAVE_V, seed: worldSeed, isalt: interiorSalt,
+      v: SAVE_V, seed: worldSeed, gen: worldGen, isalt: interiorSalt,
       q: state.q, r: state.r, depth: state.currentDepth,
       air: state.air, hull: state.hull, maxDepth: state.maxDepth,
       moves: state.moves, poisFound: state.poisFound,
@@ -21653,6 +21894,7 @@ function resumeGame(save) {
   // world a question — but that was luck, not a rule, and one added line would
   // have quietly generated a chunk of the PREVIOUS world into the fresh cache.
   worldSeed = save.seed;
+  worldGen = save.gen || 1;         // ...and by the rules it was made under; absent is the first set
   // `isalt` is absent from every save written before the salt existed, and
   // absent means the unsalted layouts that save has been looking at all along.
   interiorSalt = typeof save.isalt === 'string' ? save.isalt : '';
@@ -21688,6 +21930,7 @@ function resumeGame(save) {
   state.autoTarget = null;       // never resume under power
   state._airMark = (typeof save.airMark === 'number') ? save.airMark : null;   // null re-derives from the gauge
   state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // dampers are per-session
+  introduced.clear(); state._asked = null;   // nobody has spoken yet, and nothing has been asked
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
@@ -22190,10 +22433,10 @@ document.addEventListener('visibilitychange', () => {
 
 // Dive controls
 const sub = activeSub();
-document.getElementById('btn-ascend').addEventListener('click', () => changeDepth(-activeSub().diveStep));
-document.getElementById('btn-descend').addEventListener('click', () => changeDepth(activeSub().diveStep));
-document.getElementById('btn-ascend-fast').addEventListener('click', () => changeDepth(-activeSub().diveStepFast));
-document.getElementById('btn-descend-fast').addEventListener('click', () => changeDepth(activeSub().diveStepFast));
+document.getElementById('btn-ascend').addEventListener('click', () => diveTap(-activeSub().diveStep));
+document.getElementById('btn-descend').addEventListener('click', () => diveTap(activeSub().diveStep));
+document.getElementById('btn-ascend-fast').addEventListener('click', () => diveTap(-activeSub().diveStepFast));
+document.getElementById('btn-descend-fast').addEventListener('click', () => diveTap(activeSub().diveStepFast));
 
 // Recenter
 document.getElementById('recenter-btn').addEventListener('click', () => {
@@ -22229,7 +22472,13 @@ function setZoom(newZoom, opts) {
   let dragStartX = 0, dragStartY = 0;
   let originPanX = 0, originPanY = 0;
   let totalMove = 0;
-  const TAP_THRESH = 8; // pixels
+  // A THUMB IS NOT A MOUSE, here either. This was 8 px measured as |dx| + |dy|,
+  // which a thumb sliding four across and five down exceeds — while the browser,
+  // which measures the straight-line distance against its own slop of about
+  // 8 px, still calls that a tap and sends the click. The chart then shifted
+  // six pixels and threw the click away, so the tap did nothing at all. Ten,
+  // straight-line: anything the browser calls a tap is now a tap here too.
+  const TAP_THRESH = 10; // pixels, straight-line
 
   // Pinch tracking
   let pinchStartDist = 0;
@@ -22319,7 +22568,7 @@ function setZoom(newZoom, opts) {
     const p = (e.touches && e.touches[0]) || e;
     const dx = p.clientX - dragStartX;
     const dy = p.clientY - dragStartY;
-    totalMove = Math.max(totalMove, Math.abs(dx) + Math.abs(dy));
+    totalMove = Math.max(totalMove, Math.sqrt(dx * dx + dy * dy));
     if (totalMove > TAP_THRESH) {
       state.panX = originPanX - dx / zoom;
       state.panY = originPanY - dy / zoom;
@@ -22385,6 +22634,35 @@ function setZoom(newZoom, opts) {
   surfaceEl.addEventListener('click', (e) => {
     if (totalMove > TAP_THRESH) { e.stopPropagation(); e.preventDefault(); totalMove = 0; }
   }, true);
+
+  // A TAP THAT LANDED ON NO TARGET STILL GETS AN ANSWER. Only charted water open
+  // at her depth has a target drawn over it; the dark, water closed at this
+  // depth, the land, the pier and the sliver between two targets had none, so a
+  // tap there did nothing and said nothing. This works out which hex was meant
+  // from where the finger came down and hands it to the same functions the
+  // drawn targets call. The sea chart only — ashore, the deck draws its own.
+  surfaceEl.addEventListener('click', (e) => {
+    if (e.defaultPrevented || state.foot || !state.alive || !worldGroupEl) return;   // a drag's click is not a tap
+    if (e.target && e.target.getAttribute && e.target.getAttribute('data-tap')) return;   // a drawn target has it
+    const ctm = worldGroupEl.getScreenCTM && worldGroupEl.getScreenCTM();
+    if (!ctm) return;
+    const pt = surfaceEl.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const at = pt.matrixTransform(ctm.inverse());
+    const h = pixelToHex(at.x, at.y);
+    const dist = hexDistance(h, { q: state.q, r: state.r });
+    if (dist === 0) return;                      // her own hex: the wait target's business
+    if (dist === 1) {
+      // The sliver round a neighbour's own target. Open water and the shore
+      // (which only speaks) are safe to pass on; ROCK IS NOT — a ram costs hull,
+      // and it has to be meant, so it stays on the target drawn for it.
+      const nt = getTile(h.q, h.r);
+      if (state.hunt && huntTap(h.q, h.r)) return;
+      if (nt && (nt.land || (!nt.wall && hexAcceptsDepth(nt, state.currentDepth)))) move(h.q, h.r);
+      return;
+    }
+    farTap(h.q, h.r);
+  });
 })();
 
 //=============================================================================
