@@ -61,6 +61,7 @@ vm.runInContext(script + [
   // The same ocean, with the boat back at the pier and nothing found: a new captain in an old world.
   'function __reset() {',
   '  revealed.clear(); visited.clear(); state.creatures = []; state.threats = []; state.poisFound = []; state.travel = null; state.autoTarget = null;',
+  '  state.ships = []; state.passage = null; cardNow = null; cardHold = false;        // no sail in sight, no course laid, no card left on the table',
   '  state.alive = true; state.moves = 0; state._asked = null; state.hull = SUBS.erebus.hull; state.air = SUBS.erebus.air; state.foot = null;',
   '  state.q = 0; state.r = 0; state.currentDepth = 0; visited.add(hexKey(0, 0));',
   '  for (let dq = -5; dq <= 5; dq++) for (let dr = Math.max(-5, -dq - 5); dr <= Math.min(5, -dq + 5); dr++) revealAt(dq, dr, 0);',
@@ -97,7 +98,26 @@ vm.runInContext(script + [
   '  seen.add(k); nx.push(n); } fr = nx; } return seen.size; }',
   // The same seed, made the way every world before generation 2 was made.
   'function __gen1reach(s, R) { worldGen = 1; __seed(s, true); const n = __reach(R); worldGen = WORLD_GEN; return n; }',
-  'var __X = { state, farTap, nearTap, travelStep, diveTap, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
+  // Every prize under open surface water within R: the depth the boat announces from the surface, and the depth it is worked at.
+  'function __announced(R) { const keep = [state.q, state.r, state.currentDepth]; let told = 0, wrong = 0, worst = 0;',
+  '  for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) { if (hexDistance({ q, r }, { q: 0, r: 0 }) > R) continue; const t = getTile(q, r);',
+  '    if (!t || t.wall || !cells.has(cellKey(q, r, 0)) || !(t.poi === "salvage" || t.poi === "hull" || t.poi === "ruin")) continue;',
+  '    state.q = q; state.r = r; state.currentDepth = 0; const said = prizeDepthHere(t), run = cellRun(q, r, 0); if (said == null || !run) continue;',
+  '    let works = null; for (let d = 0; d <= run.floor; d += DEPTH_GRID) { state.currentDepth = d; if (atReachableBottom(t)) { works = d; break; } }',
+  '    told++; if (works == null || Math.abs(said - works) > DEPTH_GRID) { wrong++; worst = Math.max(worst, Math.abs(said - (works || 0))); } }',
+  '  state.q = keep[0]; state.r = keep[1]; state.currentDepth = keep[2]; return { told: told, wrong: wrong, worst: worst }; }',
+  // A hull put on the water by hand; the harbours are emptied so nothing else is.
+  'function __sail(hull, culture, q, r) { const st = shipStats(culture, hull); ports.clear(); state.ships = [];',
+  '  const sh = { id: "s" + q + "," + r, hull: hull, culture: culture, q: q, r: r, toQ: q + 60, toR: r - 30, fromName: "A", toName: "B", hp: st.hull, prog: 0, seen: false, followed: false };',
+  '  state.ships.push(sh); return sh; }',
+  'function __cardKind() { return cardNow ? cardNow.kind : null; }',
+  'function __cardPick(label) { const i = cardNow ? cardNow.choices.findIndex(c => c.label === label) : -1; if (i >= 0) cardPick(i); }',
+  // Every hex within eight of the pier, projected onto a sheet and read back off it.
+  'function __roundTrip() { chartT = { ox: 137.5, oy: 91.25, s: 6.4, W: 345, H: 317 }; let n = 0, bad = 0;',
+  '  for (let q = -8; q <= 8; q++) for (let r = -8; r <= 8; r++) { const x = chartT.ox + SQRT3 * (q + r / 2) * chartT.s, y = chartT.oy + 1.5 * r * chartT.s;',
+  '    for (const [jx, jy] of [[0, 0], [2.2, -1.9], [-2.4, 1.6]]) { const h = chartHexAt(x + jx, y + jy); n++; if (!h || h.q !== q || h.r !== r) bad++; } }',
+  '  return { n: n, bad: bad }; }',
+  'var __X = { state, farTap, nearTap, travelStep, diveTap, passageAdd, passageUndo, passageClear, passageGo, passageLegs, chartShowsBoat, PASSAGE_MS, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
   '  revealAt, poiSeenDepth, cellRun, hexKey, activeSub, hexNeighbors, TILES };',
 ].join('\n'), sb, { timeout: 600000 });
 const X = sb.__X, S = X.state;
@@ -360,6 +380,76 @@ const oldReach = sb.__gen1reach(BOXED, 12);
 sb.__seed(BOXED, true);
 check(oldReach < 30 && sb.__reach(12) >= 30, 'a world made before the fix is left exactly as it was; the same seed made now is open',
   'made under the old rules ' + oldReach + ' hex(es), made now ' + sb.__reach(12));
+
+//--- 8. THE PASSAGE --------------------------------------------------------------
+// Sean: "plot a course by selecting waypoints, and then click a button ... a
+// little sub icon would move along a red line denoting the course. If an NPC
+// (or PC) were encountered, then a pop-up might occur."
+console.log('\n--- 8. A COURSE LAID ON THE SEA CHART, AND SAILED ---');
+load(world.seed);
+const run2 = sb.__line(10);
+if (run2) {
+  const far1 = run2[6], far2 = run2[10];
+  S.passage = null;
+  X.passageAdd(far1.q, far1.r); X.passageAdd(far2.q, far2.r);
+  let legs = X.passageLegs();
+  check(S.passage && S.passage.wps.length === 2 && legs.length === 2 && legs[0].n === 6 && legs[1].n === 4 && !legs.some(l => l.land),
+    'two taps are two marks: a course of two legs, measured from where she lies', legs.map(l => l.n + ' hexes').join(', '));
+  X.passageAdd(0, 6);                                    // the home island, drawn on the sheet as land
+  check(S.passage.wps.length === 2, 'a mark is not laid on land the sheet shows as land', S.passage.wps.length + ' marks still');
+  X.passageAdd(0, 34);                                   // sea on the far side of the island (never generated: blank paper)
+  legs = X.passageLegs();
+  check(legs.length === 3 && legs[2].land === true, 'and a leg the sheet shows running across land is marked before she sails it', 'leg 3 crosses the island');
+  X.passageUndo();
+  check(S.passage.wps.length === 2, 'Undo takes the last mark off');
+  // Under way.
+  const hullP = S.hull, movesP = S.moves;
+  L.length = 0;
+  X.passageGo();
+  check(S.passage && S.passage.running && S.travel && S.travel.passage && S.travel.pace === X.PASSAGE_MS,
+    'Get under way: she is running the course, at the passage’s pace', X.PASSAGE_MS + ' ms a hex');
+  // A captain gets her under way again whenever something sighted hands the helm back.
+  let goes = 0;
+  for (let i = 0; i < 12 && S.passage; i++) {
+    let n = 0; while (S.travel && n++ < 80) X.travelStep();
+    if (S.passage && !S.passage.running) { X.passageGo(); goes++; }
+  }
+  check(!S.passage && here() === far2.q + ',' + far2.r && S.hull === hullP, 'she makes both marks and the course comes off the sheet', 'at ' + here() + ' after ' + (S.moves - movesP) + ' turns, got under way again ' + goes + ' time(s)');
+  check(S.moves - movesP >= 10 && said().some(x => /Passage made/.test(x)), 'every hex of it was a turn, and the Mate says when it is made', (said().filter(x => /Passage made/.test(x))[0] || ''));
+  // Not from under water.
+  load(world.seed);
+  S.passage = null; X.passageAdd(far1.q, far1.r);
+  X.changeDepth(X.activeSub().diveStep);
+  X.passageGo();
+  check(S.currentDepth > 0 && S.passage && !S.passage.running && !S.travel, 'a passage is made on the surface: from sixty metres down she does not get under way');
+  // And a sail on the way: the card comes up, and answering it takes the passage up again.
+  load(world.seed);
+  S.passage = null; X.passageAdd(far2.q, far2.r);
+  X.passageGo();
+  const stranger = sb.__sail('merchant', 'mariners', run2[3].q + 3, run2[3].r);
+  let n4 = 0; while (S.travel && n4++ < 40 && !sb.__cardKind()) X.travelStep();
+  check(sb.__cardKind() === 'sail' && S.passage && !S.passage.running && S.passage.resume === true, 'a sail sighted on passage stops her and puts its card on the table', 'card: ' + sb.__cardKind() + ', passage ' + JSON.stringify(S.passage) + ', travel ' + !!S.travel);
+  sb.__cardPick('Slip away');
+  check(!sb.__cardKind() && S.passage && S.passage.running === true, 'and when the card is answered the passage is taken up again', 'running: ' + !!(S.passage && S.passage.running));
+}
+// Where she is, on the sheet.
+load(world.seed);
+check(X.chartShowsBoat() === true, 'on the surface the sheet shows where she is, with no instrument at all');
+X.changeDepth(X.activeSub().diveStep);
+check(S.currentDepth > 0 && X.chartShowsBoat() === false, 'under water it does not — that is what the positioning log is for');
+S.fits = { fix: 1 };
+check(X.chartShowsBoat() === true, 'and with the log fitted, it does again');
+S.fits = {};
+// WHAT THE BOAT SAYS IS UNDER HER IS WHERE IT IS. "Wreckage, 10,440 m below the
+// keel" over a wreck lying in 180 m: the announcement read the bottom of
+// everything the hex holds, caves and all. 16 of 56 in eight worlds.
+load(world.seed);
+const ann = sb.__announced(26);
+check(ann.told >= 5 && ann.wrong === 0, 'every prize the boat announces from the surface is announced at the depth it is worked at',
+  ann.told + ' announced, ' + ann.wrong + ' at the wrong depth' + (ann.wrong ? ' (out by as much as ' + ann.worst + ' m)' : ''));
+// A tap lands on the hex that is drawn there.
+const back = sb.__roundTrip();
+check(back.n >= 100 && back.bad === 0, 'a tap on the sheet lands on the hex drawn under it', back.n + ' hexes there and back, ' + back.bad + ' wrong');
 
 console.log('\n' + (fail === 0 ? 'THE CHART HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);

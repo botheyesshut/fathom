@@ -1,5 +1,130 @@
 # FATHOM — START HERE (last updated 2026-10-02)
 
+## THE PASSAGE, AND THE ENCOUNTER IN CARDS (2026-10-02, later the same day)
+
+Sean, to the proposal in the entry below: *"Yes, let's make it. We'll have pop-up
+cards like Pirates! used, and like Pirates! we should have animated art for each
+associated craft, but ours will be ANSI ... make the decisions 'approach the
+vessel' and 'slip away.' If user approaches, have a slightly different animation
+suitable to match the new information gained, which will include the apparent
+faction of the craft, its likely armaments, and the user's current relationship
+to that faction ... If the faction is angry at the user, the captain should be
+informed that the NPC ship is 'coming about, sir.' The user should get one more
+chance to evade, this one somewhat diminished, before combat ensues. Note that I
+have still no experience with naval combat in this game."*
+
+### What was already here — most of it
+
+Hulls with a people, guns and a hold; standing; a sighting that does not name
+her; colours read by closing; a hunter that comes for you; an attack with return
+fire; **four hull drawings, recoloured per owner** (`CULT_INK`, `CULT_MARK`) plus
+each people's own. All of it spoke through three log lines and two buttons beside
+the dive arrows. **So the cards are a front end, not a second game**: every card
+calls the function the button called, and the sea is simply not asked for a turn
+until the card is answered.
+
+### The four cards (`THE ENCOUNTER, IN CARDS` in the source)
+
+| card | picture | says | choices |
+|---|---|---|---|
+| **SAIL HO** | the bare hull any yard might have built (`ship<hull>`), no flag | the Mate's bearing and range, her class by her lines, her course | **Approach the vessel** · **Slip away** |
+| **HER COLOURS** | the same hull in her owner's paint, their device at the masthead | whose she is, her likely guns, her hold, your standing — and the Mate's arithmetic | Hail her · Attack her · Leave her be |
+| **COMING ABOUT** | flagged if her colours can be read, bare if not | *"She is coming about, sir."* and why, if you can tell | Stand and fight · **Break away** |
+| **THE ACTION** | her own picture | each round's lines, her state, yours, what is in the racks | Fire · Dive out from under her |
+
+- **Approach** is a chase on the chart — real steps, real turns, the red line on
+  HER — ending in her colours, or in *"she has the legs of you"*.
+- **The Mate's arithmetic** is the thing for a captain who has never fought one:
+  *"Her guns are worth about 5 of our hull a salvo, and we have 100. About 3 fish
+  would sink her; we carry 3."* By hull CLASS until her colours are read — her
+  owner's real figures would give her owner away.
+- **The action is `attackShip`, unchanged**, a round at a time. One Fire button,
+  whose weapon is still `attackShip`'s to choose (the Gun's knack is that choice).
+  Diving out costs one salvo if she is hostile and armed.
+- **The old Close/Hail and Attack buttons open the same cards.** Close used to
+  open fire *"before you have finished reading the flag"* — the one outcome his
+  flow rules out — and Attack used to fire the first shot with no warning of what
+  it cost. Neither can happen now.
+
+### The three numbers this added, and two rules it changed (my calls)
+
+- `SLIP_ODDS` **0.75** — slipping away from a hull whose lookouts have you.
+  Outside her lookouts' range it cannot fail; a hull that means no harm is simply
+  left. You are never told which kind she was: you did not go and look.
+- `BREAK_ODDS` **0.40** — breaking away once she has come about. *"Somewhat
+  diminished."* Fail, and she is alongside with her first salvo in the hull.
+- `CHASE_GIVE_UP` 14 — steps of closing on a hull that gets no nearer.
+- **A hunter no longer turns on the tick she is sighted.** It was a flat nine
+  hexes for every hull — the same range the boat sights at — so the captain's
+  first news of her was that it was too late. She now waits one turn (`metAt`,
+  the turn the card is answered in) and her range is her own lookouts': `ear`,
+  in the hull table since it was written and read by nothing. A destroyer still
+  has you at nine; a merchant with a deck gun must be within four.
+- **An evaded hull stays evaded** (`sh.evaded`), or the choice did nothing.
+
+Measured (`tests/encounter.test.js`, suite 21, 41 checks): slip 72% of 400
+against 75; break 37% against 40; caught = alongside and hurt 254 of 254; the
+card never names her before her colours; all ten (people, hull) pairs have both
+pictures.
+
+### The passage (`THE PASSAGE` in the source)
+
+Tap the sea chart to lay marks; **Get under way**; she runs the legs on the
+surface at nine hexes a second and the boat's mark walks the red line. It is the
+helm (`travelStep`) pointed at a list, so it keeps the helm's rules: every hex a
+real turn, charts only her track, stops short of land, and anything sighted hands
+the helm back — a sail puts its card up over the chart, and when it is answered
+**the passage is taken up again**. A leg the sheet shows running onto land is
+drawn broken before she sails it. On its side, the phone is all chart.
+
+**My three calls, he left them open.** The verb: *Get under way* / *Heave to*.
+**Position: on the surface the sheet always shows where she is** — a course has
+to start somewhere, and a boat with the hatch open has the sun and the shore;
+the positioning log is what does it UNDER water, and its text now says so.
+Surface only. Also: the sheet zooms out past its fit (`CHART_ZOOM_MIN` 0.3) so
+there is blank paper to lay a course across.
+
+Seen in the browser at 375×812 and 812×375: twenty hexes in four seconds; hove
+to over a wreck the sounder found; a sail's card over the chart, *Slip away*, and
+the passage resumed and was made. Guarded by `tests/chart.test.js` §8 (51 checks
+in that suite now): marks, legs, the land leg, the pace, not from under water,
+the card-and-resume, the position rule, and a tap landing on the hex drawn
+under it (867 of 867).
+
+### Found on the way, and fixed
+
+- **A wreck in 180 m of water was announced as "10,440 m below the keel."**
+  `prizeDepthHere` answered `tile.floor` — the bottom of everything in the hex,
+  caves included — for legacy seabed prizes. **16 of the 56** a boat can sail
+  over and be told about (29%, eight worlds) were announced kilometres too deep,
+  one line under a sounder that had it right. It now uses the same test the
+  claim rule does. After: 56 of 56, and the chart suite holds it (its own world
+  had 5 wrong of 11 on the old build).
+- The main chart's view lagged thirty hexes behind after a passage, and was not
+  redrawn at all when one finished on its last mark.
+
+### Not done, and worth knowing
+
+- **Depth charges are still only a picture.** `depthCharge` is in the hull table
+  and on the destroyer's stern and does nothing: diving is a complete escape
+  from every surface hull. That is why Break away has to be an attempt and the
+  action's Dive costs a salvo — but a real destroyer would follow you down.
+- **Other boats under water** (`rival` creatures, the Signal button) have no
+  cards yet. Same flow would fit.
+- Only vessels get cards. A harbour sighted, the sounder answering, a trench:
+  those stop the helm and stay in the log.
+
+### Knobs
+
+`SLIP_ODDS`, `BREAK_ODDS`, `CHASE_GIVE_UP`. `shipHunting` — delete the `metAt`
+line and the `Math.min(9, …ear)` for the old flat nine. `sailHoCard`'s call in
+`shipsTick` — remove it and sightings are log-only again (the buttons still open
+cards). `chartShowsBoat` — return `canFixPosition()` for the old no-fix chart.
+`PASSAGE_MS` — her pace. `oddsSaid` — the Mate's arithmetic; drop it from the two
+card bodies if it says too much.
+
+---
+
 ## PLAYTEST, 2026-10-02 — three remarks off the phone, and what was under them
 
 Sean, playing on his phone and remarking as he went. Each remark was true, and

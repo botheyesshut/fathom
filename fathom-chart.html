@@ -630,6 +630,71 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.54rem; letter-spacing: 0.06em; color: var(--bone-dim);
   }
+  /* THE ENCOUNTER CARD. Over everything, the sea chart included, because a
+     passage is where most sails are met. The picture is the porthole's own
+     24-column frame drawn large: 24 columns of 0.6em fill the card's inside
+     width, whatever that is, so the font size is worked out from the width
+     rather than guessed — the same arithmetic `#vp-art` does, the other way
+     round. Buttons are full width and 48 px: a thumb, on a phone, in a hurry. */
+  #card {
+    position: fixed; inset: 0; z-index: 62;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(4, 8, 16, 0.86);
+    padding: 0.8rem;
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  }
+  #card.show { display: flex; }
+  #card-box {
+    --card-w: min(92vw, 26rem);
+    width: var(--card-w); max-height: 94vh; overflow-y: auto;
+    background: var(--abyss);
+    border: 1px solid var(--sonar-dim);
+    border-radius: 3px;
+    padding: 0.8rem 0.9rem 0.8rem;
+    box-shadow: 0 0 0 1px rgba(94, 184, 154, 0.08), 0 18px 50px rgba(0,0,0,0.7);
+  }
+  #card-art {
+    margin: 0 auto 0.6rem; width: 24ch;
+    font-family: 'Courier New', Consolas, monospace;
+    /* 15.6, not 14.4: Android has no Courier New and its fallback monospace runs
+       a little wider than 0.6em, so the frame is sized to fit at 0.65. */
+    font-size: calc((var(--card-w) - 1.8rem) / 15.6);
+    line-height: 1.05; white-space: pre; overflow: hidden;
+    text-shadow: 0 0 3px rgba(80, 160, 200, 0.18);
+  }
+  /* THE ROWS MEET. A block character in a monospace face is about three-quarters
+     of the line tall, which at the porthole's nine pixels reads as scan lines and
+     at a card's twenty reads as a hull sawn into planks. Each run is stretched to
+     the pitch of the rows; the picture keeps its proportions and loses the gaps. */
+  #card-art span { transform: scaleY(1.34); }
+  #card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--lantern); margin-bottom: 0.5rem;
+  }
+  #card-body { color: var(--bone); font-size: 0.96rem; line-height: 1.42; }
+  #card-body p { margin: 0 0 0.5rem; }
+  #card-body p:last-child { margin-bottom: 0; }
+  #card-body p.said { color: var(--lantern); }
+  #card-body p.dim { color: var(--bone-dim); font-size: 0.86rem; }
+  #card-body p.bad { color: #e8806a; }
+  #card-body p.good { color: #8fd0a8; }
+  #card-body .fact { display: flex; gap: 0.6rem; margin: 0 0 0.3rem; font-size: 0.9rem; }
+  #card-body .fact b {
+    flex: none; width: 5.2rem; font-family: 'JetBrains Mono', monospace; font-weight: 400;
+    font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sonar);
+    padding-top: 0.22rem;
+  }
+  #card-choices { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; }
+  #card-choices .btn {
+    display: block; width: 100%; min-height: 48px; text-align: left;
+    padding: 0.5rem 0.8rem; font-size: 0.8rem; letter-spacing: 0.1em;
+    white-space: normal;
+  }
+  #card-choices .btn small {
+    display: block; margin-top: 0.15rem;
+    font-size: 0.6rem; letter-spacing: 0.03em; text-transform: none; color: var(--bone-dim);
+  }
   #longpress-tip {
     position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%) translateY(6px);
     z-index: 300; max-width: 84vw; pointer-events: none;
@@ -1062,6 +1127,42 @@
      canvas ever hears about it. */
   #chart-canvas { display: block; width: 100%; height: auto; background: #e8dcc0;
                   touch-action: none; cursor: grab; }
+  /* The passage's own row, under the sheet. The note says what the course is or
+     why she stopped; the three buttons are thumb-sized and the one that sends
+     her is the one that stands out. */
+  #chart-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;
+    padding: 0.5rem 0.7rem; border-top: 1px solid #b9a67f; background: #ddcfae;
+  }
+  #chart-foot > div { display: flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+  #chart-plot-note {
+    flex: 1 1 9rem; min-width: 0;
+    font-family: 'Cormorant Garamond', serif; font-size: 0.98rem; line-height: 1.2; color: #3a2f1c;
+  }
+  #chart-foot .btn {
+    flex: none; min-height: 40px; padding: 0.45rem 0.7rem; font-size: 0.6rem;
+    border-color: #8a7550; color: #4a3c22;
+  }
+  #chart-foot .btn.primary { border-color: #8c1f14; color: #8c1f14; font-weight: 600; }
+  #chart-foot .btn:disabled { opacity: 0.4; }
+  /* THE PHONE ON ITS SIDE. 375 px of height, and the head alone was taking 118
+     of it in two rows — so the course row, which is the reason to turn the phone
+     at all, fell off the bottom of the panel. One row of head, a tighter foot,
+     the panel to the edges; `drawSeaChart` measures what is left and gives all
+     of it to the sheet. */
+  @media (orientation: landscape) and (max-height: 520px) {
+    #seachart { padding: 0.3rem; }
+    #chart-panel { max-width: 100%; max-height: 98vh; }
+    #chart-head { flex-wrap: nowrap; padding: 0.25rem 0.6rem; font-size: 1.05rem; gap: 0.4rem; }
+    #chart-layers { flex-basis: auto; order: 0; padding-top: 0; }
+    #chart-layer-label { min-width: 6.5rem; font-size: 0.7rem; }
+    #chart-up, #chart-down { min-height: 36px; min-width: 40px; }
+    #chart-head .btn { padding: 0.3rem 0.6rem; }
+    #chart-note { font-size: 0.68rem; }
+    #chart-foot { padding: 0.25rem 0.6rem; flex-wrap: nowrap; }
+    #chart-foot .btn { min-height: 36px; padding: 0.3rem 0.6rem; }
+    #chart-plot-note { font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  }
 
   #transcript {
     position: fixed; inset: 0; background: rgba(4, 8, 16, 0.9); display: none;
@@ -1292,6 +1393,17 @@
       <div><span id="chart-note"></span><button class="btn" id="chart-fit" title="Back to the whole sheet">Fit</button><button class="btn" id="chart-close">Close</button></div>
     </div>
     <canvas id="chart-canvas"></canvas>
+    <!-- THE PASSAGE. Sean: "plot a course by selecting waypoints, and then click
+         a button ... a little sub icon would move along a red line denoting the
+         course." Tap the sheet to lay it; the button gets her under way. -->
+    <div id="chart-foot">
+      <span id="chart-plot-note">Tap the chart to lay a course.</span>
+      <div>
+        <button class="btn" id="chart-undo" title="Take the last mark off the course">Undo</button>
+        <button class="btn" id="chart-clear" title="Rub the whole course out">Clear</button>
+        <button class="btn primary" id="chart-go" title="Sail the course laid on the chart, on the surface, until it is made or something is sighted">Get under way</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1355,6 +1467,19 @@
     <div id="brief-body"></div>
     <button class="btn" id="brief-ok">Understood</button>
     <div id="brief-off">these are the Standing Orders — turn them off in Options</div>
+  </div>
+</div>
+
+<!-- THE ENCOUNTER CARD. Sean: "We'll have pop-up cards like Pirates! used, and
+     like Pirates! we should have animated art for each associated craft, but
+     ours will be ANSI." One card, one picture, two or three choices; the sea
+     waits while it is up. -->
+<div id="card">
+  <div id="card-box">
+    <pre id="card-art" aria-hidden="true"></pre>
+    <div id="card-title"></div>
+    <div id="card-body"></div>
+    <div id="card-choices"></div>
   </div>
 </div>
 
@@ -2104,8 +2229,8 @@ const ITEMS = {
   bonekey:    { name: 'a great bone key',         kind: 'key', glyph: '⚷', col: '#d4c060', val: 2, strange: true, find: 3, depth: 1200,
                 flavor: 'Yellowed, and far too large for any lock a human hand ever turned. It fits something, somewhere, that was built to be kept shut.' },
   inertiallog: { name: 'an inertial positioning log', kind: 'fit', fit: 'fix', glyph: '⌖', col: '#e0c060', val: 6, find: 2, depth: 900,
-                fitLog: 'You mount the log and let it settle. It counts every turn of the screw and every degree of the helm, and for the first time the chart can say where you are standing on it.',
-                flavor: 'Brass and glass and a mechanism nobody has been able to copy since. Fit it and your own boat appears on your own chart — which, until now, it never has.' },
+                fitLog: 'You mount the log and let it settle. It counts every turn of the screw and every degree of the helm, and for the first time the chart can say where you are standing on it with no sky to ask.',
+                flavor: 'Brass and glass and a mechanism nobody has been able to copy since. Fit it and your own boat appears on your own chart under water — which, until now, it has only done with the hatch open.' },
   gillhood:   { name: 'a gill-hood of Dagon make', kind: 'use', glyph: '❈', col: '#6fae72', keep: true, val: 5, strange: true, find: 0, depth: 2400, props: ['gills', 'sig'], sig: 'dagon',
                 flavor: 'Wet leather and something that is not leather, and it breathes for you. Wear it and a drowned passage is only a passage. The Children of Dagon make these, and part with them rarely, and never cheaply.' },
 };
@@ -2636,7 +2761,11 @@ let chartLayer = null;
 // know, on one sheet", which is the default and what the reset returns to. The pan is in
 // screen pixels and is clamped in `drawSeaChart` so the sheet cannot leave the table.
 let chartZoom = 1, chartPanX = 0, chartPanY = 0;
-const CHART_ZOOM_MIN = 1, CHART_ZOOM_MAX = 10;
+// BELOW ONE, SO THE SHEET CAN BE PUSHED AWAY. The fit is all the water you know,
+// edge to edge — which left nowhere to put a mark beyond it, and a passage is
+// mostly made INTO water you do not know. Pinch out and there is blank paper
+// round the survey to lay a course across.
+const CHART_ZOOM_MIN = 0.3, CHART_ZOOM_MAX = 10;
 function chartReset() { chartZoom = 1; chartPanX = 0; chartPanY = 0; drawSeaChart(); }
 function chartZoomBy(f, cx, cy) {
   const was = chartZoom;
@@ -2671,15 +2800,23 @@ function wireChartGestures() {
     if (a.length < 2) return 0;
     return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
   };
+  // A TAP LAYS A MARK. One finger, down and up in the same place and soon: that is
+  // not a drag and not a pinch, and until the passage it was nothing at all.
+  let tap = null;
   cv.addEventListener('pointerdown', (e) => {
     cv.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     lastMid = mid(); lastSpread = spread();
+    tap = pts.size === 1 ? { x: e.clientX, y: e.clientY, at: Date.now(), far: 0 } : null;
   });
   cv.addEventListener('pointermove', (e) => {
     if (!pts.has(e.pointerId)) return;
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (tap) tap.far = Math.max(tap.far, Math.hypot(e.clientX - tap.x, e.clientY - tap.y));
     const m = mid(), sp = spread();
+    // A thumb that has not left its own slop has not started a drag: the sheet
+    // stays put under a tap, or the mark would land a hex from where it was put.
+    if (tap && tap.far <= 10 && pts.size === 1) { lastMid = m; lastSpread = sp; e.preventDefault(); return; }
     if (pts.size >= 2 && lastSpread > 4 && sp > 4) {
       chartZoomBy(sp / lastSpread, m.x, m.y);
     } else if (lastMid) {
@@ -2691,8 +2828,15 @@ function wireChartGestures() {
     e.preventDefault();
   });
   const up = (e) => { pts.delete(e.pointerId); lastMid = mid(); lastSpread = spread(); };
-  cv.addEventListener('pointerup', up);
-  cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerup', (e) => {
+    const t = tap; tap = null;
+    up(e);
+    if (t && t.far <= 10 && Date.now() - t.at < 700 && !pts.size) {
+      const r = cv.getBoundingClientRect();
+      chartTap(e.clientX - r.left, e.clientY - r.top);
+    }
+  });
+  cv.addEventListener('pointercancel', (e) => { tap = null; up(e); });
   // A wheel is a pinch on a desktop.
   cv.addEventListener('wheel', (e) => {
     const r = cv.getBoundingClientRect();
@@ -2742,8 +2886,20 @@ function chartLayerLabel() {
 function drawSeaChart() {
   const cv = document.getElementById('chart-canvas');
   if (!cv) return;
-  const wrapW = Math.min(760, (document.getElementById('chart-panel') || {}).clientWidth || 720) - 2;
-  const W = Math.max(280, wrapW), H = Math.round(Math.min(W * 0.92, window.innerHeight * 0.66));
+  // TURNED ON ITS SIDE, THE PHONE IS ALL CHART. Sean: "the user could turn their
+  // phone to use their whole screen or use pinch and widen when in portrait
+  // orientation to see portions of it in the top half of their phone." Upright,
+  // the sheet takes the top of the screen and leaves the course row under it;
+  // on its side it takes everything the panel's two rows of controls leave.
+  const landscape = window.innerWidth > window.innerHeight * 1.15;
+  const wrapW = Math.min(landscape ? 1100 : 760, (document.getElementById('chart-panel') || {}).clientWidth || 720) - 2;
+  const W = Math.max(280, wrapW);
+  // MEASURED, not assumed. The first cut subtracted a guess for the two rows of
+  // controls and the guess was 20 px short, which is exactly the course row.
+  const headEl = document.getElementById('chart-head'), footEl = document.getElementById('chart-foot');
+  const rows = ((headEl && headEl.offsetHeight) || 56) + ((footEl && footEl.offsetHeight) || 52);
+  const H = landscape ? Math.max(120, Math.floor(window.innerHeight * 0.96 - rows - 8))
+                      : Math.round(Math.min(W * 0.92, window.innerHeight * 0.6));
   const dpr = window.devicePixelRatio || 1;
   cv.width = W * dpr; cv.height = H * dpr;
   cv.style.height = H + 'px';
@@ -2791,6 +2947,7 @@ function drawSeaChart() {
   const ox = W / 2 - (W / 2 - ox0) * chartZoom + chartPanX;
   const oy = H / 2 - (H / 2 - oy0) * chartZoom + chartPanY;
   const P = (q, r) => { const p = px(q, r); return { x: ox + p.x * s, y: oy + p.y * s }; };
+  chartT = { ox: ox, oy: oy, s: s, W: W, H: H };     // where a tap lands, and where the boat is drawn
 
   const hexPath = (cx, cy, rad) => {
     g.beginPath();
@@ -2992,20 +3149,8 @@ function drawSeaChart() {
   g.font = `${Math.max(8, Math.round(s * 0.9))}px "JetBrains Mono", monospace`;
   g.fillText('╪', dockP.x, dockP.y);
 
-  // ---- YOUR POSITION — only if you have the instrument for it.
   const lab = document.getElementById('chart-layer-label');
   if (lab) lab.textContent = chartLayerLabel();
-  const note = document.getElementById('chart-note');
-  if (canFixPosition()) {
-    const me = P(state.q, state.r);
-    g.strokeStyle = '#8c1f14'; g.lineWidth = 1.6;
-    g.beginPath(); g.arc(me.x, me.y, Math.max(5, rad * 0.8), 0, Math.PI * 2); g.stroke();
-    g.beginPath(); g.moveTo(me.x, me.y - rad * 1.5); g.lineTo(me.x, me.y + rad * 1.5);
-    g.moveTo(me.x - rad * 1.5, me.y); g.lineTo(me.x + rad * 1.5, me.y); g.stroke();
-    if (note) note.textContent = `fix: ${state.q}, ${state.r} · ${Math.round(state.currentDepth)} m`;
-  } else if (note) {
-    note.textContent = 'no position fix — dead reckoning';
-  }
 
   // ---- Compass rose.
   const rx = W - 34, ry = 34, rr = 15;
@@ -3015,6 +3160,283 @@ function drawSeaChart() {
   g.moveTo(rx - rr - 4, ry); g.lineTo(rx + rr + 4, ry); g.stroke();
   g.fillStyle = '#3a2f1c'; g.font = '9px "JetBrains Mono", monospace';
   g.fillText('N', rx, ry - rr - 10);
+
+  // EVERYTHING ABOVE IS THE PAPER; WHAT FOLLOWS MOVES. The paper is kept, so a
+  // passage can walk the boat along its line without redrawing every hex the
+  // world holds ten times a second (see `chartTick`).
+  chartKeep(cv);
+  chartOverlay();
+}
+
+//=============================================================================
+// THE PASSAGE — a course laid on the sea chart, and sailed
+//=============================================================================
+// Sean, 2026-10-02: "the experience of sailing around happens very slowly and
+// step by step on a small mobile screen ... Maybe there could be an overworld
+// map, a chart not unlike a regular sea chart ... They could, maybe, plot a
+// course by selecting waypoints, and then click a button that gives the command
+// to 'weigh anchor' or whatever is submarine appropriate. At that time a little
+// sub icon would move along a red line denoting the course. If an NPC (or PC)
+// were encountered, then a pop-up might occur ... Step by step makes a lot of
+// sense in the tunnels ... but at the surface it's a little menial."
+//
+// WHAT IT IS. Tap the sheet to lay marks; GET UNDER WAY; she runs the legs on the
+// surface at nine hexes a second, and the boat's mark walks the red line. It is
+// the helm that was already here (`travelStep`) pointed at a list instead of a
+// hex, so everything the helm does it does: every hex is a real turn — water,
+// food, weather, traffic, all of it ticks, only the tapping is saved — it charts
+// her track and the hexes beside it and nothing else, it stops short of land,
+// and anything sighted hands the helm back. A sail puts its card on the table,
+// over the chart, and when the card is answered the passage is taken up again.
+//
+// MY CALLS, he left three open. THE VERB is "Get under way" — a boat with no
+// anchor down has none to weigh — and "Heave to" stops her. THE POSITION: on the
+// surface the sheet always shows where she is. A course has to start somewhere,
+// and a boat with the hatch open has the sun and the shore to fix herself by;
+// the positioning log is what does it UNDER water, where there is neither, and
+// that is still the only place it is needed. SURFACE ONLY: below, a hex at a
+// time is the game, and stays.
+const PASSAGE_MS = 110;          // a hex — nine a second. A passage is watched, not played
+let chartSnap = null, chartT = null, chartSteps = 0;
+
+function chartIsOpen() { const e = document.getElementById('seachart'); return !!(e && e.classList.contains('show') === true); }
+function chartShowsBoat() { return canFixPosition() || state.currentDepth <= 0; }
+// The paper as last drawn, kept so the things that move can be redrawn without it.
+function chartKeep(cv) {
+  try {
+    if (!chartSnap) chartSnap = document.createElement('canvas');
+    chartSnap.width = cv.width; chartSnap.height = cv.height;
+    chartSnap.getContext('2d').drawImage(cv, 0, 0);
+  } catch (e) { chartSnap = null; }
+}
+// One step of a passage with the chart open: the kept paper, then what moves.
+// Every eighth step the whole sheet is drawn again, which is when the water she
+// has charted since catches up with her.
+function chartTick() {
+  const cv = document.getElementById('chart-canvas');
+  if (!cv || !chartSnap || !chartT || (++chartSteps % 8) === 0) return drawSeaChart();
+  const g = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(chartSnap, 0, 0);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  chartOverlay();
+}
+// WHAT MOVES ON THE SHEET: the sails in sight, the course, and the boat.
+function chartOverlay() {
+  const cv = document.getElementById('chart-canvas'), T = chartT;
+  if (!cv || !T) return;
+  const g = cv.getContext('2d');
+  const P = (q, r) => ({ x: T.ox + SQRT3 * (q + r / 2) * T.s, y: T.oy + 1.5 * r * T.s });
+  const rad = T.s * 0.62;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  // Sails you can see from where you are. A flag only once you have read it.
+  if (state.currentDepth <= 0) {
+    for (const sh of (state.ships || [])) {
+      if (!sh.seen || sh.gone) continue;
+      const p = P(sh.q, sh.r);
+      g.fillStyle = sh.known && CULTURES[sh.culture] ? CULTURES[sh.culture].col : '#2f2a1a';
+      g.font = `${Math.max(10, Math.round(T.s * 1.2))}px "JetBrains Mono", monospace`;
+      g.fillText(HULLS[sh.hull].glyph, p.x, p.y);
+    }
+  }
+  const boat = chartShowsBoat() ? P(state.q, state.r) : null;
+  // THE COURSE. Red, from her to each mark in turn. A leg the sheet itself shows
+  // running onto land is drawn broken: she will stop at the shore, and it is
+  // kinder to say so before she sails than after.
+  const legs = passageLegs();
+  g.lineWidth = Math.max(1.6, T.s * 0.14); g.strokeStyle = '#b02a1a'; g.lineCap = 'round';
+  for (const L of legs) {
+    if (!L.a) continue;                                  // no fix, so no line from the boat
+    const a = P(L.a.q, L.a.r), b = P(L.b.q, L.b.r);
+    g.setLineDash(L.land ? [3, 5] : []);
+    g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+  }
+  g.setLineDash([]);
+  legs.forEach((L, i) => {
+    const b = P(L.b.q, L.b.r), last = i === legs.length - 1;
+    g.fillStyle = '#b02a1a';
+    g.beginPath(); g.arc(b.x, b.y, last ? Math.max(4, T.s * 0.34) : Math.max(2.6, T.s * 0.22), 0, Math.PI * 2); g.fill();
+    if (last) { g.fillStyle = '#e8dcc0'; g.beginPath(); g.arc(b.x, b.y, Math.max(1.6, T.s * 0.14), 0, Math.PI * 2); g.fill(); }
+  });
+  // THE BOAT. The ring and cross she has always had; filled when she is under way.
+  const note = document.getElementById('chart-note');
+  if (boat) {
+    g.strokeStyle = '#8c1f14'; g.lineWidth = 1.6;
+    g.beginPath(); g.arc(boat.x, boat.y, Math.max(5, rad * 0.8), 0, Math.PI * 2);
+    if (state.passage && state.passage.running) { g.fillStyle = '#8c1f14'; g.fill(); }
+    g.stroke();
+    g.beginPath(); g.moveTo(boat.x, boat.y - rad * 1.5); g.lineTo(boat.x, boat.y + rad * 1.5);
+    g.moveTo(boat.x - rad * 1.5, boat.y); g.lineTo(boat.x + rad * 1.5, boat.y); g.stroke();
+    if (note) note.textContent = canFixPosition()
+      ? `fix: ${state.q}, ${state.r} · ${Math.round(state.currentDepth)} m`
+      : 'position by sight — surface';
+  } else if (note) {
+    note.textContent = 'no position fix — dead reckoning';
+  }
+}
+
+// Which hex of the sheet is under this point of the canvas.
+function chartHexAt(x, y) {
+  const T = chartT;
+  if (!T) return null;
+  const fy = (y - T.oy) / T.s / 1.5, fx = (x - T.ox) / T.s / SQRT3 - fy / 2, fz = -fx - fy;
+  let q = Math.round(fx), r = Math.round(fy), z = Math.round(fz);
+  const dq = Math.abs(q - fx), dr = Math.abs(r - fy), dz = Math.abs(z - fz);
+  if (dq > dr && dq > dz) q = -r - z; else if (dr > dz) r = -q - z;
+  return { q: q, r: r };
+}
+// IS IT LAND ON THE SHEET — drawn as land, which is not the same as being land.
+// Blank paper is a hex nobody has made yet; refusing a mark there because the
+// generator knows it will be an island would be the chart telling you so.
+function chartDrawsLand(q, r) {
+  const t = getTile(q, r);
+  if (t) return !!t.land || shelfSeafloorDepth(q, r) == null;
+  return homeShoreDist(q, r) <= 0;                       // the home island is drawn entire
+}
+// The hexes a straight leg crosses, end included.
+function hexLine(a, b) {
+  const n = hexDistance(a, b), out = [];
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const fq = a.q + (b.q - a.q) * t + 1e-6, fr = a.r + (b.r - a.r) * t + 1e-6, fs = -fq - fr;
+    let q = Math.round(fq), r = Math.round(fr), z = Math.round(fs);
+    const dq = Math.abs(q - fq), dr = Math.abs(r - fr), dz = Math.abs(z - fs);
+    if (dq > dr && dq > dz) q = -r - z; else if (dr > dz) r = -q - z;
+    out.push({ q: q, r: r });
+  }
+  return out;
+}
+// The course as legs: from the boat (if the sheet knows where she is) to each mark.
+function passageLegs() {
+  const w = (state.passage && state.passage.wps) || [], out = [];
+  let a = chartShowsBoat() ? { q: state.q, r: state.r } : null;
+  for (const b of w) {
+    out.push({ a: a, b: b, n: a ? hexDistance(a, b) : 0, land: a ? hexLine(a, b).some(h => chartDrawsLand(h.q, h.r)) : false });
+    a = b;
+  }
+  return out;
+}
+
+function chartTap(x, y) {
+  const h = chartHexAt(x, y);
+  if (h) passageAdd(h.q, h.r);
+}
+function passageAdd(q, r) {
+  if (state.passage && state.passage.running) return;    // heave to before relaying it
+  if (chartDrawsLand(q, r)) return passageNote('That is land. A course is laid on water.');
+  if (!state.passage) state.passage = { wps: [], running: false };
+  const w = state.passage.wps;
+  const last = w.length ? w[w.length - 1] : (chartShowsBoat() ? { q: state.q, r: state.r } : null);
+  if (last && last.q === q && last.r === r) return;
+  w.push({ q: q, r: r });
+  passageNote(null);
+  drawSeaChart();
+}
+function passageUndo() {
+  if (!state.passage || state.passage.running) return;
+  state.passage.wps.pop();
+  if (!state.passage.wps.length) state.passage = null;
+  passageNote(null);
+  drawSeaChart();
+}
+function passageClear() {
+  if (state.passage && state.passage.running) return;
+  state.passage = null;
+  passageNote(null);
+  drawSeaChart();
+}
+// The row under the sheet: what the course is, or why she stopped; and the
+// buttons made to say what they would do now.
+function passageNote(text) {
+  const el = document.getElementById('chart-plot-note');
+  const P = state.passage, running = !!(P && P.running), any = !!(P && P.wps.length);
+  if (el) {
+    if (text) el.textContent = text;
+    else if (!any) el.textContent = 'Tap the chart to lay a course.';
+    else {
+      const legs = passageLegs(), hexes = legs.reduce((s, L) => s + L.n, 0);
+      const bad = legs.findIndex(L => L.land);
+      el.textContent = (legs.length === 1 ? 'One leg' : legs.length + ' legs') + ', ' + hexes + ' hexes — about '
+        + Math.round(hexes * WATER_DRAIN) + ' water of ' + Math.round(boatWater()) + '.'
+        + (bad >= 0 ? ' Leg ' + (bad + 1) + ' runs onto land; she will stop at the shore.' : '');
+    }
+  }
+  const go = document.getElementById('chart-go'), un = document.getElementById('chart-undo'), cl = document.getElementById('chart-clear');
+  if (go) { go.textContent = running ? 'Heave to' : 'Get under way'; go.disabled = !running && !any; }
+  if (un) un.disabled = running || !any;
+  if (cl) cl.disabled = running || !any;
+}
+// GET UNDER WAY — and, while she is, the same button heaves her to.
+function passageGo() {
+  const P = state.passage;
+  if (P && P.running) return travelStop('you hove to');
+  if (!P || !P.wps.length) return passageNote('Tap the chart to lay a course first.');
+  if (!state.alive || state.foot) return;
+  if (state.currentDepth > 0) return passageNote('A passage is made on the surface. Take her up first.');
+  P.running = true; P.resume = false;
+  log('Under way. ' + P.wps.length + ' mark' + (P.wps.length === 1 ? '' : 's') + ' on the chart.', '', 'HELM');
+  passageNote(null);
+  passageLeg();
+}
+// The next leg: through water already charted if the helm has a course there,
+// by eye if not — the same two ways a tap on the chart sails.
+function passageLeg() {
+  const P = state.passage;
+  if (!P) return;
+  while (P.wps.length && P.wps[0].q === state.q && P.wps[0].r === state.r) P.wps.shift();
+  if (!P.wps.length) return passageDone();
+  if (state.autoTarget) autoStop(null);
+  const w = P.wps[0], path = courseTo(w.q, w.r);
+  if (path) state.travel = path;
+  else if (eyeStep(w)) { state.travel = [{ q: w.q, r: w.r }]; state.travel.eye = true; }
+  else return passageHalt('the way toward the next mark is not open');
+  state.travel.passage = true;
+  state.travel.pace = PASSAGE_MS;
+  travelRun();
+}
+// THE OTHER CHART FOLLOWS HER WITH A LAG — a third of the way each time it is
+// drawn — and during a passage it is not drawn at all. Thirty hexes later the
+// sheet came off the table to show open water with no boat in it, and stayed
+// that way until she moved. When a passage stops, the view goes to her.
+function chartFollow() {
+  const p = hexToPixel(state.q, state.r);
+  state.cameraX = p.x; state.cameraY = p.y; state.panX = 0; state.panY = 0;
+}
+function passageDone() {
+  state.passage = null;
+  chartFollow();
+  mateSays(`Passage made${mateAddress()}.`, 'Passage made.', '', 'HELM');
+  passageNote('Passage made.');
+  // The last leg hands the helm on rather than back (see `travelStep`), so
+  // nothing else draws the chart under the sheet. It has not been drawn since
+  // she got under way.
+  updateHUD(); render();
+  if (chartIsOpen()) drawSeaChart();
+}
+// She has stopped short of the last mark. The course stays on the sheet; the
+// row under it says why, in the helm's words or — if it was something sighted —
+// in the words of whatever was sighted.
+function passageHalt(why) {
+  const P = state.passage;
+  if (!P) return;
+  P.running = false;
+  chartFollow();
+  let said = why ? 'Hove to — ' + why + '.' : null;
+  if (!said) {
+    for (let i = logHistory.length - 1; i >= 0 && i > logHistory.length - 8; i--) {
+      if (HELM_HALTS[logHistory[i].echo]) { said = 'Hove to. ' + logHistory[i].text; break; }
+    }
+  }
+  passageNote(said || 'Hove to.');
+  if (chartIsOpen()) drawSeaChart();
+}
+// A card was answered while a passage was under way: take it up again, if she
+// is still on the surface to do it.
+function passageResume() {
+  const P = state.passage;
+  if (!P || !P.resume) return;
+  P.resume = false;
+  if (state.alive && !state.foot && state.currentDepth <= 0 && P.wps.length && !P.running) passageGo();
 }
 
 //=============================================================================
@@ -5664,6 +6086,11 @@ const VP_SCENES = {
 };
 
 let vpScene = 'deep', vpTick = 0, vpSnow = [], vpOn = true, vpTimer = null;
+// THE ENCOUNTER CARD ON THE TABLE, or null. Declared here because the porthole's
+// own clock (`vpStep`) repaints its picture; everything else about it is in THE
+// ENCOUNTER, IN CARDS. `cardHold` is the sea being wound forward under a card
+// already open — sightings made then are logged and not carded.
+let cardNow = null, cardTimer = 0, cardHold = false;
 
 // WHOSE SHIP IS IN THE WINDOW. Set by the scene picker, read by vpDraw, and
 // null for everything that is not a ship.
@@ -5724,7 +6151,21 @@ function vpShowCaption() {
 function vpDraw() {
   const el = document.getElementById('vp-art');
   if (!el || !vpOn) return;
-  const S = VP_SCENES[vpScene] || VP_SCENES.deep;
+  el.innerHTML = vpPaint(vpScene, vpFlag);
+  // NO PERMANENT CAPTION. It rendered at 7.5px into a tile 24 characters wide
+  // and Sean could not read it. The caption is on demand now — `vpShowCaption`,
+  // on a tap — and the item suite still checks every scene has one.
+}
+
+// ONE PAINTER, TWO FRAMES. The porthole was the only thing that could draw a
+// scene, and it drew whatever the boat was looking at — so the encounter cards,
+// which have to show a hull the boat is NOT alongside yet (a sail on the
+// horizon, nine hexes off), had no way to ask for one. This is `vpDraw` with
+// the scene and the flag passed in instead of read from the porthole's own
+// state; the porthole calls it with its own two, and a card calls it with the
+// hull it is talking about. Same frames, same clock, same colours.
+function vpPaint(sceneKey, vpFlag) {
+  const S = VP_SCENES[sceneKey] || VP_SCENES.deep;
   const pulseOn = (vpTick % 4) < 2;
   const pulses = S.pulse || [];
   const shimmer = (vpTick * 2) % (VP_W + VP_H + 12) - 6;   // a diagonal sweep
@@ -5842,16 +6283,14 @@ function vpDraw() {
     }
     html += '\n';
   }
-  el.innerHTML = html;
-  // NO PERMANENT CAPTION. It rendered at 7.5px into a tile 24 characters wide
-  // and Sean could not read it. The caption is on demand now — `vpShowCaption`,
-  // on a tap — and the item suite still checks every scene has one.
+  return html;
 }
 
 function vpStep() {
   vpTick++;
   for (const p of vpSnow) { p.y += p.sp; if (p.y >= VP_H) { p.y -= VP_H; p.x = Math.floor(rand() * VP_W); } }
   vpDraw();
+  if (cardNow) cardPaint();      // a card's picture runs off the same clock
 }
 
 // Say what to show. Silently ignores an unknown key so a caller can name a
@@ -5950,10 +6389,7 @@ function sceneForNow() {
       // fallback for any owner without a drawing of its own — which is what a
       // fifth people, or a hull nobody has drawn yet, will land on rather than
       // showing nothing at all.
-      const yard = { confluence: 'line', libertines: 'cf', mariners: 'mar' }[near.culture];
-      const own = yard && (yard + near.hull.charAt(0).toUpperCase() + near.hull.slice(1));
-      if (own && VP_SCENES[own]) return own;
-      return 'ship' + near.hull;
+      return shipScenes(near).near;
     }
     vpFlag = null;
     // LAND ON THE WATER. A captain could sail up to an island and never once
@@ -6076,10 +6512,14 @@ function openSeaChart() {
   // half-dragged from ten minutes ago is disorienting in a way nobody asks for.
   chartZoom = 1; chartPanX = 0; chartPanY = 0;
   wireChartGestures();
+  passageNote(null);
   drawSeaChart();
 }
 function closeSeaChart() {
   document.getElementById('seachart').classList.remove('show');
+  // A passage still under way draws nothing on the chart below while the sheet
+  // is over it (see `render`). Put away mid-run, that chart is drawn now, on her.
+  if (state.passage && state.passage.running) { chartFollow(); render(); }
   // Fired on CLOSE, not open — a tip logged behind a full-screen panel is a tip
   // nobody reads. The missing position fix is deliberate and the chart's own
   // note says so in four words; this is the rest of the sentence.
@@ -6570,7 +7010,7 @@ const TIPS = {
   claimdeck: 'A DECK with nothing living on it can be claimed as your station: the breach becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
   claimruin: 'A drowned hall with nothing living in it can be claimed as your station: the doorway becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
   locks:   'Some doors are locked rather than stuck. A hull wreck takes a corroded hatch key; a drowned building takes the bone kind. Both turn up in the deep, both sell well at an enclave, and both are spent the moment they open something — so the question is always whether this is the door worth spending it on.',
-  chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. The boat carries no positioning gear, so it cannot mark itself — you dead-reckon, until you find something that can.',
+  chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. On the surface she marks herself by the sun and the shore, and you can lay a course on the sheet and sail it. Under water she cannot — you dead-reckon, until you find something that can.',
 };
 let tipsOn = true;
 try { tipsOn = localStorage.getItem('fathom-tips') !== '0'; } catch (e) {}
@@ -7540,6 +7980,426 @@ function rivalInReach() {
   return null;
 }
 
+//=============================================================================
+// THE ENCOUNTER, IN CARDS
+//=============================================================================
+// Sean, 2026-10-02: "We'll have pop-up cards like Pirates! used, and like
+// Pirates! we should have animated art for each associated craft, but ours will
+// be ANSI ... make the decisions 'approach the vessel' and 'slip away.' If user
+// approaches, have a slightly different animation suitable to match the new
+// information gained, which will include the apparent faction of the craft, its
+// likely armaments, and the user's current relationship to that faction ... If
+// the faction is angry at the user, the captain should be informed that the NPC
+// ship is 'coming about, sir.' The user should get one more chance to evade,
+// this one somewhat diminished, before combat ensues. Note that I have still no
+// experience with naval combat in this game."
+//
+// WHAT WAS ALREADY HERE, and it was most of it: hulls with a people, guns and a
+// hold; standing; a sighting that does not name her; colours read by closing;
+// a hunter that comes for you; an attack with return fire; four hull drawings
+// recoloured with their owner's plating and device. All of it spoke through
+// three log lines and two buttons that appeared beside the dive arrows — and
+// the man who designed it had never once been in a gun action.
+//
+// SO THIS IS A FRONT END, NOT A SECOND GAME. Every card calls the function the
+// button called. The sea does not know a card is open; it simply is not asked
+// to take a turn until the captain has answered. Four cards:
+//
+//   SAIL HO          the hull at distance, bare-masted. Approach, or slip away.
+//   HER COLOURS      the same hull in her owner's paint: whose she is, what she
+//                    carries on deck, what they think of you, and what the Mate
+//                    makes of the odds in plain numbers.
+//   COMING ABOUT     she means harm and has turned. Stand, or one thinner
+//                    chance to break away.
+//   THE ACTION       a round at a time: fire, or dive out from under her.
+//
+// THE THREE NUMBERS THIS ADDS, and nothing else in the fight is new:
+const SLIP_ODDS  = 0.75;   // slipping away from a hull whose lookouts have you in range
+const BREAK_ODDS = 0.40;   // ...and breaking away once she has come about. "Somewhat diminished."
+const CHASE_GIVE_UP = 14;  // steps of closing on a hull that is not getting any nearer
+// Beyond her lookouts' range (`ear`, which has sat in the hull table since the
+// table was written and been read by nothing) slipping away simply works.
+
+function cardEsc(s) { return String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])); }
+function cP(text, cls) { return '<p' + (cls ? ' class="' + cls + '"' : '') + '>' + cardEsc(text) + '</p>'; }
+function cFact(label, value) { return '<div class="fact"><b>' + cardEsc(label) + '</b><span>' + cardEsc(value) + '</span></div>'; }
+// In the Mate's mouth if there is one, plainly if not — the same rule `mateSays` keeps.
+function cSaid(spoken, plain) {
+  const who = mateName();
+  return who ? cP(who + ': “' + spoken + '”', 'said') : cP(plain || spoken, 'said');
+}
+// "Coming about, sir." His word for it, and a machine does not say sir.
+function sir() { const m = firstMate(); return (!m || m.machine) ? '' : ', sir'; }
+
+function cardOpen(c) {
+  cardNow = c;
+  if (state.passage && state.passage.running) state.passage.resume = true;   // ...and taken up again after
+  if (state.travel) travelStop(null);          // nobody steers through a decision
+  document.getElementById('card-title').textContent = c.title || '';
+  document.getElementById('card-body').innerHTML = (c.body || []).join('');
+  const box = document.getElementById('card-choices');
+  box.innerHTML = '';
+  (c.choices || []).forEach((ch, i) => {
+    const b = document.createElement('button');
+    b.className = 'btn' + (ch.primary ? ' primary' : '');
+    b.innerHTML = cardEsc(ch.label) + (ch.sub ? '<small>' + cardEsc(ch.sub) + '</small>' : '');
+    b.addEventListener('click', () => cardPick(i));
+    box.appendChild(b);
+  });
+  document.getElementById('card').classList.add('show');
+  cardPaint();
+  // The porthole may be switched off, and its clock with it. The card still moves.
+  if (!vpTimer && !cardTimer) cardTimer = setInterval(() => { vpTick++; cardPaint(); }, 200);
+}
+function cardPaint() {
+  const el = document.getElementById('card-art');
+  if (el && cardNow) el.innerHTML = vpPaint(cardNow.scene, cardNow.flag || null);
+}
+function cardClose() {
+  cardNow = null;
+  if (cardTimer) { clearInterval(cardTimer); cardTimer = 0; }
+  document.getElementById('card').classList.remove('show');
+  updateHUD(); render();
+}
+// A choice either opens the next card or closes this one. Nothing else.
+function cardPick(i) {
+  const c = cardNow;
+  if (c && c.choices && c.choices[i]) c.choices[i].act();
+}
+// The last card of an encounter: what happened, and one button. If a passage
+// was being made when the sail came up, it is taken up again.
+function cardResult(sh, title, body) {
+  const sc = sh ? shipScenes(sh) : null;
+  cardOpen({ kind: 'result', ship: sh ? sh.id : null, title: title, body: body,
+    scene: sc ? (sh.known ? sc.near : sc.far) : (cardNow ? cardNow.scene : 'surface'),
+    flag: sh && sh.known ? sh.culture : null,
+    choices: [{ label: 'Carry on', primary: true, act: cardDone }] });
+}
+function cardDone() {
+  cardClose();
+  if (state.alive && typeof passageResume === 'function') passageResume();
+}
+// Everything the log said since `mark`, as card paragraphs — so a card shows the
+// same words the transcript keeps, and neither can drift from the other.
+function cardSaidSince(mark) {
+  const out = [];
+  let i = logHistory.length - 1;
+  while (i >= 0 && logHistory[i] !== mark) i--;
+  for (let k = i + 1; k < logHistory.length; k++) {
+    const e = logHistory[k];
+    out.push(cP(e.text, e.cls === 'danger' ? 'bad' : e.cls === 'good' ? 'good' : ''));
+  }
+  return out;
+}
+
+function shipById(id) { return (state.ships || []).find(x => x.id === id && !x.gone) || null; }
+// Which picture: the bare hull any yard might have built, and her owner's own.
+function shipScenes(sh) {
+  const yard = { confluence: 'line', libertines: 'cf', mariners: 'mar' }[sh.culture];
+  const own = yard && (yard + sh.hull.charAt(0).toUpperCase() + sh.hull.slice(1));
+  return { far: 'ship' + sh.hull, near: (own && VP_SCENES[own]) ? own : 'ship' + sh.hull };
+}
+// "Likely armaments": what a glass shows on her deck, said the way a lookout says it.
+function gunsSeen(st) {
+  return (st.guns <= 0 ? 'None that you can see.'
+        : st.guns <= 2 ? 'A deck gun, perhaps two.'
+        : st.guns <= 4 ? 'Guns fore and aft.'
+        : 'More guns than a boat like yours should be near.')
+       + (st.depthCharge > 0 ? ' Racks along her stern.' : '');
+}
+// WHAT THE MATE MAKES OF IT, in the numbers the fight is actually made of. Sean
+// has never fought one of these, and neither has any new captain: a torpedo is
+// 16 and her hull is a number, her guns are a number and so is yours, and
+// nothing on screen ever said so. This is arithmetic the boat can do by eye —
+// her size, her guns, what is in the racks — so it gives nothing away.
+//
+// UNTIL HER COLOURS ARE READ IT IS HER CLASS HE IS JUDGING, not her: the table's
+// own destroyer, whoever built this one. A Con-Fed hull hits half again as hard
+// and is thinner-skinned, and a Mate who quoted those figures at five hexes
+// would be telling the captain whose she was.
+function oddsSaid(sh, known) {
+  const st = known ? shipStats(sh.culture, sh.hull) : { guns: HULLS[sh.hull].guns, hull: HULLS[sh.hull].tough };
+  const fish = state.torpedoes || 0, arm = state.armament && WEAPONS[state.armament];
+  const hp = (known && sh.hp != null) ? sh.hp : st.hull;
+  const need = Math.max(1, Math.ceil(hp / WEAPONS.torpedo.power));
+  const hers = st.guns > 0 ? `Her guns are worth about ${st.guns} of our hull a salvo, and we have ${Math.round(state.hull)}.`
+                           : 'She has nothing to hurt us with.';
+  const ours = fish > 0 ? `About ${need} fish would sink her; we carry ${fish}.`
+             : arm ? `No fish in the racks. The harpoon would take ${Math.ceil(hp / arm.power)} rounds alongside her.`
+             : 'And we have nothing aboard to shoot with.';
+  return cSaid(hers + ' ' + ours);
+}
+function standingSaid(culture) {
+  const w = standingBand(culture).word;
+  let s = ucfirst(w) + '.';
+  if (alliedWith(culture)) s += ' You have a treaty with them.';
+  const com = state.commission;
+  if (com && com.against === culture && atWar(com.forCulture, com.against))
+    s += ` You hold ${CULTURES[com.forCulture].short}’ commission against this flag.`;
+  return s;
+}
+
+// ---- SAIL HO ---------------------------------------------------------------
+function sailHoCard(sh) {
+  const H = HULLS[sh.hull];
+  const d = hexDistance(sh, { q: state.q, r: state.r });
+  const where = `${bearing(state.q, state.r, sh.q, sh.r)} of us, ${(d * 60 / 1000).toFixed(1)} km`;
+  cardOpen({ kind: 'sail', ship: sh.id, scene: shipScenes(sh).far, flag: null, title: 'Sail ho',
+    body: [
+      cSaid(`Sail ho${sir()} — ${where}.`, `A sail, ${where}.`),
+      cP(H.flavor),
+      cFact('Her lines', ucfirst(H.name) + '.'),
+      cFact('Her course', 'Standing ' + bearing(sh.q, sh.r, sh.toQ, sh.toR) + '.'),
+      cP('No colours at this range. Close on her and you will read them — and she will read yours.', 'dim'),
+    ],
+    choices: [
+      { label: 'Approach the vessel', sub: 'Close the range and read her colours', primary: true, act: () => approachShip(sh.id) },
+      { label: 'Slip away', sub: 'Turn off and put her under the horizon', act: () => slipAway(sh.id) },
+    ] });
+}
+
+// SLIP AWAY — the first chance, and the good one. A hull that means you no harm
+// is simply left behind. One that does has to have SEEN you to do anything about
+// it: outside her lookouts' range it cannot fail, and inside it mostly does not.
+// Either way the captain is not told which kind she was. He did not go and look.
+function slipAway(id) {
+  const sh = shipById(id);
+  if (!sh) return cardDone();
+  const noticed = hexDistance(sh, { q: state.q, r: state.r }) <= shipStats(sh.culture, sh.hull).ear;
+  if (!shipMeansHarm(sh) || !noticed || rand() < SLIP_ODDS) {
+    sh.evaded = true;
+    log('You turn off and let the horizon have her. Whatever she was, she was not your business today.', '', 'SAIL');
+    return cardDone();
+  }
+  comeAbout(sh, 'She has seen us.');
+}
+
+// APPROACH — a stern chase on the chart, a hex a turn like any other sailing,
+// with the red line on HER. It ends in her colours, or in her topsails going
+// under because she is simply the faster hull.
+function approachShip(id) {
+  const sh = shipById(id);
+  cardClose();
+  if (!sh) return;
+  if (hexDistance(sh, { q: state.q, r: state.r }) <= 2) return coloursCard(sh);
+  if (state.currentDepth > 0) { log('You cannot close on a sail from under the water. Surface first.', 'warn', 'SAIL'); return; }
+  state.travel = [{ q: sh.q, r: sh.r }];
+  state.travel.eye = true;
+  state.travel.chase = sh.id;
+  state.travel.best = hexDistance(sh, { q: state.q, r: state.r });
+  state.travel.since = 0;
+  log('You put the helm over and close on her.', '', 'HELM');
+  travelRun();
+}
+// One step of that chase, asked by `travelStep` before it steers. Returns a
+// reason to stop, or null to keep closing. Reaching her is not a reason to
+// stop — it is the next card.
+function chaseTick() {
+  const T = state.travel, sh = shipById(T.chase);
+  if (!sh) return 'she is gone';
+  const d = hexDistance(sh, { q: state.q, r: state.r });
+  if (d <= 2) { travelStop(null); coloursCard(sh); return ''; }
+  if (d > 12) return 'she has run you out of sight';
+  if (d < T.best) { T.best = d; T.since = 0; }
+  else if (++T.since >= CHASE_GIVE_UP) return 'she has the legs of you';
+  T[0] = { q: sh.q, r: sh.r };
+  return null;
+}
+
+// ---- HER COLOURS -----------------------------------------------------------
+// The same hull, in her owner's paint: plating in their colour, their device at
+// the masthead (see CULT_INK and CULT_MARK). And what a glass and a memory tell
+// you: whose she is, what is on her deck, and how you stand with her people.
+function coloursCard(sh) {
+  const cu = CULTURES[sh.culture], H = HULLS[sh.hull], st = shipStats(sh.culture, sh.hull);
+  const mark = logHistory[logHistory.length - 1];
+  if (!sh.known) {
+    sh.known = true;
+    const whose = cu.short + (/s$/.test(cu.short) ? "'" : "'s");
+    log(`You close the range. ${ucfirst(whose)} colours, and ${H.name} by her lines.`, '', 'SAIL');
+  }
+  if (shipMeansHarm(sh) && !sh.evaded) return comeAbout(sh, sh.greed && !standingHostile(sh.culture)
+    ? `It is not personal. They want what you are carrying${sh.greedFor ? ' (' + sh.greedFor + ')' : ''}.`
+    : ucfirst(cu.short) + ' know your boat.');
+  const facts = shipFacts(sh);
+  const armed = (state.torpedoes || 0) > 0 || !!(state.armament && WEAPONS[state.armament]);
+  const choices = [];
+  // SHE KNOWS THE BOAT AND HAS NOTHING TO SHOOT WITH. The old Close button said
+  // this and sent her running; so does the card.
+  if (standingHostile(sh.culture) && st.guns <= 0 && !alliedWith(sh.culture)) {
+    if (!sh.fleeing) log('They know the boat, and they have nothing to shoot with. She puts her helm over and runs.', 'warn', 'SAIL');
+    sh.fleeing = true;
+    if (armed) choices.push({ label: 'Attack her', sub: 'She cannot answer — and their people will hear of it', act: () => actionCard(sh.id, 'yours') });
+    choices.push({ label: 'Let her run', primary: true, act: cardDone });
+  } else {
+    const told = (state.hailed || []).indexOf(sh.id) >= 0;
+    if (!told) choices.push({ label: 'Hail her', sub: 'News, and a little goodwill. One hull, one hail', primary: true, act: () => hailCard(sh.id) });
+    if (armed && !alliedWith(sh.culture)) choices.push({ label: 'Attack her', sub: attackCostSaid(sh), act: () => actionCard(sh.id, 'yours') });
+    choices.push({ label: 'Leave her be', primary: told, act: cardDone });
+  }
+  cardOpen({ kind: 'colours', ship: sh.id, scene: shipScenes(sh).near, flag: sh.culture,
+    title: ucfirst(cu.short) + ' — ' + H.name.replace(/^an? /, ''),
+    body: cardSaidSince(mark).concat(facts, [oddsSaid(sh, true)]), choices: choices });
+}
+function shipFacts(sh) {
+  const cu = CULTURES[sh.culture], st = shipStats(sh.culture, sh.hull);
+  const out = [cFact('Her colours', ucfirst(cu.name) + (cu.motto ? ' — “' + cu.motto + '”' : '') )];
+  out.push(cFact('Her guns', gunsSeen(st)));
+  if (st.cargo > 0) out.push(cFact('Her hold', 'Riding deep. There is freight in her.'));
+  out.push(cFact('Standing', standingSaid(sh.culture)));
+  return out;
+}
+// What opening fire costs, said before the first shot instead of after it.
+function attackCostSaid(sh) {
+  const com = state.commission;
+  if (com && com.against === sh.culture && atWar(com.forCulture, com.against)) return 'A lawful prize under your commission — her people will hate you all the same';
+  return 'It will cost you with ' + CULTURES[sh.culture].short;
+}
+function hailCard(id) {
+  const sh = shipById(id);
+  if (!sh) return cardDone();
+  const mark = logHistory[logHistory.length - 1];
+  hailShip(sh);
+  cardResult(sh, 'Hailed', cardSaidSince(mark));
+}
+
+// ---- COMING ABOUT ----------------------------------------------------------
+// The one sentence Sean asked for by name. She has turned toward the boat and
+// she has guns; this is the second chance and the thin one.
+function comeAbout(sh, why) {
+  sh.chasing = true;
+  const close = sh.known || hexDistance(sh, { q: state.q, r: state.r }) <= 2;
+  if (close) sh.known = true;
+  mateSays(`She is coming about${sir()}. ${why}`, `She has put her head round and she is coming for you. ${why}`, 'danger', 'SAIL');
+  sfx('contact');
+  if (cardHold || !gameStarted || state.foot) return;
+  const armed = (state.torpedoes || 0) > 0 || !!(state.armament && WEAPONS[state.armament]);
+  const sc = shipScenes(sh);
+  const body = [cSaid(`She is coming about${sir()}.`, 'She is coming about.'), cP(why, 'bad')];
+  if (close) body.push(...shipFacts(sh));
+  else body.push(cFact('Her lines', ucfirst(HULLS[sh.hull].name) + '.'), cP('No colours yet — but nobody turns like that to say good morning.', 'dim'));
+  body.push(oddsSaid(sh, close));
+  const choices = [];
+  if (armed) choices.push({ label: 'Stand and fight', sub: 'Hold the surface and let her come into reach of the tubes', act: () => actionCard(sh.id, 'stand') });
+  choices.push({ label: 'Break away', sub: 'One more chance to lose her, and a thinner one', primary: !armed, act: () => breakAway(sh.id) });
+  cardOpen({ kind: 'about', ship: sh.id, scene: close ? sc.near : sc.far, flag: close ? sh.culture : null,
+    title: 'She is coming about', body: body, choices: choices });
+}
+function breakAway(id) {
+  const sh = shipById(id);
+  if (!sh) return cardDone();
+  if (rand() < BREAK_ODDS) {
+    sh.evaded = true; sh.chasing = false;
+    const mark = logHistory[logHistory.length - 1];
+    log('You turn stern-on and trim her down until the sea runs over the casing. Her head swings, searching, and swings back to her course.', 'good', 'SAIL');
+    return cardResult(sh, 'She has lost you', cardSaidSince(mark));
+  }
+  actionCard(sh.id, 'caught');
+}
+
+// ---- THE ACTION ------------------------------------------------------------
+// A ROUND AT A TIME, AND EVERY ROUND IS THE OLD ATTACK BUTTON. `attackShip` is
+// the whole of the fighting in this game — your shot, her answer, the standing
+// it costs, the hold if she goes down — and it is called here unchanged. What
+// the card adds is that you can see it: her state, yours, what is left in the
+// racks, and the one other thing a submarine can always do, which is leave.
+//
+// HOW IT IS JOINED. If you opened it, you are in reach already. If she is
+// coming for you, the sea is wound forward — real turns, the same ones a wait
+// spends — until she is: to the reach of the tubes if you stood to fight, so
+// the first shot is yours; all the way alongside if she caught you breaking
+// away, so the first shot is hers.
+function sheCloses(sh, reach) {
+  cardHold = true;
+  let n = 0;
+  while (state.alive && !sh.gone && n++ < 40 && hexDistance(sh, { q: state.q, r: state.r }) > reach) {
+    state.moves++;
+    applyMoveCosts(1);
+    seaTick();
+  }
+  cardHold = false;
+  return !sh.gone && hexDistance(sh, { q: state.q, r: state.r }) <= Math.max(reach, 2);
+}
+function actionCard(id, how) {
+  const sh = shipById(id);
+  if (!sh) return cardDone();
+  const mark = logHistory[logHistory.length - 1];
+  if (how === 'stand' || how === 'caught') {
+    const st = shipStats(sh.culture, sh.hull);
+    const here = sheCloses(sh, how === 'stand' ? 2 : 1);
+    if (!state.alive) return cardClose();
+    if (!here) { sh.evaded = true; return cardResult(sh, 'She has lost you', [cP('She never came up. Whatever she turned for, she has thought better of it.')]); }
+    sh.known = true;
+    // Caught on the surface with the boat half-turned: her first salvo is in
+    // the air before the card is. (Alongside, the sea itself may already have
+    // fired it — `firedAt` says so, and she does not get two.)
+    if (how === 'caught' && st.guns > 0 && sh.firedAt !== state.moves) {
+      sh.firedAt = state.moves;
+      log('No good. She has the range before the boat has finished turning.', 'danger', 'SAIL');
+      shipOpensFire(sh);
+      if (!state.alive) return cardClose();
+    }
+  }
+  actionShow(sh, cardSaidSince(mark), how === 'yours' ? 'You have the first shot.'
+    : how === 'stand' && sh.firedAt !== state.moves ? 'She is in reach of the tubes, and the first shot is yours.' : null);
+}
+function hullSaid(sh) {
+  const st = shipStats(sh.culture, sh.hull);
+  const f = (sh.hp == null ? st.hull : sh.hp) / st.hull;
+  return f >= 0.99 ? 'Untouched.' : f > 0.66 ? 'Hit, and shrugging it off.' : f > 0.33 ? 'Hurt. She is listing.' : 'Down by the head and burning.';
+}
+function actionShow(sh, said, note) {
+  const st = shipStats(sh.culture, sh.hull), H = HULLS[sh.hull], cu = CULTURES[sh.culture];
+  const fish = state.torpedoes || 0, arm = state.armament && WEAPONS[state.armament];
+  const alongside = hexDistance(sh, { q: state.q, r: state.r }) <= 1;
+  const body = said.slice();
+  if (note) body.push(cP(note, 'dim'));
+  body.push(cFact('Her', hullSaid(sh) + (st.guns > 0 ? '' : ' Unarmed.')));
+  body.push(cFact('Us', `Hull ${Math.round(state.hull)}. ${fish} fish in the racks${arm ? ', and the harpoon gun' : ''}.`));
+  const choices = [];
+  // ONE FIRE BUTTON, and which weapon it opens is `attackShip`'s to say: the fish
+  // unless a Gun is aboard to serve the harpoon alongside. That choice is the
+  // Gun's whole trade, and two buttons here would have given it away for free.
+  const served = arm && crewLvl('gun') > 0 && alongside;
+  if (fish > 0 && !served) choices.push({ label: 'Fire a torpedo', sub: `${fish} left — about ${WEAPONS.torpedo.power} into her`, primary: true, act: () => actionRound(sh.id, 'fire') });
+  else if (arm) choices.push({ label: 'Fire the harpoon gun', sub: `About ${arm.power} into her, and it wants her alongside`, primary: true, act: () => actionRound(sh.id, 'fire') });
+  choices.push({ label: 'Dive out from under her', primary: !choices.length,
+    sub: st.guns > 0 && (sh.chasing || sh.hostileTo) ? 'She gets one salvo as the hatch comes down' : 'Break off, and leave her the surface',
+    act: () => actionRound(sh.id, 'dive') });
+  cardOpen({ kind: 'action', ship: sh.id, scene: shipScenes(sh).near, flag: sh.culture,
+    title: 'The action — ' + cu.short.replace(/^the /, '') + ' ' + H.name.replace(/^an? /, ''), body: body, choices: choices });
+}
+// Which hull `attackShip` fires on. The button asks for the nearest in reach;
+// the card has a particular one in mind, and with two sails close it matters.
+let attackTarget = null;
+function actionRound(id, what) {
+  const sh = shipById(id);
+  if (!sh) return cardDone();
+  const mark = logHistory[logHistory.length - 1];
+  const st = shipStats(sh.culture, sh.hull);
+  if (what === 'dive') {
+    if (st.guns > 0 && (sh.chasing || sh.hostileTo)) {
+      log('She gets one in as the hatch comes down.', 'danger', 'SAIL');
+      shipOpensFire(sh);
+      if (!state.alive) return cardClose();
+    }
+    sh.evaded = true; sh.chasing = false;
+    // Under, if there is water to be under in. `changeDepth` is the real dive:
+    // it spends the air and the turn, and the sea takes her off your back.
+    if (!diveBlocked(1)) changeDepth(activeSub().diveStepFast);
+    else log('No water here to dive in. You run for it on the surface, low in the swell, and she loses the thread.', '', 'SAIL');
+    if (!state.alive) return cardClose();
+    return cardResult(sh, 'Broken off', cardSaidSince(mark));
+  }
+  attackTarget = sh;
+  attackShip();
+  attackTarget = null;
+  if (!state.alive) return cardClose();
+  const said = cardSaidSince(mark);
+  if (sh.gone) return cardResult(sh, 'She is gone', said);
+  actionShow(sh, said, sh.fleeing ? 'She is running, and she is still in reach.' : null);
+}
+
 function shipInReach() {
   if (state.foot || !state.alive || state.currentDepth !== 0) return null;
   let best = null, bd = 99;
@@ -7571,34 +8431,24 @@ function syncSailBtn() {
 }
 
 // CLOSE ON HER. Her colours become readable, and whoever hates you acts on it.
+// THE BUTTON AND THE CARD ARE THE SAME DOOR. This used to do the whole thing in
+// three log lines — and for a people that hunted you it opened fire "before you
+// have finished reading the flag", which is the one outcome Sean's flow rules
+// out: you are told she is coming about, and you get a chance to break away
+// before anybody shoots. So the button opens the card, the card decides, and
+// there is one way these meetings go.
 function closeOnShip() {
   const sh = shipInReach();
   if (!sh) return;
-  if (!sh.known) {
-    sh.known = true;
-    const cu = CULTURES[sh.culture], H = HULLS[sh.hull];
-    const whose = cu.short + (/s$/.test(cu.short) ? "'" : "'s");
-    log(`You close the range. ${whose} colours, and ${H.name} by her lines.`, '', 'SAIL');
-    // AND NOW THEY DECIDE. A people that wants you dead does not wait to be
-    // hailed — and one that is merely watching you will let you speak.
-    if (standingHostile(sh.culture)) {
-      const st2 = shipStats(sh.culture, sh.hull);
-      if (st2.guns > 0) {
-        log(`They know the boat. ${cu.motto || 'They do not hail.'} The first round goes over the sail before you have finished reading the flag.`, 'danger', 'SAIL');
-        shipOpensFire(sh);
-        updateHUD(); render(); scheduleSave();
-        return;
-      }
-      log('They know the boat, and they have nothing to shoot with. She puts her helm over and runs.', 'warn', 'SAIL');
-      sh.fleeing = true;
-      updateHUD(); render(); scheduleSave();
-      return;
-    }
-    log('No gun ports opening. You are near enough to hail.', '', 'SAIL');
-    updateHUD(); render(); scheduleSave();
-    return;
-  }
-  hailShip(sh);
+  coloursCard(sh);
+  scheduleSave();
+}
+// The Attack button, likewise: it opens the action rather than the first shot.
+// What firing on her flag costs is on the card before the trigger is.
+function attackFromButton() {
+  const sh = shipInReach();
+  if (!sh || !sh.known) return;
+  actionCard(sh.id, 'yours');
 }
 
 // She fires. Ships are not creatures and this is not the deep's hunting model —
@@ -7649,7 +8499,7 @@ function hailShip(sh) {
 // smart way to take a merchant is not implemented as a special case — it falls
 // out of the fact that her guns cannot reach you if you are not up here.
 function attackShip() {
-  const sh = shipInReach();
+  const sh = attackTarget || shipInReach();
   if (!sh || !sh.known) return;
   const cu = CULTURES[sh.culture], H = HULLS[sh.hull];
   const st2 = shipStats(sh.culture, sh.hull);
@@ -11546,8 +12396,35 @@ function cargoWanted(culture) {
 }
 
 function shipHunting(sh) {
-  if (!sh || sh.gone || sh.fleeing) return false;
+  // EVADED IS FOR GOOD. A hull you slipped or broke away from has lost you, and
+  // an evasion she could undo next turn by looking round again would be a
+  // choice that did nothing.
+  if (!sh || sh.gone || sh.fleeing || sh.evaded) return false;
   if (state.currentDepth > 0) return false;
+  if (!shipMeansHarm(sh)) return false;
+  // A CHASE THAT GIVES UP BECAUSE YOU ARE FAST IS NOT A CHASE. Once she has put
+  // her head round she holds on out to the edge of the world you can perceive.
+  // Losing her means going under or getting clear altogether, not simply having
+  // the better speed.
+  const d = hexDistance(sh, { q: state.q, r: state.r });
+  if (sh.chasing) return d <= SHIP_RANGE;
+  // TO START ONE SHE HAS TO HAVE SEEN YOU — and you saw her first, or at the
+  // same moment. This was a flat nine hexes for every hull, the same range at
+  // which the boat sights a sail, so a hunter turned on the very tick she was
+  // sighted and the captain's first news of her was that it was too late. Two
+  // changes, both small. She waits one turn after being sighted (`metAt`),
+  // which is the turn the SAIL HO card is answered in; and her range is her own
+  // lookouts' — `ear`, in the hull table since the table was written and read
+  // by nothing until now. A destroyer still has you at nine; a merchant with a
+  // deck gun has to be within four.
+  if (sh.metAt == null || state.moves <= sh.metAt) return false;
+  return d <= Math.min(9, shipStats(sh.culture, sh.hull).ear);
+}
+
+// DOES SHE MEAN YOU HARM, and can she do any? The standing half of the question,
+// with no range in it — the cards ask this before they know whether she has
+// seen the boat at all.
+function shipMeansHarm(sh) {
   // A TREATY IS WORTH SOMETHING OR IT IS WORTH NOTHING. This is the whole of what an
   // alliance buys, and it is enough: their hulls leave you alone, greed and all.
   if (alliedWith(sh.culture)) return false;
@@ -11563,12 +12440,7 @@ function shipHunting(sh) {
     if (!sh.greed) return false;
     if (!cargoWanted(sh.culture)) { sh.greed = false; return false; }   // hold is empty now
   }
-  if (shipStats(sh.culture, sh.hull).guns <= 0) return false;
-  // A CHASE THAT GIVES UP BECAUSE YOU ARE FAST IS NOT A CHASE. Nine hexes to
-  // START one — that is sighting range — but once she has put her head round she
-  // holds on out to the edge of the world you can perceive. Losing her means
-  // going under or getting clear altogether, not simply having the better speed.
-  return hexDistance(sh, { q: state.q, r: state.r }) <= (sh.chasing ? SHIP_RANGE : 9);
+  return shipStats(sh.culture, sh.hull).guns > 0;
 }
 
 function shipsTick() {
@@ -11663,12 +12535,13 @@ function shipsTick() {
     // alongside would be the funniest bug in the game.
     const hunt = shipHunting(sh);
     if (hunt && !sh.chasing) {
-      sh.chasing = true;
-      log(sh.greed && !standingHostile(sh.culture)
-        ? `She has put her head round and she is coming for you — and it is not personal. ${ucfirst(CULTURES[sh.culture].short)} want what you are carrying${sh.greedFor ? ' (' + sh.greedFor + ')' : ''}.`
-        : `She has put her head round and she is coming for you. ${ucfirst(CULTURES[sh.culture].short)} know your boat.`,
-        'danger', 'SAIL');
-      sfx('contact');
+      // SHE COMES ABOUT. At a distance you know only that she has turned; whose
+      // she is and why are things her colours tell you, when you can read them.
+      const near = sh.known || hexDistance(sh, { q: state.q, r: state.r }) <= 2;
+      comeAbout(sh, !near ? 'She has seen us, and she means it.'
+        : sh.greed && !standingHostile(sh.culture)
+          ? `It is not personal. ${ucfirst(CULTURES[sh.culture].short)} want what you are carrying${sh.greedFor ? ' (' + sh.greedFor + ')' : ''}.`
+          : `${ucfirst(CULTURES[sh.culture].short)} know your boat.`);
     } else if (!hunt && sh.chasing) {
       sh.chasing = false;
       if (state.currentDepth > 0) log('Her screws go on over the top of you and then away. Whatever she was looking for, it was on the surface.', '', 'SONAR');
@@ -11784,6 +12657,7 @@ function shipsTick() {
     if (d > 9) { sh.seen = false; continue; }
     if (sh.seen) continue;
     sh.seen = true;
+    sh.metAt = state.moves;       // ...and she may not turn on you before the turn after this one
     const H = HULLS[sh.hull], cu = CULTURES[sh.culture];
     if (state.currentDepth === 0) {
       // A SIGHTING DOES NOT NAME HER. Sean's flow, out of Pirates!: you sight a
@@ -11796,6 +12670,10 @@ function shipsTick() {
                `Sail, ${bearing(state.q, state.r, sh.q, sh.r)} of you. ${H.flavor}`,
                '', 'SAIL');
       log('Close on her to read her colours, or hold your course and let her go.', '', 'SAIL');
+      // AND THE CARD. One at a time: a second sail sighted while the first is
+      // still being decided is in the log, and has a card of her own to come if
+      // she ever turns.
+      if (!cardNow && !cardHold && gameStarted && !state.foot && !state.hunt && !(state.travel && state.travel.chase)) sailHoCard(sh);
     } else if (d <= passiveContactR(0, sh.q, sh.r)) {
       // ANGELSHARK #19: surface screws were audible from 600 m down as if the
       // thermocline were a rumour. passiveContactR(0, ...) IS the hearing
@@ -12366,6 +13244,13 @@ function render() {
   // tiles, lamplight, a body instead of a boat.
   if (state.foot) { syncFootControls(true); renderInterior(); return; }
   syncFootControls(false);
+
+  // A PASSAGE IS WATCHED ON THE SEA CHART, which is lying over this one. At nine
+  // hexes a second there is no sense rebuilding a picture nobody can see — and
+  // on a phone there is not the time. The sheet moves its boat instead, and the
+  // helm coming back (`passageHalt` clears `running` first) draws this chart
+  // once, properly, for when the sheet is put away.
+  if (state.passage && state.passage.running && chartIsOpen()) { chartTick(); return; }
 
   // Clear — but keep the defs. They are two Gaussian-blur filters and a
   // gradient, none of which ever change, and they were being re-parsed from
@@ -20251,7 +21136,13 @@ function courseTo(gq, gr) {
 function travelStop(why) {
   if (travelTimer) { clearInterval(travelTimer); travelTimer = 0; }
   const had = state.travel && state.travel.length;
+  const chase = !!(state.travel && state.travel.chase);
   state.travel = null;
+  // A PASSAGE STOPS WITH THE HELM. The course stays on the sheet; `passageHalt`
+  // says why under it. (A chase that ends without her colours leaves the
+  // passage hove to: the captain went after a sail, and resumes when he says.)
+  if (state.passage && state.passage.running) passageHalt(why);
+  if (chase && why && state.passage) state.passage.resume = false;
   if (why && had) mateSays(`Helm is yours${mateAddress()} — ${why}.`,
     'You take the helm back — ' + why + '.', 'warn', 'HELM');
   render();
@@ -20316,6 +21207,14 @@ function travelStep() {
   // range, a weapon in the water, a hull that will not take much more, air nearly gone.
   const stop = autoHazard();
   if (stop) return travelStop(stop);
+  // CLOSING ON A SAIL: the mark is a hull, and it moves. `chaseTick` re-aims the
+  // course at her, or says why the chase is over, or — when she is in reach —
+  // ends it itself and puts her colours on the table.
+  if (state.travel.chase) {
+    const over = chaseTick();
+    if (over === '') return;
+    if (over) return travelStop(over);
+  }
   const eye = !!state.travel.eye;
   const nextHex = eye ? eyeStep(state.travel[0]) : state.travel[0];
   if (!nextHex) return travelStop(state.currentDepth > 0 ? 'she cannot steer by eye under water' : 'the way ahead is not open');
@@ -20328,11 +21227,21 @@ function travelStep() {
   if (!state.travel) return;                    // the step itself ended the course (she went ashore)
   if (!eye || (state.q === state.travel[0].q && state.r === state.travel[0].r)) state.travel.shift();
   if (!state.travel.length) {
+    // A LEG OF A PASSAGE: no ceremony, the next mark. The helm is handed
+    // straight on rather than back, so the run does not stop to be restarted.
+    if (state.travel.passage && state.passage && state.passage.running) {
+      if (travelTimer) { clearInterval(travelTimer); travelTimer = 0; }
+      state.travel = null;
+      return passageLeg();
+    }
     travelStop(null);
     mateSays(`Course made good${mateAddress()}.`, 'Course made good.', '', 'HELM');
     return;
   }
-  if (sightedSince(mark)) travelStop(null);
+  // (Not while closing on a sail. The captain has a hull in his glass and has
+  // said so; the sounder answering under the keel on the way is in the log, and
+  // if anything turns on him it has a card of its own.)
+  if (!state.travel.chase && sightedSince(mark)) travelStop(null);
 }
 
 // EVERY TAP ON THE CHART GETS AN ANSWER. Sean, playing on his phone: "Plotting a
@@ -20442,7 +21351,7 @@ function travelRun() {
   travelStep();
   if (state.travel) {
     if (travelTimer) clearInterval(travelTimer);
-    travelTimer = setInterval(travelStep, state.currentDepth <= 0 ? TRAVEL_MS_SURFACE : TRAVEL_MS);
+    travelTimer = setInterval(travelStep, state.travel.pace || (state.currentDepth <= 0 ? TRAVEL_MS_SURFACE : TRAVEL_MS));
   }
 }
 
@@ -20700,8 +21609,20 @@ function atReachableBottom(tile) {
 // your water — sealed behind stone, and nothing may announce or chirp it.
 function prizeDepthHere(tile) {
   const stack = poiStack(tile).filter(p => cells.has(cellKey(tile.q, tile.r, p.d)));
-  if (!stack.length) return tile.floor == null ? null : tile.floor;   // legacy seabed
   const run = cellRun(tile.q, tile.r, state.currentDepth);
+  if (!stack.length) {
+    // A LEGACY SEABED PRIZE IS WORKED WHERE `atReachableBottom` SAYS IT IS, and
+    // this said somewhere else. `tile.floor` is the bottom of everything the hex
+    // holds — the caves under the shelf included — so a wreck lying on the shelf
+    // in 180 m of water was announced as "Wreckage, 10,440 m below the keel"
+    // while the sounder, one line above it, said 180. Measured over eight
+    // worlds: 16 of the 56 prizes a boat can sail over and be told about, 29%,
+    // were announced kilometres deeper than they are worked. The claim rule
+    // relaxes to the floor of the water you can actually swim when the hex's
+    // true floor is sealed behind stone; so does this, by the same test.
+    if (tile.floor == null) return null;
+    return (run && run.floor < tile.floor) ? run.floor : tile.floor;
+  }
   if (!run) return null;
   let best = null;
   for (const p of stack) {
@@ -21462,7 +22383,7 @@ function endGame(title, summary) {
   // resolves while you are reading the Hold — and leaving it up put an opaque
   // sheet between the player and the only button on the screen.
   ['inventory', 'seachart', 'muster', 'port', 'options', 'bestiary',
-   'trade', 'transcript'].forEach(id => {
+   'trade', 'transcript', 'card'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('show');
   });
@@ -21481,6 +22402,7 @@ function endGame(title, summary) {
   state.q = 0; state.r = 0; state.currentDepth = 0;
   state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // and so does a new boat
   introduced.clear(); state._asked = null;   // nobody has spoken yet, and nothing has been asked
+  state.passage = null; cardNow = null; cardHold = false;   // no course laid, no card on the table
   // THE DROWNED JOIN THE POOL. Every hand aboard when she went down is now
   // somebody the deep has a name for, and a deck somewhere may put them in
   // front of you again, wearing what they were wearing.
@@ -21557,6 +22479,7 @@ function restart() {
   state.q = 0; state.r = 0;
   state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // a new sea gets its first reading
   introduced.clear(); state._asked = null;   // nobody has spoken yet, and nothing has been asked
+  state.passage = null; cardNow = null; cardHold = false;   // no course laid, no card on the table
   toldSpace.clear();   // ...and every room in it is a room you have not been told about
   // A NEW SEA ARRIVES UNREAD. These four are keyed by bare coordinates or by
   // the campaign, not by the seed, so they used to walk into the next world
@@ -22039,6 +22962,7 @@ function resumeGame(save) {
   state._airMark = (typeof save.airMark === 'number') ? save.airMark : null;   // null re-derives from the gauge
   state._lastSetKey = null; state._lastSndKey = null; state._lastFloor = null; state._inTrench = false;   // dampers are per-session
   introduced.clear(); state._asked = null;   // nobody has spoken yet, and nothing has been asked
+  state.passage = null; cardNow = null; cardHold = false;   // no course laid, no card on the table
   state.decoys = save.decoys == null ? 3 : save.decoys;
   const __bsBtn = document.getElementById('btn-bestiary');
   if (__bsBtn) __bsBtn.style.display = Object.keys(state.bestiary).length ? '' : 'none';
@@ -22466,6 +23390,9 @@ var __oc = document.getElementById('options-close'); if (__oc) __oc.addEventList
 var __bsc = document.getElementById('bestiary-close'); if (__bsc) __bsc.addEventListener('click', closeBestiary);
 document.getElementById('chart-close').addEventListener('click', closeSeaChart);
 document.getElementById('chart-fit').addEventListener('click', chartReset);
+document.getElementById('chart-undo').addEventListener('click', passageUndo);
+document.getElementById('chart-clear').addEventListener('click', passageClear);
+document.getElementById('chart-go').addEventListener('click', passageGo);
 document.getElementById('chart-up').addEventListener('click', () => chartLayerStep(-1));
 document.getElementById('chart-down').addEventListener('click', () => chartLayerStep(1));
 document.getElementById('log').addEventListener('click', openTranscript);
@@ -22524,7 +23451,7 @@ document.getElementById('btn-sail').addEventListener('click', () => {
   const rv = rivalInReach();
   if (rv) hailRival(rv);
 });
-document.getElementById('btn-attack').addEventListener('click', attackShip);
+document.getElementById('btn-attack').addEventListener('click', attackFromButton);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();
 document.getElementById('go-restart').addEventListener('click', anotherBoat);
