@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v23';  // bumped: the phone on its side gets two columns, so the map and the title's DIVE are on screen
+const VERSION = 'fathom-v24';  // bumped: a city's mission never names a thing it would refuse to buy
 const SHELL = [
   './',
   'fathom-chart.html',

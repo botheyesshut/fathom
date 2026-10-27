@@ -61,7 +61,7 @@ vm.runInContext(script + `
 ;var __L=[]; log=function(t,c,e){ __L.push(String(t)) };
 gameStarted = true;
 var __X = { L: __L, state, ITEMS, CULTURES, BOARD_RANKS,
-  boardOffer, buyPriceFrom, sellPriceTo, resolveBerth, boardRank,
+  missionOffer, boardOffer, buyPriceFrom, sellPriceTo, resolveBerth, boardRank,
   seedTo(v){ worldSeed=v; interiorSalt=':'+v; resetWorldCaches(); interiorCache.clear();
              state.items={}; state.poisFound=[]; state.berth=null; state.ticket=0;
              state.cargo=0; state.cargoBanked=0; state.alive=true; } };
@@ -161,6 +161,31 @@ check(/state\.moves\+\+/.test(atk), 'attacking a ship spends a turn like everyth
 check(X.CULTURES.mariners && (src.match(/mariners:\s*\{[^}]*guns:\s*0/) || /guns:\s*0/.test(src)),
   'the carrying trade is unarmed, so the cost has to be the clock and not the risk',
   'mariner hulls carry no guns');
+
+//--- 5. A MISSION NEVER ASKS FOR WHAT THE CITY WILL NOT BUY --------------------
+// `missionOffer` read `cu.buys.keys` raw, so a key the people also SELL (which
+// `buyMult` refuses to pay for) could be named as the shortage — and the
+// arrangement is kept by selling it to them, which they would not accept. Dormant
+// while no culture listed a key it also stocks; this plants one and checks the
+// offer still steers round it.
+console.log('\n--- 5. A MISSION IS NEVER FOR A THING THEY REFUSE ---');
+{
+  const cu = X.CULTURES.dagon, planted = cu.sells[0];
+  const keys0 = cu.buys.keys.slice();
+  cu.buys.keys.push(planted);
+  let offers = 0, refused = 0;
+  for (let i = 0; i < 300; i++) {
+    X.seedTo(1);
+    const o = X.missionOffer({ culture: 'dagon', id: 'city' + i });
+    if (!o) continue;
+    offers++;
+    if (X.sellPriceTo('dagon', o.item) === 0) refused++;
+  }
+  cu.buys.keys.length = 0; keys0.forEach(k => cu.buys.keys.push(k));
+  check(offers > 0, 'a mission is offered at all', offers + ' offers');
+  check(refused === 0, 'none is for a thing the city will not pay for',
+    refused ? refused + ' of ' + offers + ' named ' + planted : 'every offer has a price');
+}
 
 console.log('\n' + (fail === 0 ? 'GREED HELD OFF — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);

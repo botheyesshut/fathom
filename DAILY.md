@@ -8,6 +8,37 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-10-27 (night) — A city's mission can no longer name a thing it would refuse
+
+**Changed**
+- Nothing a player would notice yet: a city's mission is now only ever for goods the city will actually pay for (B4). It was a latent hole; no live offer was affected. Build v24.
+
+**Broke** — nothing. Battery green on arrival and after; dead functions 0. The new check fails on the old code (61 of 300 offers named a refused item) and passes on the new.
+
+**Test these three** — the change needs no human test; the three most useful instead:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | The three from two entries ago | passage, a sail's card, a fight | still untried by hand |
+| 2 | Take a mission in an underwater city | city → arrangements | does the ask make sense, and is the pay worth the trip? (see A9) |
+| 3 | Sideways play, a few turns | title → DIVE → MORE | the landscape build, still on your thumb |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed, as the sandbox blocks it). Phone, landscape, desktop: nothing off the right edge, nothing cut off, 0 console errors, 0 failed requests, no clipped text. Maps 40% / 63% / 52%.
+- Steps not taken at all three widths: bestiary and bestiary-close ("#btn-bestiary is not on screen") — Suspected: either the button is hidden until something is found, or a control moved. Evidence: `tests/out/browse.md`. Not opened by eye tonight.
+- Under 44 px: chart buttons and Options toggles (40 px; 36 px in landscape) — unchanged and deliberate.
+- Bots, 40 captains x 300 turns: no invariant violated in 9,653 turns. Never reached: torpedoes, deep and abyss, stations, selling to a people, upgrades — the income question (A3), yours. 4 of 36 items ever held.
+- Screenshots were not opened tonight; the above is measurement only.
+
+**Questions for Sean**
+- A9 — A mission pays its crates on top of the ordinary sale of the goods (about +8 a unit at Confluence). Intended bonus, or should the mission pay replace the sale?
+- Is the bestiary button meant to be hidden at the start?
+- (Still open from before: A1, A7, the first-collision line.)
+
+**Tomorrow** — D1: re-audit `PLAYTEST_FINDINGS.md`; then B5.
+
+---
+
 ## 2026-10-27 — The phone on its side now has a map
 
 **Changed**

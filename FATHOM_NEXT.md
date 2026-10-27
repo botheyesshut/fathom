@@ -47,11 +47,20 @@ built this and lost it to a refused push; this is the rebuild.)
 - Not touched: the browse.js "under 44 px" list in landscape (chart head
   buttons 36 px, set deliberately by the chart's own landscape block).
 
-- **B4. The mission pool pays for goods the pricing rules refuse.**
-  `missionOffer` reads `cu.buys` raw, so `buyMult`'s no-buy-back rule never
-  applies; measured 2026-08-01 at +6 and +2 a unit, repeatable. Dormant only
-  because Dagon alone holds cities. Fix: build the offer from what `buyMult`
-  would actually pay.
+- **B4 — BUILT 2026-10-27 (v24).** `missionOffer` now keeps only the
+  `buys.keys` that `buyMult` would pay for, so an offer is never for a thing
+  the city refuses to take back. (Original note: it read `cu.buys.keys` raw,
+  measured 2026-08-01 at +6 and +2 a unit.)
+  - Measured: tonight no culture's list held a key it also stocks, so the bug
+    was dormant — no live offer was refused (all 30 sampled offers had a price).
+    `greed.test` section 5 plants one (Dagon's own `gillhood`) and asks 300
+    cities for an offer: before the fix 61 of 300 named it, after, 0. Battery
+    green, dead functions 0.
+  - NOT done, and it is a call, so it is A9 below: a completed mission pays its
+    crates **on top of** the ordinary sale (the arrangement is kept by selling),
+    e.g. 2 ambergris at Confluence: 16 promised + 2×11 sold. Left alone.
+  - My calls: the guard's place (the pool, not the sale). **Knob:** revert the
+    `.filter(k => buyMult(e.culture, k) > 0)` in `missionOffer`.
 - **B5. Phone work the four auditors measured on 2026-08-01, not re-measured
   since — Suspected until browse.js or a thumb confirms:** the Options panel
   jumps to the top on every toggle; 5.6 px between ▼ and ▼▼; `.btn:disabled`
@@ -106,6 +115,9 @@ built this and lost it to a refused push; this is the rebuild.)
 - **A7. Her ports.** Every ship knows the harbour she left and the one she is
   making for and the game never says either. One line on HER COLOURS — *"out
   of Harrow, bound for the Shallows"* — yes or no?
+- **A9. A mission pays twice.** Its crates come on top of the sale price of the
+  goods handed over (~+8 a unit at Confluence). Intended bonus, or should the
+  mission pay replace the sale?
 - **A8. Cities are rare:** 2, 0, 2, 0, 0, 1 within sixty hexes across six
   seeds, so half the worlds cannot reach an alliance. The price of the ticket,
   not the wiring, is the question.

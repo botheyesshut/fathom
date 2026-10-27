@@ -12828,7 +12828,9 @@ function inhabitedBy(q, r, d, kind) {
 function missionOffer(e) {
   if (state.mission && state.mission.culture === e.culture) return state.mission;
   const cu = CULTURES[e.culture];
-  const keys = (cu.buys && cu.buys.keys) || [];
+  // Only what `buyMult` would actually pay for: keeping the arrangement IS selling
+  // it to them, and a people does not buy back its own stock.
+  const keys = ((cu.buys && cu.buys.keys) || []).filter(k => buyMult(e.culture, k) > 0);
   const pool = keys.length ? keys : Object.keys(ITEMS).filter(k => buyMult(e.culture, k) >= 1.2);
   if (!pool.length) return null;
   // Stable per city per standing band, so a captain cannot reroll the offer by
