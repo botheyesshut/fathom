@@ -104,9 +104,12 @@ git commit -m "<title in the project's voice>
 
 <what and why, a few lines>
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: <the model that did the work, e.g. Claude Sonnet 5.5> <noreply@anthropic.com>"
 git push origin main
 ```
+
+The trailer names the model that actually worked — the one you are — so the
+history says who built what.
 
 Sean: no separate branch — *"We can undo anything we do."* If the push to
 `main` is refused, push the same commit to a branch `daily/YYYY-MM-DD`, open a
