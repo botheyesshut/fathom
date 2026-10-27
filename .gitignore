@@ -1,0 +1,8 @@
+# Playwright, for tests/browse.js only. The game has no dependencies.
+node_modules/
+
+# What browse.js writes: screenshots and the two reports. Regenerated every run.
+tests/out/
+
+# Sean's personal permission allowlist for this checkout.
+.claude/settings.local.json

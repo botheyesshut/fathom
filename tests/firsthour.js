@@ -220,7 +220,7 @@ for (const run of cardRuns) {
     seen[k] = (seen[k] || 0) + 1;
   }
 }
-const order = ['log', 'shelf', 'impact', 'current', 'silent', 'layer', 'sounder', 'depth', 'crush', 'port', 'pages', 'chart', 'jettison'];
+const order = ['log', 'shelf', 'impact', 'current', 'silent', 'layer', 'sounder', 'depth', 'crush', 'port', 'chart', 'jettison'];
 for (const k of order) {
   const n = seen[k] || 0;
   console.log(`  ${(k + '            ').slice(0, 12)} fires in ${String(n).padStart(3)} / ${RUNS} runs   ${n === 0 ? '  <-- never fires in hour one' : ''}`);

@@ -1,0 +1,16 @@
+{
+  "name": "fathom",
+  "private": true,
+  "description": "FATHOM — a single-file game. This manifest exists for one reason: tests/browse.js opens the real page in a headless Chromium, and that needs Playwright. The game itself has no dependencies and no build step.",
+  "scripts": {
+    "test": "node tests/run-all.js",
+    "browse": "node tests/browse.js",
+    "browsers": "playwright install chromium",
+    "playtest": "node tests/playtest.js",
+    "moved": "node tests/moved.js",
+    "reachable": "node tests/reachable.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

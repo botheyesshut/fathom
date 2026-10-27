@@ -1,4 +1,108 @@
-# FATHOM — START HERE (last updated 2026-10-02)
+# FATHOM — START HERE (last updated 2026-10-26)
+
+## THE BUILD QUEUE — read this first; the nightly run builds from it (opened 2026-10-26)
+
+Sean, 2026-10-26: *"The main goal is to make it so more progress can be made
+without my having to stop in and direct little things in order for any
+progress at all to happen."* And, asked what the night may build on its own:
+**"Flag it for me, build only what's decided."** So this list has three kinds
+of entry and the kind is the rule:
+
+| mark | means | who builds it |
+|---|---|---|
+| **BUG** | measured, with the evidence named | the nightly run, first |
+| **DECIDED** | Sean said it, quoted, or it is verification work with no taste in it | the nightly run, in order |
+| **ASK** | a call that is his — balance, tone, a noun, a new mechanic | nobody, until he answers |
+
+He answers by writing a line starting `SEAN:` under the item, here or in
+`DAILY.md`. That line moves the item to DECIDED, his words quoted.
+
+The run itself: `.claude/skills/fathom-daily/SKILL.md` (the day), which calls
+`.claude/skills/fathom-playtest/SKILL.md` (the eyes). The eyes are
+`tests/browse.js` — the real page in a headless Chromium at 375×812, 812×375
+and 1280×800, screenshotted after every tap — plus the battery and the bots.
+A cloud routine runs the day at 02:30 Pacific so the report is at the top of
+`DAILY.md` by six. No separate branch, at his word: *"We can undo anything we
+do."*
+
+### BUGS — measured, open
+
+- **B1. Landscape (812×375): opening MORE pushes MUSTER and OPTIONS 26 px past
+  the bottom edge, and nothing scrolls.** Verified 2026-10-26,
+  `tests/out/landscape/06-more.png`. The drawer takes its height from the
+  viewport rather than from the log, which is the thing that can give way.
+- **B2. Landscape: the main screen has no map at all.** HUD, log, sonar dial,
+  dive row and control row fill the whole 375 px and the hex chart gets zero
+  height. Verified 2026-10-26, `tests/out/landscape/02-look.png`. The sea
+  chart in landscape is fine (`04-chart.png`), which is the case Sean asked for.
+  Fix, mine unless he says otherwise: in landscape the log is capped so the map
+  keeps at least a third of the height.
+- **B3. Landscape: the title's DIVE button sits 11 px below the bottom edge.**
+  Verified 2026-10-26, `tests/out/landscape/00-title.png`.
+- **B4. The mission pool pays for goods the pricing rules refuse.**
+  `missionOffer` reads `cu.buys` raw, so `buyMult`'s no-buy-back rule never
+  applies; measured 2026-08-01 at +6 and +2 a unit, repeatable. Dormant only
+  because Dagon alone holds cities. Fix: build the offer from what `buyMult`
+  would actually pay.
+- **B5. Phone work the four auditors measured on 2026-08-01, not re-measured
+  since — Suspected until browse.js or a thumb confirms:** the Options panel
+  jumps to the top on every toggle; 5.6 px between ▼ and ▼▼; `.btn:disabled`
+  at 1.69:1 so a disabled control reads as absent; rotating with the chart open
+  mis-registers it until reopened; eight duplicate `inv-panel`/`inv-head` ids.
+  Re-verify each; fix the ones that hold.
+
+### DECIDED — Sean's words, or verification with no taste in it
+
+- **D1. Re-audit `PLAYTEST_FINDINGS.md` against this build.** The handoff's
+  own instruction (2026-10-26): *"check whether PLAYTEST_FINDINGS.md items
+  (e.g. #1, the control row running off Android screens) are already fixed."*
+  Top six first, then O1–O8, E1–E11, M1–M10. Each becomes **fixed** (say where)
+  or **still true** (today's evidence); the still-true ones that are bugs get
+  fixed, the ones that are taste become ASK entries here. Already measured:
+  **#1 is fixed** — `#controls-row` wraps, and browse.js finds no control past
+  the right edge at 375 px.
+- **D2. Cards for the boats under water.** Sean, 2026-10-02: *"animated art
+  for each associated craft."* The `rival` creatures and the Signal button
+  still speak through log lines; the SAIL HO → HER COLOURS → COMING ABOUT →
+  THE ACTION flow fits them (see the 2026-10-02 entry's *Not done*). Mine:
+  what the Ear hears before colours, the card's name, the art. His: nothing
+  that is not already in his quote.
+- **D3. The test the save auditor asked for.** No suite asserts what
+  `restart()` clears — the one test that would have caught the `ordersSaid`
+  leak outright. And `board`/`works`/`locks` fake the save round trip with
+  `JSON.parse(JSON.stringify(...))` instead of calling the real functions.
+  Write the first; route the three through `saveGame`/`loadSave`.
+- **D4. `startExpedition` has one live arm of three** — always `'signal'`, so
+  the `'beach'` prose can never print and `relicChance` is a constant. Either
+  route is dead code by the project's own doctrine; delete the dead arms, keep
+  the prose in the ledger in case a beach ever wants it.
+
+### ASK — his calls; a `SEAN:` line under any of these moves it up
+
+- **A1. Depth charges.** `depthCharge` is in the hull table and on the
+  destroyer's stern and does nothing: diving is a complete escape from every
+  surface hull. Should a destroyer follow you down — a card, a roll, a cost?
+- **A2. The ghost thread** (Angelshark #22). Recorded, not built; it needs
+  the arc only you have.
+- **A3. The income question** and its four satellites (2026-07-27 entry,
+  still open): a captain banks 0–4 crates in 300–400 turns against a hand at
+  5; `CREW_HIRE_COST`; engagement rate 13 %; the Libertines as a market; the
+  twenty items with no buyer. Untouched per your ruling. One honest 40-minute
+  session answers the first.
+- **A4. `depthBand` on the four cultures** is read by nothing. Delete the
+  fields, or make faction encounters honour their declared band?
+- **A5. Free provisioning.** `dockHere()` spends no turn: air, stores, wounds,
+  decoys, in three taps. The "night ashore" fiction, or an oversight?
+- **A6. The four generic ship scenes** (~181 lines of art) can only be reached
+  by a fifth people that does not exist. Keep as a fallback, or delete?
+- **A7. Her ports.** Every ship knows the harbour she left and the one she is
+  making for and the game never says either. One line on HER COLOURS — *"out
+  of Harrow, bound for the Shallows"* — yes or no?
+- **A8. Cities are rare:** 2, 0, 2, 0, 0, 1 within sixty hexes across six
+  seeds, so half the worlds cannot reach an alliance. The price of the ticket,
+  not the wiring, is the question.
+
+---
 
 ## THE PASSAGE, AND THE ENCOUNTER IN CARDS (2026-10-02, later the same day)
 
