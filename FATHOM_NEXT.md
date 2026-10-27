@@ -27,6 +27,14 @@ do."*
 
 ### BUGS — measured, open
 
+*(B1–B3 were built together by the first cloud run, 2026-10-27 01:04 UTC — one
+CSS block, `@media (orientation: landscape) and (max-height: 520px)`: HUD and
+map in a left column, the log over a scrolling controls column on the right;
+`browse.js` taught to count a control cut off part-way with nothing to scroll;
+gate green, `moved.js` 0. Then GitHub refused the push — the Claude GitHub
+App is not installed on the repo — and the sandbox took the commit with it.
+They stay open here until a run lands them.)*
+
 - **B1. Landscape (812×375): opening MORE pushes MUSTER and OPTIONS 26 px past
   the bottom edge, and nothing scrolls.** Verified 2026-10-26,
   `tests/out/landscape/06-more.png`. The drawer takes its height from the

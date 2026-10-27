@@ -10,6 +10,24 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ## 2026-10-26 — The night shift is set up; the game itself is untouched
 
+**ONE THING ONLY YOU CAN DO, and the night does nothing until it is done.**
+The first cloud run (01:04–01:41 UTC, 37 minutes) built the landscape fix
+(B1–B3: two columns on a phone turned sideways, HUD and map left, log over
+the controls right; gate green; nothing else moved) and then could not push:
+GitHub answered 403 on `main`, on a branch, and on the GitHub tools — *"Claude
+doesn't have GitHub access to botheyesshut/fathom."* The work is lost with
+that sandbox; the queue still lists B1–B3 and the next run rebuilds them.
+**Install the Claude GitHub App on the repo: https://github.com/apps/claude/installations/select_target
+(or reconnect GitHub at https://claude.ai/customize/connectors).** One click.
+After that, every night's push lands.
+
+Two things the run taught, both fixed tonight: the sandbox cannot download a
+browser, so `browse.js` now uses the Chromium the box already has; and the
+box is slower than your PC, so the battery's 60 ms chunk-time check went red
+on unchanged code — it now measures against the HEAD build on the same
+machine when the budget is missed, and still fails a build that is really
+slower.
+
 **Changed**
 - The game is unchanged: build `9043060`, v22, the one that is live.
 - A browser playtest now exists: the real page, headless, at phone, landscape and desktop width, a screenshot and a layout audit after every tap (`node tests/browse.js`).
