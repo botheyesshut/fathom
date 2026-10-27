@@ -116,10 +116,13 @@ function auditInPage() {
     }
     return null;
   };
-  const offRight = [], offBottom = [], small = [], clipped = [];
+  const offRight = [], offBottom = [], small = [], clipped = [], cutOff = [];
   for (const el of controls) {
     const r = el.getBoundingClientRect();
     if (r.right > W + 1) offRight.push({ el: name(el), right: Math.round(r.right), viewport: W });
+    // Part-way over the bottom edge with nothing to scroll: a control the thumb can
+    // see and cannot press. (The title's DIVE sat 11 px under the edge on its side.)
+    if (r.bottom > H + 1 && r.top < H && !scrolls(el)) cutOff.push({ el: name(el), by: Math.round(r.bottom - H) });
     if (r.bottom > H + 1) offBottom.push({ el: name(el), bottom: Math.round(r.bottom), viewport: H, wholly: r.top >= H, scrollsIn: scrolls(el) });
     // 44 px is the floor the findings used (Apple's and Android's guidance
     // agree on it). Listed, not judged: the dive arrows are small by design and
@@ -132,6 +135,8 @@ function auditInPage() {
   }
   const panelIds = ['brief', 'card', 'chart', 'inventory', 'muster', 'port', 'options', 'bestiary', 'trade', 'transcript', 'gameover'];
   const panelsOpen = panelIds.filter(id => { const e = document.getElementById(id); return e && seen(e); });
+  const chartEl = document.getElementById('chart-container');
+  const chartRect = chartEl && seen(chartEl) ? chartEl.getBoundingClientRect() : null;
   const row = document.getElementById('controls-row');
   const rowRect = row ? row.getBoundingClientRect() : null;
   return {
@@ -139,7 +144,8 @@ function auditInPage() {
     pageOverflowX: document.documentElement.scrollWidth - W,
     pageOverflowY: document.documentElement.scrollHeight - H,
     controlsSeen: controls.length,
-    offRight, offBottom, small, clipped, panelsOpen,
+    offRight, offBottom, small, clipped, cutOff, panelsOpen,
+    chartH: chartRect ? Math.round(chartRect.height) : null,
     controlsRow: rowRect ? { top: Math.round(rowRect.top), bottom: Math.round(rowRect.bottom), right: Math.round(rowRect.right), buttons: row.querySelectorAll('button').length } : null,
   };
 }
@@ -274,6 +280,10 @@ function summarise(report) {
     const overflowX = steps.filter(s => s.audit && s.audit.pageOverflowX > 0).map(s => s.step + ':' + s.audit.pageOverflowX);
     L.push('- controls past the RIGHT edge: ' + (offR.length ? offR.map(h => h.el + ' (right ' + h.right + ' > ' + h.viewport + ', at ' + h.steps.slice(0, 3).join('/') + ')').join('; ') : 'none'));
     L.push('- controls wholly BELOW the viewport: ' + (offB.length ? offB.map(h => h.el + ' (at ' + h.steps.slice(0, 3).join('/') + (h.scrollsIn ? ', reachable: ' + h.scrollsIn + ' scrolls' : ', NOTHING SCROLLS') + ')').join('; ') : 'none'));
+    const cut = hits('cutOff');
+    L.push('- controls CUT OFF by the bottom edge, nothing to scroll: ' + (cut.length ? cut.map(h => h.el + ' (' + h.by + ' px, at ' + h.steps.slice(0, 3).join('/') + ')').join('; ') : 'none'));
+    const chartHs = steps.filter(s => s.audit && s.audit.chartH !== null && !s.audit.panelsOpen.length).map(s => s.audit.chartH);
+    if (chartHs.length) { const lo = Math.min(...chartHs); L.push('- the map on the main screen, smallest height: ' + lo + ' px of ' + r.viewport.height + ' (' + Math.round(100 * lo / r.viewport.height) + '%)' + (lo < r.viewport.height / 3 ? ' — UNDER A THIRD' : '')); }
     L.push('- page wider than the viewport: ' + (overflowX.length ? overflowX.join(', ') + ' px' : 'never'));
     L.push('- clipped text: ' + (clipped.length ? clipped.map(h => h.el + ' ' + h.scroll + '>' + h.client).join('; ') : 'none'));
     L.push('- controls under 44 px: ' + small.length + (small.length ? ' — ' + small.slice(0, 8).map(h => h.el + ' ' + h.w + '×' + h.h).join(', ') + (small.length > 8 ? ', …' : '') : ''));

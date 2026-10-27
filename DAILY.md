@@ -8,6 +8,41 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-10-27 — The phone on its side now has a map
+
+**Changed**
+- Turn the phone sideways: the main screen is two columns — readings and the map on the left, the log over the buttons on the right. It had no map at all before.
+- MORE no longer pushes Muster and Options off the bottom; the button column scrolls.
+- The title's DIVE button is on screen in landscape (it was 11 px under the edge).
+- Portrait is unchanged. Build v23.
+
+**Broke** — nothing. Battery 21 of 21; dead functions 0; the playtest instrument now measures the map and cut-off buttons, and flagged the old build (map 8% of the height, three buttons cut off) before passing the new one (map 63%, none cut off).
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Play a few turns sideways | title → DIVE → LOOK, PING, a dive arrow, MORE | is the map big enough to steer by, and are the buttons where a right thumb falls? |
+| 2 | Read a long log line sideways | trigger any room description | does the log box (top right) show enough, and does dragging its top edge still work? |
+| 3 | The three from the last entry | passage, a sail's card, a fight | still untried: nobody with hands has played them |
+
+**What the playtest found**
+- **B1, B2, B3 (landscape) are fixed and landed** — MOBILE — Verified. Evidence: `tests/out/landscape/02-look.png`, `06-more.png`, `00-title.png`; browse.md reports none cut off, map 236 of 375 px.
+- Portrait phone and desktop: nothing off-screen, nothing clipped, 0 console errors, 0 failed requests. Options' Abandon is below the fold; the panel scrolls to it.
+- Landscape sea chart: fine (`04-chart.png`).
+- Bots, 40 captains × 300 turns: no invariant violated in 9,966 turns; the same unreached list as before (torpedoes, Dagon, stations, selling). That is the income question, A3, yours.
+- First hour, 40 captains: no deaths; the first ping names its reach and the dial. The first collision's hull cost is still not explained to the player afterwards (NOW NO in firsthour.js) — Suspected: a missing line, a voice call, so a question not a fix.
+- Cloud note: GitHub access worked tonight; the push result is below.
+
+**Questions for Sean**
+- A1 — Depth charges: should a destroyer follow you down?
+- A7 — Her ports: one line on HER COLOURS, *"out of Harrow, bound for the Shallows"* — yes or no?
+- The first collision costs 8 hull and the log never says why — a line from the Mate, yes or no?
+
+**Tomorrow** — D1: re-audit `PLAYTEST_FINDINGS.md` against this build; then B4 (missions pay for goods the pricing rules refuse).
+
+---
+
 ## 2026-10-26 — The night shift is set up; the game itself is untouched
 
 **ONE THING ONLY YOU CAN DO, and the night does nothing until it is done.**

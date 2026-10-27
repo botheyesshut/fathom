@@ -27,26 +27,26 @@ do."*
 
 ### BUGS — measured, open
 
-*(B1–B3 were built together by the first cloud run, 2026-10-27 01:04 UTC — one
-CSS block, `@media (orientation: landscape) and (max-height: 520px)`: HUD and
-map in a left column, the log over a scrolling controls column on the right;
-`browse.js` taught to count a control cut off part-way with nothing to scroll;
-gate green, `moved.js` 0. Then GitHub refused the push — the Claude GitHub
-App is not installed on the repo — and the sandbox took the commit with it.
-They stay open here until a run lands them.)*
+**B1–B3 — BUILT 2026-10-27 (v23), landed.** One CSS block,
+`@media (orientation: landscape) and (max-height: 520px)` beside the sea chart's
+own: the body becomes two columns — HUD over the map on the left, the log over
+the controls on the right. The controls column scrolls, so MORE can no longer
+push MUSTER and OPTIONS off the edge; the map keeps the rest of the height; the
+title's padding and margins shrink so DIVE is on screen. (The first cloud run
+built this and lost it to a refused push; this is the rebuild.)
+- Measured: `browse.js` at 812×375 — the map's smallest height on the main
+  screen 29 px (8%) before, 236 px (63%) after; controls cut off by the bottom
+  edge with nothing to scroll: #dive 11 px, #btn-muster 26, #btn-options 26
+  before, none after. Phone 375×812 and desktop unchanged (map 40% / 52%).
+  `browse.js` now prints both lines, so a regression shows. Battery green,
+  dead functions 0, `moved.js` 0 moved, 189 held.
+- My calls: the split (left column 46%, right 54%); the log's cap in landscape
+  (7.5rem); the title's tighter spacing. **Knob:** delete the one
+  `@media (orientation: landscape) and (max-height: 520px)` block just above
+  `/* ====== GAME OVER ====== */`; the column split is its `grid-template-columns`.
+- Not touched: the browse.js "under 44 px" list in landscape (chart head
+  buttons 36 px, set deliberately by the chart's own landscape block).
 
-- **B1. Landscape (812×375): opening MORE pushes MUSTER and OPTIONS 26 px past
-  the bottom edge, and nothing scrolls.** Verified 2026-10-26,
-  `tests/out/landscape/06-more.png`. The drawer takes its height from the
-  viewport rather than from the log, which is the thing that can give way.
-- **B2. Landscape: the main screen has no map at all.** HUD, log, sonar dial,
-  dive row and control row fill the whole 375 px and the hex chart gets zero
-  height. Verified 2026-10-26, `tests/out/landscape/02-look.png`. The sea
-  chart in landscape is fine (`04-chart.png`), which is the case Sean asked for.
-  Fix, mine unless he says otherwise: in landscape the log is capped so the map
-  keeps at least a third of the height.
-- **B3. Landscape: the title's DIVE button sits 11 px below the bottom edge.**
-  Verified 2026-10-26, `tests/out/landscape/00-title.png`.
 - **B4. The mission pool pays for goods the pricing rules refuse.**
   `missionOffer` reads `cu.buys` raw, so `buyMult`'s no-buy-back rule never
   applies; measured 2026-08-01 at +6 and +2 a unit, repeatable. Dormant only
