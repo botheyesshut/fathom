@@ -111,8 +111,10 @@ git push origin main
 The trailer names the model that actually worked — the one you are — so the
 history says who built what.
 
-Sean: no separate branch — *"We can undo anything we do."* If the push to
-`main` is refused, push the same commit to a branch `daily/YYYY-MM-DD`, open a
+Sean: no separate branch — *"We can undo anything we do."* `main` may have
+moved while you worked, so `git pull --rebase origin main` before the push,
+re-run the gate if anything came in, and push again. Only if the push is
+still refused, push the same commit to a branch `daily/YYYY-MM-DD`, open a
 pull request with `gh pr create` (body ending `🤖 Generated with [Claude Code](https://claude.com/claude-code)`),
 and say so in the report. Work that does not pass the gate by the deadline is
 not committed; the report says what was attempted and why it did not land.

@@ -42,6 +42,12 @@ comparable day to day.
 | 2 | the game did not boot | the top finding, Verified |
 | 3 | SKIPPED — no Playwright or no Chromium | "browser playtest skipped" in the report. A skip is never a pass |
 
+In the cloud sandbox `npx playwright install` is refused (cdn.playwright.dev
+is blocked), and that is expected: `browse.js` then uses the Chromium already
+on the box under `/opt/pw-browsers`, and `browse.md` says which Chromium ran.
+Only if it prints `BROWSE SKIPPED` is the browser run skipped. `FATHOM_CHROME`
+names an executable by hand if ever needed.
+
 Read `tests/out/browse.md` first. It lists, per width: controls past the right
 edge, controls below the viewport (and whether something scrolls to reach
 them), page overflow, clipped text, controls under 44 px, console errors,

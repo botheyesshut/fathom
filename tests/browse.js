@@ -261,6 +261,8 @@ function summarise(report) {
   const L = [];
   L.push('# browse.js — ' + report.when + ' — build ' + report.commit + (report.seed === null ? ' — random seed' : ' — seed ' + report.seed));
   L.push('');
+  L.push('Chromium: ' + report.chromium);
+  L.push('');
   for (const [dev, r] of Object.entries(report.devices)) {
     L.push('## ' + dev + ' ' + r.viewport.width + '×' + r.viewport.height + (r.booted ? ' — world seed ' + r.seed : ' — DID NOT BOOT'));
     const steps = r.steps;
@@ -289,17 +291,55 @@ function summarise(report) {
   return L.join('\n') + '\n';
 }
 
+// ---- finding a Chromium when Playwright's own is not there -------------------
+// The cloud sandbox the nightly run lives in blocks cdn.playwright.dev, so
+// `npx playwright install` fails there — but the box already carries a
+// Chromium under PLAYWRIGHT_BROWSERS_PATH (/opt/pw-browsers), one revision off
+// the one this Playwright asks for. The first night's run found it by hand
+// and wrapped `launch` to use it. This is that, done once, in the right place:
+// FATHOM_CHROME names an executable outright; otherwise the browsers folder is
+// searched for a headless shell or a chrome, newest folder first.
+const EXE_NAMES = ['chrome-headless-shell', 'chrome-headless-shell.exe', 'headless_shell', 'headless_shell.exe', 'chrome', 'chrome.exe', 'chromium'];
+function findChromium() {
+  if (process.env.FATHOM_CHROME && fs.existsSync(process.env.FATHOM_CHROME)) return process.env.FATHOM_CHROME;
+  const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH, '/opt/pw-browsers',
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'ms-playwright'),
+    process.env.HOME && path.join(process.env.HOME, '.cache', 'ms-playwright'),
+    process.env.HOME && path.join(process.env.HOME, 'Library', 'Caches', 'ms-playwright')].filter(Boolean);
+  const walk = (dir, depth) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return null; }
+    for (const ent of entries) if (ent.isFile() && EXE_NAMES.includes(ent.name)) return path.join(dir, ent.name);
+    if (depth === 0) return null;
+    for (const ent of entries) if (ent.isDirectory()) { const hit = walk(path.join(dir, ent.name), depth - 1); if (hit) return hit; }
+    return null;
+  };
+  for (const root of roots) {
+    let dirs = [];
+    try { dirs = fs.readdirSync(root).filter(d => /^chromium/.test(d)).sort().reverse(); } catch (e) { continue; }
+    // headless shells first — they are what Playwright itself prefers for headless runs
+    dirs.sort((a, b) => (/headless/.test(b) - /headless/.test(a)));
+    for (const d of dirs) { const hit = walk(path.join(root, d), 3); if (hit) return hit; }
+  }
+  return null;
+}
+
 // ---- main ---------------------------------------------------------------------
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const { srv, port } = await serve();
   const base = 'http://127.0.0.1:' + port + '/';
-  let browser;
+  let browser, usedExe = null;
   try { browser = await pw.chromium.launch({ headless: true }); }
-  catch (e) { srv.close(); skip('Chromium could not be launched (' + String(e && e.message || e).split('\n')[0].slice(0, 160) + '). Run `npx playwright install chromium`.'); }
+  catch (e1) {
+    const exe = findChromium();
+    if (!exe) { srv.close(); skip('Chromium could not be launched (' + String(e1 && e1.message || e1).split('\n')[0].slice(0, 160) + ') and none was found on this machine. Run `npx playwright install chromium`, or set FATHOM_CHROME to a Chromium executable.'); }
+    try { browser = await pw.chromium.launch({ headless: true, executablePath: exe }); usedExe = exe; }
+    catch (e2) { srv.close(); skip('Chromium could not be launched: neither Playwright\'s own (' + String(e1 && e1.message || e1).split('\n')[0].slice(0, 120) + ') nor ' + exe + ' (' + String(e2 && e2.message || e2).split('\n')[0].slice(0, 120) + ').'); }
+  }
   let commit = '?';
   try { commit = execSync('git rev-parse --short HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (e) {}
-  const report = { when: new Date().toISOString(), commit, seed: SEED, devices: {} };
+  const report = { when: new Date().toISOString(), commit, seed: SEED, chromium: usedExe || "playwright's own", devices: {} };
   try {
     for (const dev of DEVICE_NAMES) {
       process.stdout.write('browse: ' + dev + ' … ');
