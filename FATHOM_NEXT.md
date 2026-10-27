@@ -1906,7 +1906,17 @@ node tests/run-all.js      # the gate. 18 suites. Ship only on ALL SUITES PASSED
 node tests/moved.js        # what ELSE moved, vs HEAD. ~2 min. Run before committing.
 node tests/moved.js --full # ...including playtest/firsthour/reasons. ~25 min.
 node tests/delve.js        # the on-foot layer, walked directly. Also in the battery.
+node tests/browse.js       # the SCREEN: the real page in a headless Chromium. 2026-10-26.
 ```
+
+*(2026-10-26: the battery's chunk-time check is machine-aware now. Its 60 ms
+budget is a number about Sean's phone measured on Sean's PC; the cloud box the
+nightly run lives on measured 67 ms on unchanged code and went red. When the
+budget is missed, `flip.test` times the same workload on the HEAD build on the
+same machine and fails only if this build is a quarter slower. Proved both
+ways: unchanged code passes under a 1 ms budget; a build with a planted 240 ms
+per chunk fails with THIS BUILD IS SLOWER. `FATHOM_CHUNK_MS` exists only to
+force that arm.)*
 
 **THE FINDING, AND IT IS THE IMPORTANT PART: the sea-going bot reaches a deck in
 3% of its runs.** One in thirty. Not for want of trying — every persona in
