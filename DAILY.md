@@ -8,6 +8,38 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-10-28 — Re-read the top six of the old problem list: five are fixed, one is yours
+
+**Changed**
+- Nothing a player will notice. No game code touched; build stays v24.
+- D1 first slice: the six biggest items in `PLAYTEST_FINDINGS.md` checked against today's source. #1 to #5 are fixed (control row, dead buttons, the log, the rock-tap, the money faucets). Written up under D1 in the queue.
+
+**Broke** — nothing. Battery green on arrival; dead functions 0; no invariant violated in 9,966 bot turns.
+
+**Test these three** — no change to test; the most useful by hand instead:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Tap the log | main screen, any time | does the transcript open and scroll well with a thumb? |
+| 2 | Tap DESCEND on the sea floor, twice | first dive | one line, no hull lost, the arrow dimmed |
+| 3 | A mission in an underwater city | city → arrangements | is the ask sensible, the pay worth the trip (A9)? |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed again, the sandbox blocks it). Phone, landscape, desktop: nothing off the right edge, nothing cut off, page never wider, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%. Screenshots not opened tonight.
+- **The bestiary "step could not be taken" is not a bug.** The button is hidden until the boat has met something (`style="display:none"`, shown on the first sighting). The harness presses it on a fresh game. Verified by source. Suggest browse.js stops counting it; not touched, it is a test change not in the queue.
+- Under 44 px: the chart buttons and Options toggles, 36-40 px, deliberate and unchanged. Phone: Abandon sits below the fold but its list scrolls.
+- Bots, 40 captains x 300 turns: median 3 crates banked (max 9); 4 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached. That is the income question (A3), yours.
+- First hour: 0 deaths in 40; the first collision's hull cost is still not explained to the player (still true, open from before).
+
+**Questions for Sean**
+- A9 — A mission pays its crates on top of the sale of the goods (about +8 a unit at Confluence). Keep as a bonus, or should the mission replace the sale?
+- The first hit on rock costs 8 hull and the log never says why. One plain line the first time, yes or no?
+- (Still open: A1, A7, A3.)
+
+**Tomorrow** — D1 slice 2: O1–O8 of `PLAYTEST_FINDINGS.md`; then B5.
+
+---
+
 ## 2026-10-27 (night) — A city's mission can no longer name a thing it would refuse
 
 **Changed**

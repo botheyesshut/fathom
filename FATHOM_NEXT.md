@@ -78,6 +78,27 @@ built this and lost it to a refused push; this is the rebuild.)
   fixed, the ones that are taste become ASK entries here. Already measured:
   **#1 is fixed** — `#controls-row` wraps, and browse.js finds no control past
   the right edge at 375 px.
+  - **D1 slice 1 — DONE 2026-10-28: the top six, audited against this build
+    (no game code touched, so no `sw.js` bump).** Each by its source, read today:
+    - **#1 control row off the edge — fixed** (2026-10-27). `browse.js`: none past
+      the right edge at 375, 812 or 1280.
+    - **#2 dead controls — fixed.** `updateHUD` hides FIRE unless `state.armament`
+      or `state.torpedoes`, and hides `dive-controls` / `ping-power-row` ashore.
+    - **#3 the log letterbox — fixed.** `#log` tap opens `openTranscript`; the cap
+      is now 7.5rem, not 6rem; `logHistory` is read in several places.
+    - **#4 DESCEND into rock — fixed in what the player sees, kept in the code.**
+      `diveTap` asks `diveBlocked` first and answers with one line, no hull cost;
+      the arrows take a `blocked` class. `changeDepth` still bills a strike, but
+      only an unguarded caller reaches it.
+    - **#5 economy — all three fixed.** 5a `buyMult` returns 0 for a culture's own
+      stock (`items.test` asserts it); 5b `FIT_CAP` bounds every fitting; 5c
+      `LEAD_TIER_CAP = 6` and the chain odds are capped at 0.8.
+    - **#6 the empty ocean — still true, and it is A3, his.** Bots today (40 x 300):
+      median 3 crates banked (max 9), 4 of 36 items ever held, 20 content lines at
+      0 % (torpedoes, deep, abyss, stations, selling to a people, upgrades). Not
+      retuned.
+    - Left for slices 2+: O1–O8, E1–E11, M1–M10.
+    - My calls: none that change the game. **Knob:** none; this is a read.
 - **D2. Cards for the boats under water.** Sean, 2026-10-02: *"animated art
   for each associated craft."* The `rival` creatures and the Signal button
   still speak through log lines; the SAIL HO → HER COLOURS → COMING ABOUT →
