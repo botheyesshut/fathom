@@ -8,6 +8,39 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-10-29 — Re-read O1–O8 of the old problem list: seven are fixed, one is yours
+
+**Changed**
+- Nothing a player will notice. No game code touched; build stays v24.
+- D1 slice 2: onboarding items O1–O8 of `PLAYTEST_FINDINGS.md` checked against today's source. O1, O2, O4, O5, O7, O8 are fixed. O3 is half fixed. O6 still holds. Written up under D1 in the queue.
+
+**Broke** — nothing. Battery green on arrival; dead functions 0; no invariant violated in 10,012 bot turns.
+
+**Test these three** — no change to test; the most useful by hand instead:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Close the game with a campaign going, reopen, tap Dive | title | does one line about the depth tell you enough to carry on (A11)? |
+| 2 | Hold a finger on any button for half a second | main screen | does the explanation appear and the button not fire? |
+| 3 | Take the boat below 1500 m | deep water | does the groan tell you how bad it is (A10)? |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed again, the sandbox blocks it). Phone, landscape, desktop: nothing off the right edge, nothing cut off, page never wider, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%.
+- Screenshots opened: phone 02-look, 04-chart, 06-more, 17-descend-2, and landscape 04-chart. All read cleanly; nothing clipped, nothing overlapping.
+- The bestiary "step could not be taken" is the same hidden-until-met button as last night, not a bug. Still not touched.
+- Under 44 px: chart buttons and Options toggles, deliberate, unchanged.
+- Bots, 40 x 300: median 3 crates banked (max 9); 5 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached. That is the income question (A3), yours.
+- First hour: 0 deaths in 40; the first collision's 8 hull is still not explained to the player (still true, asked last night).
+
+**Questions for Sean**
+- A10 — Past her rated depth the log says "the hull groans" whether it costs 2 hull or 26, and says nothing for the first 50 m. Scale the words in bands, or keep it vague?
+- A11 — On loading a save the game writes one line (the depth). Add who is aboard and what is still marked, and call the title button Continue?
+- (Still open: A9, the rock-hit line, A1, A7, A3.)
+
+**Tomorrow** — D1 slice 3: E1–E11 of `PLAYTEST_FINDINGS.md`; then B5.
+
+---
+
 ## 2026-10-28 — Re-read the top six of the old problem list: five are fixed, one is yours
 
 **Changed**

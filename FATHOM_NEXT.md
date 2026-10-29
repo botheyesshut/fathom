@@ -97,7 +97,28 @@ built this and lost it to a refused push; this is the rebuild.)
       median 3 crates banked (max 9), 4 of 36 items ever held, 20 content lines at
       0 % (torpedoes, deep, abyss, stations, selling to a people, upgrades). Not
       retuned.
-    - Left for slices 2+: O1–O8, E1–E11, M1–M10.
+    - **D1 slice 2 — DONE 2026-10-29: O1–O8, audited against this build (no game
+      code touched, so no `sw.js` bump).** Each by its source, read today:
+      - **O1 wreck on the shelf — fixed.** `handleTile` now runs the
+        "prize under you / above you" announcement before the depth flavour, and
+        `workableHere` lets the prize switch have its turn; salvage and ruin hints
+        are unconditional. The one coin flip left (`rand() < 0.5` on "Rise to vent")
+        is behind a line that already said the same thing without one.
+      - **O2 the objective — fixed.** `restart()` logs THE TRADE on the cast-off.
+      - **O3 depths — half fixed, half taste.** The HUD shows "safe to 1500 m" and a
+        band word; the yard slate warns past rated and past crush depth; the crush
+        line is its own. STILL TRUE: past safe depth the line is "The hull groans
+        under the pressure." at every rate, and silent for the first 50 m over.
+        Scaling it is wording, so it is A10 below.
+      - **O4 tooltips — fixed.** `wireLongPress`: hold a control half a second.
+      - **O5 the death screen — fixed.** `deathCause`, `deathTitle`, `lostWithHer`.
+      - **O6 coming back — still true.** `resumeGame` writes one line (the chart
+        unrolls, the depth); the title button says Dive with or without a save.
+        What the brief says and what the button is called are his: A11 below.
+      - **O7 Wait — fixed.** Own hex is drawn with a dotted ring.
+      - **O8 silent running — fixed.** The dial reads "OFF · running silent".
+      - My calls: none that change the game. **Knob:** none; this is a read.
+    - Left for slices 3+: E1–E11, M1–M10.
     - My calls: none that change the game. **Knob:** none; this is a read.
 - **D2. Cards for the boats under water.** Sean, 2026-10-02: *"animated art
   for each associated craft."* The `rival` creatures and the Signal button
@@ -139,6 +160,13 @@ built this and lost it to a refused push; this is the rebuild.)
 - **A9. A mission pays twice.** Its crates come on top of the sale price of the
   goods handed over (~+8 a unit at Confluence). Intended bonus, or should the
   mission pay replace the sale?
+- **A10. The pressure warning does not scale.** Past rated depth the log says
+  "The hull groans under the pressure." at −2 hull a move and at −26, and says
+  nothing for the first 50 m. Say the cost in three bands, or keep it vague on
+  purpose? (From O3; the words are his.)
+- **A11. Coming back.** After a save loads the game writes one line. Should it
+  say who is aboard and what marks are open, and should the title button read
+  Continue when a save exists? (From O6.)
 - **A8. Cities are rare:** 2, 0, 2, 0, 0, 1 within sixty hexes across six
   seeds, so half the worlds cannot reach an alliance. The price of the ticket,
   not the wiring, is the question.
