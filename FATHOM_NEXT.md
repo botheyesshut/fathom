@@ -118,7 +118,38 @@ built this and lost it to a refused push; this is the rebuild.)
       - **O7 Wait — fixed.** Own hex is drawn with a dotted ring.
       - **O8 silent running — fixed.** The dial reads "OFF · running silent".
       - My calls: none that change the game. **Knob:** none; this is a read.
-    - Left for slices 3+: E1–E11, M1–M10.
+    - **D1 slice 3 — DONE 2026-10-30: E1–E11, audited against this build (no game
+      code touched, so no `sw.js` bump).** Each by its source, read today:
+      - **E1 45-second offers, E2 no shop, E3 yard spends first, E4 offer chain —
+        fixed, all four at once.** The port is a panel of priced rows now
+        (`rows.push`, "Patch the hull", "Sign on", "Buy"); the comment above the
+        old chain in `surface()` says nothing expires, nothing hides behind
+        anything, nothing spends a crate without a tap.
+      - **E5 leads — fixed.** `leadTarget` caps the roll at `safeDepthNow() + 600`
+        and under crush; `checkLeads` compares depth (`atDepth`) and says how far
+        above or below you are. Not re-checked tonight: the edge arrow for an
+        off-screen lead (E5.3).
+      - **E6 arbitrage — fixed in kind.** `items.test` asserts most saleable items
+        fetch 1.5x or more at one people over another; 5a closed the same-vendor loop.
+      - **E7 enclave on a depth change — fixed.** `checkEnclave` is called from the
+        depth path (comment "E7" in the source).
+      - **E8 engineer — fixed.** The yard's `need` divides by the Wrench's bonus
+        (`hullPerCrate * (1 + 0.25 * wrench)`), so the bill falls with the level.
+      - **E9 money on the HUD — fixed.** Hold shows "N bank"; the port led shows
+        BANK and VAULT.
+      - **E10 corpse trade — half fixed.** `corpseValue` is now at most 4 crates,
+        under the 5-crate hire. STILL TRUE: the port surgeon sets every hand's
+        nerve to 100 for free (scars stay, nerve does not). That is A12 below.
+      - **E11 — five of seven fixed or moved, two are taste.**
+        Keys: fixed, `hatchkey`/`bonekey` open the strongroom lock. Specimen jar:
+        fixed, Dagon and the Libertines both buy it. Hire: fixed, it is a listed
+        row, not a re-rolled slot. STILL TRUE: relics have no floor price (sinks
+        are still lance, wardsuit, torpedoes) and torpedoes cost 2 relics for 3 —
+        both prices, so A12. NOT RE-READ tonight: the shot-turret against the
+        hardened lock (`lock` 14 cr, `turret` 22 cr in the defence table) and dig
+        threat per tile; they are numbers, and I did not re-measure them.
+      - My calls: none that change the game. **Knob:** none; this is a read.
+    - Left for slices 4+: M1–M10.
     - My calls: none that change the game. **Knob:** none; this is a read.
 - **D2. Cards for the boats under water.** Sean, 2026-10-02: *"animated art
   for each associated craft."* The `rival` creatures and the Signal button
@@ -167,6 +198,10 @@ built this and lost it to a refused push; this is the rebuild.)
 - **A11. Coming back.** After a save loads the game writes one line. Should it
   say who is aboard and what marks are open, and should the title button read
   Continue when a save exists? (From O6.)
+- **A12. Relics and nerve.** (From E10, E11.) Two prices, both yours: should a
+  relic carried to port fetch a floor price in crates, so banking one is never a
+  loss? And should a night ashore leave the crew a little shaken instead of
+  setting every nerve back to 100?
 - **A8. Cities are rare:** 2, 0, 2, 0, 0, 1 within sixty hexes across six
   seeds, so half the worlds cannot reach an alliance. The price of the ticket,
   not the wiring, is the question.

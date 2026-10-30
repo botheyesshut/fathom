@@ -8,6 +8,39 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-10-30 — Re-read E1–E11 of the old problem list: nine are fixed, one is half, one is yours
+
+**Changed**
+- Nothing a player will notice. No game code touched; build stays v24.
+- D1 slice 3: the economy items E1–E11 of `PLAYTEST_FINDINGS.md` checked against today's source. The port panel, leads, enclave, engineer, HUD money, keys, jar and hire are all fixed. Written up under D1 in the queue.
+
+**Broke** — nothing. Battery green on arrival; dead functions 0; no invariant violated in 9,960 bot turns.
+
+**Test these three** — no change to test; the most useful by hand instead:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Dock with a hurt hull and exactly the price of the next boat | any port | does the panel show both, and take nothing until you tap? |
+| 2 | Bring a relic home, then try to spend it | port | is there anything to do with it but torpedoes (A12)? |
+| 3 | Sign a hand on, let them die, sell the body, dock | port, trade | does the crew coming back whole feel right (A12)? |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed, the sandbox blocks it). Phone, landscape, desktop: nothing past the edge, nothing cut off, page never wider, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%.
+- Screenshots opened: phone 06-more and 04-chart. Both read cleanly. Not opened tonight: 03-ping, 17-descend, landscape 04-chart.
+- The bestiary "step could not be taken" is the same hidden-until-met button as before, not a bug.
+- Under 44 px: chart buttons and Options toggles, deliberate, unchanged.
+- Bots, 40 x 300: median 3 crates banked (max 9); 4 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached. That is the income question (A3), yours.
+- First hour: 0 deaths in 40; the first collision's 8 hull is still not explained to the player (still true, asked before).
+- The repo was checked out detached at 80ac427; I switched to main (same commit) before working.
+
+**Questions for Sean**
+- A12 — A relic carried home has no price, and a night ashore resets every crew nerve to 100. Give relics a floor price in crates? Leave some shake on the crew?
+- (Still open: A10, A11, A9, A1, A7, A3.)
+
+**Tomorrow** — D1 slice 4: M1–M10 of `PLAYTEST_FINDINGS.md`; then B5.
+
+---
+
 ## 2026-10-29 — Re-read O1–O8 of the old problem list: seven are fixed, one is yours
 
 **Changed**
