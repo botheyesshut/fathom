@@ -149,7 +149,38 @@ built this and lost it to a refused push; this is the rebuild.)
         hardened lock (`lock` 14 cr, `turret` 22 cr in the defence table) and dig
         threat per tile; they are numbers, and I did not re-measure them.
       - My calls: none that change the game. **Knob:** none; this is a read.
-    - Left for slices 4+: M1–M10.
+    - **D1 slice 4 — DONE 2026-10-31: M1–M10, audited against this build (no game
+      code touched, so no `sw.js` bump).** Each by its source, read today:
+      - **M1 Cast Off — fixed.** The Hold's action reads "Jettison"; "Cast Off" now
+        only closes the Port and Trade panels. NOT re-read: whether Jettison takes
+        two taps (the source comment says it does).
+      - **M2 silent refusals — half fixed.** Trade rows now say "N more in the hold"
+        instead of a dead price. NOT re-read: the Hold's `useItem` refusals, which
+        still log under a full-screen panel.
+      - **M3 modal exits — half fixed.** Back gesture closes the top panel
+        (`popstate`, `pushState` per opener). NOT found: backdrop tap or Escape for
+        the Hold/Trade (only the briefing card has them).
+      - **M4 tiny type — half fixed.** Pinch-zoom lock is gone from the viewport
+        meta. `.stat-label` is 0.62rem (was 0.55). `gesturestart` is still
+        `preventDefault`ed. STILL TRUE: labels are ~10 px; sizes are taste.
+      - **M5 depth strip labels — still true.** `#depth-strip-labels` is still
+        `display: none`. Width and contrast not re-measured.
+      - **M6 deck at 1.16:1 — still true.** `renderInterior` wall `#1b1712`, memory
+        `dim = 0.4`, unchanged. Colours are taste: A13.
+      - **M7 see the world and tap it — still true (Suspected).** No off-screen edge
+        indicator for POIs or leads in the source. New UI: A14.
+      - **M8 640 px phone — not re-measured.** At 375x812 the map is 40 % (browse.js).
+      - **M9 touch targets — mostly fixed.** `#recenter-btn` 44x44; `#controls .btn`
+        44. browse.js today: chart buttons 36-40 and Options toggles 40 high; the
+        Hold `.act` column not measured.
+      - **M10 smaller defects.** Fonts: fixed (`@import url('assets/fonts.css')`,
+        local). Duplicate ids: fixed (a class now). Safe-area insets: present.
+        `TAP_THRESH` 10, straight-line: fixed. STILL TRUE: sound starts muted only on
+        a local build (`audioLocalBuild`); on the hosted page it starts on (A15).
+        STILL TRUE: reachable hex stroke 0.8 / 0.55 alpha. NOT re-read: the trade
+        panel's "They will take" fold.
+      - My calls: none that change the game. **Knob:** none; this is a read.
+    - Left: B5, then D2.
     - My calls: none that change the game. **Knob:** none; this is a read.
 - **D2. Cards for the boats under water.** Sean, 2026-10-02: *"animated art
   for each associated craft."* The `rival` creatures and the Signal button
@@ -202,6 +233,13 @@ built this and lost it to a refused push; this is the rebuild.)
   relic carried to port fetch a floor price in crates, so banking one is never a
   loss? And should a night ashore leave the crew a little shaken instead of
   setting every nerve back to 100?
+- **A13. Deck legibility.** (From M6, M5.) On foot the walls read at 1.16:1 and
+  memory is dimmed to 0.4; the depth strip carries no numbers. Lift the colours
+  and bring the labels back, or keep the dark on purpose?
+- **A14. Off-screen pointers.** (From M7.) An edge arrow for known prizes and leads
+  so you can steer without pinching out — yes or no?
+- **A15. Sound on first launch.** (From M10.) On the hosted page the game starts
+  with sound on. Start muted with a hint, or keep it?
 - **A8. Cities are rare:** 2, 0, 2, 0, 0, 1 within sixty hexes across six
   seeds, so half the worlds cannot reach an alliance. The price of the ticket,
   not the wiring, is the question.

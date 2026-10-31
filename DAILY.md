@@ -8,6 +8,40 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-10-31 — Re-read M1–M10 of the old phone list: five fixed or mostly, five still hold
+
+**Changed**
+- Nothing a player will notice. No game code touched; build stays v24.
+- D1 slice 4: the phone items M1–M10 of `PLAYTEST_FINDINGS.md` checked against today's source. "Cast Off" is renamed, the back gesture closes panels, fonts are local, ids are fixed. Written up under D1 in the queue.
+- Three still-true items are now asks (A13–A15).
+
+**Broke** — nothing. Battery green on arrival; dead functions 0; no invariant violated in 9,966 bot turns.
+
+**Test these three** — no change to test; the most useful by hand instead:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Walk a deck outdoors in daylight | on foot, any wreck | can you see the walls (A13)? |
+| 2 | Open Hold, press Use on a full hull, then press the Android back button | main screen | does the refusal show? does back close the panel and stay in the game? |
+| 3 | First launch on the hosted page | title, Dive | does sound start unasked (A15)? |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed, so the box's own Chromium was used). Phone, landscape, desktop: nothing past the edge, nothing cut off, page never wider, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%.
+- Screenshots opened: phone 06-more and 04-chart. Both read cleanly. Not opened: 03-ping, 17-descend, landscape 04-chart.
+- Under 44 px: chart buttons (36-40) and Options toggles (40), unchanged. The bestiary "step could not be taken" is the same hidden-until-met button.
+- Bots, 40 x 300: median 3 crates banked (max 9); 6 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached. Income question (A3), yours.
+- First hour: 0 deaths in 40; the first collision's 8 hull is still not explained (still true, asked before).
+
+**Questions for Sean**
+- A13 — Lift the deck's wall colours and bring back the depth-strip numbers, or keep it dark on purpose?
+- A14 — An edge arrow for known prizes and leads, so you need not pinch out?
+- A15 — Start the hosted game muted, with a "tap for sound" hint?
+- (Still open: A12, A10, A11, A9, A1, A7, A3.)
+
+**Tomorrow** — B5 (re-verify the five phone items), then D2.
+
+---
+
 ## 2026-10-30 — Re-read E1–E11 of the old problem list: nine are fixed, one is half, one is yours
 
 **Changed**
