@@ -61,12 +61,19 @@ built this and lost it to a refused push; this is the rebuild.)
     e.g. 2 ambergris at Confluence: 16 promised + 2×11 sold. Left alone.
   - My calls: the guard's place (the pool, not the sale). **Knob:** revert the
     `.filter(k => buyMult(e.culture, k) > 0)` in `missionOffer`.
-- **B5. Phone work the four auditors measured on 2026-08-01, not re-measured
-  since — Suspected until browse.js or a thumb confirms:** the Options panel
-  jumps to the top on every toggle; 5.6 px between ▼ and ▼▼; `.btn:disabled`
-  at 1.69:1 so a disabled control reads as absent; rotating with the chart open
-  mis-registers it until reopened; eight duplicate `inv-panel`/`inv-head` ids.
-  Re-verify each; fix the ones that hold.
+- **B5 — RE-VERIFIED 2026-11-01: all five are already fixed; nothing to build (no game
+  code touched, so no `sw.js` bump).** Each by its source, one by the page:
+  - Options jumps to the top on a toggle — fixed. The click handler redraws only the
+    button (comment "IN PLACE, not a re-render"); `renderOptions` runs only on open.
+  - 5.6 px between ▼ and ▼▼ — fixed, MEASURED. `#dive-controls` gap is 0.6rem;
+    Chromium at 375x812: 9.6 px between two 44x44 buttons.
+  - `.btn:disabled` at 1.69:1 — fixed. `opacity: 0.45` (comment in the CSS); the
+    contrast ratio itself NOT re-measured, only the rule read.
+  - Rotating with the chart open — fixed. The `resize` handler redraws the sea chart
+    if it is showing. Not driven by a real rotation tonight.
+  - Duplicate `inv-panel`/`inv-head` ids — fixed (a class now; `reachable.js` finds no
+    asked-for id absent).
+  - My calls: none that change the game. **Knob:** none; this is a read.
 
 ### DECIDED — Sean's words, or verification with no taste in it
 
@@ -180,7 +187,7 @@ built this and lost it to a refused push; this is the rebuild.)
         STILL TRUE: reachable hex stroke 0.8 / 0.55 alpha. NOT re-read: the trade
         panel's "They will take" fold.
       - My calls: none that change the game. **Knob:** none; this is a read.
-    - Left: B5, then D2.
+    - Left: D2.
     - My calls: none that change the game. **Knob:** none; this is a read.
 - **D2. Cards for the boats under water.** Sean, 2026-10-02: *"animated art
   for each associated craft."* The `rival` creatures and the Signal button

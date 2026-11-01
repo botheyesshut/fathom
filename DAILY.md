@@ -8,6 +8,37 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-01 — B5 re-checked: all five phone items were already fixed
+
+**Changed**
+- Nothing a player will notice. No game code touched; build stays v24.
+- B5 closed in the queue: Options toggle, ▼/▼▼ gap, disabled-button look, rotating with the chart open, duplicate ids. All five already fixed; the gap measured at 9.6 px.
+- D1 is finished. D2 (cards for the boats under water) is next.
+
+**Broke** — nothing. Battery green on arrival; dead functions 0; no invariant violated in 9,965 bot turns.
+
+**Test these three** — no change to test; the most useful by hand instead:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Turn the phone sideways with the sea chart open | chart | does it redraw to the new shape at once? |
+| 2 | Toggle Sound and Tips in Options with the list scrolled down | Options | does the list stay where it was? |
+| 3 | Reach the seabed and look at the dive arrows | main screen | does a greyed arrow still read as there, not gone? |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed, the box's own Chromium was used). Phone, landscape, desktop: nothing past the edge, nothing cut off, page never wider, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%.
+- Screenshots NOT opened tonight, so no visual claim is made.
+- Under 44 px: chart buttons (36-40) and Options toggles (40), unchanged. Bestiary "step could not be taken" is the same hidden-until-met button.
+- Bots, 40 x 300: median 3 crates banked in every playstyle; 5 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached. Income question (A3), yours.
+- First hour: 0 deaths in 40; first collision's 8 hull is still not explained (still true, asked before).
+
+**Questions for Sean**
+- None new. (Still open: A13, A14, A15, A12, A10, A11, A9, A1, A7, A3.)
+
+**Tomorrow** — D2, the cards for the boats under water.
+
+---
+
 ## 2026-10-31 — Re-read M1–M10 of the old phone list: five fixed or mostly, five still hold
 
 **Changed**
