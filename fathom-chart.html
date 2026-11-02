@@ -19006,6 +19006,36 @@ function hailRival(c) {
   render(); scheduleSave();
 }
 
+// THE SIGNAL BUTTON IS A CARD NOW, as the Close button is. Sean, 2026-10-02: pop-up
+// cards "and like Pirates! ... animated art for each associated craft". Another boat
+// alongside gets her picture and two choices; the answer is hailRival, unchanged, and
+// its lines are the card's body, so the card and the transcript cannot differ. What is
+// NOT on this card is whose she is: you have not signalled, and a lamp is how you ask.
+function rivalCard(c) {
+  if (!c || c.gone || !c.culture) return;
+  const told = (state.hailed || []).indexOf(c.id) >= 0;
+  const choices = [];
+  if (!told) choices.push({ label: 'Signal her', sub: 'Lamp to lamp. One boat, one signal', primary: true, act: () => rivalSignalCard(c.id) });
+  choices.push({ label: 'Leave her be', primary: told, act: cardDone });
+  cardOpen({ kind: 'rival', ship: c.id, scene: 'rival', flag: null, title: 'Another boat',
+    body: [cSaid('Contact alongside' + sir() + '. A boat, running dark.', 'A boat alongside, running dark.'),
+           cP(told ? 'You have had all of her you are going to get.' : 'No colours down here. Nobody shows a flag to the dark.', 'dim')],
+    choices: choices });
+}
+// The one control's one handler: a sail on the surface, a lamp under it.
+function sailTap() {
+  if (shipInReach()) return closeOnShip();
+  const rv = rivalInReach();
+  if (rv) rivalCard(rv);
+}
+function rivalSignalCard(id) {
+  const c = (state.creatures || []).find(x => x.id === id && !x.gone);
+  if (!c) return cardDone();
+  const mark = logHistory[logHistory.length - 1];
+  hailRival(c);
+  cardResult(null, 'Signalled', cardSaidSince(mark));
+}
+
 // A boat is only a target you can actually place: alongside, lit by a ping or a
 // launch, or loud enough under power to hear. A silent boat cannot be fired on —
 // you cannot shoot what you cannot find.
@@ -23476,11 +23506,7 @@ document.getElementById('btn-still').addEventListener('click', () => {
 document.getElementById('btn-hunt').addEventListener('click', () => { if (state.hunt) huntSpook(); else huntStart(); });
 document.getElementById('btn-dock').addEventListener('click', dockHere);
 // One control, two seas: a sail on the surface, a lamp under it.
-document.getElementById('btn-sail').addEventListener('click', () => {
-  if (shipInReach()) return closeOnShip();
-  const rv = rivalInReach();
-  if (rv) hailRival(rv);
-});
+document.getElementById('btn-sail').addEventListener('click', sailTap);
 document.getElementById('btn-attack').addEventListener('click', attackFromButton);
 document.getElementById('ping-power').addEventListener('input', updatePingDisplay);
 updatePingDisplay();

@@ -76,6 +76,7 @@ vm.runInContext(script + [
   '    fromName: "Somewhere", toName: "Elsewhere", hp: st.hull, prog: 0, seen: false, followed: false };',
   '  state.ships.push(sh); ports.clear(); return sh; }',
   'function __card() { return cardNow; }',
+  'function __signalButton() { sailTap(); }',
   'function __labels() { return cardNow ? cardNow.choices.map(c => c.label) : []; }',
   'function __pick(label) { const i = cardNow ? cardNow.choices.findIndex(c => c.label === label) : -1; if (i < 0) return false; cardPick(i); return true; }',
   'function __body() { return cardNow ? cardNow.body.join(" ").replace(/<[^>]+>/g, " ") : ""; }',
@@ -83,7 +84,7 @@ vm.runInContext(script + [
   'function __chase() { let n = 0; while (state.travel && n++ < 60) { ports.clear(); travelStep(); } return n; }',
   'function __pairs() { const out = []; for (const cu in FLEETS) for (const h in FLEETS[cu].mix) out.push([cu, h]); return out; }',
   'var __X = { state, shipsTick, shipHunting, shipMeansHarm, shipStats, shipScenes, vpPaint, hexDistance, standingBand, nudgeStanding, attackFromButton, closeOnShip,',
-  '  VP_SCENES, CULT_MARK, HULLS, CULTURES, SLIP_ODDS, BREAK_ODDS, WEAPONS, changeDepth, activeSub, gunsSeen };',
+  '  VP_SCENES, CULT_MARK, HULLS, CULTURES, SLIP_ODDS, BREAK_ODDS, WEAPONS, changeDepth, activeSub, gunsSeen, spawnCreature, rivalInReach };',
 ].join('\n'), sb, { timeout: 600000 });
 const X = sb.__X, S = X.state;
 
@@ -257,6 +258,27 @@ const sc = X.shipScenes({ culture: 'libertines', hull: 'destroyer' });
 const far = X.vpPaint(sc.far, null), near = X.vpPaint(sc.near, 'libertines');
 check(far !== near && near.indexOf(X.CULT_MARK.libertines) >= 0, 'and they are different pictures: up close she flies her people’s device',
   'the Con-Fed’s ' + X.CULT_MARK.libertines + ' at the masthead');
+
+
+//--- 8. ANOTHER BOAT, UNDER WATER ---------------------------------------------------
+console.log('\n--- 8. THE SIGNAL BUTTON OPENS A CARD FOR A BOAT UNDER WATER ---');
+fresh();
+X.changeDepth(X.activeSub().diveStep);
+X.spawnCreature('rival', S.q + 1, S.r, S.currentDepth);
+const rv = S.creatures[S.creatures.length - 1];
+rv.culture = 'mariners'; rv.boat = 'Kittiwake'; rv.revealTurns = 3;
+check(X.rivalInReach() === rv, 'a boat alongside is in reach of the Signal button');
+sb.__signalButton();
+check(kind() === 'rival' && !!sb.__card() && sb.__card().scene === 'rival', 'pressing it puts her card up, with her picture on it', kind() || 'no card');
+check(sb.__labels().join(' | ') === 'Signal her | Leave her be', 'and two choices', sb.__labels().join(' | '));
+check(S.hailed.indexOf(rv.id) < 0, 'nothing has been signalled until the captain says so');
+check(!/Kittiwake|Mariner/i.test(sb.__body()), 'and the card does not name her', sb.__body().slice(0, 70));
+sb.__pick('Signal her');
+check(kind() === 'result' && S.hailed.indexOf(rv.id) >= 0 && /Lamp to lamp/.test(sb.__body()), 'Signal her is the old hail: her name, her people, on the card', sb.__body().slice(0, 70));
+sb.__pick('Carry on');
+check(!sb.__card(), 'and Carry on closes it');
+sb.__signalButton();
+check(sb.__labels().join(' | ') === 'Leave her be', 'a boat already signalled offers only to leave her', sb.__labels().join(' | '));
 
 console.log('\n' + (fail === 0 ? 'THE ENCOUNTER HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);

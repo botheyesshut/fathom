@@ -8,6 +8,39 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-02 — The Signal button for a boat under water now opens a card
+
+**Changed**
+- Under water, with another boat alongside, SIGNAL now puts up a card: her picture, "Contact alongside, sir. A boat, running dark.", and two choices.
+- **Signal her** does what the button always did (the lamp, her name, her people, her news); the words land on a second card. **Leave her be** does nothing.
+- The card does not say whose she is. You find that out by signalling.
+- First slice of D2. Her own paint, and a coming-about card for a hostile boat, are still to do. Build is v25.
+
+**Broke** — nothing. Battery green on arrival and after; dead functions 0; moved.js 0 moved, 189 held; no invariant violated in 9,966 bot turns.
+
+**Test these three** — the card wants a thumb:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Dive and close on another boat until SIGNAL shows | main screen, under water | does her card come up with the picture, and read right in the Mate's voice? |
+| 2 | Press Signal her | the card | does the second card show the lamp lines, and does Carry on return you to the sea? |
+| 3 | Press SIGNAL again at the same boat | main screen | does it offer only Leave her be? |
+
+**What the playtest found**
+- Browser playtest RAN (Chromium from /opt/pw-browsers; `playwright install --with-deps` failed, the box's own Chromium was used). Phone, landscape, desktop: nothing past the edge, nothing cut off, page never wider, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%.
+- Screenshots opened: phone ping, hold, descend, landscape chart. They read cleanly; no visual fault seen. Landscape's main-screen map is 63%, the HUD sits top-left over it.
+- Under 44 px: chart buttons and Options toggles, unchanged and deliberate. Bestiary "step could not be taken" is the same hidden-until-met button.
+- Bots, 40 x 300: 0 deaths; 5 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached. Income question (A3), yours.
+- First hour: first collision's 8 hull is still not explained (still true, asked before). Depth, crush, port, chart and jettison tips fire in 0 of 40 first hours.
+
+**Questions for Sean**
+- A hostile boat you signal now answers "with her bow" in one log line. Should that become a COMING ABOUT card with the same Stand and fight / Break away as a surface hull? (Needs a call on whether a boat under water can be broken away from.)
+- Should the Ear speak before she is alongside, at the moment she is first heard?
+
+**Tomorrow** — D2 slice 2 if you answer; otherwise D3, the test of what `restart()` clears.
+
+---
+
 ## 2026-11-01 — B5 re-checked: all five phone items were already fixed
 
 **Changed**

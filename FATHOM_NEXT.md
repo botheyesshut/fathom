@@ -195,6 +195,24 @@ built this and lost it to a refused push; this is the rebuild.)
   THE ACTION flow fits them (see the 2026-10-02 entry's *Not done*). Mine:
   what the Ear hears before colours, the card's name, the art. His: nothing
   that is not already in his quote.
+  - **D2 slice 1 — BUILT 2026-11-02 (v25): the Signal button, for a boat alongside
+    under water, opens a card.** `rivalCard` (picture: the existing `rival` scene;
+    title "Another boat"; choices **Signal her** · **Leave her be**). Signal her is
+    `hailRival`, unchanged, and its log lines become a "Signalled" result card
+    (`rivalSignalCard`, `cardSaidSince`). The button's handler is now the named
+    `sailTap`. A boat already signalled offers only to leave her. The card never says
+    whose she is: signalling is how you ask.
+    - Measured: `tests/encounter.test.js` section 8, 8 checks; against the old handler
+      5 FAIL, with the fix 49 of 49 hold. Battery green, dead functions 0.
+    - My calls: the Ear's line, "Contact alongside, sir. A boat, running dark."
+      (the scene's own caption, said in the Mate's voice, `cSaid`); the sub-line "No
+      colours down here. Nobody shows a flag to the dark."; the button labels.
+      **Knob:** in `sailTap`, call `hailRival(rv)` instead of `rivalCard(rv)`.
+    - NOT done, left in D2: a second picture for her once signalled (her people's
+      paint, as the surface hulls have); a COMING ABOUT / action card for a hostile
+      boat (today a hostile answer is one log line and `c.alert = 100`, and the
+      fight stays the torpedo's); what the Ear hears before she is alongside.
+
 - **D3. The test the save auditor asked for.** No suite asserts what
   `restart()` clears — the one test that would have caught the `ordersSaid`
   leak outright. And `board`/`works`/`locks` fake the save round trip with
