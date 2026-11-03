@@ -50,7 +50,7 @@ const sb = { console, Math, JSON, Date: FrozenDate, Array, Object, Map, Set, Str
   parseInt, parseFloat, isNaN, isFinite, setTimeout: () => 0, clearTimeout: () => {},
   setInterval: () => 0, clearInterval: () => {}, requestAnimationFrame: () => 0,
   performance: { now: () => Date.now() }, document: doc, navigator: { userAgent: 'node' },
-  localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  localStorage: (() => { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; })(),
   addEventListener: () => {}, location: { href: '', reload: () => {} },
   matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }), alert: () => {} };
 sb.window = sb; sb.globalThis = sb; sb.self = sb;
@@ -59,7 +59,7 @@ vm.runInContext(script + `
 ;var __L=[]; log=function(t,c,e){ __L.push(String(t)) };
 gameStarted = true;
 var __X = { L: __L, state, interiorAt, tileAt, ITEMS, giveItem, itemCount, takeItem,
-  stepFoot, lockOpened, noteLockOpened, siteKey, siteSuffix, LOCK_CHANCE,
+  stepFoot, doSave, loadSave, resumeGame, lockOpened, noteLockOpened, siteKey, siteSuffix, LOCK_CHANCE,
   seedTo(v){ worldSeed=v; interiorSalt=':'+v; resetWorldCaches(); interiorCache.clear();
              state.items={}; state.siteTook={}; state.foot=null; } };
 `, sb, { timeout: 180000 });
@@ -135,10 +135,18 @@ if (sample) {
   const wasOpen = X.lockOpened(X.state.foot, sample.k);
   check(wasOpen, 'the deck remembers the lock was turned', 'recorded in siteTook');
   // surface and come back: a whole new foot, the interior regenerated
-  const keep = JSON.parse(JSON.stringify(X.state.siteTook));
+  // THE REAL ROUND TRIP: doSave writes the bytes, loadSave reads them back,
+  // resumeGame puts them on the state. (This used to clone siteTook with
+  // JSON.parse(JSON.stringify(..)), which proves nothing about the save.)
   X.state.foot = null;
+  X.doSave(true);
+  X.state.siteTook = {};
   X.interiorCache && X.interiorCache.clear && X.interiorCache.clear();
-  X.state.siteTook = keep;
+  const saved = X.loadSave();
+  check(!!saved, 'the save reads back', saved ? 'v' + saved.v : 'loadSave returned null');
+  X.resumeGame(saved);
+  check(X.lockOpened({ q: sample.q, r: sample.r, d: sample.d, kind: sample.kind }, sample.k),
+    'the opened lock survives doSave -> loadSave -> resumeGame', 'recorded in the saved siteTook');
   X.state.foot = { q: sample.q, r: sample.r, d: sample.d, kind: sample.kind,
     x: lx, y: ly - 1, closed: [], water: [], seen: [], took: [], opened: [], crates: 0, relics: 0, steps: 0, tick: 0, dweller: null };
   X.state.items = {};

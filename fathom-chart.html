@@ -22579,6 +22579,10 @@ function restart() {
   state.clearedSites = []; state.siteTook = {}; state.siteHurt = {}; state.siteDead = {}; state.beachDrawn = {};
   state.standing = {}; state.hailed = [];   // a new ocean has never heard of you
   state.stores = 100;
+  // A NEW BOAT HAS FULL TANKS. `water`, `still` and `inRain` were never reset, so
+  // a captain who died of thirst started the next ocean on an empty tank with
+  // the still left running (found by tests/restart.test.js, 2026-11-03).
+  state.water = 100; state.still = false; state.inRain = false;
   state.lostCrew = [];
   state.items = {};
   state.fits = {};

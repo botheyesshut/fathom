@@ -218,6 +218,26 @@ built this and lost it to a refused push; this is the rebuild.)
   leak outright. And `board`/`works`/`locks` fake the save round trip with
   `JSON.parse(JSON.stringify(...))` instead of calling the real functions.
   Write the first; route the three through `saveGame`/`loadSave`.
+  - **D3 — BUILT 2026-11-03 (v26).** `tests/restart.test.js` (in the battery):
+    dirties every top-level `state` field with a sentinel, calls `restart()`, and
+    compares each to a fresh world's value. 65 fields; `KEEPS` lists the ones that
+    survive on purpose, each with its reason. A new field that leaks now fails by
+    itself. Position, enclaves, crew and the Standing Orders are also asserted by value.
+    - Measured: against the old `ordersSaid` leak it FAILS (restart line removed);
+      against today's build it found **three real leaks and one open question**:
+      `water`, `still`, `inRain` were never reset (a captain who died of thirst
+      began the next ocean on an empty tank, the still running). Fixed, one line in
+      `restart()`. **Knob:** delete `state.water = 100; state.still = false;
+      state.inRain = false;` in `restart()` (the test will then fail, by design).
+    - `state.lore` (per-species lessons) is not reset by `restart()`. Whether it
+      should be is taste, not mine — held in `KEEPS` and asked in DAILY.md.
+    - `locks.test` now round-trips through the real `doSave` -> `loadSave` ->
+      `resumeGame` (it cloned `siteTook` with JSON before); with `siteTook` removed
+      from `doSave` it FAILS 2 checks. `board.test` and `works.test` hold no such
+      fake (no JSON clone or hand-built save in either); nothing to route.
+    - Battery green, dead functions 0, `moved.js` 0 moved, 189 held.
+    - My calls: the three timestamps (`pingTimer`, `lastMoveTime`, `lastFailTime`)
+      are KEPT in `KEEPS` as harmless animation clocks.
 - **D4. `startExpedition` has one live arm of three** — always `'signal'`, so
   the `'beach'` prose can never print and `relicChance` is a constant. Either
   route is dead code by the project's own doctrine; delete the dead arms, keep

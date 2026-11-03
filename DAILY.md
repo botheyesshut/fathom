@@ -8,6 +8,38 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-03 — A new world now starts with full water tanks, and restart() has a test
+
+**Changed**
+- A captain who died of thirst and began a new ocean started on an empty tank with the still left running. Now every new boat has full tanks, and the still and the rain are off. Build is v26.
+- New check `restart.test`: it dirties every one of the 65 state fields, restarts, and fails on any that comes back changed. It fails against the old Standing Orders leak, so it can catch one.
+- The locked-door test now saves and loads through the game's real save code instead of copying a list by hand.
+
+**Broke** — nothing. Battery green on arrival and after (restart.test added); dead functions 0; moved.js 0 moved, 189 held; no invariant violated in 9,954 bot turns.
+
+**Test these three** — thumb work:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Run low on water, die or Abandon, start a new world | Options, then Dive | does the water gauge read full, and is the Still button off? |
+| 2 | Start a new world after finishing the Standing Orders | title, Dive | do the Standing Orders come back? |
+| 3 | Open a locked hatch on a wreck, leave, reload the page, return | wreck deck | does the door stay open? |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed). Phone, landscape, desktop: nothing past the edge, nothing cut off, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%. I did not open the screenshots tonight, so no visual verdict.
+- Under 44 px: chart buttons and Options toggles, unchanged and deliberate. Bestiary step skipped: its button is hidden until met.
+- Bots, 40 x 300: 0 deaths; 5 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades never reached (A3, yours).
+- First hour: the first collision's 8 hull is still not explained (still true). Depth, crush, port, chart and jettison tips fire in 0 of 40 first hours.
+- **restart() left water, still and inRain alone** — BUG — Verified. Evidence: tests/restart.test.js failed on them. Fixed tonight.
+
+**Questions for Sean**
+- What a captain has learned about each creature (it never makes the same mistake twice) survives a new ocean, as the bestiary does. Should a new ocean forget it?
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+
+**Tomorrow** — D4 (delete the dead arms of `startExpedition`); D2 slice 2 waits on your answer.
+
+---
+
 ## 2026-11-02 — The Signal button for a boat under water now opens a card
 
 **Changed**
