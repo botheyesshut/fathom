@@ -15697,10 +15697,9 @@ function musicStopAll() {
 // in the dark with divers down is the loneliest air in the game.
 //=============================================================================
 
-function startExpedition(tile, kind) {
+function startExpedition(tile) {
   state.expedition = {
     key: hexKey(tile.q, tile.r),
-    type: kind,
     turns: 4 + randInt(3),
     crates: 0,
     relics: 0,
@@ -15779,22 +15778,23 @@ function expeditionTick() {
   }
   exp.turns--;
   const roll = rand();
-  const relicChance = 0.20;   // a signal is the only dive team left — see startExpedition
-  if (roll < relicChance) {
+  // A signal is the only dive team left — see startExpedition. Bands, in order:
+  // relic .20, crate .55+, snag .70+, pocket .80, hazard .92 (+.05 a diver level).
+  if (roll < 0.20) {
     exp.relics++;
     log('The divers surface a relic — old work, and not drowned-men make.', 'strange', 'RELIC');
     sfx('relic');
-  } else if (roll < relicChance + 0.35 + 0.05 * crewLvl('diver')) {
+  } else if (roll < 0.55 + 0.05 * crewLvl('diver')) {
     exp.crates++;
     log('The divers send up a crate on the line.', '', 'DIVE TEAM');
-  } else if (roll < relicChance + 0.50 + 0.05 * crewLvl('diver')) {
+  } else if (roll < 0.70 + 0.05 * crewLvl('diver')) {
     const dmg = Math.max(1, 2 + randInt(3) - crewLvl('diver'));
     state.hull = Math.max(0, state.hull - dmg);
     log(`Something shifts below — the line snags and saws the hull. -${dmg} hull.`, 'warn', 'DIVE TEAM');
-  } else if (roll < relicChance + 0.60) {
+  } else if (roll < 0.80) {
     state.air = Math.min(activeSub().air, state.air + 8);
     log('The divers tap a trapped pocket and pass gas up the line. +8 air.', '', 'DIVE TEAM');
-  } else if (roll < relicChance + 0.72) {
+  } else if (roll < 0.92) {
     resolveHazard(exp);
   } else {
     log(pick([
@@ -21998,7 +21998,7 @@ function handleTile(tile) {
       if (firstVisit) {
         if (!state.expedition) {
           log(pickFlavor(FLAVOR.signal), 'strange', 'SIGNAL');
-          startExpedition(tile, 'signal');
+          startExpedition(tile);
         }
       }
       break;

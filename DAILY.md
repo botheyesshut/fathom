@@ -8,6 +8,38 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-04 — The signal dive team loses its dead weight; its dice are pinned by a test
+
+**Changed**
+- Nothing a player will notice, on purpose. The diver's dice (relic, crate, snag, pocket, hazard) are exactly what they were.
+- `startExpedition` no longer takes a kind it never used, and the expedition no longer carries a `type` nothing read. The beach arm of the old code was already gone; this took what was left.
+- New check `expedition.test`: pins every band of the dive team's dice at both edges. It fails 3 checks against the old build. Build is v27.
+
+**Broke** — nothing. Battery green on arrival and after (expedition.test added); dead functions 0; moved.js 0 moved, 189 held.
+
+**Test these three** — D4 needs no thumb, so the three most useful tries:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Work a signal: sail onto a SIGNAL hex and wait | sea | divers surface crates, relics and the odd snag as before; the team comes in when you move off |
+| 2 | Rotate the phone with the chart open | sea chart, landscape | the chart and its buttons still sit cleanly (I opened the screenshot; it looked right at rest, but not through a rotation) |
+| 3 | Start a dive, look at the first log lines | title, Dive | can you tell what to do in the first minute without the Standing Orders? |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed again). Phone, landscape, desktop: nothing past the edge, nothing cut off, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%. Opened and looked at phone 06-more, phone 04-chart, landscape 04-chart: clean at rest.
+- Under 44 px, unchanged and deliberate: chart undo/clear/go and Options toggles (40 px). Bestiary step skipped: its button is hidden until met.
+- Bots, 40 x 300: 8 of 40 captains died (6 air, 2 hull); survival 70–90% by style; median 3 crates banked (max 9); 6 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades at 0% (A3, yours). No invariant violated in 9,957 turns. Last night's run had 0 deaths; a different run of the same bots, so I would not read a trend into it.
+- First-hour bot: ran, output not mined beyond the headline.
+- Nothing new that is Verified and structural.
+
+**Questions for Sean**
+- (Carried) What a captain has learned about each creature survives a new ocean, as the bestiary does. Should a new ocean forget it?
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+
+**Tomorrow** — nothing DECIDED is left in the queue but D2 slice 2 (her own paint; a coming-about card), which waits on your answer above. If none comes, the night spends itself on verification depth.
+
+---
+
 ## 2026-11-03 — A new world now starts with full water tanks, and restart() has a test
 
 **Changed**

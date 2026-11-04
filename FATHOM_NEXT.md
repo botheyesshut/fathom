@@ -242,6 +242,22 @@ built this and lost it to a refused push; this is the rebuild.)
   the `'beach'` prose can never print and `relicChance` is a constant. Either
   route is dead code by the project's own doctrine; delete the dead arms, keep
   the prose in the ledger in case a beach ever wants it.
+  - **D4 — BUILT 2026-11-04 (v27).** Found on arrival: the `'beach'` arm and its
+    prose were already gone (a comment in `startExpedition` says so). What was left
+    of the dead weight: the `kind` argument, the `type` field nothing reads, and
+    `relicChance`, a constant added into every band. All three removed; the bands
+    are written as plain thresholds (relic .20, crate .55+, snag .70+, pocket .80,
+    hazard .92; +.05 a diver level on the two that had it).
+    - The prose kept here, in case a beach ever wants a dive team again: none
+      survives in the source; the beach is walked (`enterGrotto`) and has its own
+      lines in `maybeBeach`.
+    - Measured: `tests/expedition.test.js` (in the battery, 13 checks) pins the
+      dice at both edges of every band; against the old build 3 FAIL (the `type`
+      field and the two-argument signature), with the change 13 of 13 hold. Same
+      thresholds, so nothing a player sees moves; a saved expedition that still
+      carries `type` loads harmlessly.
+    - My calls: the thresholds as literals, not a named constant. **Knob:** none
+      needed (no behaviour changed); to restore, `git revert` the commit.
 
 ### ASK — his calls; a `SEAN:` line under any of these moves it up
 
