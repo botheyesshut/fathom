@@ -8,6 +8,41 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-05 — Nothing decided was left to build; the night watched instead
+
+**Changed**
+- Nothing a player will notice, on purpose. No game code touched, so no new build (stays v27).
+- The queue has no BUG and no DECIDED item left but D2 slice 2 (her own paint, a coming-about card), and that waits on your answer to last night's question. No `SEAN:` line was found anywhere.
+
+**Broke** — nothing. Battery green on arrival (ALL SUITES PASSED); dead functions 0; element ids asked for but absent: none.
+
+**Test these three** — no change tonight needs a thumb, so the three most useful tries:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Hit rock on purpose in your first minute | sea, DESCEND into the floor | does the hull loss come with a line saying why? (the first-hour bot says no — see below) |
+| 2 | Ping at the default dial, then once louder | sea | the Echo line names the reach and what it cost; does the cost feel worth it? |
+| 3 | Open the chart, then Muster, then Options | phone | nothing cut off; Abandon sits low in Options and you scroll to it |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed again, as expected). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%. I opened phone 04-chart and 06-more: clean at rest.
+- Under 44 px, unchanged and deliberate: chart undo/clear/go, Options toggles (40 px); in landscape also chart up/down/fit. Bestiary step skipped: its button is hidden until met.
+- Bots, 40 x 300: 7 of 40 captains died (6 air, 1 hull); survival 70–90% by style; median 3 crates banked (max 9); 3 of 36 items ever held; torpedoes, deep, abyss, stations, selling to a people, upgrades at 0% (A3, yours, not retuned). No invariant violated in 9,966 turns.
+- First hour, 40 captains: 0 deaths; the depth, crush, port, chart and jettison tips fire in 0 of 40 (the hour is spent at the shelf); median 3 tips a run.
+- **The first collision costs 8 hull and the harness says no line explains it** — BUTTONS, FORTY — Suspected
+  Evidence: `tests/firsthour.js` "THE FIRST COLLISION": "and now explained NO", "in the right order NO". The probe forces the ram, and I did not look in the source for the cause.
+  Fix, if obvious: none yet; wording is yours.   Impact: hurts
+- Nothing else new.
+
+**Questions for Sean**
+- (Carried) What a captain has learned about each creature survives a new ocean, as the bestiary does. Should a new ocean forget it?
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+- The first-collision finding above: should a ram into rock log a line saying what hit you and why it cost hull?
+
+**Tomorrow** — D2 slice 2, if you answer the coming-about question; otherwise verification depth, starting with the first-collision line.
+
+---
+
 ## 2026-11-04 — The signal dive team loses its dead weight; its dice are pinned by a test
 
 **Changed**
