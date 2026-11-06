@@ -8,6 +8,41 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-06 — Nothing decided left to build; last night's first-collision worry was the probe, not the game
+
+**Changed**
+- Nothing a player will notice, on purpose. No game code touched, so no new build (stays v27).
+- `tests/firsthour.js` fixed: its "first collision" probe looked for a tip as a log line (tips are cards now) and reused a walk that had already used up the once-only tip. It now says "explained: yes".
+- No `SEAN:` line anywhere, so D2 slice 2 (her own paint, a coming-about card) is still waiting on you.
+
+**Broke** — nothing. Battery green on arrival and after; dead functions 0.
+
+**Test these three** — no change needs a thumb, so the three most useful tries:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Hit rock on purpose in your first minute | sea | a line saying what hit and "-N hull", then one tip card (it may wait behind a card already open) |
+| 2 | Signal a boat alongside under water | sea | the card, "Signal her" / "Leave her be", and its result card |
+| 3 | Rotate the phone with the chart open | chart | nothing cut off through the turn (never driven by a real rotation) |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed, as expected). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Maps 40% / 63% / 52%. I did not open the screenshots tonight.
+- Under 44 px, unchanged and deliberate: chart undo/clear/go and Options toggles (40 px); landscape also chart up/down/fit. Bestiary step skipped: its button is hidden until met.
+- Bots, 40 x 300: no invariant violated in 9,966 turns; 5 of 36 items ever held; torpedoes, deep, abyss, selling to a people, upgrades at 0% (A3, yours, not retuned).
+- First hour: 0 deaths, median 3 tips a run.
+- **Last night's first-collision finding is withdrawn** — BUTTONS, FORTY — Verified
+  Evidence: `hullStrike` in the source logs "<sentence> -N hull." tagged IMPACT and calls `tip('impact')`; the probe now reports explained yes.
+  Impact: cosmetic (it was the harness)
+- Nothing else new.
+
+**Questions for Sean**
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+- (Carried) What a captain has learned about each creature (`state.lore`) survives a new ocean, as the bestiary does. Should a new ocean forget it?
+
+**Tomorrow** — D2 slice 2 if you answer the coming-about question; otherwise verification depth.
+
+---
+
 ## 2026-11-05 — Nothing decided was left to build; the night watched instead
 
 **Changed**

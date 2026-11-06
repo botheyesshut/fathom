@@ -287,11 +287,18 @@ function median(a) { const b = a.slice().sort((x, y) => x - y); return b.length 
   s.__clear();
   if (wall) {
     const h0 = st.hull;
+    // The walk out may already have bumped stone, and a tip fires once; forget it so
+    // this measures the FIRST collision's teaching, not the walk's.
+    st.tipsSeen = (st.tipsSeen || []).filter(k => k !== 'impact');
+    const c0 = s.__cards_().length;
     s.move(wall.q, wall.r);
     const ls = s.__lines_();
     const hurt = h0 - st.hull;
-    const taught = ls.some(l => l.tag === 'TIP' && l.t === TIPTEXT.impact);
-    const order = ls.findIndex(l => l.tag === 'IMPACT') < ls.findIndex(l => l.tag === 'TIP');
+    // Tips are cards now (see THE TIPS above), not TIP log lines: the lesson is the
+    // 'impact' tip (a card, queued if one is open); the log's own IMPACT line must say what hit and what it cost.
+    const sentence = ls.find(l => l.tag === 'IMPACT');
+    const taught = !!sentence && /-\d+ hull/.test(sentence.t) && (st.tipsSeen || []).indexOf('impact') >= 0;   // shown, or queued behind a card already open
+    const order = !!sentence;
     console.log('--- THE FIRST COLLISION (forced; the bot never rams) ---');
     console.log(`  hull cost kept                BEFORE 4-8      NOW ${hurt}`);
     console.log(`  and now explained             BEFORE never    NOW ${taught ? 'yes' : 'NO'}`);
