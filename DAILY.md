@@ -8,6 +8,38 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-12 — Nothing decided left to build; the night watched, and found nothing new
+
+**Changed**
+- Nothing a player will notice, on purpose. No game code touched, so no new build (stays v27).
+- The queue has no BUG and no DECIDED item but D2 slice 2 (her own paint, a coming-about card). It waits on your answer. No `SEAN:` line was found anywhere.
+
+**Broke** — nothing. Battery green on arrival (ALL SUITES PASSED); dead functions 0; element ids asked for but absent: none.
+
+**Test these three** — no change needs a thumb, so the three most useful tries:
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Rotate the phone with the chart open | chart | nothing cut off through the turn (still never driven by a real rotation) |
+| 2 | Signal a boat alongside under water | sea | the card, "Signal her" / "Leave her be", then the result card |
+| 3 | Ping at the default dial, then louder | sea | the Echo line names the reach and the cost; is the cost worth it? |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed to download, as expected). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I read the report; I opened no screenshots tonight, so no claim about how they look.
+- Under 44 px, unchanged and deliberate: chart undo/clear/go and Options toggles (36-40 px). Bestiary step skipped: its button is hidden until met. Abandon sits below the fold on phone and landscape, reachable by scrolling the list.
+- Bots, 40 x 300: 33 survived; 6 ran out of air, 1 hull failure; 0 invariants broken over 9965 turns. Median 3 crates banked. Only 5 of 36 items ever held. Nothing reached the deep, a station, Dagon or the Libertines, or selling to a people (income question, yours, not retuned).
+- First hour: 0 deaths in 40; first ping names its reach (18); first collision explained, in the right order.
+- Note: the checkout came up on a detached HEAD again; I moved to main and fast-forwarded before working.
+- Nothing new.
+
+**Questions for Sean**
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+- (Carried) What a captain has learned about each creature (`state.lore`) survives a new ocean, as the bestiary does. Should a new ocean forget it?
+
+**Tomorrow** — D2 slice 2 if you answer the coming-about question; otherwise verification depth.
+
+---
+
 ## 2026-11-11 — Nothing decided left to build; the night watched, and found nothing new
 
 **Changed**
