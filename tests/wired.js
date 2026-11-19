@@ -158,8 +158,9 @@ const ternRe = /\?\s*'([a-z]+)'\s*:/g;                while ((m = ternRe.exec(sf
 const ternRe2 = /:\s*'([a-z]+)'\s*[;\n]/g;            while ((m = ternRe2.exec(sfn))) sceneLits.add(m[1]);
 // The computed families: yard + Hull for every (people, hull) pair a fleet can
 // actually put to sea — read off FLEETS, so a Mariner destroyer (which does not
-// exist) is not reported missing — and 'ship' + hull, the generic fallback,
-// which is reachable only if some real pair has no drawing of its own.
+// exist) is not reported missing — and 'ship' + hull, the generic hull, which
+// the porthole shows only if some real pair has no drawing of its own, and the
+// SAIL HO card shows for every sail whose colours are not yet read (below).
 const yards = { confluence: 'line', libertines: 'cf', mariners: 'mar' };
 const computed = new Set();
 const pairs = [];
@@ -174,11 +175,21 @@ list(missingScenes, s => `sceneForNow names '${s}' and VP_SCENES has no such sce
 failures += missingScenes.length;
 const noOwn = pairs.filter(p => !scenes.has(p.own));
 const genericReachable = new Set(noOwn.map(p => 'ship' + p.h));
+// The SAIL HO card (2026-10-02) paints the bare hull for every sail until her
+// colours are read: `shipScenes(sh).far` is 'ship' + hull, whoever owns her. This
+// check predates the cards, and until 2026-11-19 it called all four generic
+// scenes dead while every sighting painted one; the build queue then asked Sean
+// whether to delete them. It reads the source for that line rather than assuming
+// it, so if the far picture ever stops being the generic hull, the old report
+// comes back by itself.
+const farIsGeneric = /far:\s*'ship'\s*\+\s*sh\.hull/.test(script);
+if (farIsGeneric) for (const p of pairs) genericReachable.add('ship' + p.h);
 for (const g of genericReachable) computed.add(g);
 console.log('  (people, hull) pairs a fleet can sail: ' + pairs.length + '; with a drawing of their own: ' + (pairs.length - noOwn.length)
-  + (noOwn.length ? '; falling back to the generic hull scene: ' + noOwn.map(p => p.cu + '/' + p.h).join(', ') : ''));
+  + (noOwn.length ? '; falling back to the generic hull scene: ' + noOwn.map(p => p.cu + '/' + p.h).join(', ') : '')
+  + (farIsGeneric ? '; the SAIL HO card shows the generic hull of all of them' : ''));
 for (const h of T.HULLS) if (!genericReachable.has('ship' + h) && scenes.has('ship' + h))
-  console.log(`  generic scene 'ship${h}' can never show — every people that sails ${h} has its own drawing`);
+  console.log(`  generic scene 'ship${h}' can never show — no sighting card paints it, and every people that sails ${h} has its own drawing`);
 
 // ---- 2. IN THE TABLE BUT NEVER NAMED ----------------------------------------
 section('IN THE TABLE BUT NEVER NAMED — for the eye. A tip nothing can fire, a scene nothing can pick.');

@@ -212,6 +212,13 @@ built this and lost it to a refused push; this is the rebuild.)
       paint, as the surface hulls have); a COMING ABOUT / action card for a hostile
       boat (today a hostile answer is one log line and `c.alert = 100`, and the
       fight stays the torpedo's); what the Ear hears before she is alongside.
+    - **Two of those three are already decided, so build them (Opus, 2026-11-19).**
+      D2's own terms hand the art and the Ear to whoever builds it (*"Mine: what
+      the Ear hears before colours, the card's name, the art"*). Her picture once
+      signalled, and what the Ear hears before she is alongside, need no answer.
+      The nights from 11-05 on held them back along with the hostile card.
+      **Only the hostile COMING ABOUT card waits on Sean**: it changes what a
+      hostile boat under water does, and that is a mechanic. Knob: delete this bullet.
 
 - **D3. The test the save auditor asked for.** No suite asserts what
   `restart()` clears — the one test that would have caught the `ordersSaid`
@@ -275,8 +282,13 @@ built this and lost it to a refused push; this is the rebuild.)
   fields, or make faction encounters honour their declared band?
 - **A5. Free provisioning.** `dockHere()` spends no turn: air, stores, wounds,
   decoys, in three taps. The "night ashore" fiction, or an oversight?
-- **A6. The four generic ship scenes** (~181 lines of art) can only be reached
-  by a fifth people that does not exist. Keep as a fallback, or delete?
+- **A6 — CLOSED 2026-11-19 (Opus): a stale question, nothing to decide.** The
+  four generic ship scenes have been on screen since 2026-10-02: every SAIL HO
+  card paints one (`shipScenes(sh).far`, the bare hull before her colours are
+  read). `tests/wired.js` predated the cards and kept calling them unreachable,
+  and this question came from it. It now reads that line from the source, and on
+  a build where the far picture is the owner's own it reports them again.
+  Deleting them would also fail `encounter.test` section 7.
 - **A7. Her ports.** Every ship knows the harbour she left and the one she is
   making for and the game never says either. One line on HER COLOURS — *"out
   of Harrow, bound for the Shallows"* — yes or no?
