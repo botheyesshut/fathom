@@ -6112,6 +6112,10 @@ const VP_SCENES = {
        '   └────────────────┘   '],
     ] },
 };
+// HER PEOPLE'S PAINT (D2 slice 2). The boat under water is the same boat once you have
+// signalled her; what changes is the hull, which takes her owner's ink the way a surface
+// hull's plating does (CULT_INK, applied in vpPaint through `inkAlso`).
+VP_SCENES.rivalOwned = Object.assign({}, VP_SCENES.rival, { cap: 'Another boat, and now you know whose', inkAlso: ['█', '▄', '▀'] });
 
 let vpScene = 'deep', vpTick = 0, vpSnow = [], vpOn = true, vpTimer = null;
 // THE ENCOUNTER CARD ON THE TABLE, or null. Declared here because the porthole's
@@ -6209,6 +6213,7 @@ function vpPaint(sceneKey, vpFlag) {
   const flagMark = vpFlag ? (CULT_MARK[vpFlag] || '¦') : null;
   if (vpFlag && CULT_INK[vpFlag]) {
     key['▓'] = CULT_INK[vpFlag];
+    for (const g of (S.inkAlso || [])) key[g] = CULT_INK[vpFlag];
     if (flagMark) key[flagMark] = CULT_INK[vpFlag];
   }
 
@@ -8096,11 +8101,11 @@ function cardPick(i) {
 }
 // The last card of an encounter: what happened, and one button. If a passage
 // was being made when the sail came up, it is taken up again.
-function cardResult(sh, title, body) {
+function cardResult(sh, title, body, look) {
   const sc = sh ? shipScenes(sh) : null;
   cardOpen({ kind: 'result', ship: sh ? sh.id : null, title: title, body: body,
-    scene: sc ? (sh.known ? sc.near : sc.far) : (cardNow ? cardNow.scene : 'surface'),
-    flag: sh && sh.known ? sh.culture : null,
+    scene: look ? look.scene : sc ? (sh.known ? sc.near : sc.far) : (cardNow ? cardNow.scene : 'surface'),
+    flag: look ? look.flag : sh && sh.known ? sh.culture : null,
     choices: [{ label: 'Carry on', primary: true, act: cardDone }] });
 }
 function cardDone() {
@@ -19017,7 +19022,7 @@ function rivalCard(c) {
   const choices = [];
   if (!told) choices.push({ label: 'Signal her', sub: 'Lamp to lamp. One boat, one signal', primary: true, act: () => rivalSignalCard(c.id) });
   choices.push({ label: 'Leave her be', primary: told, act: cardDone });
-  cardOpen({ kind: 'rival', ship: c.id, scene: 'rival', flag: null, title: 'Another boat',
+  cardOpen({ kind: 'rival', ship: c.id, scene: told ? 'rivalOwned' : 'rival', flag: told ? c.culture : null, title: 'Another boat',
     body: [cSaid('Contact alongside' + sir() + '. A boat, running dark.', 'A boat alongside, running dark.'),
            cP(told ? 'You have had all of her you are going to get.' : 'No colours down here. Nobody shows a flag to the dark.', 'dim')],
     choices: choices });
@@ -19033,7 +19038,7 @@ function rivalSignalCard(id) {
   if (!c) return cardDone();
   const mark = logHistory[logHistory.length - 1];
   hailRival(c);
-  cardResult(null, 'Signalled', cardSaidSince(mark));
+  cardResult(null, 'Signalled', cardSaidSince(mark), { scene: 'rivalOwned', flag: c.culture });
 }
 
 // A boat is only a target you can actually place: alongside, lit by a ping or a

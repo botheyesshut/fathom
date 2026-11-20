@@ -275,10 +275,16 @@ check(S.hailed.indexOf(rv.id) < 0, 'nothing has been signalled until the captain
 check(!/Kittiwake|Mariner/i.test(sb.__body()), 'and the card does not name her', sb.__body().slice(0, 70));
 sb.__pick('Signal her');
 check(kind() === 'result' && S.hailed.indexOf(rv.id) >= 0 && /Lamp to lamp/.test(sb.__body()), 'Signal her is the old hail: her name, her people, on the card', sb.__body().slice(0, 70));
+// D2 slice 2: once she has been signalled the picture is hers — her people's ink on the hull.
+const rc = sb.__card();
+check(rc.scene === 'rivalOwned' && rc.flag === 'mariners', 'and the result card paints her in her own people\'s paint', rc.scene + ' / ' + rc.flag);
+const inkOf = (flag) => X.vpPaint('rivalOwned', flag);
+check(!!X.VP_SCENES.rivalOwned && inkOf('mariners') !== inkOf('libertines') && inkOf('mariners') !== X.vpPaint('rival', null), 'her paint differs by people, and from the unsignalled boat');
 sb.__pick('Carry on');
 check(!sb.__card(), 'and Carry on closes it');
 sb.__signalButton();
 check(sb.__labels().join(' | ') === 'Leave her be', 'a boat already signalled offers only to leave her', sb.__labels().join(' | '));
+check(sb.__card().scene === 'rivalOwned' && sb.__card().flag === 'mariners', 'and her card now carries her people\'s paint', sb.__card().scene + ' / ' + sb.__card().flag);
 
 console.log('\n' + (fail === 0 ? 'THE ENCOUNTER HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);

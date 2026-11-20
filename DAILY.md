@@ -8,6 +8,38 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-20 — A boat you have signalled under water now shows her own colours
+
+**Changed**
+- Signal a boat alongside under water and her card is drawn with her people's paint on the hull. Before the signal she is still the plain dark boat.
+- Same picture on the "Signalled" result card and if you press the button on her again.
+- New build, v28 (phones pick it up).
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` moved nothing.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Signal a boat alongside under water, from each people if you can | sea, below the surface | the result card's hull is in her colours (Mariners, Libertines, Con-Fed, Dagon): do they read apart? |
+| 2 | Press the button on her a second time | sea | her card keeps the paint; only "Leave her be" |
+| 3 | Rotate the phone with the chart open | chart | nothing cut off through the turn (still never driven by a real rotation) |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed, as expected). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I opened one screenshot (phone `04-chart`): the chart reads cleanly. No claim about the others. I did not open a screenshot of the new card: the browser run never meets a boat under water, so the paint itself is checked by `encounter.test` (the card's scene and flag, and that the picture differs by people) and not by eye.
+- Under 44 px, unchanged and deliberate: chart undo/clear/go and Options toggles (36-40 px). Bestiary step skipped: its button is hidden until met. Abandon sits below the fold on phone and landscape, reachable by scrolling.
+- Bots, 40 x 300: 33 survived; 6 ran out of air, 1 hull failure; 0 invariants broken over 9963 turns. Median 3 crates banked (max 9). Only 5 of 36 items held in the items run. Nothing reached the deep, a station, or selling to a people (income question, yours, not retuned).
+- Nothing new.
+
+**Questions for Sean**
+- (New) I took the 2026-11-19 note in the queue as settled: her picture and the Ear's line before she is alongside are mine under D2's terms. Built the picture only. For the Ear's line, a new line of the Mate's voice: want it, or leave her silent until alongside?
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+- (Carried) What a captain has learned about each creature (`state.lore`) survives a new ocean, as the bestiary does. Should a new ocean forget it?
+
+**Tomorrow** — the Ear's line before she is alongside, if you say yes; otherwise verification depth.
+
+---
+
 ## 2026-11-19 — Nothing decided left to build; the night watched, and found nothing new
 
 **Changed**

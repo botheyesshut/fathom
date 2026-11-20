@@ -219,6 +219,18 @@ built this and lost it to a refused push; this is the rebuild.)
       The nights from 11-05 on held them back along with the hostile card.
       **Only the hostile COMING ABOUT card waits on Sean**: it changes what a
       hostile boat under water does, and that is a mechanic. Knob: delete this bullet.
+  - **D2 slice 2 — BUILT 2026-11-20 (v28): her picture once signalled.** A boat you have
+    signalled is drawn in her people's paint: scene `rivalOwned` (the `rival` frames) with
+    the hull in `CULT_INK[her people]`, on the "Signalled" result card and on her card if
+    you press the button again. Before the signal she is still the plain `rival`.
+    - Measured: `encounter.test` section 8, 52 checks; against the old build 2 FAIL (the
+      result card and the second card painted `rival` / no flag), with the change 52 of 52
+      hold. Battery green, dead functions 0, `moved.js` 0 moved. Browser playtest ran clean.
+    - My calls: the hull takes the ink on all three hull glyphs (`inkAlso`), not a new
+      drawing per people; the caption "Another boat, and now you know whose".
+      **Knob:** in `rivalCard` / `rivalSignalCard`, paint `'rival'` with a null flag.
+    - Left: what the Ear hears before she is alongside (his voice, a line to author), and
+      the hostile COMING ABOUT card (Sean's).
 
 - **D3. The test the save auditor asked for.** No suite asserts what
   `restart()` clears — the one test that would have caught the `ordersSaid`
