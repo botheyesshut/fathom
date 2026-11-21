@@ -8,6 +8,37 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-21 — Nothing decided left to build; the night watched, and found nothing new
+
+**Changed**
+- Nothing a player will notice, on purpose. No game code touched, so no new build (stays v28).
+- The one open D2 piece that is not yours is the Ear's line before a boat is alongside. It is a new line in the Mate's voice, which is tone, so I left it for your answer. No `SEAN:` line was found anywhere.
+
+**Broke** — nothing. Battery green on arrival (ALL SUITES PASSED); dead functions 0; element ids asked for but absent: none.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Signal a boat alongside under water, from each people if you can | sea, below the surface | the result card's hull is in her colours; do the four peoples read apart? |
+| 2 | Rotate the phone with the chart open | chart | nothing cut off through the turn (still never driven by a real rotation) |
+| 3 | Ping at the default dial, then louder | sea | the Echo line names the reach and the cost; is the cost worth it? |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed, as expected). Phone, landscape, desktop on v28: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I opened one screenshot (phone `04-chart`, taken on the previous build, before I pulled): the chart reads cleanly. No claim about the others, and none about the new boat card (the browser run never meets a boat under water).
+- Under 44 px, unchanged and deliberate: chart undo/clear/go and Options toggles (40 px). Bestiary step skipped: its button is hidden until met. Abandon sits below the fold on phone, reachable by scrolling.
+- Bots, 40 x 300 (run on the previous build, before I pulled): 33 survived; 6 ran out of air, 1 hull failure; 0 invariants broken over 9958 turns. Median 3 crates banked (max 9). Only 5 of 36 items held. Nothing reached the deep, a station, or selling to a people (income question, yours, not retuned). First hour, 40 captains: 0 deaths.
+- Nothing new.
+
+**Questions for Sean**
+- (Carried) For the Ear's line before a boat is alongside, a new line in the Mate's voice: want it, or leave her silent until alongside?
+- (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+- (Carried) What a captain has learned about each creature (`state.lore`) survives a new ocean, as the bestiary does. Should a new ocean forget it?
+
+**Tomorrow** — the Ear's line, if you say yes; otherwise verification depth.
+
+---
+
 ## 2026-11-20 — A boat you have signalled under water now shows her own colours
 
 **Changed**
