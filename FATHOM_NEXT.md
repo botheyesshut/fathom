@@ -1,4 +1,4 @@
-# FATHOM — START HERE (last updated 2026-10-26)
+# FATHOM — START HERE (last updated 2026-11-21)
 
 ## THE BUILD QUEUE — read this first; the nightly run builds from it (opened 2026-10-26)
 
@@ -231,6 +231,8 @@ built this and lost it to a refused push; this is the rebuild.)
       **Knob:** in `rivalCard` / `rivalSignalCard`, paint `'rival'` with a null flag.
     - Left: what the Ear hears before she is alongside (his voice, a line to author), and
       the hostile COMING ABOUT card (Sean's).
+    - **2026-11-21: both settled.** The Ear's line was already in the game (see D5);
+      the hostile card is D5, at Sean's *"D2 yes"*.
 
 - **D3. The test the save auditor asked for.** No suite asserts what
   `restart()` clears — the one test that would have caught the `ordersSaid`
@@ -250,6 +252,7 @@ built this and lost it to a refused push; this is the rebuild.)
       state.inRain = false;` in `restart()` (the test will then fail, by design).
     - `state.lore` (per-species lessons) is not reset by `restart()`. Whether it
       should be is taste, not mine — held in `KEEPS` and asked in DAILY.md.
+      **Settled 2026-11-21: kept** (SEAN: *"carried = use your best judgment"*; see ASK).
     - `locks.test` now round-trips through the real `doSave` -> `loadSave` ->
       `resumeGame` (it cloned `siteTook` with JSON before); with `siteTook` removed
       from `doSave` it FAILS 2 checks. `board.test` and `works.test` hold no such
@@ -278,11 +281,274 @@ built this and lost it to a refused push; this is the rebuild.)
     - My calls: the thresholds as literals, not a named constant. **Knob:** none
       needed (no behaviour changed); to restore, `git revert` the commit.
 
+#### Sean answered the ASK list, 2026-11-21 — D5 to D12 come from it
+
+His reply to the leans I put to him on 2026-11-19, whole:
+
+> *"D2 yes, A1 yes but only to a point -- you can judge what's most fun
+> depthwise, but a destroyer is not a submarine so it shouldn't be able to
+> follow very deep, A7 yes, A10  yes, A11 yes, A13 yes, A14 yes, A15 yes, A12
+> use your best judgment, A9 keep it for your reasons, A5 keep, A4 delete,
+> carried = use your best judgment, A8 use your best judgment, new= yes"*
+
+"carried" was the `state.lore` question; "new" was letting idle nights work a
+list of unchecked items. Each yes was to a lean of mine, so the lean is quoted
+beside his word. Some answers left the call to judgment, and some yeses still
+needed words or numbers. Those calls are mine (Opus, 2026-11-21) and are written
+out below, so **nothing in D5–D12 needs taste from the night: build what is
+written.** A word may change to fit `VOICE.md`; the meaning and the numbers may
+not. Anything the spec did not foresee is a question in the report, not a call.
+
+Before writing these I re-read every premise against the code. Two were stale:
+A4 (the bands are read) and the Ear's line in D2 (it exists). The depth strip's
+hidden numbers turned out to be a fixed "800" that nothing updates.
+
+- **D5. A hostile boat under water comes about** (D2's last piece). SEAN: *"D2
+  yes"*, to: *"A hostile boat you signal: a 'coming about' card? — Yes. Your
+  surface flow, one thin chance to break away."*
+  - Today: `rivalSignalCard` → `hailRival`. When `rivalHostile(c)`, that is one
+    log line and `c.alert = 100; c.revealTurns = 3`, then the "Signalled" result
+    card. Keep every line of `hailRival`: the card is a front end.
+  - Build: in `rivalSignalCard`, when `rivalHostile(c)` after the hail, open a
+    COMING ABOUT card in place of the result card.
+    - `kind: 'about'`, scene `rivalOwned`, flag her people, title **She is coming about**.
+    - Body: the hail's own lines (`cardSaidSince(mark)`).
+    - Then `cSaid('She is coming about' + sir() + '. She has our bearing.', 'She is coming about. She has your bearing.')`.
+    - Then `cP('Breaking away: about four in ten.', 'dim')`.
+  - Choices, the surface's two:
+    - **Fire first**, only with fish in the racks. Sub: `N in the racks — yours
+      before hers`. It fires a torpedo at her, through the existing `fireWeapon`
+      path, aimed at her the way `attackTarget` aims `attackShip`. Then the result
+      card with the lines since the mark.
+    - **Break away**, primary when unarmed. Sub: `One chance to lose her, and a
+      thin one`. Roll `rand() < BREAK_ODDS`, the surface's own 0.40 (no new
+      number).
+      - Success: `c.alert = 0; c.revealTurns = 0; c.shy = true;`. This boat stops
+        hunting you; her people's standing is untouched. Log `Ballast held, motors
+        stopped. You let her slide past in the dark, and her screws fade astern.`
+        (good, HAIL), then result card **She has lost you**.
+      - Failure: if she can shoot (`c.torps > 0 && c.reload <= 0`), `rivalFires(c)`.
+        The fish is in the water, with the two turns the game already gives. Then
+        result card **She has you**.
+  - Test: `encounter.test` section 8 grows. A hostile signal opens the 'about'
+    card with its choices. A break won (stub `rand`) leaves `rivalHostile` false.
+    A break lost puts a threat from her id in `state.threats`. Fire first dents
+    her hull. Run it once against today's build and watch it fail.
+  - Knob: in `rivalSignalCard`, delete the `rivalHostile` branch (the result card
+    comes back).
+  - The Ear's line before she is alongside: **already in the game, nothing to
+    build.** The passive contact names another boat at range in three steps
+    (`engine noise — another boat, not yet onto you`, `…casting for you in the
+    dark`, `…it has a solution`), through `earSays`, the Ear's own voice. It
+    predates D2. The 11-20 and 11-21 nights held it back as a new line; it is not
+    one.
+
+- **D6. Four small ones, one night.** Build them in this order; if the night runs
+  out, the rest stay here.
+  - **A15, sound starts off.** SEAN: *"A15 yes"*, to: *"Start muted on first
+    launch, with a hint? — Yes. Your living-room rule, for everyone."*
+    - `let audioMuted = audioLocalBuild;` becomes `let audioMuted = true;`. Every
+      origin starts silent until the player chooses, and a stored `fathom-audio`
+      still wins both ways (the lines under it are unchanged).
+    - If `audioLocalBuild` then has no other reader, delete it and rewrite its comment.
+    - Hint: a new tip `sound: 'The sound is off. Options, then Sound, to hear the
+      sea.'`. It fires at the cast-off, beside THE TRADE line in `restart()`, and
+      only while no `fathom-audio` is stored, so a player who has chosen either way
+      never sees it.
+    - Test: no stored preference on a hosted hostname → muted (fails today).
+    - Knob: `= true` back to `= audioLocalBuild`.
+  - **A7, her passage.** SEAN: *"A7 yes"*, to: *"One line on her colours saying
+    where she sailed from and where she's bound? — Yes. The game already knows
+    both."*
+    - Every hull carries `fromName`/`toName`, set in `shipsTick` and read by nothing.
+    - In `shipFacts`, after 'Her colours': `cFact('Her passage', 'Out of ' +
+      sh.fromName + ', bound for ' + sh.toName + '.')`, when both are set.
+    - Test: `encounter.test`, HER COLOURS names both ports (fails today).
+    - Knob: delete that line.
+  - **A11, coming back.** SEAN: *"A11 yes"*, to: *"After a reload, say who is
+    aboard and label the button Continue? — Yes to both."*
+    - The title button `#dive` reads **Continue** when a save is stored (`SAVE_KEY`
+      present) and **Dive** when not. Same handler; only the word changes.
+    - In `resumeGame`, add one line after "The chart unrolls where you left it…".
+      First `Aboard: ` and each hand by name and role (`roleName`), or `No hands
+      aboard but you.`. Then, naming only what exists, `Open: N leads on the chart,
+      a mission for <people>, a commission against <people>.` (from `state.leads`,
+      `state.mission`, `state.commission`).
+    - Test: `save.test`. A save with two hands and a lead resumes with both names
+      and "1 lead" in the log, and the button word follows the save (both fail today).
+    - Knob: delete the line in `resumeGame` and the label line.
+  - **A10, the pressure said in numbers.** SEAN: *"A10 yes"*, to: *"Say the
+    pressure cost in three bands? — Yes. A captain can't weigh a risk the log
+    hides."*
+    - In `applyMoveCosts`, the not-crush branch speaks from the first metre over
+      (not after 50), by `dmg`, the hull that move cost:
+      - 1–3: `Past her rating. The hull ticks as it settles — ${dmg} off her on that move.` (warn)
+      - 4–9: `The hull groans under the pressure. ${dmg} off her on that move.` (warn — the old words, with the number)
+      - 10+: `Plates working, rivets going. ${dmg} off her on that move. Take her up.` (danger)
+    - Say it when the number changes, and otherwise every fifth move past her
+      rating. Today it repeats on every move past 50 m over; sitting deep should
+      not be a wall of the same line.
+    - The crush line and both tips are unchanged.
+    - Test: 20 m over gives a line with the number (today: silence), and in the
+      heavy band the number is in the line.
+    - Knob: restore the single `over > 50` line.
+  - One ledger entry and one `sw.js` bump cover the four; one commit each is fine.
+
+- **D7. A relic is always worth a crate** (A12). SEAN: *"A12 use your best
+  judgment"*. My call, the lean as I put it: *"Relics yes, one crate. Keep the
+  full rest."*
+  - In the port panel, beside the VAULT count, while `state.relicsBanked > 0`: a
+    row **Sell a relic to the collectors · 1 cr**.
+    - One tap sells one: `relicsBanked − 1`, `cargoBanked + 1`.
+    - Log `The collectors weigh it in their hands and pay a crate. (bank N, vault M.)` (PORT).
+    - Peoples who hoard relics still pay their own price in Trade. This is the floor under it, at every harbour.
+  - Why it does not break his income ruling: one crate is the lowest price in the
+    game for anything. It is below every existing use of a relic (two buy three
+    torpedoes), so it only turns a dead relic into something. `moved.js` should
+    show it, and the ledger says what moved.
+  - The other half is **unchanged**: a night ashore still sets nerve back to 100,
+    and torpedoes still cost 2 relics for 3.
+  - Test: `greed.test` or `items.test`. Two vaulted relics at a port show the row,
+    and one tap gives +1 bank −1 vault (fails today).
+  - Knob: delete the row.
+
+- **D8. A destroyer follows you down, not far** (A1). SEAN: *"A1 yes but only to
+  a point -- you can judge what's most fun depthwise, but a destroyer is not a
+  submarine so it shouldn't be able to follow very deep"*. The lean he said yes
+  to: *"destroyers only. One pass overhead. Deep and silent cuts the damage."*
+  - Who: a surface hull with `shipStats(...).depthCharge > 0`. Today that is a
+    destroyer of the Libertines (6) or the Confluence (2). A Mariner destroyer has
+    0 and never charges: the Mariners carry no guns.
+  - When: the boat goes from the surface to any depth while such a hull is hunting
+    her (`sh.chasing || sh.hostileTo`) within 3 hexes. That is any route down
+    through `changeDepth`, including the ACTION card's "Dive out from under her".
+    One pass per hull per dive.
+    - At once, the Ear: `earSays('Screws overhead' + sir() + ' — she is turning
+      to pass over us.', 'Screws overhead. She is turning to pass over you.',
+      'danger', 'SAIL')`.
+  - The pass lands on the captain's **next move**, so the warning buys exactly one
+    move: go deeper, or rig for silent.
+    - Damage = `round(depthCharge × 3 × reach × (silent ? 0.5 : 1) × (0.7 + rand() × 0.6))`.
+    - `reach` is 1 down to 60 m, 0.6 to 120 m, 0.3 to 180 m, and 0 below 180 m.
+    - A Libertine destroyer does about 18 at 60 m, 11 at 120 m, 5 at 180 m, and nothing deeper. Silent halves it.
+    - Hit: `The charges come down around you. A hammer on the hull, then another. ${dmg} taken.` (danger, HULL)
+    - Out of reach: `Charges, a long way above. The boat shivers and that is all. She cannot reach this deep.` (good, SAIL)
+    - Then `sh.evaded = true; sh.chasing = false`, as today's dive does.
+    - If the boat surfaces before the pass lands, there is no pass.
+  - Why 180 m (my call, his to move): a fast dive from the surface reaches 120 m,
+    so in open water one more step down takes you out of her reach. Over the
+    shelf, where the bottom is shallow, you cannot get under her, and that is
+    where a destroyer is dangerous. All of it happens inside the sunlit band
+    (down to 300 m).
+  - Constants: `DC_REACH = 180`, `DC_PER = 3`.
+  - Test: `encounter.test`, with a hunting destroyer. All of these fail today:
+    - a dive to 120 m gives the warning;
+    - the next move at 120 m takes hull in the band;
+    - at 240 m there is no damage, and the out-of-reach line;
+    - a merchant does nothing;
+    - silent takes about half, over N trials.
+  - Knob: `DC_REACH = 0` turns it off.
+
+- **D9. Edge arrows to what you know is out there** (A14). SEAN: *"A14 yes"*,
+  to: *"Edge arrows to known prizes off screen? — Yes. It saves pinching out."*
+  - What gets one: every open lead (`state.leads`), and every prize the sea chart
+    marks that is not yet worked (`state.poisFound`). The sea chart's own test is
+    in `drawSeaChart`: `chartKnown(t) && t.poi && !isLand(t)`. Never use
+    `tile.poi` alone; that leaked sinkholes twice.
+  - Only those off the visible main map count, and only the **nearest 3** by hex
+    distance get an arrow.
+  - How it looks: a small solid triangle, about 10 px, at the map's edge on the
+    bearing to the mark. It takes the colour the main map draws that mark in, at
+    70% opacity. No label, and not tappable (a minimum of clutter).
+  - The sea map only: none on foot, none under a panel.
+  - Test: `chart.test`. A charted wreck 30 hexes east gives one arrow on the right
+    edge; the same wreck on screen gives none; an uncharted one gives none (fails
+    today).
+  - Knob: `EDGE_ARROWS = 3`; 0 turns them off.
+
+- **D10. The walls on foot, and the depth numbers** (A13). SEAN: *"A13 yes"*,
+  to: *"On foot, brighter walls and depth numbers back? — Yes. Let the dark come
+  from what is unseen."*
+  - Colours in `renderInterior`, my first pass. He may move them by eye; that is
+    what the knob is for.
+    - The wall `#1b1712` → `#443a2d`.
+    - The floor kinds ×1.8: plain `#3a3126` → `#685844`, rubble `#433727` → `#796346`, carved `#2c2a20` → `#4f4c3a`.
+    - Their dot glyphs ×1.4: rubble `#8a7758` → `#c1a77b`, carved `#5f6a4e` → `#85946d`.
+    - Memory `dim` 0.4 → 0.6.
+    - Every other tile keeps its colours.
+  - What that buys, against `#081420`, the background I read from the source:
+    - a lamplit wall against the background goes from 1.04:1 to 1.62:1;
+    - the floor against a wall goes from 1.40 to 1.68;
+    - a remembered wall goes from 1.01 to 1.29.
+  - Measure the real background in the browser (`getComputedStyle` on the map)
+    and print all three numbers in the ledger. If it is not `#081420`, say so, and
+    build these literals anyway.
+  - The depth strip:
+    - Today `#depth-strip-labels` is `display: none`, and its bottom label is a
+      fixed "800" that nothing updates. The strip's real bottom is `maxScale`, in
+      `updateDepthStrip`.
+    - Show the labels, and write `#depth-strip-bot` from `maxScale`, rounded to
+      100 m, on every update. The top stays 0.
+    - Check at 375 px that they clear the recenter button.
+  - Test: `interior.test` reads the wall fill and the memory opacity off a
+    rendered room, and the strip's bottom label must equal `maxScale` after an
+    update. Both fail today.
+  - Put a browser screenshot on foot in the report. It is the first test Sean
+    should do.
+  - Knob: the literals, and the one CSS line.
+
+- **D11. A city within reach of home** (A8). SEAN: *"A8 use your best
+  judgment"*. My call, the lean as I put it: *"Yes, within 60 hexes, new worlds
+  only."*
+  - **Measure first.** Over 60 seeds, at the current generation, count two things:
+    - how many worlds have a city within 60 hexes of home today;
+    - how many have somewhere a deep Dagon enclave can sit (at least `CITY_DEPTH`, 3600 m) within 60 hexes.
+  - Build only if at least 57 of the 60 have such a place:
+    - the first deep Dagon enclave spawned within 60 hexes of home becomes a city, unless a city within 60 hexes already exists;
+    - gate it on a new world generation (`WORLD_GEN` 3, `worldGen >= 3`), so a saved campaign is not changed: new worlds only, as I put it to him.
+  - If more than 3 worlds have nowhere for one, stop. Write the numbers here and
+    move it back to ASK: the fix would then be the world's shape (deep water near
+    home), and that is his.
+  - Test: `chart.test`, §7-style. Thirty new-generation seeds each have a city
+    within 60 hexes, and a generation-2 seed is unchanged.
+  - Knob: the gate, or the 60.
+
+- **D12. The idle list** (new). SEAN: *"new= yes"*, to: *"Let idle nights work
+  through a list of unchecked items? — Yes. The old audits left about a dozen."*
+  - Only when there is no BUG and nothing above is buildable: **one a night, top
+    first**.
+  - Each comes out fixed, or still true with today's evidence. A still-true bug
+    goes to BUGS; a still-true matter of taste becomes an ASK. Strike each one
+    when it is done.
+  1. The underwater boat cards, seen by a browser. In `browse.js`, plant a boat
+     alongside under water (as `encounter.test` does) and screenshot her card
+     before and after the signal. No night has seen them yet.
+  2. A real rotation with the chart open: 375×812 → 812×375 in `browse.js`, with a
+     screenshot after. B5 only read the handler.
+  3. A 640 px-tall phone: `browse.js` at 360×640 (M8).
+  4. The `.btn:disabled` contrast, measured. B5 only read the rule.
+  5. Does Jettison take two taps? Drive it (M1).
+  6. The Hold's `useItem` refusals: drive one and see where the line lands, under
+     the full-screen panel (M2).
+  7. Backdrop tap and Escape on the Hold and on Trade (M3).
+  8. The touch targets in the Hold's `.act` column, measured (M9).
+  9. Trade's "They will take" fold, driven (M10).
+  10. The shot-turret against the hardened lock (`lock` 14 cr, `turret` 22 cr),
+      and dig threat per tile, measured (E11).
+  11. The reachable-hex stroke (0.8 / 0.55 alpha) against the water, measured (M10).
+  12. The 3% hole: the sea-going bot sets foot anywhere in 3% of runs, so almost
+      nothing on foot is ever played. A persona that goes ashore, or `delve.js`
+      further.
+
 ### ASK — his calls; a `SEAN:` line under any of these moves it up
 
-- **A1. Depth charges.** `depthCharge` is in the hull table and on the
-  destroyer's stern and does nothing: diving is a complete escape from every
-  surface hull. Should a destroyer follow you down — a card, a roll, a cost?
+**Answered 2026-11-21** (his words are under DECIDED, above D5). Moved to
+DECIDED: A1 → D8, A7 → D6, A8 → D11, A10 → D6, A11 → D6, A12 → D7, A13 → D10,
+A14 → D9, A15 → D6. Closed: A4, A5 and A9 below, and `state.lore`. Still his:
+A2 and A3.
+
+- **A1 → D8 (2026-11-21).** Depth charges: should a destroyer follow you down?
+  SEAN: *"yes but only to a point"*.
 - **A2. The ghost thread** (Angelshark #22). Recorded, not built; it needs
   the arc only you have.
 - **A3. The income question** and its four satellites (2026-07-27 entry,
@@ -290,10 +556,27 @@ built this and lost it to a refused push; this is the rebuild.)
   5; `CREW_HIRE_COST`; engagement rate 13 %; the Libertines as a market; the
   twenty items with no buyer. Untouched per your ruling. One honest 40-minute
   session answers the first.
-- **A4. `depthBand` on the four cultures** is read by nothing. Delete the
-  fields, or make faction encounters honour their declared band?
-- **A5. Free provisioning.** `dockHere()` spends no turn: air, stores, wounds,
-  decoys, in three taps. The "night ashore" fiction, or an oversight?
+- **A4 — CLOSED 2026-11-21 (Opus): not deleted, because the premise was wrong.**
+  SEAN: *"A4 delete"*, to my lean *"Delete the faction depth bands nothing
+  reads?"*. Something does read them.
+  - `weightedPeople` weighs which people holds an enclave by those bands. It has
+    done so since 2026-08-04 (`3ed83e7`).
+  - That was at Sean's own word, then: *"I have no problem with factions having
+    a preference for or origination from a certain depth."*
+  - This question predates that change and was never closed. I copied it into my
+    leans without re-reading the code.
+  - Deleting the bands would quietly flatten every people's preference for its
+    own depth, so they stay.
+  - Knob, if he still wants them gone: delete `depthBand` from the four CULTURES,
+    and have `weightedPeople` weigh everyone 1.
+- **A5 — CLOSED 2026-11-21: kept.** SEAN: *"A5 keep"*. Docking spends no turn:
+  that is the night ashore, not an oversight.
+- **A9 — CLOSED 2026-11-21: kept.** SEAN: *"A9 keep it for your reasons"*. A
+  completed mission pays on top of the sale, and that is the reason to haul.
+- **`state.lore` (from D3) — CLOSED 2026-11-21: kept.** SEAN: *"carried = use
+  your best judgment"*. My call, the lean as I put it: *"No. Keep it, as the
+  bestiary does."* What a captain learned of a species follows them to a new
+  ocean. `restart.test`'s `KEEPS` entry now says so, not "open question".
 - **A6 — CLOSED 2026-11-19 (Opus): a stale question, nothing to decide.** The
   four generic ship scenes have been on screen since 2026-10-02: every SAIL HO
   card paints one (`shipScenes(sh).far`, the bare hull before her colours are
@@ -301,33 +584,16 @@ built this and lost it to a refused push; this is the rebuild.)
   and this question came from it. It now reads that line from the source, and on
   a build where the far picture is the owner's own it reports them again.
   Deleting them would also fail `encounter.test` section 7.
-- **A7. Her ports.** Every ship knows the harbour she left and the one she is
-  making for and the game never says either. One line on HER COLOURS — *"out
-  of Harrow, bound for the Shallows"* — yes or no?
-- **A9. A mission pays twice.** Its crates come on top of the sale price of the
-  goods handed over (~+8 a unit at Confluence). Intended bonus, or should the
-  mission pay replace the sale?
-- **A10. The pressure warning does not scale.** Past rated depth the log says
-  "The hull groans under the pressure." at −2 hull a move and at −26, and says
-  nothing for the first 50 m. Say the cost in three bands, or keep it vague on
-  purpose? (From O3; the words are his.)
-- **A11. Coming back.** After a save loads the game writes one line. Should it
-  say who is aboard and what marks are open, and should the title button read
-  Continue when a save exists? (From O6.)
-- **A12. Relics and nerve.** (From E10, E11.) Two prices, both yours: should a
-  relic carried to port fetch a floor price in crates, so banking one is never a
-  loss? And should a night ashore leave the crew a little shaken instead of
-  setting every nerve back to 100?
-- **A13. Deck legibility.** (From M6, M5.) On foot the walls read at 1.16:1 and
-  memory is dimmed to 0.4; the depth strip carries no numbers. Lift the colours
-  and bring the labels back, or keep the dark on purpose?
-- **A14. Off-screen pointers.** (From M7.) An edge arrow for known prizes and leads
-  so you can steer without pinching out — yes or no?
-- **A15. Sound on first launch.** (From M10.) On the hosted page the game starts
-  with sound on. Start muted with a hint, or keep it?
-- **A8. Cities are rare:** 2, 0, 2, 0, 0, 1 within sixty hexes across six
-  seeds, so half the worlds cannot reach an alliance. The price of the ticket,
-  not the wiring, is the question.
+- **A7 → D6 (2026-11-21).** Her ports on HER COLOURS. SEAN: *"A7 yes"*.
+- **A10 → D6 (2026-11-21).** The pressure warning in three bands. SEAN: *"A10 yes"*.
+- **A11 → D6 (2026-11-21).** Coming back: who is aboard, and Continue. SEAN: *"A11 yes"*.
+- **A12 → D7 (2026-11-21).** Relics and nerve. SEAN: *"use your best judgment"*:
+  the relic floor is queued; nerve stays as it is.
+- **A13 → D10 (2026-11-21).** The on-foot walls and the depth numbers. SEAN: *"A13 yes"*.
+- **A14 → D9 (2026-11-21).** Edge arrows. SEAN: *"A14 yes"*.
+- **A15 → D6 (2026-11-21).** Start muted, with a hint. SEAN: *"A15 yes"*.
+- **A8 → D11 (2026-11-21).** Cities are rare. SEAN: *"use your best judgment"*:
+  measure first, then build only if the world allows it.
 
 ---
 

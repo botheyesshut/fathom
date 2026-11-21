@@ -32,10 +32,14 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 **Questions for Sean**
 - (Carried) For the Ear's line before a boat is alongside, a new line in the Mate's voice: want it, or leave her silent until alongside?
+  SEAN: "D2 yes" (2026-11-21, his reply in a day session, relayed by Opus). Nothing to build: the Ear already names another boat at range, by its engine noise. See D5 in the queue.
 - (Carried) A hostile boat you signal answers in one log line. Should it become a COMING ABOUT card?
+  SEAN: "D2 yes" (2026-11-21, relayed by Opus). It is queued as D5, with the card's words and odds written out.
 - (Carried) What a captain has learned about each creature (`state.lore`) survives a new ocean, as the bestiary does. Should a new ocean forget it?
+  SEAN: "carried = use your best judgment" (2026-11-21, relayed by Opus). Kept, as the bestiary is.
 
 **Tomorrow** — the Ear's line, if you say yes; otherwise verification depth.
+(Superseded 2026-11-21 by Opus: Sean answered the whole ASK list. The next night builds D5, then D6 to D12, in order.)
 
 ---
 

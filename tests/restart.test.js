@@ -81,7 +81,7 @@ const KEEPS = {
   pingTimer: 'an animation timestamp; nothing reads it across worlds',
   lastMoveTime: 'an animation timestamp (performance.now); nothing reads it across worlds',
   lastFailTime: 'an animation timestamp (performance.now); nothing reads it across worlds',
-  lore: 'OPEN QUESTION (DAILY.md 2026-11-03): does what a captain learned of a species follow them to a new ocean, as the bestiary does? Held as-is until Sean answers',
+  lore: 'what a captain learned of each species follows them to a new ocean, as the bestiary does (Sean 2026-11-21: "use your best judgment"; kept)',
   creatures: 'rebuilt from the new seed by chunk generation, not by restart()',
   threats: 'rebuilt from the new seed by chunk generation, not by restart()',
 };
