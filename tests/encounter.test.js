@@ -76,6 +76,7 @@ vm.runInContext(script + [
   '    fromName: "Somewhere", toName: "Elsewhere", hp: st.hull, prog: 0, seen: false, followed: false };',
   '  state.ships.push(sh); ports.clear(); return sh; }',
   'function __card() { return cardNow; }',
+  'const __rand0 = rand; function __rand(v) { rand = v == null ? __rand0 : (() => v); }',
   'function __signalButton() { sailTap(); }',
   'function __labels() { return cardNow ? cardNow.choices.map(c => c.label) : []; }',
   'function __pick(label) { const i = cardNow ? cardNow.choices.findIndex(c => c.label === label) : -1; if (i < 0) return false; cardPick(i); return true; }',
@@ -84,7 +85,7 @@ vm.runInContext(script + [
   'function __chase() { let n = 0; while (state.travel && n++ < 60) { ports.clear(); travelStep(); } return n; }',
   'function __pairs() { const out = []; for (const cu in FLEETS) for (const h in FLEETS[cu].mix) out.push([cu, h]); return out; }',
   'var __X = { state, shipsTick, shipHunting, shipMeansHarm, shipStats, shipScenes, vpPaint, hexDistance, standingBand, nudgeStanding, attackFromButton, closeOnShip,',
-  '  VP_SCENES, CULT_MARK, HULLS, CULTURES, SLIP_ODDS, BREAK_ODDS, WEAPONS, changeDepth, activeSub, gunsSeen, spawnCreature, rivalInReach };',
+  '  VP_SCENES, CULT_MARK, HULLS, CULTURES, SLIP_ODDS, BREAK_ODDS, WEAPONS, changeDepth, activeSub, gunsSeen, spawnCreature, rivalInReach, rivalHostileNow: rivalHostile };',
 ].join('\n'), sb, { timeout: 600000 });
 const X = sb.__X, S = X.state;
 
@@ -285,6 +286,52 @@ check(!sb.__card(), 'and Carry on closes it');
 sb.__signalButton();
 check(sb.__labels().join(' | ') === 'Leave her be', 'a boat already signalled offers only to leave her', sb.__labels().join(' | '));
 check(sb.__card().scene === 'rivalOwned' && sb.__card().flag === 'mariners', 'and her card now carries her people\'s paint', sb.__card().scene + ' / ' + sb.__card().flag);
+
+//--- 9. A HOSTILE BOAT UNDER WATER COMES ABOUT (D5) ---------------------------------
+console.log('\n--- 9. SHE IS COMING ABOUT, ONE DECK DOWN ---');
+const hostileBoat = () => {
+  fresh(); sb.__card() && sb.__pick('Carry on');
+  X.changeDepth(X.activeSub().diveStep);
+  S.standing = { libertines: -80 };
+  X.spawnCreature('rival', S.q + 1, S.r, S.currentDepth);
+  const b = S.creatures[S.creatures.length - 1];
+  b.culture = 'libertines'; b.boat = 'Marguerite'; b.torps = 3; b.reload = 0; b.hull = 20; b.hostile = false; b.shy = false;
+  return b;
+};
+let hb = hostileBoat();
+check(X.rivalInReach() === hb, 'a hostile boat alongside is in reach');
+sb.__signalButton(); sb.__pick('Signal her');
+check(kind() === 'about', 'signalling a boat that is hostile opens COMING ABOUT, not the result card', kind() || 'no card');
+check(sb.__card().title === 'She is coming about' && sb.__card().scene === 'rivalOwned' && sb.__card().flag === 'libertines', 'titled, and drawn in her colours', sb.__card().title + ' / ' + sb.__card().scene + ' / ' + sb.__card().flag);
+check(/not talking to you/.test(sb.__body()) && /coming about/.test(sb.__body()) && /four in ten/.test(sb.__body()), 'the body is the hail\u2019s own line, then the Mate, then the odds', sb.__body().slice(0, 80));
+check(sb.__labels().join(' | ') === 'Fire first | Break away', 'with fish in the racks: Fire first, Break away', sb.__labels().join(' | '));
+check(sb.__card().choices[0].sub.indexOf(S.torpedoes + ' in the racks') === 0, 'Fire first says how many are in the racks', sb.__card().choices[0].sub);
+const t0 = S.torpedoes, h0 = hb.hull;
+sb.__pick('Fire first');
+check(S.torpedoes === t0 - 1 && (hb.hull < h0 || hb.gone), 'Fire first sends a torpedo at her and dents her', 'racks ' + t0 + ' -> ' + S.torpedoes + ', her hull ' + h0 + ' -> ' + hb.hull);
+check(kind() === 'result' && /torpedo/i.test(sb.__body()), 'and the result card carries the lines since', sb.__body().slice(0, 60));
+sb.__pick('Carry on');
+// unarmed: only Break away, and primary
+hb = hostileBoat(); S.torpedoes = 0; S.armament = null;
+sb.__signalButton(); sb.__pick('Signal her');
+check(sb.__labels().join(' | ') === 'Break away' && sb.__card().choices[0].primary, 'with nothing in the racks only Break away is offered', sb.__labels().join(' | '));
+sb.__rand(0.0);
+sb.__pick('Break away'); sb.__rand(null);
+check(kind() === 'result' && sb.__card().title === 'She has lost you' && !X.rivalHostileNow(hb) && hb.alert === 0, 'a break won leaves her no longer hostile, alert gone', 'hostile ' + X.rivalHostileNow(hb) + ', alert ' + hb.alert);
+sb.__pick('Carry on');
+hb = hostileBoat(); S.torpedoes = 0; S.armament = null;
+sb.__signalButton(); sb.__pick('Signal her');
+S.threats = [];
+sb.__rand(0.99);
+sb.__pick('Break away'); sb.__rand(null);
+check(kind() === 'result' && sb.__card().title === 'She has you' && S.threats.some(t => t.from === hb.id), 'a break lost puts her torpedo in the water', 'threats from her: ' + S.threats.filter(t => t.from === hb.id).length);
+sb.__pick('Carry on');
+// a friendly boat still gets the old result card
+fresh(); X.changeDepth(X.activeSub().diveStep); S.standing = {};
+X.spawnCreature('rival', S.q + 1, S.r, S.currentDepth);
+const fb = S.creatures[S.creatures.length - 1]; fb.culture = 'mariners'; fb.boat = 'Kittiwake';
+sb.__signalButton(); sb.__pick('Signal her');
+check(kind() === 'result', 'a boat with no quarrel with you still gets the plain Signalled card', kind() || 'no card');
 
 console.log('\n' + (fail === 0 ? 'THE ENCOUNTER HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);

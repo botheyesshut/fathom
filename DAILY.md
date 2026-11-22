@@ -8,6 +8,37 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-22 — A hostile boat you signal under water now comes about: fire first, or one thin chance to break away
+
+**Changed**
+- Signal a boat under water that holds a grudge and you get a COMING ABOUT card, in her colours, instead of one log line.
+- With fish in the racks you may Fire first. Without, or if you would rather, Break away: about four in ten.
+- Break away won: she loses you and stops hunting. Lost: if she can shoot, her torpedo is in the water, two turns.
+- Friendly boats still get the plain "Signalled" card. New build, v29.
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Signal a Con-Fed or Dagon boat alongside under water, with torpedoes | sea, below the surface | the card reads right; Fire first dents her; does the card feel like the surface one? |
+| 2 | Same, unarmed, press Break away a few times (new boats) | sea | about four in ten get away; the lost one gives you the torpedo warning |
+| 3 | Rotate the phone with the new card up | card | nothing cut off (card never seen on a screen, the browser run cannot meet a boat) |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed, as expected). Phone, landscape, desktop on v29: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I opened phone `04-chart`, `06-more`, `17-descend-2`: all read cleanly. Landscape not opened.
+- Under 44 px, unchanged and deliberate: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met). Abandon below the fold on phone, reachable by scrolling.
+- Bots, 40 x 300: 33 survived; 6 ran out of air, 1 hull failure; 0 invariants broken over 9960 turns. Median 3 crates banked (max 9). 5 of 36 items held. Nothing reached the deep, a station, or selling to a people (income question, yours, not retuned). First hour: 0 deaths.
+- Nothing new.
+
+**Questions for Sean**
+- If you shot first, a boat stays hostile even after a won Break away (the spec only clears her grudge, not your act). Right, or should a won break calm her too?
+
+**Tomorrow** — D6, the four small ones.
+
+---
+
 ## 2026-11-21 — Nothing decided left to build; the night watched, and found nothing new
 
 **Changed**

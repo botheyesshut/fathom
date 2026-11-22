@@ -336,6 +336,23 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
     her hull. Run it once against today's build and watch it fail.
   - Knob: in `rivalSignalCard`, delete the `rivalHostile` branch (the result card
     comes back).
+  - **D5 — BUILT 2026-11-22 (v29).** `rivalSignalCard` now opens the COMING ABOUT
+    card (`rivalAboutCard`) when the hail finds her hostile: scene `rivalOwned`, her
+    flag, title "She is coming about", the hail's own lines, the Mate's line, "Breaking
+    away: about four in ten." **Fire first** (only with fish in the racks) is
+    `fireWeapon` unchanged, then a "You fired first" result card. **Break away** rolls
+    `BREAK_ODDS`; won: alert 0, `shy`, her screws fade astern, "She has lost you"; lost:
+    `rivalFires` if she can shoot, "She has you". Words are the spec's, verbatim, except
+    the two result titles ("You fired first", "She has you" for the lost break), mine.
+    - Measured: `encounter.test` section 9, 12 checks (64 in all); against the old build
+      4 FAIL then the file crashes (no 'about' card exists). Battery green, dead
+      functions 0, `moved.js` 0 moved / 189 held. Browser playtest clean (it never meets a
+      boat under water, so the new card itself is NOT seen on a screen).
+    - My calls: the two result titles above; Fire first goes through `fireWeapon`, which
+      takes the nearest lit target, so a creature nearer than her would take the fish
+      (she is alongside when the card opens, so this needs a second creature on the same
+      hex; not seen). **Knob:** in `rivalSignalCard`, delete the `rivalHostile` line (the
+      result card comes back).
   - The Ear's line before she is alongside: **already in the game, nothing to
     build.** The passive contact names another boat at range in three steps
     (`engine noise — another boat, not yet onto you`, `…casting for you in the

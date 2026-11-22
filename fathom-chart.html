@@ -19038,7 +19038,43 @@ function rivalSignalCard(id) {
   if (!c) return cardDone();
   const mark = logHistory[logHistory.length - 1];
   hailRival(c);
+  // D5: a boat that answers with her bow is COMING ABOUT, as a hull on the surface is.
+  if (state.alive && rivalHostile(c)) return rivalAboutCard(c, mark);
   cardResult(null, 'Signalled', cardSaidSince(mark), { scene: 'rivalOwned', flag: c.culture });
+}
+// COMING ABOUT, one deck down. A front end on `hailRival`, `fireWeapon` and `rivalFires`:
+// the hail's own lines are the body; Fire first is the torpedo; Break away is the
+// surface's one thin chance (BREAK_ODDS, no new number).
+function rivalAboutCard(c, mark) {
+  const racks = state.torpedoes || 0;
+  const choices = [];
+  if (racks > 0) choices.push({ label: 'Fire first', sub: racks + ' in the racks \u2014 yours before hers', act: () => rivalFireFirst(c.id) });
+  choices.push({ label: 'Break away', sub: 'One chance to lose her, and a thin one', primary: racks <= 0, act: () => rivalBreakAway(c.id) });
+  cardOpen({ kind: 'about', ship: c.id, scene: 'rivalOwned', flag: c.culture, title: 'She is coming about',
+    body: [...cardSaidSince(mark),
+           cSaid('She is coming about' + sir() + '. She has our bearing.', 'She is coming about. She has your bearing.'),
+           cP('Breaking away: about four in ten.', 'dim')],
+    choices: choices });
+}
+function rivalFireFirst(id) {
+  const c = (state.creatures || []).find(x => x.id === id && !x.gone);
+  if (!c) return cardDone();
+  const mark = logHistory[logHistory.length - 1];
+  fireWeapon();
+  if (!state.alive) return cardClose();
+  cardResult(null, 'You fired first', cardSaidSince(mark), { scene: 'rivalOwned', flag: c.culture });
+}
+function rivalBreakAway(id) {
+  const c = (state.creatures || []).find(x => x.id === id && !x.gone);
+  if (!c) return cardDone();
+  const mark = logHistory[logHistory.length - 1];
+  if (rand() < BREAK_ODDS) {
+    c.alert = 0; c.revealTurns = 0; c.shy = true;
+    log('Ballast held, motors stopped. You let her slide past in the dark, and her screws fade astern.', 'good', 'HAIL');
+    return cardResult(null, 'She has lost you', cardSaidSince(mark), { scene: 'rivalOwned', flag: c.culture });
+  }
+  if (c.torps > 0 && c.reload <= 0) rivalFires(c);
+  cardResult(null, 'She has you', cardSaidSince(mark), { scene: 'rivalOwned', flag: c.culture });
 }
 
 // A boat is only a target you can actually place: alongside, lit by a ping or a
