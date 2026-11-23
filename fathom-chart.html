@@ -7043,6 +7043,8 @@ const TIPS = {
   claimdeck: 'A DECK with nothing living on it can be claimed as your station: the breach becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
   claimruin: 'A drowned hall with nothing living in it can be claimed as your station: the doorway becomes a lock, the water goes out, and what you leave there is still there when you come back. It costs crates, and the Erebus can only supply one.',
   locks:   'Some doors are locked rather than stuck. A hull wreck takes a corroded hatch key; a drowned building takes the bone kind. Both turn up in the deep, both sell well at an enclave, and both are spent the moment they open something — so the question is always whether this is the door worth spending it on.',
+  // A15: every origin starts muted, so the one thing the player must be told is how to undo it.
+  sound:   'The sound is off. Options, then Sound, to hear the sea.',
   chart:   'The surface was charted before the Fall, so all of it is drawn. Below it the paper holds only what you have sounded. On the surface she marks herself by the sun and the shore, and you can lay a course on the sheet and sail it. Under water she cannot — you dead-reckon, until you find something that can.',
 };
 let tipsOn = true;
@@ -8277,6 +8279,7 @@ function coloursCard(sh) {
 function shipFacts(sh) {
   const cu = CULTURES[sh.culture], st = shipStats(sh.culture, sh.hull);
   const out = [cFact('Her colours', ucfirst(cu.name) + (cu.motto ? ' — “' + cu.motto + '”' : '') )];
+  if (sh.fromName && sh.toName) out.push(cFact('Her passage', 'Out of ' + sh.fromName + ', bound for ' + sh.toName + '.'));
   out.push(cFact('Her guns', gunsSeen(st)));
   if (st.cargo > 0) out.push(cFact('Her hold', 'Riding deep. There is freight in her.'));
   out.push(cFact('Standing', standingSaid(sh.culture)));
@@ -15481,38 +15484,16 @@ function pregenTick() {
 
 let audioCtx = null;
 let audioMaster = null;
-// A LOCAL BUILD IS SILENT UNTIL SOMEBODY ASKS IT NOT TO BE.
+// EVERY ORIGIN STARTS SILENT UNTIL SOMEBODY CHOOSES.
 //
 // Sean, 2026-08-05: "Sometimes I work through your remote-control command and
 // the sound goes off while my wife is innocently here on the couch in the
 // living room, and it plays our scary theme song and creeps her the hell out."
-//
-// The mute already existed and the music already honoured it; the fault was the
-// DEFAULT. It starts false, and a preview server is a fresh origin that has
-// never stored a preference, so every reload I do comes up loud — and I reload
-// a great many times.
-//
-// So the default is decided by where the page came from. localhost, a bare IP
-// and file:// are a build being driven by somebody with a terminal open; the
-// hosted copy on botheyesshut.github.io is somebody PLAYING. His phone loads
-// from the second and cannot reach the first, so this can never silence the
-// real game by accident.
-//
-// An explicit choice still wins in BOTH directions: flip the toggle on a local
-// build and it stores '1' and stays audible, because a rule you cannot override
-// locally is just a different kind of annoyance.
-// GUARDED, because this runs at the top level of a 20,000-line script and a
-// throw here does not fail loudly — it aborts the rest of the file, leaving
-// every `let` below undeclared, and the next thing to touch one dies with
-// "cannot access X before initialization" hundreds of lines from the cause.
-// Three suites went down that way when this landed unguarded: not every test
-// harness stubs `location`, and it need not.
-let audioLocalBuild = false;
-try {
-  audioLocalBuild = location.protocol === 'file:'
-    || /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(location.hostname || '');
-} catch (e) {}
-let audioMuted = audioLocalBuild;
+// That first fix silenced only local builds. Sean, 2026-11-21 (A15): "A15 yes" —
+// his living-room rule, for everyone. A stored `fathom-audio` still wins in
+// BOTH directions, so a player who turns the sea on keeps it on. A first launch
+// is told, once, how to hear it (the `sound` tip, fired from restart()).
+let audioMuted = true;
 try {
   const pref = localStorage.getItem('fathom-audio');
   if (pref !== null) audioMuted = pref === '0';
@@ -19852,10 +19833,12 @@ function tickPingMemory() {
   }
 }
 
+let pressureSaidDmg = 0, pressureSaidMoves = 0;   // A10: what the hull last said, so it does not say it every move
 function applyMoveCosts(tileCostMultiplier, favour) {
   const sub = activeSub();
   // At depth 0 — hatch open, boat passively replenishes air with each move.
   if (state.currentDepth <= 0) {
+    pressureSaidDmg = 0; pressureSaidMoves = 0;
     surfaceAirRecovery();
     return;
   }
@@ -19877,10 +19860,19 @@ function applyMoveCosts(tileCostMultiplier, favour) {
     if (crush) {
       log(`Past crush depth. The hull screams — no plating you can bolt on answers this.`, 'danger', 'PRESSURE');
       tip('crush');
-    } else if (over > 50) {
-      log(`The hull groans under the pressure.`, 'warn', 'PRESSURE');
+    } else if (over > 0) {
+      // A10: the cost in numbers, in three bands, said when the number changes and
+      // otherwise every fifth move past her rating — not a wall of the same line.
+      const changed = dmg !== pressureSaidDmg;
+      pressureSaidMoves++;
+      if (changed || pressureSaidMoves % 5 === 0) {
+        pressureSaidDmg = dmg;
+        if (dmg >= 10) log(`Plates working, rivets going. ${dmg} off her on that move. Take her up.`, 'danger', 'PRESSURE');
+        else if (dmg >= 4) log(`The hull groans under the pressure. ${dmg} off her on that move.`, 'warn', 'PRESSURE');
+        else log(`Past her rating. The hull ticks as it settles — ${dmg} off her on that move.`, 'warn', 'PRESSURE');
+      }
     }
-  }
+  } else { pressureSaidDmg = 0; pressureSaidMoves = 0; }
 
   state.maxDepth = Math.max(state.maxDepth, state.currentDepth);
 }
@@ -22693,6 +22685,9 @@ function restart() {
   // the chart" — told about the other half before the first half existed.
   log(`The trade is salvage. Take the boat down, find what the Fall left on the bottom, and bring it back to this dock — nothing counts until it is ashore. Two things end you down there: the air runs out, or the pressure finds a seam. Both are on the gauges.`,
       '', 'THE TRADE');
+  // A15: only while no choice is stored, so a player who chose either way never sees it.
+  { let chosen = false; try { chosen = localStorage.getItem('fathom-audio') !== null; } catch (e) { chosen = true; }
+    if (!chosen) tip('sound'); }
   // ANGELSHARK #3. The fourth thing a captain ever read was a philosophy of
   // cartography. What they need first is a bearing — where the one solid thing
   // in the world stands. The chart's creed survives as the `chart` tip.
@@ -23008,6 +23003,18 @@ function migrateSave(save) {
   }
 }
 
+// A11, coming back: who is aboard and what is still open, in one line.
+function resumeAboardSaid() {
+  const hands = (state.crew || []).map(m => m.name + ', ' + roleName(m.role));
+  let t = hands.length ? 'Aboard: ' + hands.join('; ') + '.' : 'No hands aboard but you.';
+  const open = [];
+  const nl = (state.leads || []).length;
+  if (nl) open.push(nl + (nl === 1 ? ' lead' : ' leads') + ' on the chart');
+  if (state.mission && CULTURES[state.mission.culture]) open.push('a mission for ' + CULTURES[state.mission.culture].short);
+  if (state.commission && CULTURES[state.commission.against]) open.push('a commission against ' + CULTURES[state.commission.against].short);
+  if (open.length) t += ' Open: ' + open.join(', ') + '.';
+  return t;
+}
 function resumeGame(save) {
   // A save is bytes from disk, not a contract. `|| []` trusts any truthy
   // value — a string, a number, an object — and hands it to `for...of`.
@@ -23171,6 +23178,7 @@ function resumeGame(save) {
   logEl.innerHTML = '';
   const depthNote = state.currentDepth > 0 ? `, ${Math.round(state.currentDepth)} m down` : ', riding the surface';
   log(`The chart unrolls where you left it. The ${sub.name} holds station${depthNote}.`, '', 'RESUME');
+  log(resumeAboardSaid(), '', 'RESUME');   // A11: who is aboard, and what is open
   document.getElementById('gameover').classList.remove('show');
   const pp = document.getElementById('ping-power');
   if (pp) pp.max = sub.sonarMaxPower;
@@ -23253,6 +23261,8 @@ function startGame() {
 }
 
 const diveBtn = document.getElementById('dive');
+// A11: the title button says Continue when a campaign is stored. Same handler.
+try { if (diveBtn && localStorage.getItem(SAVE_KEY)) diveBtn.textContent = 'Continue'; } catch (e) {}
 
 function startOnce(e) {
   if (e) { e.preventDefault(); e.stopPropagation(); }

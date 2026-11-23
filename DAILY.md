@@ -8,6 +8,38 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-23 — D6 landed: sound starts off, her passage, Continue, and the pressure in numbers
+
+**Changed**
+- First launch is silent everywhere, with one pop-up at cast-off: Options, then Sound. A choice you have made is never overridden.
+- A boat's colours card now says where she sailed from and where she is bound.
+- After a reload the title button reads Continue, and the log says who is aboard and what is still open.
+- Past her rated depth the hull tells you the cost in numbers: a tick, a groan, then "Take her up". Said when the number changes, else every fifth move. New build, v30.
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Clear site data, open the game, press Dive | first launch, phone | silent; the sound pop-up reads right; turning sound on in Options sticks across a reload |
+| 2 | Reload a campaign that has hands and a lead | title, then log | button says Continue; the Aboard line reads like the Mate, not a ledger |
+| 3 | Take the Erebus 30 m, then 300 m, past her rating | sea | the three bands feel proportionate; not a wall of text when you sit deep |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed, as expected). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I opened phone `04-chart`, `06-more`, `17-descend-2` and `00-title`: all read cleanly. Landscape not opened.
+- Under 44 px, unchanged and deliberate: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met). Abandon below the fold on phone, reachable by scrolling.
+- Bots, 40 x 300: 33 survived; 1 hull failure; 0 invariants broken over 9966 turns. Median 3 crates banked (max 9); 6 of 36 items ever held. Nothing reached the deep, a station, or selling (income question, yours, not retuned). First hour: 0 deaths.
+- The browser run never meets a boat or goes past her rating, so the new colours line and pressure lines were checked by the suites only, not seen on a screen.
+- Nothing new.
+
+**Questions for Sean**
+- Still open from last night: a won Break away leaves a boat hostile if you shot first. Right, or should a won break calm her too?
+
+**Tomorrow** — D7, a relic is always worth a crate.
+
+---
+
 ## 2026-11-22 — A hostile boat you signal under water now comes about: fire first, or one thin chance to break away
 
 **Changed**

@@ -188,6 +188,7 @@ check(kind() === 'colours' && dist(sh) <= 2 && S.moves > moves0 && (S.q + ',' + 
 check(!!c && c.scene === 'lineMerchant' && c.flag === 'confluence', 'and now it is HER picture: the same hull in her owner’s paint', c ? c.scene + ', flying ' + c.flag : '');
 const body = sb.__body();
 check(/Long Line/.test(body), 'the apparent faction', (body.match(/Her colours\s+([^.]*\.?)/) || [])[0]);
+check(/Her passage\s+Out of Somewhere, bound for Elsewhere\./.test(body), 'A7: HER COLOURS names where she sailed from and where she is bound', (body.match(/Her passage[^.]*\./) || ['absent'])[0]);
 check(body.indexOf(X.gunsSeen(X.shipStats('confluence', 'merchant'))) >= 0, 'her likely armament, as a lookout would say it', X.gunsSeen(X.shipStats('confluence', 'merchant')));
 check(/Standing\s+Nobody to them/.test(body), 'and how you stand with her people', (body.match(/Standing\s+[^.]*\./) || [])[0]);
 check(/fish would sink her; we carry 3/.test(body) && /of our hull a salvo/.test(body), 'with the Mate’s arithmetic, for a captain who has never fought one', (body.match(/Osei:[^”]*”/) || [])[0]);

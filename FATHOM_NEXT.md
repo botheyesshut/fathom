@@ -411,6 +411,14 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
     - Knob: restore the single `over > 50` line.
   - One ledger entry and one `sw.js` bump cover the four; one commit each is fine.
 
+  - **BUILT 2026-11-23 (v30), all four.** Ledger:
+    - A15: `audioMuted = true`; `audioLocalBuild` had no other reader and is gone. New `sound` tip fires from `restart()` right after THE TRADE, only while no `fathom-audio` is stored. Measured: save.test, 5 checks (hosted default muted, stored on/off both win, tip fires, tip silent for a chooser); the first and fourth fail on the old file.
+    - A7: `Her passage` fact after `Her colours`, only when both names are set. encounter.test check fails on the old file.
+    - A11: `resumeAboardSaid()` called from `resumeGame` after the RESUME line; the title button reads Continue when `SAVE_KEY` is stored (decided at load, since the title shows once). The label check reads the source, because the test document is a stub: it proves the rule is there, not that the button repaints. Hands read "Name, role"; "No hands aboard but you." when empty.
+    - A10: three bands by `dmg`, said when the number changes and otherwise every fifth move past her rating; the counters are module lets, reset at the surface and when back under her rating (not state fields, so `restart.test` is untouched). Measured: 20 m over on the Erebus = 1 off, band one; 400 m over = 16 off, "Take her up".
+    - Battery green (65 checks in the encounter suite), dead functions 0, `moved.js` 0 moved / 189 held.
+    - My calls: where the sound tip fires (the spec said beside THE TRADE; I put it after it); hands joined with semicolons; the every-fifth counter counts moves past rating since the last change. **Knobs:** `= true` back to `= audioLocalBuild` (and restore its three lines); delete the `Her passage` line; delete the `resumeAboardSaid` call and the Continue line; restore the single `over > 50` line.
+
 - **D7. A relic is always worth a crate** (A12). SEAN: *"A12 use your best
   judgment"*. My call, the lean as I put it: *"Relics yes, one crate. Keep the
   full rest."*

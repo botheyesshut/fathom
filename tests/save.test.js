@@ -150,5 +150,52 @@ c1.restart();
 check(!store._m.has('fathom-save-v1'), 'restart/New World clears the save');
 check(c1.__seed() !== seed1, 'restart rolls a fresh seed', seed1 + ' → ' + c1.__seed());
 
+// ---- D6: A15 sound, A11 coming back, A10 pressure in numbers ----
+{
+  const rd = (c, e) => vm.runInContext(e, c);
+  const cA = freshContext(memStorage());
+  check(rd(cA, 'audioMuted') === true, 'A15: no stored preference on a hosted origin starts muted', 'audioMuted ' + rd(cA, 'audioMuted'));
+  const stOn = memStorage(); stOn.setItem('fathom-audio', '1');
+  check(rd(freshContext(stOn), 'audioMuted') === false, 'A15: a stored "on" still wins', '');
+  const stOff = memStorage(); stOff.setItem('fathom-audio', '0');
+  check(rd(freshContext(stOff), 'audioMuted') === true, 'A15: a stored "off" still wins', '');
+  cA.restart();
+  check((cA.__state().tipsSeen || []).indexOf('sound') >= 0, 'A15: the cast-off tells a first launch how to hear the sea', JSON.stringify(cA.__state().tipsSeen));
+  const cB = freshContext(stOn); cB.restart();
+  check((cB.__state().tipsSeen || []).indexOf('sound') < 0, 'A15: and says nothing to a player who has chosen', '');
+
+  // A11: two hands, a lead, a mission -> named on resume; the button follows the save.
+  const stC = memStorage();
+  const c3 = freshContext(stC);
+  c3.restart();
+  const s3 = c3.__state();
+  s3.crew = [{ name: 'Osei', role: 'helmsman' }, { name: 'Marit', role: 'ear' }];
+  s3.leads = [{ q: 3, r: 3 }];
+  c3.doSave();
+  const c4 = freshContext(stC);
+  c4.startGame();
+  const line = rd(c4, 'resumeAboardSaid()');
+  check(/Aboard: Osei, [^;]+; Marit, [^.]+\./.test(line) && /1 lead on the chart/.test(line), 'A11: resume names who is aboard and what is open', line);
+  const c5 = freshContext(memStorage()); c5.restart();
+  check(rd(c5, 'resumeAboardSaid()').indexOf('No hands aboard but you.') === 0 || /^Aboard:/.test(rd(c5, 'resumeAboardSaid()')), 'A11: a fresh boat says her hands, or none', rd(c5, 'resumeAboardSaid()'));
+  // The label: the title button's text. The stub document swallows writes, so
+  // read the source for the rule instead of a DOM that is not there.
+  check(/localStorage\.getItem\(SAVE_KEY\)\) diveBtn\.textContent = 'Continue'/.test(script), 'A11: the title button reads Continue when a save is stored', '');
+
+  // A10: 20 m over gives a line with the number; the heavy band says Take her up.
+  const c6 = freshContext(memStorage()); c6.restart();
+  const s6 = c6.__state();
+  const lines = [];
+  c6.log = (t) => { lines.push(String(t)); };
+  const safe = rd(c6, 'safeDepthNow()');
+  s6.currentDepth = safe + 20; s6.hull = 100; s6.air = 400;
+  c6.applyMoveCosts(1, 0);
+  check(lines.some(l => /\d+ off her on that move/.test(l)), 'A10: 20 m over past her rating speaks, with the number', lines.join(' | ') || 'silence');
+  lines.length = 0;
+  s6.currentDepth = safe + 400; s6.hull = 100;
+  c6.applyMoveCosts(1, 0);
+  check(lines.some(l => /\d{2,} off her on that move\. Take her up\./.test(l)), 'A10: the heavy band names the number and says to go up', lines.join(' | ') || 'silence');
+}
+
 console.log(failures === 0 ? '\nALL PERSISTENCE CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');
 process.exit(failures === 0 ? 0 : 1);
