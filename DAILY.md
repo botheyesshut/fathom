@@ -8,6 +8,36 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-24 — D7 landed: a relic is always worth a crate
+
+**Changed**
+- At any harbour, with a relic in the vault, the port panel shows a new row: Sell a relic to the collectors, 1 relic for 1 crate. One tap, one relic.
+- The log says: the collectors weigh it in their hands and pay a crate, with bank and vault counts.
+- Nerve and the torpedo price (2 relics for 3) are unchanged. New build, v31.
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Bring a relic home, open the port panel | port, phone | "The Collectors" at the foot of the list; one tap gives +1 bank, -1 vault; the row is gone at an empty vault |
+| 2 | Same panel with several relics | port | one crate each feels like a floor, not a reason to sell what you meant to keep for torpedoes |
+| 3 | Rotate with the port panel open | port | the new rows are not cut off (never seen on a screen) |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I read `browse.md` only and opened no screenshots today, so nothing about how it looks is claimed.
+- Under 44 px, unchanged: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met). Abandon below the fold, reachable by scrolling.
+- Bots, 40 x 300: 33 survived; 0 invariants broken over 9966 turns. Median 3 crates banked (max 9); 5 of 36 items ever held. Nothing reached the deep, a station, or selling to a people (income question, yours, not retuned). First hour: 0 deaths.
+- Nothing new.
+
+**Questions for Sean**
+- Still open: a won Break away leaves a boat hostile if you shot first. Right, or should a won break calm her too?
+
+**Tomorrow** — D8, a destroyer follows you down, not far.
+
+---
+
 ## 2026-11-23 — D6 landed: sound starts off, her passage, Continue, and the pressure in numbers
 
 **Changed**

@@ -436,6 +436,11 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
   - Test: `greed.test` or `items.test`. Two vaulted relics at a port show the row,
     and one tap gives +1 bank −1 vault (fails today).
   - Knob: delete the row.
+  - **BUILT 2026-11-24 (v31).** Ledger:
+    - `portRows` gains a "The Collectors" header and the row **Sell a relic to the collectors** (1 relic for 1 crate), only while `relicsBanked > 0`; new act `sellrelic` in `portBuy`, with the spec's log line. Nothing else touched: nerve and torpedoes unchanged.
+    - Measured: `cargo.test`, 3 checks (row shown with two relics; one tap is +1 bank -1 vault; no row at an empty vault). All three fail on the old file, pass on the new. Battery green, dead functions 0, `moved.js` 0 moved / 189 held (the bots rarely hold a relic, so the economy lines do not move; this is not evidence the income is unchanged for a human).
+    - Not seen on a screen: the browse run never reaches a port with a relic in the vault.
+    - My calls: the row sits at the foot of the port panel under its own small header, not on the ledger line; a relic is sold one per tap, at every harbour, with no culture price. **Knob:** delete the `if (state.relicsBanked > 0)` block in `portRows` (the `sellrelic` branch is then unreachable and can go with it).
 
 - **D8. A destroyer follows you down, not far** (A1). SEAN: *"A1 yes but only to
   a point -- you can judge what's most fun depthwise, but a destroyer is not a

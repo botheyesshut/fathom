@@ -270,6 +270,14 @@ check(st2.crew.length === 1, 'the crew survives reload', st2.crew[0] && (st2.cre
   check(st.armament === 'harpoon' && st.cargoBanked === 12, 'the dock bolts on a harpoon for crates', 'arm=' + st.armament + ' bank=' + st.cargoBanked);
   sb.portBuy('torps');
   check(st.torpedoes === 3 && st.relicsBanked === 3, 'the armourer trades torpedoes for relic-work', 'torps=' + st.torpedoes + ' vault=' + st.relicsBanked);
+
+  // D7: a relic is always worth a crate, at any harbour.
+  st.relicsBanked = 2; st.cargoBanked = 5;
+  check(sb.portRows().some(r => r.act === 'sellrelic'), 'two vaulted relics show the collectors row', '');
+  sb.portBuy('sellrelic');
+  check(st.cargoBanked === 6 && st.relicsBanked === 1, 'one tap sells one relic: +1 bank, -1 vault', 'bank=' + st.cargoBanked + ' vault=' + st.relicsBanked);
+  sb.portBuy('sellrelic');
+  check(st.cargoBanked === 7 && st.relicsBanked === 0 && !sb.portRows().some(r => r.act === 'sellrelic'), 'an empty vault shows no row', 'bank=' + st.cargoBanked);
 }
 
 // 6. Unnatural growth: a living, varied hazard that bites every pass (not once)

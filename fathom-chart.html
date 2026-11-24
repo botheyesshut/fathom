@@ -6821,6 +6821,14 @@ function portRows() {
     rows.push({ name: 'Torpedoes ×3', desc: 'Reaches three hexes, and the only thing aboard that will open another boat. Relic-work. · 2 relics',
       ok: canPay(0, 2), why: shortfall(0, 2), act: 'torps' });
   }
+  // D7, A RELIC IS ALWAYS WORTH A CRATE: the floor under every harbour. One
+  // crate is the lowest price in the game for anything, below every other use
+  // of a relic, so this turns a dead relic into something and nothing more.
+  if (state.relicsBanked > 0) {
+    rows.push({ head: 'The Collectors', note: 'They pay for what the deep gave up.' });
+    rows.push({ name: 'Sell a relic to the collectors', desc: '1 relic for 1 crate · ' + state.relicsBanked + ' in the vault',
+      ok: true, why: '', act: 'sellrelic' });
+  }
   return rows;
 }
 
@@ -6947,6 +6955,12 @@ function portBuy(act) {
     state.cargoBanked -= cost;
     state.stores = 100;
     log(`Salt meat, biscuit, water and lamp oil go down the hatch. The lockers are full. (${cost} crate${cost === 1 ? '' : 's'}; ${state.cargoBanked} banked.)`, '', 'STORES');
+    sfx('bell');
+  } else if (act === 'sellrelic') {
+    if (state.relicsBanked < 1) return;
+    state.relicsBanked -= 1;
+    state.cargoBanked += 1;
+    log(`The collectors weigh it in their hands and pay a crate. (bank ${state.cargoBanked}, vault ${state.relicsBanked}.)`, 'strange', 'PORT');
     sfx('bell');
   } else if (act === 'torps') {
     if (state.relicsBanked < 2) return;
