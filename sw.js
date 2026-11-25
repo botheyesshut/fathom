@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v31';  // bumped: a relic is always worth a crate — Sell a relic to the collectors at every harbour
+const VERSION = 'fathom-v32';  // bumped: a destroyer follows you down, not far — one pass overhead, and nothing below 180 m
 const SHELL = [
   './',
   'fathom-chart.html',

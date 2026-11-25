@@ -8,6 +8,36 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-25 — D8 landed: a destroyer follows you down, not far
+
+**Changed**
+- Dive from the surface with a hunting destroyer (Libertines or Confluence) within 3 hexes and the Ear says: screws overhead, she is turning to pass over us.
+- Your next move she makes one pass: about 18 hull at 60 m, 11 at 120 m, 5 at 180 m, nothing deeper. Silent running halves it. Surface first and there is no pass.
+- Below 180 m the line is: charges, a long way above, she cannot reach this deep. Mariner destroyers and merchants do nothing. New build, v32.
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held. One slip of mine, fixed before landing: the Ear's line first carried a tag the Ear is not allowed (`mate.test` caught it), so it is now a sonar contact line.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Anger the Libertines, let a destroyer close to 3 hexes, dive | sea, phone | the Ear's warning reads like the Ear; the pass lands on the next move, not the dive |
+| 2 | Same dive, then go deeper before the next move | sea | 18 down to 5 feels like a reason to run deep, not a coin flip |
+| 3 | Same dive, rig silent | sea | about half the damage, and you can tell why |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` failed, as expected). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I opened no screenshots today, so nothing about how it looks is claimed.
+- Under 44 px, unchanged: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met).
+- Bots, 40 x 300: 32 survived, 0 invariants broken over 9958 turns. Median 3 crates banked (max 9); 5 of 36 items ever held. Nothing reached the deep, a station or a people (income question, yours, not retuned). First hour: 0 deaths of 40. Dead functions 0.
+- Nothing new.
+
+**Questions for Sean**
+- Still open: a won Break away leaves a boat hostile if you shot first. Right, or should a won break calm her too?
+
+**Tomorrow** — D9, edge arrows to what you know is out there.
+
+---
+
 ## 2026-11-24 — D7 landed: a relic is always worth a crate
 
 **Changed**

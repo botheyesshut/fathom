@@ -478,6 +478,9 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
     - a merchant does nothing;
     - silent takes about half, over N trials.
   - Knob: `DC_REACH = 0` turns it off.
+  - **BUILT 2026-11-25 (v32).** `depthChargeArm` (called from `changeDepth` on a surface-to-depth dive) finds hunting hulls with racks within 3 hexes, queues one pass and has the Ear warn; `depthChargeTick` (first thing in `seaTick`) lands it on the next move. Surfacing first cancels it. `DC_REACH = 180`, `DC_PER = 3`, bands 1 / 0.6 / 0.3 as written.
+  - Measured: `encounter.test`, 13 new checks (warning, no damage on the dive itself, hull in the band at 100 m, one pass only, silent about half, 240 m out of reach, merchant / Mariner destroyer / unquarrelled destroyer / one 6 hexes off do nothing, surfacing cancels, the bands). Run against the old file, 6 of them fail; on the new file all pass. Battery green, dead functions 0, `moved.js` 0 moved / 189 held (the bots rarely meet a destroyer, so no economy line moves).
+  - My calls: the Ear's line is tagged `CONTACT`, not `SAIL` as the spec wrote it, because `mate.test` holds that the Ear speaks only for the sonar and a destroyer's screws are a contact; I did not loosen that check. A merchant or any hull without racks does nothing; the pass takes one move to land, counted as one `seaTick`. Not seen on a screen. **Knob:** `DC_REACH = 0` turns it off; `DC_PER` scales the damage.
 
 - **D9. Edge arrows to what you know is out there** (A14). SEAN: *"A14 yes"*,
   to: *"Edge arrows to known prizes off screen? — Yes. It saves pinching out."*

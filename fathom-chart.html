@@ -15258,7 +15258,52 @@ function flagMoveFail(q, r, color) {
 // So: one list. What is peculiar to an action — the set of the water, the zone
 // line, the sounding, the hatch — stays with the action. What the sea does
 // regardless of which way you moved lives here, and nowhere else.
+// A DESTROYER FOLLOWS YOU DOWN, NOT FAR (D8; Sean, A1: "a destroyer is not a submarine
+// so it shouldn't be able to follow very deep"). A surface hull with racks, hunting
+// the boat within 3 hexes, makes ONE pass over where she went under. The Ear warns at
+// the dive; the pass lands on the captain's NEXT move, so the warning buys one move:
+// go deeper, or rig silent. My calls: the reach bands and the 3-a-rack damage.
+const DC_REACH = 180;   // metres; 0 turns the whole thing off
+const DC_PER = 3;       // hull per rack, before reach and the dice
+function dcReach(depth) {
+  if (!(DC_REACH > 0) || depth > DC_REACH) return 0;
+  return depth <= 60 ? 1 : depth <= 120 ? 0.6 : 0.3;
+}
+function depthChargeArm(prevDepth) {
+  if (!(DC_REACH > 0) || prevDepth > 0 || state.currentDepth <= 0) return;
+  const hunters = (state.ships || []).filter(sh => !sh.gone && (sh.chasing || sh.hostileTo)
+    && shipStats(sh.culture, sh.hull).depthCharge > 0
+    && hexDistance(sh, { q: state.q, r: state.r }) <= 3);
+  if (!hunters.length) return;
+  state.dcPending = { ids: hunters.map(sh => sh.id), wait: 1 };
+  earSays('Screws overhead' + sir() + ' \u2014 she is turning to pass over us.',
+          'Screws overhead. She is turning to pass over you.', 'danger', 'CONTACT');
+}
+function depthChargeTick() {
+  const dp = state.dcPending;
+  if (!dp) return;
+  if (state.currentDepth <= 0) { state.dcPending = null; return; }   // up before the pass: no pass
+  if (dp.wait > 0) { dp.wait--; return; }
+  state.dcPending = null;
+  const reach = dcReach(state.currentDepth);
+  const silent = pingPower() === 0;
+  for (const id of dp.ids) {
+    const sh = (state.ships || []).find(x => x.id === id && !x.gone);
+    if (!sh) continue;
+    sh.evaded = true; sh.chasing = false;
+    if (reach <= 0) {
+      log('Charges, a long way above. The boat shivers and that is all. She cannot reach this deep.', 'good', 'SAIL');
+      continue;
+    }
+    const dmg = Math.max(1, Math.round(shipStats(sh.culture, sh.hull).depthCharge * DC_PER * reach * (silent ? 0.5 : 1) * (0.7 + rand() * 0.6)));
+    state.hull = Math.max(0, state.hull - dmg);
+    log('The charges come down around you. A hammer on the hull, then another. ' + dmg + ' taken.', 'danger', 'HULL');
+  }
+  checkDeath();
+}
+
 function seaTick() {
+  depthChargeTick();
   warTick();
   shipsTick();
   creatureTick();
@@ -20003,6 +20048,7 @@ function changeDepth(deltaMeters) {
     tip('layer');
   }
   state.currentDepth = actual;
+  depthChargeArm(prevDepth);
   noteRoute(state.q, state.r, state.currentDepth);   // a dive is a move; the log records both
   state.moves++;
   state.lastMoveTime = performance.now();

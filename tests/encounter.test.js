@@ -85,7 +85,7 @@ vm.runInContext(script + [
   'function __chase() { let n = 0; while (state.travel && n++ < 60) { ports.clear(); travelStep(); } return n; }',
   'function __pairs() { const out = []; for (const cu in FLEETS) for (const h in FLEETS[cu].mix) out.push([cu, h]); return out; }',
   'var __X = { state, shipsTick, shipHunting, shipMeansHarm, shipStats, shipScenes, vpPaint, hexDistance, standingBand, nudgeStanding, attackFromButton, closeOnShip,',
-  '  VP_SCENES, CULT_MARK, HULLS, CULTURES, SLIP_ODDS, BREAK_ODDS, WEAPONS, changeDepth, activeSub, gunsSeen, spawnCreature, rivalInReach, rivalHostileNow: rivalHostile };',
+  '  VP_SCENES, CULT_MARK, HULLS, CULTURES, SLIP_ODDS, BREAK_ODDS, WEAPONS, changeDepth, activeSub, gunsSeen, spawnCreature, rivalInReach, rivalHostileNow: rivalHostile, wait, pingPower, DC_REACH: typeof DC_REACH === \'undefined\' ? 0 : DC_REACH, dcReach: typeof dcReach === \'undefined\' ? (() => -1) : dcReach };',
 ].join('\n'), sb, { timeout: 600000 });
 const X = sb.__X, S = X.state;
 
@@ -333,6 +333,48 @@ X.spawnCreature('rival', S.q + 1, S.r, S.currentDepth);
 const fb = S.creatures[S.creatures.length - 1]; fb.culture = 'mariners'; fb.boat = 'Kittiwake';
 sb.__signalButton(); sb.__pick('Signal her');
 check(kind() === 'result', 'a boat with no quarrel with you still gets the plain Signalled card', kind() || 'no card');
+
+//--- D8. A DESTROYER FOLLOWS YOU DOWN, NOT FAR -------------------------------
+console.log('\n--- D8. ONE PASS OVERHEAD, AND ONLY SO DEEP ---');
+const diveWith = (hull, cu, hostile) => { fresh(); S.standing = {}; const d = sb.__ship(hull, cu, 2); if (hostile) d.hostileTo = true;
+  L.length = 0; X.changeDepth(X.activeSub().diveStep); return d; };
+const hullTaken = (fn) => { const h0 = S.hull; fn(); return h0 - S.hull; };
+sb.__rand(0.5);
+let d8 = diveWith('destroyer', 'libertines', true);
+check(said().some(t => /Screws overhead/.test(t)), 'a hunting destroyer: a dive from the surface gets the warning', said().filter(t => /Screws/.test(t)).length + ' line');
+check(S.hull === X.activeSub().hull, 'the pass has not landed on the dive itself', 'hull ' + S.hull);
+S.currentDepth = 100; L.length = 0;
+let taken = hullTaken(() => X.wait());
+check(taken > 0 && said().some(t => /charges come down/i.test(t)), 'the next move at 100 m takes hull in the band', taken + ' taken');
+const t2 = hullTaken(() => X.wait());
+check(t2 === 0 && !S.dcPending, 'one pass only: the move after takes nothing', t2 + ' taken');
+check(d8.evaded && !d8.chasing, 'she has done with you after the pass', 'evaded ' + d8.evaded);
+// silent halves it
+sb.__rand(0.5); d8 = diveWith('destroyer', 'libertines', true); S.currentDepth = 100;
+const loud = (() => { const r = hullTaken(() => X.wait()); return r; })();
+d8 = diveWith('destroyer', 'libertines', true); S.currentDepth = 100; const pp = sb.pingPower; sb.pingPower = () => 0;
+const quiet = hullTaken(() => X.wait()); sb.pingPower = pp;
+check(quiet > 0 && Math.abs(quiet * 2 - loud) <= 1, 'rigged silent takes about half', 'silent ' + quiet + ', loud ' + loud);
+// out of reach
+d8 = diveWith('destroyer', 'libertines', true); S.currentDepth = 240; L.length = 0;
+taken = hullTaken(() => X.wait());
+check(taken === 0 && said().some(t => /She cannot reach this deep/.test(t)), 'at 240 m: no damage, and the out-of-reach line', taken + ' taken');
+// a merchant does nothing; a Mariner destroyer (no guns) does nothing; a quiet destroyer does nothing
+d8 = diveWith('merchant', 'mariners', true);
+check(!said().some(t => /Screws overhead/.test(t)) && !S.dcPending, 'a merchant does nothing', '');
+d8 = diveWith('destroyer', 'mariners', true);
+check(X.shipStats('mariners', 'destroyer').depthCharge === 0 && !S.dcPending, 'a Mariner destroyer carries no charges and does nothing', '');
+d8 = diveWith('destroyer', 'libertines', false);
+check(!S.dcPending, 'a destroyer with no quarrel with you does nothing', '');
+// up before the pass lands: no pass
+d8 = diveWith('destroyer', 'libertines', true); S.currentDepth = 0; L.length = 0;
+taken = hullTaken(() => X.wait());
+check(taken === 0 && !S.dcPending, 'if the boat surfaces before the pass lands there is no pass', taken + ' taken');
+// too far away at the dive
+fresh(); S.standing = {}; d8 = sb.__ship('destroyer', 'libertines', 6); d8.hostileTo = true; L.length = 0; X.changeDepth(X.activeSub().diveStep);
+check(!S.dcPending, 'a destroyer more than 3 hexes off does not turn', '');
+sb.__rand(null);
+check(X.DC_REACH === 180 && X.dcReach(60) === 1 && X.dcReach(120) === 0.6 && X.dcReach(180) === 0.3 && X.dcReach(181) === 0, 'the reach bands are 1, 0.6, 0.3, then nothing below 180 m', '');
 
 console.log('\n' + (fail === 0 ? 'THE ENCOUNTER HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);
