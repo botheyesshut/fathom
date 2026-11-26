@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v32';  // bumped: a destroyer follows you down, not far — one pass overhead, and nothing below 180 m
+const VERSION = 'fathom-v33';  // bumped: edge arrows — a small triangle at the rim for each of the three nearest charted prizes and leads off the map
 const SHELL = [
   './',
   'fathom-chart.html',

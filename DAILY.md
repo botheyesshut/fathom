@@ -8,6 +8,36 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-26 — D9 landed: edge arrows to what you know is out there
+
+**Changed**
+- On the sea map, each of the three nearest charted, unworked prizes or open leads that is off screen gets a small triangle at the rim, on its bearing. Prize colour, leads gold, 70% opacity.
+- No label and not tappable. None with the chart sheet open or on foot. New build, v33.
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Chart a wreck, sail until it is off screen | sea, phone | a triangle at the rim pointing at it; it vanishes when it scrolls on |
+| 2 | Work that wreck | sea | its arrow is gone |
+| 3 | Have four known prizes off screen | sea | only the nearest three; is it clutter, or just right? |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium; `playwright install --with-deps` was not what ran, the box's own Chromium was). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%. I opened two phone screenshots (`04-chart`, `02-look`): the chart sheet looks fine, and one faint arrow shows at the top rim of `02-look`. Others unopened, so nothing about them is claimed.
+- Under 44 px, unchanged: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met).
+- Bots, 40 x 300: 33 survived, 0 invariants broken over 9966 turns. Median 3 crates banked (max 9); 6 of 36 items ever held. Nothing reached the deep, a station or a people (income question, yours, not retuned). First hour: 0 deaths of 40. Dead functions 0.
+- Nothing new.
+
+**Questions for Sean**
+- Still open: a won Break away leaves a boat hostile if you shot first. Right, or should a won break calm her too?
+- The arrow reads faint on the dark water. Brighter than 70%, or leave it?
+
+**Tomorrow** — D10, the walls on foot and the depth numbers.
+
+---
+
 ## 2026-11-25 — D8 landed: a destroyer follows you down, not far
 
 **Changed**

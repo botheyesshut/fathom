@@ -2881,6 +2881,42 @@ function chartDepths() {
 }
 
 // Does this hex belong on the sheet currently on the table?
+// EDGE ARROWS. SEAN, 2026-11-21: "Edge arrows to known prizes off screen? — Yes. It saves
+// pinching out." Every open lead and every charted prize not yet worked, that is
+// off the visible sea map: the nearest EDGE_ARROWS of them get a small triangle at
+// the map's edge on the bearing. The chart's own test for "marked" is used
+// (known, has a poi, not under land) — never `tile.poi` alone, that leaked
+// sinkholes twice. Pure: the view comes in as arguments so a test can ask it.
+const EDGE_ARROWS = 3;   // 0 turns them off
+const EDGE_COL = { ruin: '#d89248', hull: '#8a8f6a', salvage: '#f4b860', air: '#9ee0c2', opening: '#f4b860', signal: '#b870e8' };
+function edgeArrowMarks(cx, cy, vw, vh, zoom) {
+  if (!EDGE_ARROWS || state.foot || !(zoom > 0)) return [];
+  const hw = vw / (2 * zoom), hh = vh / (2 * zoom);
+  const here = { q: state.q, r: state.r };
+  const worked = new Set();
+  for (const k of (state.poisFound || [])) {
+    if (typeof k !== 'string' || k.indexOf(':') >= 0) continue;
+    const a = k.split(',');
+    worked.add(a[0] + ',' + a[1]);
+  }
+  const out = [];
+  const consider = (q, r, col) => {
+    const p = hexToPixel(q, r);
+    if (Math.abs(p.x - cx) <= hw && Math.abs(p.y - cy) <= hh) return;   // already on the map
+    out.push({ q: q, r: r, x: p.x, y: p.y, col: col, d: hexDistance({ q: q, r: r }, here) });
+  };
+  for (const L of (state.leads || [])) consider(L.q, L.r, '#f0c850');
+  for (const t of world.values()) {
+    if (!t.poi || t.wall || t.land || shelfSeafloorDepth(t.q, t.r) == null) continue;   // the chart's own isLand
+    const k = hexKey(t.q, t.r);
+    if (!(visited.has(k) || revealed.has(k)) || worked.has(k)) continue;
+    const col = EDGE_COL[t.poi];
+    if (col) consider(t.q, t.r, col);
+  }
+  out.sort((a, b) => a.d - b.d);
+  return out.slice(0, EDGE_ARROWS);
+}
+
 function chartKnown(t) {
   const k = hexKey(t.q, t.r);
   if (chartLayer === null) return visited.has(k) || revealed.has(k);
@@ -14072,6 +14108,23 @@ function render() {
     mk.setAttribute('fill', '#f0c850'); mk.setAttribute('filter', 'url(#glow)');
     mk.textContent = '⌖';
     g.appendChild(mk);
+  }
+
+  // EDGE ARROWS: the nearest few known prizes and marks that are off the map.
+  // A small solid triangle at the rim on the bearing; no label, not tappable.
+  if (!chartIsOpen()) {
+    for (const m of edgeArrowMarks(camX, camY, viewW, viewH, zoom)) {
+      const dx = m.x - camX, dy = m.y - camY;
+      const hw = viewW / (2 * zoom), hh = viewH / (2 * zoom), inset = 9 / zoom;
+      const k = Math.min((hw - inset) / Math.max(1e-6, Math.abs(dx)), (hh - inset) / Math.max(1e-6, Math.abs(dy)));
+      const ax = camX + dx * k, ay = camY + dy * k, ang = Math.atan2(dy, dx), z = 1 / zoom;
+      const tri = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      const pt = (a, rr) => (ax + Math.cos(a) * rr * z) + ',' + (ay + Math.sin(a) * rr * z);
+      tri.setAttribute('points', [pt(ang, 6), pt(ang + 2.5, 5), pt(ang - 2.5, 5)].join(' '));
+      tri.setAttribute('fill', m.col); tri.setAttribute('opacity', '0.7');
+      tri.setAttribute('pointer-events', 'none');
+      g.appendChild(tri);
+    }
   }
 
   // Enclaves — a people's settlement, a known landmark once you have found it.

@@ -498,6 +498,9 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
     edge; the same wreck on screen gives none; an uncharted one gives none (fails
     today).
   - Knob: `EDGE_ARROWS = 3`; 0 turns them off.
+  - **BUILT 2026-11-26 (v33).** `edgeArrowMarks` (called from `render`, drawn after the leads, only when the sea chart sheet is closed and not on foot) takes every open lead and every known, unworked prize off the visible map, sorts by hex distance and keeps the nearest `EDGE_ARROWS`. A 'known' prize is the chart's own test (visited or revealed, `poi`, not wall or land); 'worked' is a plain hex key in `poisFound` (beach and city keys ignored).
+  - Measured: `chart.test`, 9 new checks (uncharted none, charted one, worked none, on-screen none, nearest three and the farthest goes without, lead colour, none on foot, the knob). Run with `EDGE_ARROWS = 0`, 4 of them fail. Battery green, dead functions 0, `moved.js` 0 moved / 189 held. `browse.js` three widths, 0 console errors; one faint triangle seen at the top rim of the phone screenshot `02-look`.
+  - My calls: colours per prize kind (ruin, hull, salvage, air, sinkhole, signal; leads gold) taken from the main map where it names one, hull's is mine; triangle 12 px long, inset 9 px from the rim; the sheet closed means no arrows. A prize worked at one depth of a hex counts as worked for the whole hex (poisFound key prefix). **Knob:** `EDGE_ARROWS = 0`.
 
 - **D10. The walls on foot, and the depth numbers** (A13). SEAN: *"A13 yes"*,
   to: *"On foot, brighter walls and depth numbers back? — Yes. Let the dark come

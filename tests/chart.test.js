@@ -117,7 +117,13 @@ vm.runInContext(script + [
   '  for (let q = -8; q <= 8; q++) for (let r = -8; r <= 8; r++) { const x = chartT.ox + SQRT3 * (q + r / 2) * chartT.s, y = chartT.oy + 1.5 * r * chartT.s;',
   '    for (const [jx, jy] of [[0, 0], [2.2, -1.9], [-2.4, 1.6]]) { const h = chartHexAt(x + jx, y + jy); n++; if (!h || h.q !== q || h.r !== r) bad++; } }',
   '  return { n: n, bad: bad }; }',
-  'var __X = { state, farTap, nearTap, travelStep, diveTap, passageAdd, passageUndo, passageClear, passageGo, passageLegs, chartShowsBoat, PASSAGE_MS, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
+  // EDGE ARROWS: a prize planted by hand on a sea hex at least n from the boat, known to the chart or not.
+  'function __plant(n, poi, known, nth) { let seen = 0; for (const t of world.values()) { if (t.wall || t.land || shelfSeafloorDepth(t.q, t.r) == null || t.poi || hexDistance(t, { q: state.q, r: state.r }) < n) continue;',
+  '  if (seen++ < (nth || 0)) continue; t.poi = poi; if (known) revealed.set(hexKey(t.q, t.r), new Set([0])); return t; } return null; }',
+  'function __plantNear(poi) { for (let k = 1; k <= 4; k++) for (let dq = -k; dq <= k; dq++) for (let dr = -k; dr <= k; dr++) { const t = getTile(state.q + dq, state.r + dr); if (!t || t.wall || t.land || t.poi || shelfSeafloorDepth(t.q, t.r) == null || hexDistance(t, { q: state.q, r: state.r }) !== k) continue; t.poi = poi; revealed.set(hexKey(t.q, t.r), new Set([0])); return t; } return null; }',
+  'function __chart(t) { revealed.set(hexKey(t.q, t.r), new Set([0])); }',
+  'function __arrows() { const p = hexToPixel(state.q, state.r); return edgeArrowMarks(p.x, p.y, 400, 700, 2.4); }',
+  'var __X = { state, edgeArrowMarks, EDGE_ARROWS_ON: () => EDGE_ARROWS, farTap, nearTap, travelStep, diveTap, passageAdd, passageUndo, passageClear, passageGo, passageLegs, chartShowsBoat, PASSAGE_MS, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
   '  revealAt, poiSeenDepth, cellRun, hexKey, activeSub, hexNeighbors, TILES };',
 ].join('\n'), sb, { timeout: 600000 });
 const X = sb.__X, S = X.state;
@@ -450,6 +456,37 @@ check(ann.told >= 5 && ann.wrong === 0, 'every prize the boat announces from the
 // A tap lands on the hex that is drawn there.
 const back = sb.__roundTrip();
 check(back.n >= 100 && back.bad === 0, 'a tap on the sheet lands on the hex drawn under it', back.n + ' hexes there and back, ' + back.bad + ' wrong');
+
+// EDGE ARROWS (D9). Sean, 2026-11-21: "Edge arrows to known prizes off screen? — Yes.
+// It saves pinching out." One arrow per charted, unworked prize or lead that is off the map;
+// the nearest three; none for what is on screen, uncharted, or worked. The world may
+// already hold charted prizes of its own, so each check looks for the one it planted.
+{
+  load(world.seed); S.leads = []; S.poisFound = [];
+  const has = t => sb.__arrows().some(a => a.q === t.q && a.r === t.r);
+  check(X.EDGE_ARROWS_ON() === 3, 'the knob: EDGE_ARROWS is three');
+  const w1 = sb.__plant(30, 'ruin', false, 0);
+  check(w1 && !has(w1), 'an UNCHARTED prize off the map gets no arrow', 'planted at ' + (w1 && (w1.q + ',' + w1.r)));
+  sb.__chart(w1);
+  check(has(w1), 'the same prize once charted gets an arrow');
+  S.poisFound = [X.hexKey(w1.q, w1.r)];
+  check(!has(w1), 'a worked prize gets none');
+  S.poisFound = [];
+  const nearT = sb.__plantNear('salvage');
+  check(nearT && X.hexDistance(nearT, { q: S.q, r: S.r }) <= 8 && !has(nearT), 'a charted prize ON the map gets no arrow', 'at ' + X.hexDistance(nearT, { q: S.q, r: S.r }) + ' hexes');
+  const ps = [sb.__plant(34, 'hull', true, 1), sb.__plant(38, 'air', true, 2), sb.__plant(42, 'ruin', true, 3)];
+  const ar = sb.__arrows();
+  const ds = ar.map(a => a.d);
+  check(ar.length === 3, 'never more than three arrows, and three when there are more', ar.length + ' arrows');
+  check(ds.every((d, i) => i === 0 || ds[i - 1] <= d) && !has(ps[2]), 'they are the nearest, nearest first; the farthest goes without', ds.join(','));
+  S.leads = [{ q: w1.q, r: w1.r, d: 0, tier: 1, kind: 'cache' }];
+  check(sb.__arrows().some(a => a.col === '#f0c850'), 'an open lead off the map gets an arrow in the lead colour');
+  S.leads = [];
+  S.foot = { x: 0 };
+  check(sb.__arrows().length === 0, 'none on foot');
+  S.foot = null;
+  for (const t of [w1, nearT, ps[0], ps[1], ps[2]]) if (t) { delete t.poi; }
+}
 
 console.log('\n' + (fail === 0 ? 'THE CHART HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));
 process.exit(fail === 0 ? 0 : 1);
