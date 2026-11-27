@@ -43,8 +43,22 @@ function makeStub() {
   return stub;
 }
 const stub = makeStub();
+// A RECORDING ELEMENT, for the two things this suite reads back off the page:
+// the interior's SVG (what colour is a wall, how bright is a memory) and the
+// depth strip's bottom label. Anything else it is asked for is the stub.
+function makeRec() {
+  const o = { attrs: {}, kids: [],
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; },
+    appendChild(c) { this.kids.push(c); return c; },
+    removeChild(c) { const i = this.kids.indexOf(c); if (i >= 0) this.kids.splice(i, 1); return c; },
+    get firstChild() { return this.kids[0] || null; } };
+  return new Proxy(o, { get(t, p) { return p in t ? t[p] : stub; }, set(t, p, v) { t[p] = v; return true; } });
+}
+const recById = {};
 const documentStub = new Proxy({}, { get(t, p) {
-  if (['createElementNS','createElement','getElementById','querySelector','querySelectorAll'].includes(p)) return () => makeStub();
+  if (p === 'createElementNS') return () => makeRec();
+  if (p === 'getElementById') return id => (id === 'chart-svg' || id === 'depth-strip-bot') ? (recById[id] = recById[id] || makeRec()) : makeStub();
+  if (['createElement','querySelector','querySelectorAll'].includes(p)) return () => makeStub();
   if (p === 'addEventListener') return () => {};
   return stub;
 }});
@@ -123,6 +137,9 @@ try { vm.runInContext(script +
   '\nfunction __beach(){ maybeBeach(); }' +
   '\nfunction __subAir(){ return activeSub().air; }' +
   '\nfunction __way(){ followWay(); }' +
+  '\nfunction __renderInt(){ renderInterior(); }' +
+  '\nfunction __strip(){ updateDepthStrip(); return depthStripScale(); }' +
+  '\nfunction __lampR(){ return effLampR(); }' +
   '\nfunction __seed(s){ worldSeed=s; interiorSalt=":"+s;interiorCache.clear();rng=mulberry32(s); resetWorldCaches(); }',
   sandbox, { timeout: 20000 }); } catch (e) { console.log('BOOT FAIL', e.message); process.exit(1); }
 
@@ -1706,6 +1723,76 @@ console.log('\n--- ashore() IS A GUARD, NOT A PREDICATE ---');
   check(strays.length === 0,
     'and no identifier names a cavern record after a submarine',
     strays.length ? 'STRAYS: ' + strays.join(', ') : 'the records are site*, the boat words are boat words');
+}
+
+
+// ---------------------------------------------------------------------------
+// D10 — THE WALLS ON FOOT, AND THE DEPTH NUMBERS. Sean: "Let the dark come from
+// what is unseen." A wall at 1.04:1 against the page is not a dark room, it is a
+// room that is not there. Read the real fills off a rendered room.
+{
+  const BG = [8, 20, 32];                                    // #081420, measured in the page
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = rgb => 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+  const over = (fill, op) => hex(fill).map((v, i) => v * op + BG[i] * (1 - op));
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+
+  sandbox.__seed(20261127);
+  sandbox.__enter(3, -2, 600);
+  const f = sandbox.__foot();
+  const ch = sandbox.__chunk();
+  // One remembered floor tile: seen, but beyond the lamp.
+  const LR = sandbox.__lampR();
+  let far = null;
+  for (const k of ch.tiles.keys()) {
+    const [x, y] = k.split(',').map(Number);
+    if (ch.tiles.get(k).t === 'floor' || ch.tiles.get(k).t === 'rubble' || !ch.tiles.get(k).t) { if (Math.hypot(x - f.x, y - f.y) > LR + 2) { far = k; break; } }
+  }
+  if (far && !f.seen.includes(far)) f.seen.push(far);
+  sandbox.__renderInt();
+  const svgEl = recById['chart-svg'];
+  const g = svgEl.kids.find(c => c.attrs && c.attrs.transform);
+  const rects = (g ? g.kids : []).filter(c => c.attrs && c.attrs.fill && c.attrs.width);
+  const fillOp = r => [r.attrs.fill, r.attrs.opacity == null ? 1 : +r.attrs.opacity];
+  // A wall is a seen tile with no record; find one by walking the seen set.
+  let wallRect = null, floorRect = null, memRect = null;
+  for (const k of f.seen) {
+    const [x, y] = k.split(',').map(Number);
+    const t = ch.tiles.get(k);
+    const rect = rects.find(r => +r.attrs.x === x * 22 - 11 && +r.attrs.y === y * 22 - 11);
+    if (!rect) continue;
+    const lit = Math.hypot(x - f.x, y - f.y) <= LR;
+    if (!t && lit && !wallRect) wallRect = rect;
+    if (t && (t.t === 'floor') && lit && !floorRect) floorRect = rect;
+    if (k === far) memRect = rect;
+  }
+  check(!!wallRect, 'a lit wall was found in the rendered room');
+  if (wallRect) {
+    const [wf, wo] = fillOp(wallRect);
+    const r = ratio(over(wf, wo), BG);
+    check(r >= 1.5, 'a lamplit wall is at least 1.5:1 against the page', r.toFixed(2) + ':1 (fill ' + wf + ', opacity ' + wo + ')');
+    if (floorRect) {
+      const [ff, fo] = fillOp(floorRect);
+      const r2 = ratio(over(ff, fo), over(wf, wo));
+      check(r2 >= 1.6, 'a lit floor reads against a wall at 1.6:1 or better', r2.toFixed(2) + ':1');
+    }
+  }
+  check(!!memRect, 'a remembered tile was found in the rendered room');
+  if (memRect) {
+    const op = +memRect.attrs.opacity;
+    check(Math.abs(op - 0.6) < 1e-9, 'a remembered tile draws at 0.6, not 0.4', 'opacity ' + op);
+  }
+
+  // The strip: its bottom label is its real scale, written on every update.
+  const s0 = sandbox.__strip();
+  const bot = () => recById['depth-strip-bot'].textContent;
+  check(bot() === String(Math.round(s0 / 100) * 100), 'the depth strip\'s bottom label equals its scale', bot() + ' vs ' + s0);
+  sandbox.__st().maxDepth = 5000;
+  const s1 = sandbox.__strip();
+  check(s1 > s0 && bot() === String(Math.round(s1 / 100) * 100), 'and it follows the scale when the scale moves', bot() + ' vs ' + s1);
+  const css = html.match(/#depth-strip-labels\s*\{([^}]*)\}/);
+  check(css && !/display:\s*none/.test(css[1]), 'and the labels are shown');
 }
 
 console.log(failures === 0 ? '\nALL INTERIOR CHECKS PASSED' : '\n' + failures + ' CHECK(S) FAILED');

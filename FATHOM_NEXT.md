@@ -533,6 +533,28 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
     should do.
   - Knob: the literals, and the one CSS line.
 
+  - **BUILT 2026-11-27 (v34), landed.** The colours exactly as listed above, and:
+    - `#depth-strip-labels` is shown. It sits inside the 28 px track (absolute,
+      over it), so it cannot reach the recenter button. The bottom label is
+      written on every `updateDepthStrip` from a new one-line `depthStripScale()`
+      (the old inline `maxScale`), rounded to 100 m; the top stays 0.
+    - Measured, in the browser at 375x812: the real background behind the map is
+      **`#000000`** (`#chart-container`; the body is `#040810`), not `#081420`.
+      The literals are built as written. Against `#081420`, as the item priced
+      them: lit wall 1.04 → 1.62, floor on wall 1.40 → 1.68, remembered wall
+      1.01 → 1.29. Against the true black: 1.16 → 1.80, 1.41 → 1.70, 1.05 → 1.32.
+    - Strip at 375 px: labels at x 337–365, recenter button ends at x 327. Clear.
+    - Test: `interior.test` now has a recording DOM for the interior SVG and the
+      strip's bottom label (the suite's stub could not be read back). It renders
+      a room, reads the wall fill and the remembered tile's opacity, and asks the
+      strip's label to equal `depthStripScale()`. Run against the v33 build it
+      failed (wall 1.04:1, floor 1.40:1, memory 0.4, strip function absent);
+      on this build all pass.
+    - Gate green, dead functions 0, `moved.js` 0 moved / 189 held.
+  - My calls: the labels' size (0.6 rem), colour and place (inside the track, not
+    beside it); the helper's name. **Knob:** the colour literals in
+    `renderInterior`, `dim` (0.6), and the `#depth-strip-labels` block.
+
 - **D11. A city within reach of home** (A8). SEAN: *"A8 use your best
   judgment"*. My call, the lean as I put it: *"Yes, within 60 hexes, new worlds
   only."*

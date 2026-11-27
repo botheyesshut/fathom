@@ -8,6 +8,39 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-27 — D10 landed: on foot you can see the walls, and the strip has numbers
+
+**Changed**
+- On foot, walls, floors and rubble are brighter. A lamplit wall now reads against the dark; the dark comes from what you have not seen.
+- A place you have been but cannot see now is remembered at 0.6, not 0.4.
+- The depth strip at the right of the sea map shows 0 at the top and its real bottom (for example 2600). It was blank before. New build, v34.
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held. The new check failed on the old build first.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Step ashore into any ruin or cave | on foot, phone | walls, floor and the lamp's edge: bright enough, or did the dark go too far? |
+| 2 | Walk away from a room and look back | on foot | the remembered rooms still read as a map |
+| 3 | Sail, then dive deep | sea, phone | the numbers on the strip: readable, and clear of the ⊕ button |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%.
+- I opened the phone screenshots on foot (before and after) and the sea screen. On foot the room reads clearly now; the strip numbers are small but there and clear of the button. I did not open the landscape or desktop screenshots.
+- The map's real background is pure black, not the `#081420` the queue assumed. Built as written; numbers are in the ledger.
+- Under 44 px, unchanged: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met).
+- Bots, 40 x 300: 33 survived, 0 invariants broken over 9966 turns. Median 3 crates banked (max 9); 6 of 36 items ever held. Nothing reached the deep, a station or a people (income question, yours, not retuned). First hour: 0 deaths of 40. Dead functions 0.
+- Nothing new.
+
+**Questions for Sean**
+- Still open: a won Break away leaves a boat hostile if you shot first. Right, or should a won break calm her too?
+- Still open: the edge arrows read faint on dark water. Brighter than 70%, or leave it?
+
+**Tomorrow** — D11, a city within reach of home (measure first).
+
+---
+
 ## 2026-11-26 — D9 landed: edge arrows to what you know is out there
 
 **Changed**

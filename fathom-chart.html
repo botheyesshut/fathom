@@ -331,8 +331,23 @@
     border-radius: 1px;
     transition: top 0.3s ease;
   }
+  /* THE NUMBERS ON THE STRIP (D10). Inside the 28 px track, so they cannot reach
+     the recenter button that sits to its left; the bottom one is written from
+     the strip's real scale on every update (updateDepthStrip). */
   #depth-strip-labels {
-    display: none; /* hide for now to keep strip clean */
+    position: absolute;
+    top: 0; bottom: 0; left: 0; right: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+  }
+  .depth-strip-label {
+    font-size: 0.6rem;
+    line-height: 1;
+    color: rgba(190,214,204,0.9);
+    text-shadow: 0 0 3px #081420, 0 0 3px #081420;
   }
 
   /* ====== RECENTER BUTTON ====== */
@@ -1280,7 +1295,7 @@
     min-height: 40px; min-width: 44px;
   }
   .prow-b.no { border-color: #4a4436; background: transparent; color: #6a6250; cursor: default;
-    font-size: 0.55rem; letter-spacing: 0.03em; }
+    font-size: 0.6rem; letter-spacing: 0.03em; }
 
 
   /* THE ONE THE BOAT KNOWS. `.no` already existed for a row you cannot take;
@@ -18454,11 +18469,11 @@ function renderInterior() {
     const x = +k.slice(0, c), y = +k.slice(c + 1);
     const t = ch.tiles.get(k) || ((ownSite && carvedHere.includes(k)) ? { t: 'carved' } : null);
     const lit = Math.hypot(x - f.x, y - f.y) <= LR;
-    const dim = lit ? 1 : 0.4;                // memory is dimmer than lamplight
+    const dim = lit ? 1 : 0.6;                // memory is dimmer than lamplight (0.4 read as nothing)
     // Walls sit just above the void so the shape of the room reads; lamplit
     // deck is markedly brighter, because that is the whole point of a lamp.
-    if (!t) { box(x, y, '#1b1712', dim * 0.95); continue; }
-    if (t.t === 'carved') { box(x, y, '#2c2a20', dim); glyph(x, y, '·', '#5f6a4e', 12, dim * 0.8); }
+    if (!t) { box(x, y, '#443a2d', dim * 0.95); continue; }
+    if (t.t === 'carved') { box(x, y, '#4f4c3a', dim); glyph(x, y, '·', '#85946d', 12, dim * 0.8); }
     else
     if (t.t === 'far') {
       // Not a way on — a way THROUGH. It reads brighter than an ordinary mouth
@@ -18488,8 +18503,8 @@ function renderInterior() {
       else { box(x, y, shut ? '#5b4a2e' : '#2f3a33', dim);
              glyph(x, y, shut ? '▬' : '╪', shut ? '#f0d49a' : '#7fae9a', 14, dim); }
     } else {
-      box(x, y, t.t === 'rubble' ? '#433727' : '#3a3126', dim);
-      if (t.t === 'rubble') glyph(x, y, '·', '#8a7758', 15, dim);
+      box(x, y, t.t === 'rubble' ? '#796346' : '#685844', dim);
+      if (t.t === 'rubble') glyph(x, y, '·', '#c1a77b', 15, dim);
     }
     // Water that was always here: a stream you wade, a drowned passage you
     // cannot breathe. Drowned reads darker and deeper than the flood does.
@@ -23927,6 +23942,12 @@ function setZoom(newZoom, opts) {
 //=============================================================================
 // DEPTH STRIP UPDATER
 //=============================================================================
+// What the strip's bottom edge is, in metres. One place, so the bar and the
+// number written beside it cannot disagree.
+function depthStripScale() {
+  return Math.max(crushDepthNow() * 1.2, state.maxDepth * 1.1, 1000);
+}
+
 function updateDepthStrip() {
   const marker = document.getElementById('depth-strip-marker');
   const hexRange = document.getElementById('depth-strip-hex-range');
@@ -23939,7 +23960,7 @@ function updateDepthStrip() {
   // crush line read the bare hull table, so a twice-plated Erebus showed its
   // crush depth 900 m shallower than it was — the one instrument on the side of
   // the chart disagreeing with the readout between the dive arrows.
-  const maxScale = Math.max(crushDepthNow() * 1.2, state.maxDepth * 1.1, 1000);
+  const maxScale = depthStripScale();
 
   function pct(m) { return (Math.max(0, Math.min(maxScale, m)) / maxScale) * 100; }
 
@@ -23956,6 +23977,8 @@ function updateDepthStrip() {
   safeLine.style.top = pct(safeDepthNow()) + '%';
   crushLine.style.top = pct(crushDepthNow()) + '%';
   marker.style.top = `calc(${pct(state.currentDepth)}% - 2px)`;
+  const bot = document.getElementById('depth-strip-bot');
+  if (bot) bot.textContent = String(Math.round(maxScale / 100) * 100);
 
   syncDepthReadout();
 }
