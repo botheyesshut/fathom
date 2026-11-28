@@ -15,7 +15,7 @@
 // Fonts, the icon and the music are CACHE-FIRST — they are immutable, they are
 // the slow bytes, and re-fetching them on a phone is the thing worth avoiding.
 
-const VERSION = 'fathom-v34';  // bumped: on foot the walls and floors read against the dark, memory is brighter, and the depth strip shows its numbers
+const VERSION = 'fathom-v35';  // bumped: in a new world the first deep Dagon enclave within 60 hexes of home is a city
 const SHELL = [
   './',
   'fathom-chart.html',

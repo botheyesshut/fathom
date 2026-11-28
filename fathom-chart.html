@@ -10522,7 +10522,8 @@ let worldSeed = Date.now() & 0xffffffff;
 // save; absent means 1, every world before 2026-10-02), a new one takes the
 // current number, and a change to the substrate asks `worldGen` before it acts.
 //   2 — the harbour is kept clear (see `harbourCap`).
-const WORLD_GEN = 2;
+//   3 — a city within reach of home (see `HOME_CITY_REACH`).
+const WORLD_GEN = 3;
 let worldGen = WORLD_GEN;
 // WHICH OCEAN IS THIS DECK IN? `interiorAt` and `beachMouths` hashed nothing but
 // (q, r, d), so measured across 720 decks and 300 beaches, EVERY layout and every
@@ -12837,10 +12838,21 @@ function weightedPeople(band, roll) {
   return SURFACE_PEOPLES[SURFACE_PEOPLES.length - 1];
 }
 
+// A CITY WITHIN REACH OF HOME (D11, Sean: "A8 use your best judgment"). The first
+// deep Dagon enclave to spawn within this many hexes of the dock is a city, unless
+// one already stands that near. New worlds only: it asks `worldGen >= 3`.
+const HOME_CITY_REACH = 60;
+function homeCityDue(culture, q, r, depth) {
+  if (worldGen < 3 || culture !== 'dagon' || depth < CITY_DEPTH) return false;
+  const home = { q: 0, r: 0 };
+  if (hexDistance(home, { q: q, r: r }) > HOME_CITY_REACH) return false;
+  return !(state.enclaves || []).some(e => e.city && hexDistance(home, { q: e.q, r: e.r }) <= HOME_CITY_REACH);
+}
 function spawnEnclave(culture, q, r, depth) {
   if (!state.enclaves) state.enclaves = [];
   const city = culture === 'dagon' && depth >= CITY_DEPTH
-    && (hashStr('city:' + worldSeed + ':' + q + ':' + r + ':' + depth) % 100) < CITY_CHANCE * 100;
+    && ((hashStr('city:' + worldSeed + ':' + q + ':' + r + ':' + depth) % 100) < CITY_CHANCE * 100
+        || homeCityDue(culture, q, r, depth));
   const e = { id: 'enclave:' + q + ',' + r + ',' + depth, culture: culture, q: q, r: r, depth: depth };
   if (city) { e.city = true; e.name = cityName(q, r); }
   state.enclaves.push(e);

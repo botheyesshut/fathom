@@ -8,6 +8,37 @@ BUILD QUEUE** at the top of `FATHOM_NEXT.md`.
 
 ---
 
+## 2026-11-28 — D11 landed, in part: new worlds make a deep Dagon enclave near home a city
+
+**Changed**
+- In a new world, the first deep Dagon enclave within 60 hexes of the dock is a city, unless one already stands that near. New build, v35.
+- Saved campaigns are untouched: the rule only runs in worlds made from now on.
+- It does not put a city in every world. Only worlds that already have a deep Dagon enclave near home get one (about 22 of 60).
+
+**Broke** — nothing. Battery green on arrival and after (ALL SUITES PASSED); dead functions 0; `moved.js` 0 moved, 189 held. The new check failed on the old build first.
+
+**Test these three**
+
+| # | what | where | look for |
+|---|---|---|---|
+| 1 | Start a new campaign and chart toward deep water near home | sea, phone | whether a city turns up within reach, or the water is still empty |
+| 2 | Load an old save and sail the same water | sea | nothing new: the old world is as it was |
+| 3 | Reach a city and open the trade window | a city | the Lights lines and the diplomacy panel read as before |
+
+**What the playtest found**
+- Browser playtest RAN (box Chromium). Phone, landscape, desktop: nothing past the edge, no clipped text, 0 console errors, 0 failed requests. Map 40% / 63% / 52%.
+- I opened two phone screenshots (`04-chart`, `17-descend-2`): the chart sheet is fine; the depth strip shows 0 and 2600, clear of the recenter button. Landscape and desktop screenshots not opened, so nothing is claimed about them.
+- Under 44 px, unchanged: chart buttons and Options toggles (36-40 px). Bestiary step skipped (button hidden until met).
+- Bots, 40 x 300: 0 deaths of 40, no invariant broken over 9958 turns; 5 of 36 items ever held; nothing reached the deep, a station or a people (the income question, yours, not retuned). Dead functions 0.
+- Nothing new.
+
+**Questions for Sean**
+- D11 measured fine (a deep place within 60 hexes in 60 of 60 worlds), but the rule as worded only makes a city where a deep Dagon enclave already spawned there. Should I force one into every new world, placed by hand near home? That is a new placement, so I did not build it.
+
+**Tomorrow** — D12, item 1: the underwater boat cards, seen by a browser.
+
+---
+
 ## 2026-11-27 — D10 landed: on foot you can see the walls, and the strip has numbers
 
 **Changed**

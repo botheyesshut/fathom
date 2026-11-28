@@ -121,6 +121,11 @@ vm.runInContext(script + [
   'function __plant(n, poi, known, nth) { let seen = 0; for (const t of world.values()) { if (t.wall || t.land || shelfSeafloorDepth(t.q, t.r) == null || t.poi || hexDistance(t, { q: state.q, r: state.r }) < n) continue;',
   '  if (seen++ < (nth || 0)) continue; t.poi = poi; if (known) revealed.set(hexKey(t.q, t.r), new Set([0])); return t; } return null; }',
   'function __plantNear(poi) { for (let k = 1; k <= 4; k++) for (let dq = -k; dq <= k; dq++) for (let dr = -k; dr <= k; dr++) { const t = getTile(state.q + dq, state.r + dr); if (!t || t.wall || t.land || t.poi || shelfSeafloorDepth(t.q, t.r) == null || hexDistance(t, { q: state.q, r: state.r }) !== k) continue; t.poi = poi; revealed.set(hexKey(t.q, t.r), new Set([0])); return t; } return null; }',
+  // D11: one whole world out to R hexes of home, made under generation `gen`; what its enclaves came to.
+  'function __homeCity(s, gen, R) { worldGen = gen; __seed(s, true); generatedChunks.clear(); world.clear(); state.enclaves = []; tileAt(0, 0);',
+  '  const n = Math.ceil(R / CHUNK) + 1; for (let cq = -n; cq <= n; cq++) for (let cr = -n; cr <= n; cr++) ensureChunk(cq, cr);',
+  '  const near = state.enclaves.filter(e => hexDistance({ q: 0, r: 0 }, e) <= R); worldGen = WORLD_GEN;',
+  '  return { deep: near.filter(e => e.culture === "dagon" && e.depth >= CITY_DEPTH).length, cities: near.filter(e => e.city).length }; }',
   'function __chart(t) { revealed.set(hexKey(t.q, t.r), new Set([0])); }',
   'function __arrows() { const p = hexToPixel(state.q, state.r); return edgeArrowMarks(p.x, p.y, 400, 700, 2.4); }',
   'var __X = { state, edgeArrowMarks, EDGE_ARROWS_ON: () => EDGE_ARROWS, farTap, nearTap, travelStep, diveTap, passageAdd, passageUndo, passageClear, passageGo, passageLegs, chartShowsBoat, PASSAGE_MS, diveBlocked, changeDepth, glyphShown, getTile, describeSpace, wait, homeDock, quayAlongside, hexDistance,',
@@ -486,6 +491,23 @@ check(back.n >= 100 && back.bad === 0, 'a tap on the sheet lands on the hex draw
   check(sb.__arrows().length === 0, 'none on foot');
   S.foot = null;
   for (const t of [w1, nearT, ps[0], ps[1], ps[2]]) if (t) { delete t.poi; }
+}
+
+// 8. A CITY WITHIN REACH OF HOME (D11, A8). New worlds only.
+{
+  console.log('\n  -- a city within reach of home --');
+  let deepWorlds = 0, bare3 = 0, bare2 = 0, over = 0;
+  for (let i = 1; i <= 10; i++) {
+    const seed = 1000 + i * 7919;
+    const g3 = sb.__homeCity(seed, 3, 60), g2 = sb.__homeCity(seed, 2, 60);
+    if (g3.deep) { deepWorlds++; if (!g3.cities) bare3++; }
+    if (g2.deep && !g2.cities) bare2++;
+    if (g3.cities && g3.cities < g2.cities) over++;
+  }
+  check(deepWorlds >= 3, 'the sample has worlds with a deep Dagon enclave near home', deepWorlds + ' of 10');
+  check(bare3 === 0, 'in a new world a deep Dagon enclave near home means a city near home', bare3 + ' bare');
+  check(bare2 > 0, 'an old world is not changed: some still have the deep enclave and no city', bare2 + ' bare');
+  check(over === 0, 'a new world never has fewer cities than the old rule gave it', over + '');
 }
 
 console.log('\n' + (fail === 0 ? 'THE CHART HOLDS — ' + ok + ' checks' : fail + ' FAILED of ' + (ok + fail)));

@@ -571,6 +571,31 @@ hidden numbers turned out to be a fixed "800" that nothing updates.
     within 60 hexes, and a generation-2 seed is unchanged.
   - Knob: the gate, or the 60.
 
+  - **BUILT 2026-11-28 (v35), landed.**
+    - Measured first, 60 worlds, 60 hexes of home: a deep-enough place (a hex with
+      water at 3600 m or more, no deeper than the deepest rating) in **60 of 60**;
+      a city already within 60 hexes in **8 of 60**; a deep Dagon enclave already
+      within 60 hexes in **22 of 60**. The bar was 57 of 60, so it builds.
+    - Built as written: `WORLD_GEN` 3; `homeCityDue` in `spawnEnclave` makes the
+      first deep Dagon enclave within `HOME_CITY_REACH` (60) hexes of home a city,
+      unless one already stands that near, and only when `worldGen >= 3`.
+    - **What it does not do, and it matters:** it does not put a city in every
+      world. Only worlds that already roll a deep Dagon enclave near home (22 of
+      60 by that count) get one from this rule; the rest are as before. The
+      item's test line, "thirty seeds each have a city", cannot be met by the
+      rule as worded, so I did not write it. Forcing a city into every world
+      means placing one by hand, which is a new thing to build: asked in
+      DAILY.md.
+    - Test: `chart.test` section 8, ten seeds each made at generation 3 and 2.
+      New: a deep Dagon enclave near home always means a city near home (3 of 10
+      worlds were bare on the v34 build, 0 now); old worlds unchanged (3 still
+      bare at generation 2); a new world never has fewer cities than the old rule.
+      Run against the v34 page it failed on the second line.
+    - Gate green, dead functions 0, `moved.js` 0 moved, 189 held.
+  - My calls: the helper's name; counting distance from the dock at (0, 0);
+    ten seeds in the test (it costs two minutes). **Knob:** `HOME_CITY_REACH`, or
+    set `WORLD_GEN` back to 2 (new worlds then make no home city).
+
 - **D12. The idle list** (new). SEAN: *"new= yes"*, to: *"Let idle nights work
   through a list of unchecked items? — Yes. The old audits left about a dozen."*
   - Only when there is no BUG and nothing above is buildable: **one a night, top
